@@ -1,0 +1,149 @@
+"""Base class for controller implementations.
+
+Your task is to implement your own controller. This class must be the parent class of your
+implementation. You have to use the same function signatures as defined by the base class. Apart
+from that, you are free to add any additional methods, attributes, or classes to your controller.
+
+As an example, you could load the weights of a neural network in the constructor and use it to
+compute the control commands in the `compute_control` method. You could also use the `step_learn`
+method to update the controller at runtime.
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from collections import deque
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    import numpy as np
+
+
+class BaseController(ABC):
+    """Base class for controller implementations."""
+
+    def __init__(
+        self,
+        initial_obs: np.ndarray,
+        initial_info: dict,
+        buffer_size: int = 100,
+        verbose: bool = False,
+    ):
+        """Initialization of the controller.
+
+        INSTRUCTIONS:
+            The controller's constructor has access the initial state `initial_obs` and the a priori
+            infromation contained in dictionary `initial_info`. Use this method to initialize
+            constants, counters, pre-plan trajectories, etc.
+
+        Args:
+            initial_obs: The initial observation of the quadrotor's state [x, x_dot, y, y_dot, z,
+                z_dot, phi, theta, psi, p, q, r].
+            initial_info: The a priori information as a dictionary with keys 'symbolic_model',
+                'nominal_physical_parameters', 'nominal_gates_pos_and_type', etc.
+            buffer_size: Size of the data buffers used in method `learn()`.
+            verbose: Turn on and off additional printouts and plots.
+        """
+        # Initialize data buffers for learning
+        self.action_buffer = deque([], maxlen=buffer_size)
+        self.obs_buffer = deque([], maxlen=buffer_size)
+        self.reward_buffer = deque([], maxlen=buffer_size)
+        self.done_buffer = deque([], maxlen=buffer_size)
+        self.info_buffer = deque([], maxlen=buffer_size)
+
+    @abstractmethod
+    def compute_control(
+        self,
+        time: float,
+        obs: np.ndarray,
+        reward: Optional[float] = None,
+        done: Optional[bool] = None,
+        info: Optional[dict] = None,
+    ):
+        """Pick command sent to the quadrotor through a Crazyswarm/Crazyradio-like interface.
+
+        INSTRUCTIONS:
+            Re-implement this method to return the target position, velocity, acceleration,
+            attitude, and attitude rates to be sent from Crazyswarm to the Crazyflie using, e.g., a
+            `cmdFullState` call.
+
+        Args:
+            time: Episode's elapsed time, in seconds.
+            obs: The quadrotor's Vicon data [x, 0, y, 0, z, 0, phi, theta, psi, 0, 0, 0].
+            reward: The reward signal.
+            done: Wether the episode has terminated.
+            info: Current step information as a dictionary with keys 'constraint_violation',
+                'current_target_gate_pos', etc.
+
+        Returns:
+            Command: selected type of command (takeOff, cmdFullState, etc., see `Command`).
+            List: arguments for the type of command (see comments in class `Command`)
+        """
+
+    def step_learn(self, action: list, obs: list, reward: float, done: bool, info: dict):
+        """Learning and controller updates called between control steps.
+
+        INSTRUCTIONS:
+            Use the historically collected information in the five data buffers of actions,
+            observations, rewards, done flags, and information dictionaries to learn, adapt, and/or
+            re-plan.
+
+        Args:
+            action: Most recent applied action.
+            obs: Most recent observation of the quadrotor state.
+            reward: Most recent reward.
+            done: Most recent done flag.
+            info: Most recent information dictionary.
+
+        """
+        # Store the last step's events.
+        self.action_buffer.append(action)
+        self.obs_buffer.append(obs)
+        self.reward_buffer.append(reward)
+        self.done_buffer.append(done)
+        self.info_buffer.append(info)
+
+        #########################
+        # REPLACE THIS (START) ##
+        #########################
+
+        pass
+
+        #########################
+        # REPLACE THIS (END) ####
+        #########################
+
+    def episode_learn(self):
+        """Learning and controller updates called between episodes.
+
+        INSTRUCTIONS:
+            Use the historically collected information in the five data buffers of actions,
+            observations, rewards, done flags, and information dictionaries to learn, adapt, and/or
+            re-plan.
+        """
+        #########################
+        # REPLACE THIS (START) ##
+        #########################
+
+        _ = self.action_buffer
+        _ = self.obs_buffer
+        _ = self.reward_buffer
+        _ = self.done_buffer
+        _ = self.info_buffer
+
+        #########################
+        # REPLACE THIS (END) ####
+        #########################
+
+    def reset(self):
+        """Initialize/reset data buffers and counters."""
+        # Data buffers.
+        self.action_buffer = deque([], maxlen=self.BUFFER_SIZE)
+        self.obs_buffer = deque([], maxlen=self.BUFFER_SIZE)
+        self.reward_buffer = deque([], maxlen=self.BUFFER_SIZE)
+        self.done_buffer = deque([], maxlen=self.BUFFER_SIZE)
+        self.info_buffer = deque([], maxlen=self.BUFFER_SIZE)
+
+    def episode_reset(self):
+        """Reset the controller's internal state and models if necessary."""
+        pass
