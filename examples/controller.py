@@ -28,6 +28,7 @@ Tips:
 from __future__ import annotations  # Python 3.10 type hints
 
 import numpy as np
+from scipy import interpolate
 
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
@@ -79,34 +80,39 @@ class Controller(BaseController):
         # REPLACE THIS (START) ##
         #########################
 
-        # Example: hardcode waypoints through the gates.
-        waypoints = [
-            (
-                self.initial_obs[0],
-                self.initial_obs[2],
-                initial_info["gate_dimensions"]["tall"]["height"],
-            )
-        ]  # Height is hardcoded scenario knowledge.
-        for idx, g in enumerate(self.NOMINAL_GATES):
-            height = (
-                initial_info["gate_dimensions"]["tall"]["height"]
-                if g[6] == 0
-                else initial_info["gate_dimensions"]["low"]["height"]
-            )
-            if g[5] > 0.75 or g[5] < 0:
-                if idx == 2:  # Hardcoded scenario knowledge (direction in which to take gate 2).
-                    waypoints.append((g[0] + 0.3, g[1] - 0.3, height))
-                    waypoints.append((g[0] - 0.3, g[1] - 0.3, height))
-                else:
-                    waypoints.append((g[0] - 0.3, g[1], height))
-                    waypoints.append((g[0] + 0.3, g[1], height))
-            else:
-                if idx == 3:  # Hardcoded scenario knowledge (correct how to take gate 3).
-                    waypoints.append((g[0] + 0.1, g[1] - 0.3, height))
-                    waypoints.append((g[0] + 0.1, g[1] + 0.3, height))
-                else:
-                    waypoints.append((g[0], g[1] - 0.3, height))
-                    waypoints.append((g[0], g[1] + 0.3, height))
+        # Example: Hard-code waypoints through the gates. Obviously this is a crude way of
+        # completing the challenge that is highly susceptible to noise and does not generalize at
+        # all. It is meant solely as an example on how the drones can be controlled
+        waypoints = []
+        waypoints.append([self.initial_obs[0], self.initial_obs[2], 0.3])
+        gates = self.NOMINAL_GATES
+        z_low = initial_info["gate_dimensions"]["low"]["height"]
+        z_high = initial_info["gate_dimensions"]["tall"]["height"]
+        waypoints.append([1, 0, z_low])
+        waypoints.append([gates[0][0] + 0.2, gates[0][1] + 0.1, z_low])
+        waypoints.append([gates[0][0] + 0.1, gates[0][1], z_low])
+        waypoints.append([gates[0][0] - 0.1, gates[0][1], z_low])
+        waypoints.append(
+            [
+                (gates[0][0] + gates[1][0]) / 2 - 0.7,
+                (gates[0][1] + gates[1][1]) / 2 - 0.3,
+                (z_low + z_high) / 2,
+            ]
+        )
+        waypoints.append(
+            [
+                (gates[0][0] + gates[1][0]) / 2 - 0.5,
+                (gates[0][1] + gates[1][1]) / 2 - 0.6,
+                (z_low + z_high) / 2,
+            ]
+        )
+        waypoints.append([gates[1][0] - 0.3, gates[1][1] - 0.2, z_high])
+        waypoints.append([gates[1][0] + 0.2, gates[1][1] + 0.2, z_high])
+        waypoints.append([gates[2][0], gates[2][1] - 0.4, z_low])
+        waypoints.append([gates[2][0], gates[2][1] + 0.1, z_low])
+        waypoints.append([gates[2][0], gates[2][1] + 0.1, z_high + 0.2])
+        waypoints.append([gates[3][0], gates[3][1] + 0.1, z_high])
+        waypoints.append([gates[3][0], gates[3][1] - 0.1, z_high + 0.1])
         waypoints.append(
             [
                 initial_info["x_reference"][0],
@@ -114,31 +120,28 @@ class Controller(BaseController):
                 initial_info["x_reference"][4],
             ]
         )
+        waypoints = np.array(waypoints)
 
-        # Polynomial fit.
-        self.waypoints = np.array(waypoints)
-        deg = 6
-        t = np.arange(self.waypoints.shape[0])
-        fx = np.poly1d(np.polyfit(t, self.waypoints[:, 0], deg))
-        fy = np.poly1d(np.polyfit(t, self.waypoints[:, 1], deg))
-        fz = np.poly1d(np.polyfit(t, self.waypoints[:, 2], deg))
-        duration = 15
-        t_scaled = np.linspace(t[0], t[-1], int(duration * self.CTRL_FREQ))
-        self.ref_x = fx(t_scaled)
-        self.ref_y = fy(t_scaled)
-        self.ref_z = fz(t_scaled)
+        tck, u = interpolate.splprep([waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]], s=0.1)
+        self.waypoints = waypoints
+        duration = 16
+        t = np.linspace(0, 1, int(duration * self.CTRL_FREQ))
+        self.ref_x, self.ref_y, self.ref_z = interpolate.splev(t, tck)
 
         if self.VERBOSE:
             # Draw the trajectory on PyBullet's GUI.
             draw_trajectory(initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
 
+        self._take_off = False
+        self._setpoint_land = False
+        self._land = False
         #########################
         # REPLACE THIS (END) ####
         #########################
 
     def compute_control(
         self,
-        time: float,
+        ep_time: float,
         obs: np.ndarray,
         reward: float | None = None,
         done: bool | None = None,
@@ -152,7 +155,7 @@ class Controller(BaseController):
             `cmdFullState` call.
 
         Args:
-            time: Episode's elapsed time, in seconds.
+            ep_time: Episode's elapsed time, in seconds.
             obs: The quadrotor's Vicon data [x, 0, y, 0, z, 0, phi, theta, psi, 0, 0, 0].
             reward: The reward signal.
             done: Wether the episode has terminated.
@@ -162,72 +165,44 @@ class Controller(BaseController):
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
-        iteration = int(time * self.CTRL_FREQ)
+        iteration = int(ep_time * self.CTRL_FREQ)
 
         #########################
         # REPLACE THIS (START) ##
         #########################
 
-        # Handwritten solution for GitHub's getting_stated scenario.
+        # Handcrafted solution for getting_stated scenario.
 
-        if iteration == 0:
-            height = 1
-            duration = 2
-
-            command_type = Command(2)  # Take-off.
-            args = [height, duration]
-
-        elif iteration >= 3 * self.CTRL_FREQ and iteration < 20 * self.CTRL_FREQ:
-            step = min(iteration - 3 * self.CTRL_FREQ, len(self.ref_x) - 1)
-            target_pos = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])
-            target_vel = np.zeros(3)
-            target_acc = np.zeros(3)
-            target_yaw = 0.0
-            target_rpy_rates = np.zeros(3)
-
-            command_type = Command(1)  # cmdFullState.
-            args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, time]
-
-        elif iteration == 20 * self.CTRL_FREQ:
-            command_type = Command(6)  # Notify setpoint stop.
-            args = []
-
-        elif iteration == 20 * self.CTRL_FREQ + 1:
-            x = self.ref_x[-1]
-            y = self.ref_y[-1]
-            z = 1.5
-            yaw = 0.0
-            duration = 2.5
-
-            command_type = Command(5)  # goTo.
-            args = [[x, y, z], yaw, duration, False]
-
-        elif iteration == 23 * self.CTRL_FREQ:
-            x = self.initial_obs[0]
-            y = self.initial_obs[2]
-            z = 1.5
-            yaw = 0.0
-            duration = 6
-
-            command_type = Command(5)  # goTo.
-            args = [[x, y, z], yaw, duration, False]
-
-        elif iteration == 30 * self.CTRL_FREQ:
-            height = 0.0
-            duration = 3
-
-            command_type = Command(3)  # Land.
-            args = [height, duration]
-
-        elif iteration == 33 * self.CTRL_FREQ - 1:
-            command_type = Command(
-                -1
-            )  # Terminate command to be sent once the trajectory is completed.
-            args = []
-
+        if not self._take_off:
+            command_type = Command.TAKEOFF
+            args = [0.3, 2]  # Height, duration
+            self._take_off = True  # Only send takeoff command once
         else:
-            command_type = Command(0)  # None.
-            args = []
+            step = iteration - 2 * self.CTRL_FREQ  # Account for 2s delay due to takeoff
+            if ep_time - 2 > 0 and step < len(self.ref_x):
+                target_pos = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])
+                target_vel = np.zeros(3)
+                target_acc = np.zeros(3)
+                target_yaw = 0.0
+                target_rpy_rates = np.zeros(3)
+                command_type = Command.FULLSTATE
+                args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
+            # Notify set point stop has to be called every time we transition from low-level
+            # commands to high-level ones. Prepares for landing
+            elif step >= len(self.ref_x) and not self._setpoint_land:
+                command_type = Command.NOTIFYSETPOINTSTOP
+                args = []
+                self._setpoint_land = True
+            elif step >= len(self.ref_x) and not self._land:
+                command_type = Command.LAND
+                args = [0.0, 2.0]  # Height, duration
+                self._land = True  # Send landing command only once
+            elif self._land:
+                command_type = Command.FINISHED
+                args = []
+            else:
+                command_type = Command.NONE
+                args = []
 
         #########################
         # REPLACE THIS (END) ####

@@ -33,6 +33,7 @@ def simulate(
     controller: str = "examples/controller.py",
     n_runs: int = 1,
     gui: bool = True,
+    terminate_on_lap: bool = True,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
@@ -41,6 +42,7 @@ def simulate(
         controller: The path to the controller module.
         n_runs: The number of episodes.
         gui: Enable/disable the simulation GUI.
+        terminate_on_lap: Stop the simulation early when the drone has passed the last gate.
 
     Returns:
         A list of episode times.
@@ -132,9 +134,10 @@ def simulate(
                 sync(i, ep_start, CTRL_DT)
             i += 1
             # Break early after passing the last gate (=> gate -1) or task completion
-            if info["current_target_gate_id"] == -1 or info["task_completed"]:
-                done = True
+            if terminate_on_lap and info["current_target_gate_id"] == -1:
                 info["task_completed"] = True
+            if info["task_completed"]:
+                done = True
 
         # Learn after the episode if the controller supports it
         ctrl.episode_learn()  # Update the controller internal state and models.

@@ -31,14 +31,14 @@ quadrotor_config:
   
   task: stabilization
   task_info:
-    stabilization_goal: [-0.5, 2.9, 0.75]  # Final goal (target position in x-y-z)
+    stabilization_goal: [0, -2, 0.5]  # Final goal (target position in x-y-z)
     stabilization_goal_tolerance: 0.15
 
   # Nominal (pre-randomization) initial state
   init_state:
-    init_x: -0.9
+    init_x: 1.0
     init_x_dot: 0
-    init_y: -2.9
+    init_y: 1.0
     init_y_dot: 0
     init_z: 0.03
     init_z_dot: 0
@@ -52,17 +52,17 @@ quadrotor_config:
   # Nominal (pre-randomization) positions of gates and obstacles
   gates:
     [  # x, y, z, r, p, y, type (0: `tall` obstacle, 1: `low` obstacle)
-      [0.5, -2.5, 0, 0, 0, -1.57, 0],
-      [2, -1.5, 0, 0, 0, 0, 1],
-      [0, 0.2, 0, 0, 0, 1.57, 1],
-      [-0.5, 1.5, 0, 0, 0, 0, 0]
+      [0.5, -1.0, 0, 0, 0, 2.35, 1],
+      [1.0, -1.5, 0, 0, 0, -0.78, 0],
+      [0.0, 0.5, 0, 0, 0, 0, 1],
+      [-0.5, -0.5, 0, 0, 0, 3.14, 0]
     ]
   obstacles:
     [  # x, y, z, r, p, y
-      [1.5, -2.5, 0, 0, 0, 0],
-      [0.5, -1, 0, 0, 0, 0],
-      [1.5, 0, 0, 0, 0, 0],
-      [-1, 0, 0, 0, 0, 0]
+      [1.0, -0.5, 0, 0, 0, 0],
+      [0.5, -1.5, 0, 0, 0, 0],
+      [-0.5, 0, 0, 0, 0, 0],
+      [0, 1.0, 0, 0, 0, 0]
     ]
 
   # Randomization of the initial state

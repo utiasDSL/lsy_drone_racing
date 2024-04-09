@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     import numpy as np
 
+    from lsy_drone_racing.command import Command
+
 
 class BaseController(ABC):
     """Base class for controller implementations."""
@@ -54,12 +56,12 @@ class BaseController(ABC):
     @abstractmethod
     def compute_control(
         self,
-        time: float,
+        ep_time: float,
         obs: np.ndarray,
         reward: Optional[float] = None,
         done: Optional[bool] = None,
         info: Optional[dict] = None,
-    ):
+    ) -> tuple[Command, list]:
         """Pick command sent to the quadrotor through a Crazyswarm/Crazyradio-like interface.
 
         INSTRUCTIONS:
@@ -68,7 +70,7 @@ class BaseController(ABC):
             `cmdFullState` call.
 
         Args:
-            time: Episode's elapsed time, in seconds.
+            ep_time: Episode's elapsed time, in seconds.
             obs: The quadrotor's Vicon data [x, 0, y, 0, z, 0, phi, theta, psi, 0, 0, 0].
             reward: The reward signal.
             done: Wether the episode has terminated.
