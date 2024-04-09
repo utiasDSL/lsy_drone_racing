@@ -1,12 +1,13 @@
 # Autonomous Drone Racing Project Course
 ![ADR Banner](docs/img/banner.jpeg)
+<sub><sup>AI generated image</sup></sub>
 
 ## Installation
 
 To run the LSY Autonomous Drone Racing project, you will need 3 main repositories:
 - [safe-control-gym](https://github.com/utiasDSL/safe-control-gym/tree/beta-iros-competition) - `beta-iros-competition` branch: The drone simulator and gym environments
 - [pycffirmware](https://github.com/utiasDSL/pycffirmware) - `main` branch: A simulator for the on-board controller response of the drones we are using to accurately model their behavior
-- [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `master` branch: This repository containing the scripts to simulate and deploy the drones in the racing challenge
+- [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the scripts to simulate and deploy the drones in the racing challenge
 
 ### Fork lsy_drone_racing
 
@@ -60,9 +61,32 @@ python scripts/sim.py
 
 If everything is installed correctly, this opens the simulator and simulates a drone flying through four gates.
 
+## Difficulty levels
+The complete problem is specified by a YAML file, e.g. [`getting_started.yaml`](config/getting_started.yaml)
+
+The config folder contains settings for progressively harder scenarios:
+
+|         Evaluation Scenario         | Constraints | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes |         Notes         |
+| :---------------------------------: | :---------: | :-----------------------: | :-------------------------: | :--------------------: | :-------------------: |
+| [`level0.yaml`](config/level0.yaml) |   **Yes**   |           *No*            |            *No*             |          *No*          |   Perfect knowledge   |
+| [`level1.yaml`](config/level1.yaml) |   **Yes**   |          **Yes**          |            *No*             |          *No*          |       Adaptive        |
+| [`level2.yaml`](config/level2.yaml) |   **Yes**   |          **Yes**          |           **Yes**           |          *No*          | Learning, re-planning |
+| [`level3.yaml`](config/level3.yaml) |   **Yes**   |          **Yes**          |           **Yes**           |        **Yes**         |      Robustness       |
+|                                     |             |                           |                             |                        |                       |
+|              sim2real               |   **Yes**   |    Real-life hardware     |           **Yes**           |          *No*          |   Sim2real transfer   |
+
+> **Note:** "Rand. Between Episodes" (governed by argument `reseed_on_reset`) states whether randomized properties and positions vary or are kept constant (by re-seeding the random number generator on each `env.reset()`) across episodes
+
+### Switching between configurations
+You can choose which configuration to use by changing the `--config` command line option. To e.g. run the example controller on the hardest scenario, you can use the following command
+
+```bash
+python scripts/sim.py --config config/level3.yaml
+```
+
 ## The online competition
 
-During the semester, you will compete with the other teams on who's the fastest to complete the drone race. You can see the current standings on the competition page in Kaggle, a popular ML competition website. The results of the competition will **NOT** influence your grade directly. However, it gives you a sense of how performant and robust your approach is compared to others. In addition, the competition is an easy way for you to check if your code is running correctly. If there are errors in the automated testing, chances are your project also doesn't run on our systems.
+During the semester, you will compete with the other teams on who's the fastest to complete the drone race. You can see the current standings on the competition page in Kaggle, a popular ML competition website. The results of the competition will **NOT** influence your grade directly. However, it gives you a sense of how performant and robust your approach is compared to others. In addition, the competition is an easy way for you to check if your code is running correctly. If there are errors in the automated testing, chances are your project also doesn't run on our systems. The competition will always use difficulty level 3.
 
 ### Signing up for the online competition
 
@@ -70,7 +94,7 @@ To take part in the competition, you first have to create an account on [Kaggle]
 
 ### Setting up your GitHub repo for the competition
 
-The competition submission to Kaggle is fully automated. However, to make the automation works with your Kaggle account, you first have to save your credentials in GitHub. GitHub offers a way to safely store this information without giving anyone else access to it via its [secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions). Start by opening your account settings on Kaggle, go to the **API** section and click on **Create New Token**. This will download a json file containing two keys: Your account username and an API key. Next, open your lsy_drone_racing GitHub repository in the browser and go to Settings -> Secrets and variables -> Actions
+The competition submission to Kaggle is fully automated. However, to make the automation work with your Kaggle account, you first have to save your credentials in GitHub. GitHub offers a way to safely store this information without giving anyone else access to it via its [secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions). Start by opening your account settings on Kaggle, go to the **API** section and click on **Create New Token**. This will download a json file containing two keys: Your account username and an API key. Next, open your lsy_drone_racing GitHub repository in the browser and go to Settings -> Secrets and variables -> Actions
 
 >**Note:** You have to select the repository settings, not your account settings
 
@@ -88,12 +112,12 @@ The whole point of the steps you just took was to set you up to use the GitHub a
 
 >**Warning:** Kaggle only accepts 100 submissions per day. While we really hope you don't make 100 commits in a single day, we do mention it just in case. 
 
-Once you have pushed your latest iteration, a GitHub action runner will start testing your implementation. You can check the progress by clicking on the Actions tab of your repository. If the submission fails, you can check the errors. Please let us know if something is not working as intended. If you need additional packages for your project, please make sure to update the [environment.yaml](./environment.yaml) file accordingly. Otherwise, the tests will fail. If you want to get a more detailled summary of your performance, you can have a look at the test output directly:
+Once you have pushed your latest iteration, a GitHub action runner will start testing your implementation. You can check the progress by clicking on the Actions tab of your repository. If the submission fails, you can check the errors. Please let us know if something is not working as intended. If you need additional packages for your project, please make sure to update the [environment.yaml](./environment.yaml) file accordingly. Otherwise, the tests will fail. If you want to get a more detailed summary of your performance, you can have a look at the test output directly:
 
 
 ## Creating your own controller
 
-To implement your own controller, have a look at the [example implementation](./examples/controller.py). We recommend to alter the existing example controller instead of creating your own file to not break the testing pipeline. Please also read through the documentation of the controller. You **must not** alter its function signatures. If you encounter problems implementing something with the given interface, contact one of the lecturers.
+To implement your own controller, have a look at the [example implementation](./examples/controller.py). We recommend altering the existing example controller instead of creating your own file to not break the testing pipeline. Please also read through the documentation of the controller. You **must not** alter its function signatures. If you encounter problems implementing something with the given interface, contact one of the lecturers.
 
 ## Deployment [TODO: Complete. **NOT IMPORTANT FOR STUDENTS FOR NOW**]
 
