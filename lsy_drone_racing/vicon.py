@@ -25,7 +25,10 @@ class ViconWatcher:
             track_names: The names of any additional objects besides the drone to track.
         """
         assert Master("/rosnode").is_online(), "ROS is not running. Please run hover.launch first!"
-        rospy.init_node("playback_node")
+        try:
+            rospy.init_node("playback_node")
+        except rospy.exceptions.ROSException:
+            ...  # ROS node is already running which is fine for us
         config_path = get_ros_package_path("crazyswarm") / "launch/crazyflies.yaml"
         assert config_path.exists(), "Crazyfly config file missing!"
         with open(config_path, "r") as f:

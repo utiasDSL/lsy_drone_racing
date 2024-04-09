@@ -69,6 +69,8 @@ def apply_command(cf: Crazyflie, command_type: Command, args: Any):
         args: Additional arguments as potentially required by `command_type`.
     """
     if command_type == Command.FULLSTATE:
+        # Sim version takes an additional 'ep_time' args that needs to be removed when deployed
+        args = args[:5]
         cf.cmdFullState(*args)
     elif command_type == Command.TAKEOFF:
         cf.takeoff(*args)
