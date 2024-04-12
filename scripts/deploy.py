@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_init_info(
-    env_info: dict, gate_poses: list, obstacle_poses: list, constraint_values: list
+    env_info: dict, gate_poses: list, obstacle_poses: list, constraint_values: list, x_reference: list
 ) -> dict:
     """Create the initial information dictionary for the controller.
 
@@ -53,7 +53,7 @@ def create_init_info(
     init_info = {
         "symbolic_model": env_info["symbolic_model"],
         "nominal_physical_parameters": physical_params,
-        "x_reference": [-0.5, 0.0, 2.9, 0.0, 0.75, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        "x_reference": [x_reference[0], 0.0, x_reference[1], 0.0, x_reference[2], 0.0] + [0.0] * 6,
         "u_reference": [0.084623, 0.084623, 0.084623, 0.084623],
         "symbolic_constraints": env_info["symbolic_constraints"],
         "ctrl_timestep": 1 / 30,
@@ -136,8 +136,9 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     drone_rot_and_agl_vel = [vicon.rpy["cf"][0], vicon.rpy["cf"][1], vicon.rpy["cf"][2], 0, 0, 0]
     env.state = drone_pos_and_vel + drone_rot_and_agl_vel
     constraint_values = env.constraints.get_values(env, only_state=True)
+    x_reference = config.quadrotor_config.task_info.stabilization_goal
 
-    init_info = create_init_info(env_info, gate_poses, obstacle_poses, constraint_values)
+    init_info = create_init_info(env_info, gate_poses, obstacle_poses, constraint_values, x_reference)
 
     CTRL_FREQ = init_info["ctrl_freq"]
 
@@ -194,17 +195,8 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
                 target_gate_id = -1
                 at_goal_time = time.time()
 
-            # TODO: Clean this up
             if target_gate_id == -1:
                 goal_pos = np.array([env.X_GOAL[0], env.X_GOAL[2], env.X_GOAL[4]])
-                goal_dist = np.linalg.norm(vicon.pos["cf"][0:3] - goal_pos)
-                print(f"{time.time() - at_goal_time:.4}s and {goal_dist}m away")
-                if goal_dist >= 0.15:
-                    print(f"First hit goal position in {curr_time:.4}s")
-                    at_goal_time = time.time()
-                elif time.time() - at_goal_time > 2:
-                    print(f"Task Completed in {curr_time:.4}s")
-                    completed = True
 
             # Get the latest vicon observation and call the controller
             p = vicon.pos["cf"]
@@ -219,12 +211,8 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
             apply_command(cf, command_type, args)  # Send the command to the drone controller
             time_helper.sleepForRate(CTRL_FREQ)
 
-            if completed:
+            if command_type == Command.FINISHED or completed:
                 break
-
-        # Land does not wait for the drone to actually land, so we have to wait manually
-        cf.land(0, 3)
-        time_helper.sleep(3.5)
 
         # Save the commands for logging
         save_dir = Path(__file__).resolve().parents[1] / "logs"
