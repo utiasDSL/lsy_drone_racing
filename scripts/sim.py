@@ -93,6 +93,7 @@ def simulate(
         obs, info = wrapped_env.reset()
         info["ctrl_timestep"] = CTRL_DT
         info["ctrl_freq"] = CTRL_FREQ
+        lap_finished = False
         # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
         vicon_obs = [obs[0], 0, obs[2], 0, obs[4], 0, obs[6], obs[7], obs[8], 0, 0, 0]
         ctrl = ctrl_class(vicon_obs, info, verbose=config.verbose)
@@ -135,13 +136,13 @@ def simulate(
             i += 1
             # Break early after passing the last gate (=> gate -1) or task completion
             if terminate_on_lap and info["current_target_gate_id"] == -1:
-                info["task_completed"] = True
+                info["task_completed"], lap_finished = True, True
             if info["task_completed"]:
                 done = True
 
         # Learn after the episode if the controller supports it
         ctrl.episode_learn()  # Update the controller internal state and models.
-        log_episode_stats(stats, info, config, curr_time)
+        log_episode_stats(stats, info, config, curr_time, lap_finished)
         ctrl.episode_reset()
         # Reset the statistics
         stats["ep_reward"] = 0
@@ -155,14 +156,14 @@ def simulate(
     return ep_times
 
 
-def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float):
+def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, lap_finished: bool):
     """Log the statistics of a single episode."""
     stats["gates_passed"] = info["current_target_gate_id"]
     if stats["gates_passed"] == -1:  # The drone has passed the final gate
         stats["gates_passed"] = len(config.quadrotor_config.gates)
     if config.quadrotor_config.done_on_collision and info["collision"][1]:
         termination = "COLLISION"
-    elif config.quadrotor_config.done_on_completion and info["task_completed"]:
+    elif config.quadrotor_config.done_on_completion and info["task_completed"] or lap_finished:
         termination = "TASK COMPLETION"
     elif config.quadrotor_config.done_on_violation and info["constraint_violation"]:
         termination = "CONSTRAINT VIOLATION"
