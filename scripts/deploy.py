@@ -30,7 +30,11 @@ logger = logging.getLogger(__name__)
 
 
 def create_init_info(
-    env_info: dict, gate_poses: list, obstacle_poses: list, constraint_values: list, x_reference: list
+    env_info: dict,
+    gate_poses: list,
+    obstacle_poses: list,
+    constraint_values: list,
+    x_reference: list,
 ) -> dict:
     """Create the initial information dictionary for the controller.
 
@@ -39,6 +43,7 @@ def create_init_info(
         gate_poses: The list of gate poses.
         obstacle_poses: The list of obstacle poses.
         constraint_values: The values of the environment constraints evaluated at the start state.
+        x_reference: The reference state for the controller to stabilize the drone after the race.
     """
     gate_dimensions_low = {"shape": "square", "height": 0.525, "edge": 0.45}
     gate_dimensions_tall = {"shape": "square", "height": 1.0, "edge": 0.45}
@@ -138,7 +143,9 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     constraint_values = env.constraints.get_values(env, only_state=True)
     x_reference = config.quadrotor_config.task_info.stabilization_goal
 
-    init_info = create_init_info(env_info, gate_poses, obstacle_poses, constraint_values, x_reference)
+    init_info = create_init_info(
+        env_info, gate_poses, obstacle_poses, constraint_values, x_reference
+    )
 
     CTRL_FREQ = init_info["ctrl_freq"]
 
@@ -156,6 +163,7 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     try:
         # Run the main control loop
         start_time = time.time()
+        total_time = None
         while not time_helper.isShutdown():
             curr_time = time.time() - start_time
 
@@ -193,10 +201,7 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
 
             if target_gate_id == len(gate_poses):  # Reached the end
                 target_gate_id = -1
-                at_goal_time = time.time()
-
-            if target_gate_id == -1:
-                goal_pos = np.array([env.X_GOAL[0], env.X_GOAL[2], env.X_GOAL[4]])
+                total_time = time.time() - start_time
 
             # Get the latest vicon observation and call the controller
             p = vicon.pos["cf"]
@@ -214,6 +219,7 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
             if command_type == Command.FINISHED or completed:
                 break
 
+        logger.info(f"Total time: {total_time:.3f}s" if total_time else "Task not completed")
         # Save the commands for logging
         save_dir = Path(__file__).resolve().parents[1] / "logs"
         save_dir.mkdir(parents=True, exist_ok=True)
