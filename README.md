@@ -2,6 +2,28 @@
 ![ADR Banner](docs/img/banner.jpeg)
 <sub><sup>AI generated image</sup></sub>
 
+## Table of Contents
+- [Autonomous Drone Racing Project Course](#autonomous-drone-racing-project-course)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+    - [Fork lsy\_drone\_racing](#fork-lsy_drone_racing)
+    - [Using conda/mamba](#using-condamamba)
+  - [Difficulty levels](#difficulty-levels)
+    - [Switching between configurations](#switching-between-configurations)
+  - [The online competition](#the-online-competition)
+    - [Signing up for the online competition](#signing-up-for-the-online-competition)
+    - [Setting up your GitHub repo for the competition](#setting-up-your-github-repo-for-the-competition)
+    - [Submitting your latest iteration](#submitting-your-latest-iteration)
+  - [Creating your own controller](#creating-your-own-controller)
+  - [Deployment (**NOT IMPORTANT FOR STUDENTS FOR NOW**)](#deployment-not-important-for-students-for-now)
+    - [Hardware setup](#hardware-setup)
+    - [Common errors](#common-errors)
+      - [libNatNet](#libnatnet)
+    - [Fly with the drones](#fly-with-the-drones)
+      - [Settings](#settings)
+      - [Launch](#launch)
+
+
 ## Installation
 
 To run the LSY Autonomous Drone Racing project, you will need 3 main repositories:
@@ -119,7 +141,9 @@ Once you have pushed your latest iteration, a GitHub action runner will start te
 
 To implement your own controller, have a look at the [example implementation](./examples/controller.py). We recommend altering the existing example controller instead of creating your own file to not break the testing pipeline. Please also read through the documentation of the controller. You **must not** alter its function signatures. If you encounter problems implementing something with the given interface, contact one of the lecturers.
 
-## Deployment [TODO: Complete. **NOT IMPORTANT FOR STUDENTS FOR NOW**]
+## Deployment (**NOT IMPORTANT FOR STUDENTS FOR NOW**)
+
+### Hardware setup
 
 To deploy the controllers on real drones you must install ROS Noetic and the crazyswarm package.
 
@@ -190,9 +214,14 @@ pip install cfclient
 conda deactivate
 ```
 
-## Deploy the drones 
+### Common errors
 
-### Settings
+#### libNatNet
+If libNatNet is missing either during compiling crazyswarm or launching hover_swarm.launch, one option is to manually install it. Download the library from its [github repo](https://github.com/whoenig/NatNetSDKCrossplatform), follow the build instructions, and then add the library to your `LIBRARY_PATH` and `LD_LIBRARY_PATH` variables.
+
+### Fly with the drones 
+
+#### Settings
 Make sure you are familiar with the configuration files. Not all options are relevant depending on the motion capture setup. For more info, see the [official documentation](https://crazyswarm.readthedocs.io/en/latest/configuration.html#adjust-configuration-files).
 
 The important config files are located in the crazyswarm ROS package:
@@ -207,7 +236,7 @@ As well as the launch file and Python script:
 - cf_sim2real.launch
 - cmdFullStateCFFirmware.py
 
-### Fly
+#### Launch
 
 >**Note:** The following is **NOT** within a conda environment, but has to run directly on the system's Python 3.8 installation. ROS has never heard of these best practices you speak of.
 
