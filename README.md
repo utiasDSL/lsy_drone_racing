@@ -46,34 +46,46 @@ First, clone the new fork from your own account and create a new environment wit
 ```bash
 mkdir -p ~/repos && cd repos
 git clone https://github.com/<YOUR-USERNAME>/lsy_drone_racing.git
-cd lsy_drone_racing
-conda conda env create -f environment.yaml
+conda env create -n drone python=3.8
 conda activate drone
 ```
 
 > **Note:** It is important you stick with **Python 3.8**. Yes, it is outdated. Yes, we'd also like to upgrade. However, there are serious issues beyond our control when deploying the code on the real drones with any other version.
 
-Next, install the lsy_drone_racing package in editable mode from the repository root
-
-```bash
-pip install -e .
-```
-
-Download the `safe-control-gym` and `pycffirmware` repositories and install them. Make sure you have your conda/mamba environment active!
+Next, download the `safe-control-gym` and `pycffirmware` repositories and install them. Make sure you have your conda/mamba environment active!
 
 ```bash
 cd ~/repos
 git clone -b beta-iros-competition https://github.com/utiasDSL/safe-control-gym.git
 cd safe-control-gym
-pip install . --no-deps
+pip install .
 ```
+
+> **Note:** If you receive an error installing safe-control-gym related to gym==0.21.0, run
+> ```bash
+>    pip install setuptools==65.5.0 pip==21 wheel==0.38.4
+> ```
+> first
+
 ```bash
 cd ~/repos
 git clone https://github.com/utiasDSL/pycffirmware.git
 cd pycffirmware
 git submodule update --init --recursive
+sudo apt update
+sudo apt install build-essential
+conda install swig
 ./wrapper/build_linux.sh
 ```
+
+Now you can install the lsy_drone_racing package in editable mode from the repository root
+
+```bash
+cd ~/repos/lsy_drone_racing
+pip install --upgrade pip
+pip install -e .
+```
+
 Finally, you can test if the installation was successful by running 
 
 ```bash

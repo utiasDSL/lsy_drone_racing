@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 def main():
     """Run the simulation N times and save the results as 'submission.csv'."""
     n_runs = 10
-    ep_times = simulate(config="config/level3.yaml", n_runs=n_runs, gui=False)
+    controller = "examples/controller.py"
+    ep_times = simulate(config="config/level3.yaml", controller=controller,n_runs=n_runs, gui=False)
     # Log the number of failed runs if any
 
     if failed := [x for x in ep_times if x is None]:

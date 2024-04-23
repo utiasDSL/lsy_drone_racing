@@ -17,6 +17,16 @@ classifiers = [
     "Intended Audience :: Science/Research",
 ]
 
+dependencies = [
+    "fire >= 0.6.0",
+    "munch >= 2.5.0",
+    "numpy >= 1.24.1",
+    "pandas >= 1.5.3",
+    "pybullet >= 3.2.6",
+    "PyYAML >= 6.0.1",
+    "rospkg >= 1.5.1",
+    "scipy >= 1.10.1",
+]
 
 [tool.setuptools]
 packages = ["lsy_drone_racing"]
