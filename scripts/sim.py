@@ -25,12 +25,17 @@ from safe_control_gym.utils.utils import sync
 from lsy_drone_racing.command import apply_sim_command
 from lsy_drone_racing.utils import load_controller
 
+# Fix, so we can import form the src module
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 logger = logging.getLogger(__name__)
 
 
 def simulate(
     config: str = "config/getting_started.yaml",
-    controller: str = "examples/controller.py",
+    controller: str = "src/my_controller.py",
     n_runs: int = 1,
     gui: bool = True,
     terminate_on_lap: bool = True,
