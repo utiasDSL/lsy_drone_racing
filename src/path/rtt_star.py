@@ -17,15 +17,21 @@ class RRTStar(RRT):
                  max_extend_length = 0.15,
                  path_resolution = 0.5,
                  goal_sample_rate = 0.05,
-                 max_iter = 5000 ):
+                 max_iter = 5000 ,
+                 good_enough_abortion_delta = 0.01
+                 ):
         super().__init__(start, goal, map, max_extend_length, path_resolution, goal_sample_rate, max_iter)
         self.final_nodes = []
         self.informed_sampler = InformedSampler(goal, start)
+        self.good_enough_abortion_delta = good_enough_abortion_delta
 
     def plan(self):
         """Plans the path from start to goal while avoiding obstacles"""
         self.start.cost = 0
         self.tree.add(self.start)
+
+        optimal_cost = np.linalg.norm(self.start.p - self.goal.p)
+
         for i in range(self.max_iter):
             #Generate a random node (rnd_node)
             rnd = self.get_random_node()
@@ -38,6 +44,13 @@ class RRTStar(RRT):
             if not self.map.check_ray_collision(ray):
               #add the node to tree
               self.add(new_node)
+
+              # early abort in case found path is good up to some delta
+              if self.goal.parent and (self.goal.cost <= optimal_cost + self.good_enough_abortion_delta):
+                print(f"Early aborting at iteration {i}. Optimal cost: {optimal_cost}, found cost: {self.goal.cost}")
+                path = self.final_path()
+                return path, self.goal.cost
+              
         #Return path if it exists
         if not self.goal.parent: path = None
         else: path = self.final_path()
@@ -110,6 +123,7 @@ class RRTStar(RRT):
           #sample until rnd is inside bounds of the map
           while not self.map.inbounds(rnd):
               # Sample random point inside ellipsoid
+              #print(f"Foal cost: {self.goal.cost}")
               rnd = self.informed_sampler.sample(self.goal.cost)
         else:
           # Sample random point inside boundaries

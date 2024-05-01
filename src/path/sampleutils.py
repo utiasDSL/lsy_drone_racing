@@ -115,7 +115,12 @@ class InformedSampler:
         '''
         #Hyperspheroid axes lengths
         r1 = cmax/2
-        ri = np.sqrt(cmax**2 - self.cmin**2)/2
+
+        if self.cmin**2 > cmax**2:
+            print(f"Error: cmin**2 > cmax**2, cmin: {self.cmin}, cmax: {cmax}")
+            ri = 0
+        else:
+            ri = np.sqrt(cmax**2 - self.cmin**2)/2
         axes = [r1]+ [ri]*(self.dim - 1)
         self.ellipsampler.L = np.diag(axes)
         #return sampled point

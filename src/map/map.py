@@ -7,14 +7,17 @@ if not os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')) in sys.
 import numpy as np
 from src.map.map_utils import Object, Ray
 import matplotlib.pyplot as plt
+from rtree import index
 
 
 
 class Map:
-    def __init__(self, min_x, max_x, min_y, max_y, max_z):
-        self.lower_bound = np.array([min_x, min_y, 0])
-        self.upper_bound = np.array([max_x, max_y, max_z])
-        self.objects = []
+    def __init__(self, lower_bound: np.ndarray, upper_bound: np.ndarray, drone_radius=0):
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+        self.idx = self._create_3d_idx()
+        self.drone_radius = drone_radius
+        self.obbs = []
 
         self.components = {
     "large_portal": {
@@ -37,14 +40,16 @@ class Map:
             "size": (0.1, 0.1, 1.05)
         }
     }
-}
-    
+}   
+    @staticmethod
+    def _create_3d_idx():
+        p = index.Property()
+        p.dimension = 3
+        return index.Index(properties=p)
     
     def parse_gates(self, gates_pose_and_types):
-
         gate_type_id_to_component_name_mapping = {0: "large_portal", 1: "small_portal"}
-        
-        objects = []
+
         for gate_pos_and_type in gates_pose_and_types:
             gate_type_id = gate_pos_and_type[6]
             component_name = gate_type_id_to_component_name_mapping[gate_type_id]
@@ -56,12 +61,11 @@ class Map:
 
             object.translate(center)
             object.rotate_z(rotation[2])
-            objects.append(object)
+            for obb in object.obbs:
+                self._add_obb(obb)
 
-        self.objects.extend(objects)
     
     def parse_obstacles(self, obstacles_pose):
-        objects = []
         for obstacle_pose in obstacles_pose:
             component = self.components["obstacle"]
             object = Object.transform_urdf_component_into_object(component)
@@ -72,16 +76,43 @@ class Map:
 
             object.translate(center)
             object.rotate_z(rotation[2])
-            objects.append(object)
-        
-        self.objects.extend(objects)
+            for obb in object.obbs:
+                self._add_obb(obb)
+
+    def _add_obb(self, obb):
+        # Add the obb to the r-tree by rotating it into world frame and doing worst case estimation
+        # Calculate the corners of the OBB based on its center, half_sizes, and rotation
+        corners = np.array([
+            [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+            [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]
+        ]) * obb.half_sizes  # Scale the unit cube by half sizes
+        corners = np.dot(corners, obb.rotation_matrix.T) + obb.center  # Rotate and translate
+
+        # Compute the axis-aligned bounding box (AABB) that encloses the rotated corners
+        # is is inflated with the drone size
+        min_corner = np.min(corners, axis=0) - self.drone_radius
+        max_corner = np.max(corners, axis=0) + self.drone_radius
+
+        # Add the AABB to the r-tree
+        new_id = len(self.obbs)
+        self.idx.insert(new_id, (*min_corner, *max_corner))
+        self.obbs.append(obb)
     
     
-    def check_ray_collision(self, ray: Ray):
-        for obj in self.objects:
-            if obj.check_collision_with_ray(ray):
+    def check_ray_collision(self, ray: Ray, drone_size=0):
+        # Calculate collision candidates using the r-tree
+        ray_min = np.minimum(ray.start, ray.end)
+        ray_max = np.maximum(ray.start, ray.end)
+        potential_hits = list(self.idx.intersection((*ray_min, *ray_max), objects=True))
+
+        # Check for collision with each candidate
+        for item in potential_hits:
+            #print(f"Check potential collision with obb: {item.id}")
+            obb = self.obbs[item.id]
+            if obb.check_collision_with_ray(ray, self.drone_radius):
                 return True
         return False
+
 
     def create_map_sized_figure(self):
         fig = plt.figure()
@@ -96,8 +127,8 @@ class Map:
         return ax
     
     def add_objects_to_plot(self, ax):
-        for obj in self.objects:
-            obj.plot(ax)
+        for obb in self.obbs:
+            obb.plot(ax)
 
     def easy_plot(self):
         ax = self.create_map_sized_figure()
@@ -125,22 +156,32 @@ class Map:
       return (self.lower_bound <= p).all() and (p <= self.upper_bound).all()
 
 if __name__ == "__main__":
-    map = Map(-4, 4, -4,4, 1.5)
-    gates_pos_and_types = np.array([[
-                                    0.45, -1.0, 0, 0, 0, 2.35, 1], 
-                                    [1.0, -1.55, 0, 0, 0, -0.78, 0], 
-                                    [0.0, 0.5, 0, 0, 0, 0, 1], 
-                                    [-0.5, -0.5, 0, 0, 0, 3.14/2, 0]
-                                    ]
-                                    )
-    obstacles = [  # x, y, z, r, p, y
-      [1.0, -0.5, 0, 0, 0, 0],
-      [0.5, -1.5, 0, 0, 0, 0],
-      [-0.5, 0, 0, 0, 0, 0],
-      [0, 1.0, 0, 0, 0, 0]
-    ]
+    lower_bound = np.array([-4, -4, 0])
+    upper_bound = np.array([4, 4, 2])
+    map = Map(lower_bound, upper_bound, 0.1)
+    # gates_pos_and_types = np.array([[
+    #                                 0.45, -1.0, 0, 0, 0, 2.35, 1], 
+    #                                 [1.0, -1.55, 0, 0, 0, -0.78, 0], 
+    #                                 [0.0, 0.5, 0, 0, 0, 0, 1], 
+    #                                 [-0.5, -0.5, 0, 0, 0, 3.14/2, 0]
+    #                                 ]
+    #                                 )
+    # obstacles = [  # x, y, z, r, p, y
+    #   [1.0, -0.5, 0, 0, 0, 0],
+    #   [0.5, -1.5, 0, 0, 0, 0],
+    #   [-0.5, 0, 0, 0, 0, 0],
+    #   [0, 1.0, 0, 0, 0, 0]
+    # ]
+
+    gates_pos_and_types = np.array([
+        [0,0,0,0,0,0,0],
+    ])
+
+    obstacles = []
+
+    ray = Ray(np.array([2,2,0]), np.array([1,1,1]))
 
     map.parse_gates(gates_pos_and_types)
     map.parse_obstacles(obstacles)
-    map.easy_plot()
-    
+    col = map.check_ray_collision(ray)
+    print(f"Collision: {col}")
