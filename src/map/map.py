@@ -21,23 +21,34 @@ class Map:
 
         self.components = {
     "large_portal": {
-        "support": {"position": (0, 0, 0.4), "size": (0.05, 0.05, 0.8)},
-        "bottom_bar": {"position": (0, 0, 0.775), "size": (0.5, 0.05, 0.05)},
-        "top_bar": {"position": (0, 0, 1.25), "size": (0.5, 0.05, 0.05)},
-        "left_bar": {"position": (-0.225, 0, 0.775 + 0.5/2), "size": (0.05, 0.05, 0.5)},
-        "right_bar": {"position": (0.225, 0, 0.775 + 0.5/2), "size": (0.05, 0.05, 0.5)}
+        "support": {"position": (0, 0, 0.3875), "size": (0.05, 0.05, 0.755), "type": "collision"},
+        "bottom_bar": {"position": (0, 0, 0.75), "size": (0.55, 0.05, 0.05), "type": "collision"},
+        "top_bar": {"position": (0, 0, 1.25), "size": (0.55, 0.05, 0.05), "type": "collision"},
+        "left_bar": {"position": (-0.25, 0, 1), "size": (0.05, 0.05, 0.55), "type": "collision"},
+        "right_bar": {"position": (0.25, 0, 1), "size": (0.05, 0.05, 0.55), "type": "collision"},
+        "filling": {"position": (0, 0, 1.0), "size": (0.45, 0.05, 0.45), "type": "filling"}
     },
     "small_portal": {
-        "support": {"position": (0, 0, 0.15), "size": (0.05, 0.05, 0.3)},
-        "bottom_bar": {"position": (0, 0, 0.3), "size": (0.5, 0.05, 0.05)},
-        "top_bar": {"position": (0, 0, 0.75), "size": (0.5, 0.05, 0.05)},
-        "left_bar": {"position": (-0.225, 0, 0.3 + 0.5 / 2), "size": (0.05, 0.05, 0.5)},
-        "right_bar": {"position": (0.225, 0, 0.3 + 0.5/2), "size": (0.05, 0.05, 0.5)}
+        "support": {"position": (0, 0, 0.15), "size": (0.05, 0.05, 0.3), "type": "collision"},
+        "bottom_bar": {"position": (0, 0, 0.275), "size": (0.55, 0.05, 0.05), "type": "collision"},
+        "top_bar": {"position": (0, 0, 0.775), "size": (0.55, 0.05, 0.05), "type": "collision"},
+        "left_bar": {"position": (-0.25, 0, 0.525), "size": (0.05, 0.05, 0.55), "type": "collision"},
+        "right_bar": {"position": (0.25, 0, 0.525), "size": (0.05, 0.05, 0.55), "type": "collision"},
+        "filling": {"position": (0, 0, 0.525), "size": (0.45, 0.05, 0.45), "type": "filling"}
+    },
+    "small_portal_2": {
+        "support": {"position": (0, 0, 0.15), "size": (0.05, 0.05, 0.3),  "type": "collision"},
+        "bottom_bar": {"position": (0, 0, 0.3), "size": (0.5, 0.05, 0.05), "type": "collision"},
+        "top_bar": {"position": (0, 0, 0.75), "size": (0.5, 0.05, 0.05), "type": "collision"},
+        "left_bar": {"position": (-0.225, 0, 0.3 + 0.5 / 2), "size": (0.05, 0.05, 0.5), "type": "collision"},
+        "right_bar": {"position": (0.225, 0, 0.3 + 0.5/2), "size": (0.05, 0.05, 0.5), "type": "collision"},
+        "filling": {"position": (0, 0, 0.45), "size": (0.5, 0.05, 0.5), "type": "filling"}
     },
     "obstacle": {
         "cylinder": {
             "position": (0, 0, 0.525),
-            "size": (0.1, 0.1, 1.05)
+            "size": (0.1, 0.1, 1.05),
+            "type": "collision"
         }
     }
 }   
@@ -99,7 +110,7 @@ class Map:
         self.obbs.append(obb)
     
     
-    def check_ray_collision(self, ray: Ray, drone_size=0):
+    def check_ray_collision(self, ray: Ray, can_pass_gate):
         # Calculate collision candidates using the r-tree
         ray_min = np.minimum(ray.start, ray.end)
         ray_max = np.maximum(ray.start, ray.end)
@@ -110,6 +121,9 @@ class Map:
             #print(f"Check potential collision with obb: {item.id}")
             obb = self.obbs[item.id]
             if obb.check_collision_with_ray(ray, self.drone_radius):
+                if obb.type == "filling" and can_pass_gate:
+                    continue
+                
                 return True
         return False
 

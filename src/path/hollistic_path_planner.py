@@ -19,7 +19,9 @@ if __name__ == "__main__":
     
     lower_bound = np.array([-1.5, -2, 0])
     upper_bound = np.array([1.5, 1, 1])
-    map = Map(lower_bound=lower_bound, upper_bound=upper_bound, drone_radius=0.1)
+    drone_radius = 0.1
+
+    map = Map(lower_bound=lower_bound, upper_bound=upper_bound, drone_radius=drone_radius)
     map.parse_gates(nomial_gates)
     map.parse_obstacles(nominal_obstacles)
     #map.easy_plot()
@@ -36,10 +38,11 @@ if __name__ == "__main__":
     for gate_center, gate_normal in zip(gates_centers, gates_normals):
         gate_normal_normalized = gate_normal / np.linalg.norm(gate_normal)
         # add checkpoint before and after the gate center, 10 cm
-        early_checkpoint = gate_center - 0.1 * gate_normal_normalized
-        late_checkpoint = gate_center + 0.1 * gate_normal_normalized
+        eps = 0.05
+        early_checkpoint = gate_center - (drone_radius + eps) * gate_normal_normalized 
+        late_checkpoint = gate_center + (drone_radius + eps) * gate_normal_normalized
         checkpoints.append(early_checkpoint)
-        checkpoints.append(gate_center)
+        #checkpoints.append(gate_center)
         checkpoints.append(late_checkpoint)
 
     checkpoints.append(goal_point)
@@ -48,16 +51,18 @@ if __name__ == "__main__":
     # Generate path using r_star
     path = []
     for i, (start_pos, end_pos) in enumerate(zip(checkpoints[:-1], checkpoints[1:])):
-        print(f"Generating section {i} from {start_pos} to {end_pos}")
-        rrt = RRTStar(start_pos, end_pos, map, max_iter=500, max_extend_length=0.3, goal_sample_rate=0.1)
+        can_pass_gate = i%2 == 1
+        print(f"Generating section {i} from {start_pos} to {end_pos}. CAn pass gates {can_pass_gate}")
+        
+        rrt = RRTStar(start_pos, end_pos, map, can_pass_gates=can_pass_gate, max_iter=500, max_extend_length=0.5, goal_sample_rate=0.1)
         waypoints, _ = rrt.plan()
         if waypoints is None:
             print("Failed to find path")
             exit(1)
 
         path.append(waypoints)
-        plot_path = np.concatenate(path, axis=0)
-        map.draw_scene(plot_path)
+        #plot_path = np.concatenate(path, axis=0)
+        #map.draw_scene(plot_path)
 
     path = np.concatenate(path, axis=0)
 
