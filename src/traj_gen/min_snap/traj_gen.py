@@ -37,6 +37,7 @@ class TrajGenerator:
         Q = Hessian(T)
         A,B = self.get_constraints(T)
 
+
         invA = LA.inv(A)
 
         if unkns != 0:

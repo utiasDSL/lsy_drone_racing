@@ -47,7 +47,7 @@ class OBB:
         t_min = 0 # start of the ray
         t_max = 1 # end of the ray
 
-        if self.type != "filling":
+        if self.type == "filling":
             inflated_half_sizes = self.half_sizes
         else:
             inflated_half_sizes = self.half_sizes + drone_radius

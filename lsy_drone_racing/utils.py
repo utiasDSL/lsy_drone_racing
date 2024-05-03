@@ -135,3 +135,24 @@ def draw_trajectory(
         lineColorRGB=[1, 0, 0],
         physicsClientId=initial_info["pyb_client"],
     )
+
+def draw_traj_without_ref(initial_info:dict, waypoints: np.ndarray):
+    ref_x = waypoints[:, 0]
+    ref_y = waypoints[:, 1]
+    ref_z = waypoints[:, 2]
+
+    step = int(ref_x.shape[0] / 50)
+    for i in range(step, ref_x.shape[0], step):
+        p.addUserDebugLine(
+            lineFromXYZ=[ref_x[i - step], ref_y[i - step], ref_z[i - step]],
+            lineToXYZ=[ref_x[i], ref_y[i], ref_z[i]],
+            lineColorRGB=[1, 0, 0],
+            physicsClientId=initial_info["pyb_client"],
+        )
+    p.addUserDebugLine(
+        lineFromXYZ=[ref_x[i], ref_y[i], ref_z[i]],
+        lineToXYZ=[ref_x[-1], ref_y[-1], ref_z[-1]],
+        lineColorRGB=[1, 0, 0],
+        physicsClientId=initial_info["pyb_client"],
+    )
+

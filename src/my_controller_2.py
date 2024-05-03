@@ -35,35 +35,18 @@ from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.utils import draw_trajectory, draw_traj_without_ref
 from src.map.map import Map
 from src.path.rtt_star import RRTStar
-from src.traj_gen.min_snap.traj_gen import TrajGenerator
 from src.utils.calc_gate_center import calc_gate_center_and_normal
-import polynomial_trajectory as polytraj
 
 class Traj():
-    def __init__(self, traj_points: np.ndarray):
-        """"
-        traj_points provided as numpy array of shape in format [x,x_dot, x_ddot,y,y_dot, y_ddot,z,z_dot,z_ddot,t]
-        """
-        self.times = traj_points[:, -1]
-        positions = []
-        velocities = []
-        accelerations = []
-        for point in traj_points:
-            pos = [point[0], point[3], point[6]]
-            vel = [point[1], point[4], point[7]]
-            acc = [point[2], point[5], point[8]]
-            positions.append(pos)
-            velocities.append(vel)
-            accelerations.append(acc)
-        self.positions = np.array(positions)
-        self.velocities = np.array(velocities)
-        self.accelerations = np.array(accelerations)
-        
+    def __init__(self, waypoints, times):
+        self.waypoints = waypoints
+        self.times = times
     
     def get_des_state(self, t):
         # find the index of the closest time
         idx = np.abs(self.times - t).argmin()
-        return self.positions[idx], self.velocities[idx], self.accelerations[idx]
+        return self.waypoints[idx]
+    
 
 class Controller(BaseController):
     """Template controller class."""
@@ -118,13 +101,24 @@ class Controller(BaseController):
         start_point = np.array([initial_obs[0], initial_obs[2], self.takeoff_height])
         goal_point = np.array([0, -2, 0.5]) # Hardcoded from the config file
 
-        # Generate map
-        lower_bound = np.array([-1.5, -2, 0])
-        upper_bound = np.array([1.5, 1, 1])
-        drone_radius = 0.1
-        map = Map(lower_bound=lower_bound, upper_bound=upper_bound, drone_radius=drone_radius)
-        map.parse_gates(self.NOMINAL_GATES)
-        map.parse_obstacles(self.NOMINAL_OBSTACLES)
+        
+        # Read traj from file
+        traj_file_path = "./traj.txt"
+        
+        sampling_times = []
+        traj_points = []
+        with open(traj_file_path, "r") as f:
+            for line in f:
+                data = line.split(",")
+                sampling_times.append(float(data[0]))
+                traj_points.append([float(data[1]), float(data[2]), float(data[3])])
+        
+        traj_points = np.array(traj_points)
+        sampling_times = np.array(sampling_times)
+
+        self.traj = Traj(traj_points, sampling_times)
+
+
 
         # Reset counters and buffers.
         self.reset()
@@ -138,67 +132,8 @@ class Controller(BaseController):
         # completing the challenge that is highly susceptible to noise and does not generalize at
         # all. It is meant solely as an example on how the drones can be controlled
 
-       
-        gates_centers = []
-        gates_normals = []
-        for gate in self.NOMINAL_GATES:
-            center, normal = calc_gate_center_and_normal(gate, self.GATE_TYPES)
-            gates_centers.append(center)
-            gates_normals.append(normal)
         
-
-        checkpoints = [start_point]
-        for gate_center, gate_normal in zip(gates_centers, gates_normals):
-            gate_normal_normalized = gate_normal / np.linalg.norm(gate_normal)
-            # add checkpoint before and after the gate center, 10 cm
-            eps = 0.05
-            early_checkpoint = gate_center - (drone_radius + eps) * gate_normal_normalized 
-            late_checkpoint = gate_center + (drone_radius + eps) * gate_normal_normalized
-            checkpoints.append(early_checkpoint)
-            #checkpoints.append(gate_center)
-            checkpoints.append(late_checkpoint)
-
-        checkpoints.append(goal_point)
-        checkpoints = np.array(checkpoints)
-
-
-        # Generate path using r_star
-        path = []
-        for i, (start_pos, end_pos) in enumerate(zip(checkpoints[:-1], checkpoints[1:])):
-            can_pass_gate = i%2 == 1
-            print(f"Generating section {i} from {start_pos} to {end_pos}. CAn pass gates {can_pass_gate}")
-            
-            rrt = RRTStar(start_pos, end_pos, map, can_pass_gates=can_pass_gate, max_iter=500, max_extend_length=1, goal_sample_rate=0.1)
-            waypoints, _ = rrt.plan()
-            if waypoints is None:
-                print("Failed to find path")
-                exit(1)
-
-            path.append(waypoints)
-
-        
-        path = np.concatenate(path, axis=0)
-        # purge path remove consecutive points where difference is insignificant
-        insignificance_threshold = 0.01
-        purged_path = [path[0]]
-        for point in path[1:]:
-            if np.linalg.norm(purged_path[-1] - point) > insignificance_threshold:
-                purged_path.append(point)
-
-        purged_path = np.array(purged_path)
-
-        print("Path generated. Now calculating trajectory...")
-        max_speed = 15
-        max_acc = 12
-        sampling_intervall = 0.2
-        traj_points = polytraj.generate_trajectory(purged_path, max_speed, max_acc, sampling_intervall)
-        self.traj = Traj(traj_points)
-
-
-        # gen ref traj for plotting
-        if self.VERBOSE:
-            draw_traj_without_ref(initial_info, self.traj.positions)
-        
+        draw_traj_without_ref(initial_info=initial_info, waypoints=traj_points)
 
         self._take_off = False
         self._setpoint_land = False
@@ -252,10 +187,10 @@ class Controller(BaseController):
         else:
             
             if ep_time - self.takeoff_time > 0 and ep_time - self.takeoff_time < self.traj.times[-1]:
-                desired_pos, desired_vel, desired_acc = self.traj.get_des_state(ep_time - 2)
+                desired_state = self.traj.get_des_state(ep_time - 2)
                 command_type = Command.FULLSTATE
                 target_rpy_rates = np.zeros(3)
-                args = [desired_pos, desired_vel, desired_acc, 0, target_rpy_rates, ep_time]
+                args = [desired_state,target_rpy_rates , target_rpy_rates, 0, target_rpy_rates, ep_time]
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
             elif ep_time - self.takeoff_time >= self.traj.times[-1] and not self._setpoint_land:

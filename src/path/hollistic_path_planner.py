@@ -5,6 +5,7 @@ if not os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')) in sys.
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 import numpy as np
+import time
 
 from src.map.map import Map
 from src.utils.calc_gate_center import calc_gate_center_and_normal
@@ -12,7 +13,12 @@ from src.path.rtt_star import RRTStar
 
 if __name__ == "__main__":
     nomial_gates = np.array([[0.45, -1.0, 0, 0, 0, 2.35, 1], [1.0, -1.55, 0, 0, 0, -0.78, 0], [0.0, 0.5, 0, 0, 0, 0, 1], [-0.5, -0.5, 0, 0, 0, 3.14, 0]])
-    nominal_obstacles = np.array([])
+    nominal_obstacles = np.array([
+    [1.0, -0.5, 0, 0, 0, 0],
+      [0.5, -1.5, 0, 0, 0, 0],
+      [-0.5, 0, 0, 0, 0, 0],
+      [0, 1.0, 0, 0, 0, 0]
+    ])
     gate_types = {'tall': {'shape': 'square', 'height': 1.0, 'edge': 0.45}, 'low': {'shape': 'square', 'height': 0.525, 'edge': 0.45}}
     start_point = np.array([1, 1, 0.05])
     goal_point = np.array([0, -2, 0.5])
@@ -48,24 +54,37 @@ if __name__ == "__main__":
     checkpoints.append(goal_point)
     checkpoints = np.array(checkpoints)
 
+
     # Generate path using r_star
+    start_time = time.time()
     path = []
     for i, (start_pos, end_pos) in enumerate(zip(checkpoints[:-1], checkpoints[1:])):
         can_pass_gate = i%2 == 1
         print(f"Generating section {i} from {start_pos} to {end_pos}. CAn pass gates {can_pass_gate}")
         
-        rrt = RRTStar(start_pos, end_pos, map, can_pass_gates=can_pass_gate, max_iter=500, max_extend_length=0.5, goal_sample_rate=0.1)
+        rrt = RRTStar(start_pos, end_pos, map, can_pass_gates=can_pass_gate, max_iter=500, max_extend_length=1, goal_sample_rate=0.1)
         waypoints, _ = rrt.plan()
         if waypoints is None:
             print("Failed to find path")
             exit(1)
 
         path.append(waypoints)
-        #plot_path = np.concatenate(path, axis=0)
-        #map.draw_scene(plot_path)
 
+    
     path = np.concatenate(path, axis=0)
+    # purge path remove consecutive points where difference is insignificant
+    insignificance_threshold = 0.01
+    purged_path = [path[0]]
+    for point in path[1:]:
+        if np.linalg.norm(purged_path[-1] - point) > insignificance_threshold:
+            purged_path.append(point)
+
+    purged_path = np.array(purged_path)
+    print(f"Time taken: {time.time() - start_time} seconds")
 
     # visualize the path
-    map.draw_scene(path)
+    map.draw_scene(purged_path)
+
+    # log path into file
+    np.savetxt("path.txt", purged_path)
     
