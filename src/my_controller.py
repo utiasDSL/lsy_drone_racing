@@ -32,38 +32,15 @@ from scipy import interpolate
 
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
-from lsy_drone_racing.utils import draw_trajectory, draw_traj_without_ref
+from lsy_drone_racing.utils import draw_trajectory, draw_traj_without_ref, remove_trajectory
 from src.map.map import Map
 from src.path.rtt_star import RRTStar
+from src.traj_gen.adaptive_traj_generator import AdaptiveTrajGenerator
 from src.traj_gen.min_snap.traj_gen import TrajGenerator
 from src.utils.calc_gate_center import calc_gate_center_and_normal
 import polynomial_trajectory as polytraj
 
-class Traj():
-    def __init__(self, traj_points: np.ndarray):
-        """"
-        traj_points provided as numpy array of shape in format [x,x_dot, x_ddot,y,y_dot, y_ddot,z,z_dot,z_ddot,t]
-        """
-        self.times = traj_points[:, -1]
-        positions = []
-        velocities = []
-        accelerations = []
-        for point in traj_points:
-            pos = [point[0], point[3], point[6]]
-            vel = [point[1], point[4], point[7]]
-            acc = [point[2], point[5], point[8]]
-            positions.append(pos)
-            velocities.append(vel)
-            accelerations.append(acc)
-        self.positions = np.array(positions)
-        self.velocities = np.array(velocities)
-        self.accelerations = np.array(accelerations)
-        
-    
-    def get_des_state(self, t):
-        # find the index of the closest time
-        idx = np.abs(self.times - t).argmin()
-        return self.positions[idx], self.velocities[idx], self.accelerations[idx]
+
 
 class Controller(BaseController):
     """Template controller class."""
@@ -100,6 +77,7 @@ class Controller(BaseController):
             
 
         # Save environment and control parameters.
+        self.initial_info = initial_info
         self.CTRL_TIMESTEP = initial_info["ctrl_timestep"]
         self.CTRL_FREQ = initial_info["ctrl_freq"]
         self.initial_obs = initial_obs
@@ -118,13 +96,8 @@ class Controller(BaseController):
         start_point = np.array([initial_obs[0], initial_obs[2], self.takeoff_height])
         goal_point = np.array([0, -2, 0.5]) # Hardcoded from the config file
 
-        # Generate map
-        lower_bound = np.array([-1.5, -2, 0])
-        upper_bound = np.array([1.5, 1, 1])
-        drone_radius = 0.1
-        map = Map(lower_bound=lower_bound, upper_bound=upper_bound, drone_radius=drone_radius)
-        map.parse_gates(self.NOMINAL_GATES)
-        map.parse_obstacles(self.NOMINAL_OBSTACLES)
+        self.adaptive_traj_generator = AdaptiveTrajGenerator(start_point, goal_point, self.NOMINAL_GATES, self.NOMINAL_OBSTACLES, self.GATE_TYPES, drone_radius=0.1)
+
 
         # Reset counters and buffers.
         self.reset()
@@ -138,66 +111,10 @@ class Controller(BaseController):
         # completing the challenge that is highly susceptible to noise and does not generalize at
         # all. It is meant solely as an example on how the drones can be controlled
 
-       
-        gates_centers = []
-        gates_normals = []
-        for gate in self.NOMINAL_GATES:
-            center, normal = calc_gate_center_and_normal(gate, self.GATE_TYPES)
-            gates_centers.append(center)
-            gates_normals.append(normal)
-        
-
-        checkpoints = [start_point]
-        for gate_center, gate_normal in zip(gates_centers, gates_normals):
-            gate_normal_normalized = gate_normal / np.linalg.norm(gate_normal)
-            # add checkpoint before and after the gate center, 10 cm
-            eps = 0.05
-            early_checkpoint = gate_center - (drone_radius + eps) * gate_normal_normalized 
-            late_checkpoint = gate_center + (drone_radius + eps) * gate_normal_normalized
-            checkpoints.append(early_checkpoint)
-            #checkpoints.append(gate_center)
-            checkpoints.append(late_checkpoint)
-
-        checkpoints.append(goal_point)
-        checkpoints = np.array(checkpoints)
-
-
-        # Generate path using r_star
-        path = []
-        for i, (start_pos, end_pos) in enumerate(zip(checkpoints[:-1], checkpoints[1:])):
-            can_pass_gate = i%2 == 1
-            print(f"Generating section {i} from {start_pos} to {end_pos}. CAn pass gates {can_pass_gate}")
-            
-            rrt = RRTStar(start_pos, end_pos, map, can_pass_gates=can_pass_gate, max_iter=500, max_extend_length=1, goal_sample_rate=0.1)
-            waypoints, _ = rrt.plan()
-            if waypoints is None:
-                print("Failed to find path")
-                exit(1)
-
-            path.append(waypoints)
-
-        
-        path = np.concatenate(path, axis=0)
-        # purge path remove consecutive points where difference is insignificant
-        insignificance_threshold = 0.01
-        purged_path = [path[0]]
-        for point in path[1:]:
-            if np.linalg.norm(purged_path[-1] - point) > insignificance_threshold:
-                purged_path.append(point)
-
-        purged_path = np.array(purged_path)
-
-        print("Path generated. Now calculating trajectory...")
-        max_speed = 15
-        max_acc = 12
-        sampling_intervall = 0.2
-        traj_points = polytraj.generate_trajectory(purged_path, max_speed, max_acc, sampling_intervall)
-        self.traj = Traj(traj_points)
-
-
+        self.adaptive_traj_generator.pre_compute_traj(takeoff_time=self.takeoff_time)
         # gen ref traj for plotting
         if self.VERBOSE:
-            draw_traj_without_ref(initial_info, self.traj.positions)
+            draw_traj_without_ref(initial_info, self.adaptive_traj_generator.traj.positions)
         
 
         self._take_off = False
@@ -245,20 +162,38 @@ class Controller(BaseController):
         #     for key, value in info.items():
         #         print(f"  {key}: {value}")
 
+        
+        current_drone_pos = np.array([obs[0], obs[2], obs[4]])
+        current_drone_rot = np.array([obs[6], obs[7], obs[8]])
+
+        current_target_gate_pos = info.get("current_target_gate_pos", None)
+        current_target_gate_id = info.get("current_target_gate_id", None)
+        current_target_gate_in_range = info.get("current_target_gate_in_range", None)
+        if not(current_target_gate_pos != None and current_target_gate_id != None and current_target_gate_in_range != None):
+            print("No gate info available")
+        else:
+            #print(f"Current target gate id: {current_target_gate_id}")
+            gate_updated = self.adaptive_traj_generator.update_gate_pos(current_target_gate_pos, current_target_gate_id,next_gate_within_range=current_target_gate_in_range,  drone_pos=current_drone_pos, time=ep_time)
+            if gate_updated and self.VERBOSE:
+                remove_trajectory()
+                draw_traj_without_ref(self.initial_info, self.adaptive_traj_generator.traj.positions)
+        traj = self.adaptive_traj_generator.traj
+        
+
         if not self._take_off:
             command_type = Command.TAKEOFF
             args = [self.takeoff_height, self.takeoff_time]  # Height, duration
             self._take_off = True  # Only send takeoff command once
         else:
             
-            if ep_time - self.takeoff_time > 0 and ep_time - self.takeoff_time < self.traj.times[-1]:
-                desired_pos, desired_vel, desired_acc = self.traj.get_des_state(ep_time - 2)
+            if ep_time - self.takeoff_time > 0 and ep_time - self.takeoff_time < traj.times[-1]:
+                desired_pos, desired_vel, desired_acc = traj.get_des_state(ep_time)
                 command_type = Command.FULLSTATE
                 target_rpy_rates = np.zeros(3)
                 args = [desired_pos, desired_vel, desired_acc, 0, target_rpy_rates, ep_time]
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
-            elif ep_time - self.takeoff_time >= self.traj.times[-1] and not self._setpoint_land:
+            elif ep_time - self.takeoff_time >= traj.times[-1] and not self._setpoint_land:
                 command_type = Command.NOTIFYSETPOINTSTOP
                 args = []
                 self._setpoint_land = True

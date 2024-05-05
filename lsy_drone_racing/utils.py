@@ -156,3 +156,6 @@ def draw_traj_without_ref(initial_info:dict, waypoints: np.ndarray):
         physicsClientId=initial_info["pyb_client"],
     )
 
+def remove_trajectory():
+    p.removeAllUserDebugItems()
+

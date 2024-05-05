@@ -1,6 +1,8 @@
 # check whether we have to add to path
 import sys
 import os
+
+from src.utils.types import Gate, Obstacle
 if not os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')) in sys.path:
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
@@ -8,6 +10,7 @@ import numpy as np
 from src.map.map_utils import Object, Ray
 import matplotlib.pyplot as plt
 from rtree import index
+from typing import List
 
 
 
@@ -58,16 +61,15 @@ class Map:
         p.dimension = 3
         return index.Index(properties=p)
     
-    def parse_gates(self, gates_pose_and_types):
+    def parse_gates(self, gates: List[Gate]):
         gate_type_id_to_component_name_mapping = {0: "large_portal", 1: "small_portal"}
 
-        for gate_pos_and_type in gates_pose_and_types:
-            gate_type_id = gate_pos_and_type[6]
-            component_name = gate_type_id_to_component_name_mapping[gate_type_id]
+        for gate in gates:
+            component_name = gate_type_id_to_component_name_mapping[gate.gate_type]
             component = self.components[component_name]
             object = Object.transform_urdf_component_into_object(component)
-            center = np.array(gate_pos_and_type[0:3])
-            rotation = np.array(gate_pos_and_type[3:6])
+            center = np.array(gate.pos)
+            rotation = np.array(gate.rot)
             assert np.allclose(rotation[0], 0) and np.allclose(rotation[1], 0), "Only z-axis rotation supported"
 
             object.translate(center)
@@ -76,13 +78,13 @@ class Map:
                 self._add_obb(obb)
 
     
-    def parse_obstacles(self, obstacles_pose):
-        for obstacle_pose in obstacles_pose:
+    def parse_obstacles(self, obstacles: List[Obstacle]):
+        for obstacle in obstacles:
             component = self.components["obstacle"]
             object = Object.transform_urdf_component_into_object(component)
             
-            center = np.array(obstacle_pose[0:3])
-            rotation = np.array(obstacle_pose[3:6])
+            center = np.array(obstacle.pos)
+            rotation = np.array(obstacle.rot)
             assert np.allclose(rotation[0], 0) and np.allclose(rotation[1], 0), "Only z-axis rotation supported"
 
             object.translate(center)

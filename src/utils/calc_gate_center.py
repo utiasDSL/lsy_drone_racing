@@ -1,13 +1,14 @@
 import numpy as np
+from src.utils.types import Gate
 
-def calc_gate_center_and_normal(gate_pos_and_type, gate_types, type_id_to_type_mapping=None):
+def calc_gate_center_and_normal(gate: Gate, gate_types, type_id_to_type_mapping=None):
     if type_id_to_type_mapping is None:
         type_id_to_type_mapping = {0: "tall", 1: "low"}
     
     # parse information
-    gate_pos_xyz = gate_pos_and_type[0:3]
-    gate_rotations = gate_pos_and_type[3:6]
-    gate_type_id = gate_pos_and_type[6]
+    gate_pos_xyz = gate.pos
+    gate_rotations = gate.rot
+    gate_type_id = gate.gate_type
     gate_type = gate_types[type_id_to_type_mapping[gate_type_id]]
 
     # For now only simple calculation supported, where gate is only rotated around z-axis
