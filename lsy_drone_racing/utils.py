@@ -95,6 +95,7 @@ def check_gate_pass(
     )
     # Check the plane intersection. If passed, calculate the point of the intersection and check if
     # it is within the gate box.
+    delta = 0.1
     if last_drone_pos_gate[1] < 0 and drone_pos_gate[1] > 0:  # Drone has passed the goal plane
         alpha = -last_drone_pos_gate[1] / (drone_pos_gate[1] - last_drone_pos_gate[1])
         x_intersect = alpha * (drone_pos_gate[0]) + (1 - alpha) * last_drone_pos_gate[0]
@@ -137,11 +138,14 @@ def draw_trajectory(
     )
 
 def draw_traj_without_ref(initial_info:dict, waypoints: np.ndarray):
+    print(f"Drawing trajectory for waypoints: {waypoints}")
+    
     ref_x = waypoints[:, 0]
     ref_y = waypoints[:, 1]
     ref_z = waypoints[:, 2]
 
-    step = int(ref_x.shape[0] / 50)
+    step = max(1, int(ref_x.shape[0] / 50))
+    print(step)
     for i in range(step, ref_x.shape[0], step):
         p.addUserDebugLine(
             lineFromXYZ=[ref_x[i - step], ref_y[i - step], ref_z[i - step]],

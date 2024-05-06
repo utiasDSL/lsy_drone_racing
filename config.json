@@ -1,0 +1,192 @@
+{
+    "gate_id_to_name_mapping": {
+        "1": "small_portal",
+        "0": "large_portal"
+    },
+    "component_geometry": {
+        "large_portal": {
+            "support": {
+                "position": [
+                    0,
+                    0,
+                    0.3875
+                ],
+                "size": [
+                    0.05,
+                    0.05,
+                    0.755
+                ],
+                "type": "collision"
+            },
+            "bottom_bar": {
+                "position": [
+                    0,
+                    0,
+                    0.75
+                ],
+                "size": [
+                    0.55,
+                    0.05,
+                    0.05
+                ],
+                "type": "collision"
+            },
+            "top_bar": {
+                "position": [
+                    0,
+                    0,
+                    1.25
+                ],
+                "size": [
+                    0.55,
+                    0.05,
+                    0.05
+                ],
+                "type": "collision"
+            },
+            "left_bar": {
+                "position": [
+                    -0.25,
+                    0,
+                    1
+                ],
+                "size": [
+                    0.05,
+                    0.05,
+                    0.55
+                ],
+                "type": "collision"
+            },
+            "right_bar": {
+                "position": [
+                    0.25,
+                    0,
+                    1
+                ],
+                "size": [
+                    0.05,
+                    0.05,
+                    0.55
+                ],
+                "type": "collision"
+            },
+            "filling": {
+                "position": [
+                    0,
+                    0,
+                    1.0
+                ],
+                "size": [
+                    0.45,
+                    0.05,
+                    0.45
+                ],
+                "type": "filling"
+            }
+        },
+        "small_portal": {
+            "support": {
+                "position": [
+                    0,
+                    0,
+                    0.15
+                ],
+                "size": [
+                    0.05,
+                    0.05,
+                    0.3
+                ],
+                "type": "collision"
+            },
+            "bottom_bar": {
+                "position": [
+                    0,
+                    0,
+                    0.275
+                ],
+                "size": [
+                    0.55,
+                    0.05,
+                    0.05
+                ],
+                "type": "collision"
+            },
+            "top_bar": {
+                "position": [
+                    0,
+                    0,
+                    0.775
+                ],
+                "size": [
+                    0.55,
+                    0.05,
+                    0.05
+                ],
+                "type": "collision"
+            },
+            "left_bar": {
+                "position": [
+                    -0.25,
+                    0,
+                    0.525
+                ],
+                "size": [
+                    0.05,
+                    0.05,
+                    0.55
+                ],
+                "type": "collision"
+            },
+            "right_bar": {
+                "position": [
+                    0.25,
+                    0,
+                    0.525
+                ],
+                "size": [
+                    0.05,
+                    0.05,
+                    0.55
+                ],
+                "type": "collision"
+            },
+            "filling": {
+                "position": [
+                    0,
+                    0,
+                    0.525
+                ],
+                "size": [
+                    0.45,
+                    0.05,
+                    0.45
+                ],
+                "type": "filling"
+            }
+        },
+        "obstacle": {
+            "cylinder": {
+                "position": [
+                    0,
+                    0,
+                    0.525
+                ],
+                "size": [
+                    0.1,
+                    0.1,
+                    1.05
+                ],
+                "type": "collision"
+            }
+        }
+    },
+    "component_properties":
+    {
+        "large_portal":{
+            "height": 1
+        },
+        "small_portal":{
+            "height": 0.525
+        }
+    }
+}

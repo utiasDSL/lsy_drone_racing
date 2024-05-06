@@ -75,6 +75,14 @@ class OBB:
                 if t_min > t_max:
                     return False
         return 0 <= t_min <= 1 and 0 <= t_max <= 1
+    
+    def check_collision_with_point(self, point: np.ndarray):
+        # Transform the point into the OBB's local coordinate system
+        local_point = np.dot(point - self.center, self.rotation_matrix)
+        for i in range(3):
+            if abs(local_point[i]) > self.half_sizes[i]:
+                return False
+        return True
 
 
     def plot(self, ax):
@@ -115,7 +123,6 @@ class Object:
     def transform_urdf_component_into_object(component):
         object = Object()
         for _, part in component.items():
-
             center = np.array(part['position'])
             half_sizes = np.array(part['size']) / 2
             type = part['type']

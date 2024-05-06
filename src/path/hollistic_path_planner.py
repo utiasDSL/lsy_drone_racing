@@ -59,10 +59,9 @@ if __name__ == "__main__":
     start_time = time.time()
     path = []
     for i, (start_pos, end_pos) in enumerate(zip(checkpoints[:-1], checkpoints[1:])):
-        can_pass_gate = i%2 == 1
-        print(f"Generating section {i} from {start_pos} to {end_pos}. CAn pass gates {can_pass_gate}")
+        print(f"Generating section {i} from {start_pos} to {end_pos}")
         
-        rrt = RRTStar(start_pos, end_pos, map, can_pass_gates=can_pass_gate, max_iter=500, max_extend_length=1, goal_sample_rate=0.1)
+        rrt = RRTStar(start_pos, end_pos, map,  max_iter=500, max_extend_length=1, goal_sample_rate=0.1)
         waypoints, _ = rrt.plan()
         if waypoints is None:
             print("Failed to find path")

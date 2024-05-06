@@ -40,6 +40,8 @@ from src.traj_gen.min_snap.traj_gen import TrajGenerator
 from src.utils.calc_gate_center import calc_gate_center_and_normal
 import polynomial_trajectory as polytraj
 
+from src.utils.config_reader import ConfigReader
+
 
 
 class Controller(BaseController):
@@ -75,6 +77,8 @@ class Controller(BaseController):
             for key, value in initial_info.items():
                 print(f"  {key}: {value}")
             
+        # load config
+        self.config_reader = ConfigReader.create("./config.json")
 
         # Save environment and control parameters.
         self.initial_info = initial_info
@@ -87,7 +91,6 @@ class Controller(BaseController):
         # Configuration
         self.takeoff_height = 0.2
         self.takeoff_time = 2
-        self.max_speed = 0.5
 
         # Store a priori scenario information.
         self.NOMINAL_GATES = initial_info["nominal_gates_pos_and_type"]
@@ -120,6 +123,8 @@ class Controller(BaseController):
         self._take_off = False
         self._setpoint_land = False
         self._land = False
+        self.last_gate_id = 0
+        self.last_gate_switching_time = 0
         #########################
         # REPLACE THIS (END) ####
         #########################
@@ -173,7 +178,11 @@ class Controller(BaseController):
             print("No gate info available")
         else:
             #print(f"Current target gate id: {current_target_gate_id}")
-            gate_updated = self.adaptive_traj_generator.update_gate_pos(current_target_gate_pos, current_target_gate_id,next_gate_within_range=current_target_gate_in_range,  drone_pos=current_drone_pos, time=ep_time)
+            if self.last_gate_id != current_target_gate_id:
+                self.last_gate_id = current_target_gate_id
+                self.last_gate_switching_time = ep_time
+            
+            gate_updated = self.adaptive_traj_generator.update_gate_pos(current_target_gate_pos, current_target_gate_id,gate_switching_time=self.last_gate_switching_time, next_gate_within_range=current_target_gate_in_range,  drone_pos=current_drone_pos, time=ep_time)
             if gate_updated and self.VERBOSE:
                 remove_trajectory()
                 draw_traj_without_ref(self.initial_info, self.adaptive_traj_generator.traj.positions)
@@ -185,15 +194,18 @@ class Controller(BaseController):
             args = [self.takeoff_height, self.takeoff_time]  # Height, duration
             self._take_off = True  # Only send takeoff command once
         else:
+            if ep_time < self.takeoff_time:
+                command_type = Command.NONE
+                args = []
             
-            if ep_time - self.takeoff_time > 0 and ep_time - self.takeoff_time < traj.times[-1]:
+            elif not traj.has_ended(ep_time):
                 desired_pos, desired_vel, desired_acc = traj.get_des_state(ep_time)
                 command_type = Command.FULLSTATE
                 target_rpy_rates = np.zeros(3)
                 args = [desired_pos, desired_vel, desired_acc, 0, target_rpy_rates, ep_time]
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
-            elif ep_time - self.takeoff_time >= traj.times[-1] and not self._setpoint_land:
+            elif traj.has_ended(ep_time) and not self._setpoint_land:
                 command_type = Command.NOTIFYSETPOINTSTOP
                 args = []
                 self._setpoint_land = True

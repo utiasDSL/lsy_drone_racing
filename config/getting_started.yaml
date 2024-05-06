@@ -19,7 +19,7 @@ quadrotor_config:
 
   done_on_violation: False # Whether `done` becomes True when a constraint is violated
   done_on_completion: False # Whether `done` becomes True when the task is completed (traveled all gates and 2'' hover at stabilization_goal)
-  done_on_collision: False # Whether `done` becomes True when a collision happens
+  done_on_collision: True # Whether `done` becomes True when a collision happens
   cost: competition  # Sparse reward function, if you desire, re-implement it in Quadrotor._get_reward()
                      # github.com/utiasDSL/safe-control-gym/blob/beta-iros-competition/safe_control_gym/envs/gym_pybullet_drones/quadrotor.py
   
@@ -88,7 +88,7 @@ quadrotor_config:
       high: 0.1
 
   # Randomization of the quadrotor inertial properties
-  randomized_inertial_prop: False
+  randomized_inertial_prop: True
   inertial_prop_randomization_info:
     M:
       distrib: "uniform"
@@ -108,7 +108,7 @@ quadrotor_config:
       high: 0.000001
 
   # Randomization of the gates and obstacles positions
-  randomized_gates_and_obstacles: False
+  randomized_gates_and_obstacles: True
   gates_and_obstacles_randomization_info:
     gates:
       distrib: "uniform"

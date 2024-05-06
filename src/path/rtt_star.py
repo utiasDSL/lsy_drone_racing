@@ -19,13 +19,11 @@ class RRTStar(RRT):
                  goal_sample_rate = 0.05,
                  max_iter = 5000 ,
                  good_enough_abortion_delta = 0.01,
-                 can_pass_gates = False
                  ):
         super().__init__(start, goal, map, max_extend_length, path_resolution, goal_sample_rate, max_iter)
         self.final_nodes = []
         self.informed_sampler = InformedSampler(goal, start)
         self.good_enough_abortion_delta = good_enough_abortion_delta
-        self.can_pass_gates = can_pass_gates
 
     def plan(self):
         """Plans the path from start to goal while avoiding obstacles"""
@@ -43,7 +41,7 @@ class RRTStar(RRT):
             new_node = self.steer(nearest_node, rnd)
             # If path between new_node and nearest node is not in collision
             ray = Ray(nearest_node.p, new_node.p)
-            if not self.map.check_ray_collision(ray, can_pass_gate=self.can_pass_gates):
+            if not self.map.check_ray_collision(ray, can_pass_gate=False):
               #add the node to tree
               self.add(new_node)
 
@@ -70,7 +68,7 @@ class RRTStar(RRT):
         if self.dist(new_node,self.goal) <= self.max_extend_length:
           # Connection between node and goal needs to be collision free
           ray = Ray(new_node.p, self.goal.p)
-          if not self.map.check_ray_collision(ray, self.can_pass_gates):
+          if not self.map.check_ray_collision(ray, can_pass_gate=False):
             #add to final nodes if in goal region
             self.final_nodes.append(new_node)
         #set best final node and min_cost
@@ -84,7 +82,7 @@ class RRTStar(RRT):
         for parent in parents:
           #checking whether a connection would result in a collision
           ray = Ray(parent.p, node.p)
-          if not self.map.check_ray_collision(ray, self.can_pass_gates):
+          if not self.map.check_ray_collision(ray, can_pass_gate=False):
             #evaluating the cost of the new_node if it had that near node as a parent
             cost = self.new_cost(parent, node)
             #picking the parent resulting in the lowest cost and updating the cost of the new_node to the minimum cost.

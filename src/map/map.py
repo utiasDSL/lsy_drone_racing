@@ -1,7 +1,9 @@
 # check whether we have to add to path
+import random
 import sys
 import os
 
+from src.utils.config_reader import ConfigReader
 from src.utils.types import Gate, Obstacle
 if not os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')) in sys.path:
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -16,45 +18,13 @@ from typing import List
 
 class Map:
     def __init__(self, lower_bound: np.ndarray, upper_bound: np.ndarray, drone_radius=0):
+        self.config_reader = ConfigReader.get()
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
         self.idx = self._create_3d_idx()
         self.drone_radius = drone_radius
         self.obbs = []
 
-        self.components = {
-    "large_portal": {
-        "support": {"position": (0, 0, 0.3875), "size": (0.05, 0.05, 0.755), "type": "collision"},
-        "bottom_bar": {"position": (0, 0, 0.75), "size": (0.55, 0.05, 0.05), "type": "collision"},
-        "top_bar": {"position": (0, 0, 1.25), "size": (0.55, 0.05, 0.05), "type": "collision"},
-        "left_bar": {"position": (-0.25, 0, 1), "size": (0.05, 0.05, 0.55), "type": "collision"},
-        "right_bar": {"position": (0.25, 0, 1), "size": (0.05, 0.05, 0.55), "type": "collision"},
-        "filling": {"position": (0, 0, 1.0), "size": (0.45, 0.05, 0.45), "type": "filling"}
-    },
-    "small_portal": {
-        "support": {"position": (0, 0, 0.15), "size": (0.05, 0.05, 0.3), "type": "collision"},
-        "bottom_bar": {"position": (0, 0, 0.275), "size": (0.55, 0.05, 0.05), "type": "collision"},
-        "top_bar": {"position": (0, 0, 0.775), "size": (0.55, 0.05, 0.05), "type": "collision"},
-        "left_bar": {"position": (-0.25, 0, 0.525), "size": (0.05, 0.05, 0.55), "type": "collision"},
-        "right_bar": {"position": (0.25, 0, 0.525), "size": (0.05, 0.05, 0.55), "type": "collision"},
-        "filling": {"position": (0, 0, 0.525), "size": (0.45, 0.05, 0.45), "type": "filling"}
-    },
-    "small_portal_2": {
-        "support": {"position": (0, 0, 0.15), "size": (0.05, 0.05, 0.3),  "type": "collision"},
-        "bottom_bar": {"position": (0, 0, 0.3), "size": (0.5, 0.05, 0.05), "type": "collision"},
-        "top_bar": {"position": (0, 0, 0.75), "size": (0.5, 0.05, 0.05), "type": "collision"},
-        "left_bar": {"position": (-0.225, 0, 0.3 + 0.5 / 2), "size": (0.05, 0.05, 0.5), "type": "collision"},
-        "right_bar": {"position": (0.225, 0, 0.3 + 0.5/2), "size": (0.05, 0.05, 0.5), "type": "collision"},
-        "filling": {"position": (0, 0, 0.45), "size": (0.5, 0.05, 0.5), "type": "filling"}
-    },
-    "obstacle": {
-        "cylinder": {
-            "position": (0, 0, 0.525),
-            "size": (0.1, 0.1, 1.05),
-            "type": "collision"
-        }
-    }
-}   
     @staticmethod
     def _create_3d_idx():
         p = index.Property()
@@ -62,11 +32,9 @@ class Map:
         return index.Index(properties=p)
     
     def parse_gates(self, gates: List[Gate]):
-        gate_type_id_to_component_name_mapping = {0: "large_portal", 1: "small_portal"}
-
+    
         for gate in gates:
-            component_name = gate_type_id_to_component_name_mapping[gate.gate_type]
-            component = self.components[component_name]
+            component = self.config_reader.get_gate_geometry_by_type(gate.gate_type)
             object = Object.transform_urdf_component_into_object(component)
             center = np.array(gate.pos)
             rotation = np.array(gate.rot)
@@ -80,7 +48,7 @@ class Map:
     
     def parse_obstacles(self, obstacles: List[Obstacle]):
         for obstacle in obstacles:
-            component = self.components["obstacle"]
+            component = self.config_reader.get_obstacle_geometry()
             object = Object.transform_urdf_component_into_object(component)
             
             center = np.array(obstacle.pos)
@@ -110,6 +78,15 @@ class Map:
         new_id = len(self.obbs)
         self.idx.insert(new_id, (*min_corner, *max_corner))
         self.obbs.append(obb)
+
+    def check_path_collision(self, points):
+        # random sampling for checking points along path
+        sampling_idx = list(range(len(points)))
+        random.shuffle(sampling_idx)
+        for idx in sampling_idx:
+            if self.check_point_collision(points[idx]):
+                return True
+        return False
     
     
     def check_ray_collision(self, ray: Ray, can_pass_gate):
@@ -122,12 +99,29 @@ class Map:
         for item in potential_hits:
             #print(f"Check potential collision with obb: {item.id}")
             obb = self.obbs[item.id]
-            if obb.check_collision_with_ray(ray, self.drone_radius):
-                if obb.type == "filling" and can_pass_gate:
-                    continue
-                
+            if obb.type == "filling" and can_pass_gate:
+                continue
+            elif obb.check_collision_with_ray(ray, self.drone_radius):
                 return True
         return False
+
+    def check_point_collision(self, point: np.ndarray):
+        """
+        Check whether a single point collides with any object.
+        :param point: The point to check.
+        :return: True if the point is inside any object, False otherwise.
+        """
+        
+        # Search for objects in the vicinity of the point using the R-tree
+        potential_hits = list(self.idx.intersection((*point, *point), objects=True))
+        for item in potential_hits:
+            obb = self.obbs[item.id]
+            if obb.type == "filling":
+                continue
+            elif obb.check_collision_with_point(point):
+                return True
+        return False
+            
 
 
     def create_map_sized_figure(self):
