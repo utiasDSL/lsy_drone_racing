@@ -23,6 +23,7 @@ from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import sync
 
 from lsy_drone_racing.command import apply_sim_command
+from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_controller
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,6 @@ def simulate(
 
     # Create environment.
     assert config.use_firmware, "Firmware must be used for the competition."
-    FIRMWARE_FREQ = 500
     pyb_freq = config.quadrotor_config["pyb_freq"]
     assert pyb_freq % FIRMWARE_FREQ == 0, "pyb_freq must be a multiple of firmware freq"
     # The env.step is called at a firmware_freq rate, but this is not as intuitive to the end

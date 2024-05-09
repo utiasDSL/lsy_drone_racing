@@ -22,6 +22,7 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 from lsy_drone_racing.command import Command, apply_command
+from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils import check_gate_pass, load_controller
 from lsy_drone_racing.vicon import ViconWatcher
@@ -132,7 +133,7 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     obstacle_poses = config.quadrotor_config.obstacles
 
     # Create a safe-control-gym environment from which to take the symbolic models
-    config.quadrotor_config["ctrl_freq"] = 500
+    config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
     env = make("quadrotor", **config.quadrotor_config)
     _, env_info = env.reset()
 

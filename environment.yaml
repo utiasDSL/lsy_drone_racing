@@ -57,6 +57,7 @@ dependencies:
 - gst-plugins-base=1.22.9=hfa15dee_1
 - gstreamer=1.22.9=h98fc4e7_1
 - gym=0.21.0=py38he5a9106_2
+- gymnasium=0.29.1=py38hb563948_1
 - harfbuzz=8.3.0=h3d44ed6_0
 - icu=73.2=h59595ed_0
 - idna=3.6=pyhd8ed1ab_0
