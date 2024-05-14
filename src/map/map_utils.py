@@ -136,7 +136,6 @@ class Object:
 
     def translate(self, vector: np.ndarray):
         """Translates the whole object and its components."""
-        print(vector)
         self.global_center += vector
         for obb in self.obbs:
             obb.center += vector

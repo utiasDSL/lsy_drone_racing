@@ -137,15 +137,12 @@ def draw_trajectory(
         physicsClientId=initial_info["pyb_client"],
     )
 
-def draw_traj_without_ref(initial_info:dict, waypoints: np.ndarray):
-    print(f"Drawing trajectory for waypoints: {waypoints}")
-    
+def draw_traj_without_ref(initial_info:dict, waypoints: np.ndarray):    
     ref_x = waypoints[:, 0]
     ref_y = waypoints[:, 1]
     ref_z = waypoints[:, 2]
 
     step = max(1, int(ref_x.shape[0] / 50))
-    print(step)
     for i in range(step, ref_x.shape[0], step):
         p.addUserDebugLine(
             lineFromXYZ=[ref_x[i - step], ref_y[i - step], ref_z[i - step]],

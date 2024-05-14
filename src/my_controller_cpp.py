@@ -26,21 +26,13 @@ Tips:
 """
 
 from __future__ import annotations
-import asyncio  # Python 3.10 type hints
 
 import numpy as np
-from scipy import interpolate
 
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.utils import draw_trajectory, draw_traj_without_ref, remove_trajectory
-from src.map.map import Map
-from src.path.rtt_star import RRTStar
-from src.traj_gen.adaptive_traj_generator import AdaptiveTrajGenerator
-from src.traj_gen.min_snap.traj_gen import TrajGenerator
-from src.utils.calc_gate_center import calc_gate_center_and_normal
-import polynomial_trajectory as polytraj
-
+from online_traj_planner import OnlineTrajGenerator
 from src.utils.config_reader import ConfigReader
 
 
@@ -79,7 +71,8 @@ class Controller(BaseController):
                 print(f"  {key}: {value}")
             
         # load config
-        self.config_reader = ConfigReader.create("./config.json")
+        config_path = "./config.json"
+        self.config_reader = ConfigReader.create(config_path)
 
         # Save environment and control parameters.
         self.initial_info = initial_info
@@ -100,12 +93,16 @@ class Controller(BaseController):
         start_point = np.array([initial_obs[0], initial_obs[2], self.takeoff_height])
         goal_point = np.array([0, -2, 0.5]) # Hardcoded from the config file
 
-        self.adaptive_traj_generator = AdaptiveTrajGenerator(start_point, goal_point, self.NOMINAL_GATES, self.NOMINAL_OBSTACLES, self.GATE_TYPES, drone_radius=0.1)
-
+        self.traj_generator_cpp = OnlineTrajGenerator(start_point, goal_point, self.NOMINAL_GATES, self.NOMINAL_OBSTACLES, config_path)
+        self.traj_generator_cpp.pre_compute_traj(self.takeoff_time)
 
         # Reset counters and buffers.
         self.reset()
         self.episode_reset()
+
+        self.current_gate_id = 0
+        self.last_gate_id = 0
+        self.next_potential_switching_time = 0
 
 
         #########################
@@ -116,10 +113,11 @@ class Controller(BaseController):
         # completing the challenge that is highly susceptible to noise and does not generalize at
         # all. It is meant solely as an example on how the drones can be controlled
 
-        self.adaptive_traj_generator.pre_compute_traj(takeoff_time=self.takeoff_time)
         # gen ref traj for plotting
         if self.VERBOSE:
-            draw_traj_without_ref(initial_info, self.adaptive_traj_generator.traj.positions)
+            traj = self.traj_generator_cpp.get_planned_traj()
+            traj_positions = traj[:, [0, 3, 6]]
+            draw_traj_without_ref(initial_info, traj_positions)
         
 
         self._take_off = False
@@ -165,32 +163,43 @@ class Controller(BaseController):
         # Handcrafted solution for getting_stated scenario.
 
         #print info
-        if self.VERBOSE:
-            for key, value in info.items():
-                print(f"  {key}: {value}")
+        # if self.VERBOSE:
+        #     for key, value in info.items():
+        #         print(f"  {key}: {value}")
         
         current_drone_pos = np.array([obs[0], obs[2], obs[4]])
         current_drone_rot = np.array([obs[6], obs[7], obs[8]])
+
+    
 
         current_target_gate_pos = info.get("current_target_gate_pos", None)
         current_target_gate_id = info.get("current_target_gate_id", None)
         current_target_gate_in_range = info.get("current_target_gate_in_range", None)
         if not(current_target_gate_pos != None and current_target_gate_id != None and current_target_gate_in_range != None):
-            print("No gate info available")
+            pass
         else:
-            #print(f"Current target gate id: {current_target_gate_id}")
+
             if self.last_gate_id != current_target_gate_id:
                 self.last_gate_id = current_target_gate_id
-                self.last_gate_switching_time = ep_time
+                self.next_potential_switching_time = ep_time + 1.0
             
-            # How to make this non blocking?
-            asyncio.run(self.adaptive_traj_generator.update_gate_pos(current_target_gate_pos, current_target_gate_id,gate_switching_time=self.last_gate_switching_time, next_gate_within_range=current_target_gate_in_range,  drone_pos=current_drone_pos, time=ep_time))
-            
-            # if gate_updated and self.VERBOSE:
-            #     remove_trajectory()
-            #     draw_traj_without_ref(self.initial_info, self.adaptive_traj_generator.traj.positions)
-        traj = self.adaptive_traj_generator.traj
+            if ep_time > self.next_potential_switching_time:
+                gate_updated = self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
+            else:
+                gate_updated = False
+
+            if gate_updated and self.VERBOSE:
+                #print(f"Eo time {ep_time}, gate updated {current_target_gate_id}")
+                remove_trajectory()
+                traj = self.traj_generator_cpp.get_planned_traj()
+                traj_positions = traj[:, [0, 3, 6]]
+                traj_times = traj[:, -1]
+               # print(traj_times)
+                draw_traj_without_ref(self.initial_info, traj_positions)
+
         
+        traj_end_time = 100 # ToDo
+        traj_has_ended = ep_time > traj_end_time
 
         if not self._take_off:
             command_type = Command.TAKEOFF
@@ -201,14 +210,17 @@ class Controller(BaseController):
                 command_type = Command.NONE
                 args = []
             
-            elif not traj.has_ended(ep_time):
-                desired_pos, desired_vel, desired_acc = traj.get_des_state(ep_time)
+            elif not traj_has_ended:
+                traj_sample = self.traj_generator_cpp.sample_traj(ep_time)
+                desired_pos = np.array([traj_sample[0], traj_sample[3], traj_sample[6]])
+                desired_vel = np.array([traj_sample[1], traj_sample[4], traj_sample[7]])
+                desired_acc = np.array([traj_sample[2], traj_sample[5], traj_sample[8]])
                 command_type = Command.FULLSTATE
                 target_rpy_rates = np.zeros(3)
                 args = [desired_pos, desired_vel, desired_acc, 0, target_rpy_rates, ep_time]
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
-            elif traj.has_ended(ep_time) and not self._setpoint_land:
+            elif traj_has_ended and not self._setpoint_land:
                 command_type = Command.NOTIFYSETPOINTSTOP
                 args = []
                 self._setpoint_land = True

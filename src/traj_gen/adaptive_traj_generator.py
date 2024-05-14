@@ -25,8 +25,8 @@ class AdaptiveTrajGenerator():
         self.max_extend_length = 1
         self.goal_sample_rate = 0.05
 
-        self.max_vel = 5
-        self.max_acc = 3
+        self.max_vel = 3
+        self.max_acc = 2
         self.sample_intervall = 0.2
 
 
@@ -42,6 +42,8 @@ class AdaptiveTrajGenerator():
             checkpoints.append(late_checkpoint)
         checkpoints.append(goal_point)
         self.checkpoints = checkpoints
+        
+        print(f"Checkpoints: {checkpoints}")
 
 
     
@@ -87,7 +89,7 @@ class AdaptiveTrajGenerator():
         traj_points = polytraj.generate_trajectory(start_pose, end_pose, purged_path[1:-1], self.max_vel, self.max_acc, self.sample_intervall)
         self.traj = Traj(traj_points, creation_time=time)
 
-    def update_gate_pos(self, next_gate_pose, next_gate_id, next_gate_within_range, drone_pos, gate_switching_time, time):
+    async def update_gate_pos(self, next_gate_pose, next_gate_id, next_gate_within_range, drone_pos, gate_switching_time, time):
         """
         
         Return True if update necessary due to much divergence, False otherwise
@@ -96,7 +98,7 @@ class AdaptiveTrajGenerator():
             self.gates_seen_within_range.add(next_gate_id)
 
         # Ignore change if time passed is to low. This is a dirty fix to prevent drone flying through same goal it just passed
-        time_delta = 0.7
+        time_delta = 1.5
         if time - gate_switching_time < time_delta:
             return False
         
@@ -151,25 +153,25 @@ class AdaptiveTrajGenerator():
         self.segments[segment_id_pre] = segment_path
 
         # calculate post segment, i.e., from next gate to next next gate
-        # start_pos = late_checkpoint
-        # end_pos = self.checkpoints[2*segment_id_post + 1]
-        # rrt = RRTStar(start_pos, end_pos, map, max_iter=self.max_iter, max_extend_length=self.max_extend_length, goal_sample_rate=self.goal_sample_rate)
-        # segment_path, _ = rrt.plan()
-        # if len(segment_path) == 0:
-        #     print(f"Failed to generate path for segment {segment_id_post} from {start_pos} to {end_pos}")
-        #     exit(1)
-        # self.segments[segment_id_post] = segment_path
+        start_pos = late_checkpoint
+        end_pos = self.checkpoints[2*segment_id_post + 1]
+        rrt = RRTStar(start_pos, end_pos, map, max_iter=self.max_iter, max_extend_length=self.max_extend_length, goal_sample_rate=self.goal_sample_rate)
+        segment_path, _ = rrt.plan()
+        if len(segment_path) == 0:
+            print(f"Failed to generate path for segment {segment_id_post} from {start_pos} to {end_pos}")
+            exit(1)
+        self.segments[segment_id_post] = segment_path
         _, last_sampled_vel, last_sampled_acc = self.traj.get_last_state()
         self._traj_from_segments(cur_segment_id=segment_id_pre, time=time, start_vel=last_sampled_vel, start_acc=last_sampled_acc)
 
         # check whether traj for current segment is still valid
-        this_seg_traj = self.traj.get_segment_positions(segment_id_pre)
-        traj_collides = map.check_path_collision(this_seg_traj)
-        if traj_collides:
-            print(f"Trajectory for segment {segment_id_pre} collides with map. Recomputing trajectory")
-            exit(1)
-        else:
-            print(f"Trajectory for segment {segment_id_pre} is collision free")
+        # this_seg_traj = self.traj.get_segment_positions(segment_id_pre)
+        # traj_collides = map.check_path_collision(this_seg_traj)
+        # if traj_collides:
+        #     print(f"Trajectory for segment {segment_id_pre} collides with map. Recomputing trajectory")
+        #     exit(1)
+        # else:
+        #     print(f"Trajectory for segment {segment_id_pre} is collision free")
 
         return True
 

@@ -1,0 +1,3 @@
+[submodule "Polynomial-Trajectory-Generation"]
+	path = Polynomial-Trajectory-Generation
+	url = https://github.com/Autonomous-Drone-Racing-Lab/Polynomial-Trajectory-Generation.git

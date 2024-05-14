@@ -34,6 +34,7 @@ class Map:
     def parse_gates(self, gates: List[Gate]):
     
         for gate in gates:
+            print(f"Gate type {gate.gate_type}")
             component = self.config_reader.get_gate_geometry_by_type(gate.gate_type)
             object = Object.transform_urdf_component_into_object(component)
             center = np.array(gate.pos)
