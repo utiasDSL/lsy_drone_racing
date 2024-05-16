@@ -53,8 +53,9 @@ class Controller(BaseController):
             constants, counters, pre-plan trajectories, etc.
 
         Args:
-            initial_obs: The initial observation of the quadrotor's state
-                [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r].
+            initial_obs: The initial observation of the environment's state. Consists of
+                [drone_xyz_yaw, gates_xyz_yaw, gates_in_range, obstacles_xyz, obstacles_in_range,
+                gate_id]
             initial_info: The a priori information as a dictionary with keys 'symbolic_model',
                 'nominal_physical_parameters', 'nominal_gates_pos_and_type', etc.
             buffer_size: Size of the data buffers used in method `learn()`.
@@ -84,7 +85,7 @@ class Controller(BaseController):
         # completing the challenge that is highly susceptible to noise and does not generalize at
         # all. It is meant solely as an example on how the drones can be controlled
         waypoints = []
-        waypoints.append([self.initial_obs[0], self.initial_obs[2], 0.3])
+        waypoints.append([self.initial_obs[0], self.initial_obs[1], 0.3])
         gates = self.NOMINAL_GATES
         z_low = initial_info["gate_dimensions"]["low"]["height"]
         z_high = initial_info["gate_dimensions"]["tall"]["height"]
@@ -109,8 +110,8 @@ class Controller(BaseController):
         waypoints.append([gates[1][0] - 0.3, gates[1][1] - 0.2, z_high])
         waypoints.append([gates[1][0] + 0.2, gates[1][1] + 0.2, z_high])
         waypoints.append([gates[2][0], gates[2][1] - 0.4, z_low])
-        waypoints.append([gates[2][0], gates[2][1] + 0.1, z_low])
-        waypoints.append([gates[2][0], gates[2][1] + 0.1, z_high + 0.2])
+        waypoints.append([gates[2][0], gates[2][1] + 0.2, z_low])
+        waypoints.append([gates[2][0], gates[2][1] + 0.2, z_high + 0.2])
         waypoints.append([gates[3][0], gates[3][1] + 0.1, z_high])
         waypoints.append([gates[3][0], gates[3][1] - 0.1, z_high + 0.1])
         waypoints.append(
@@ -164,7 +165,8 @@ class Controller(BaseController):
 
         Args:
             ep_time: Episode's elapsed time, in seconds.
-            obs: The quadrotor's Vicon data [x, 0, y, 0, z, 0, phi, theta, psi, 0, 0, 0].
+            obs: The environment's observation [drone_xyz_yaw, gates_xyz_yaw, gates_in_range,
+                obstacles_xyz, obstacles_in_range, gate_id].
             reward: The reward signal.
             done: Wether the episode has terminated.
             info: Current step information as a dictionary with keys 'constraint_violation',

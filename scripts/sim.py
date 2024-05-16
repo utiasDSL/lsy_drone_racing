@@ -25,6 +25,7 @@ from safe_control_gym.utils.utils import sync
 from lsy_drone_racing.command import apply_sim_command
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_controller
+from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +68,7 @@ def simulate(
     # user sends ctrl signals, not the firmware.
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
     env_func = partial(make, "quadrotor", **config.quadrotor_config)
-    wrapped_env = make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ)
-    env = wrapped_env.env
+    env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ))
 
     # Load the controller module
     path = Path(__file__).parents[1] / controller
@@ -90,14 +90,15 @@ def simulate(
         done = False
         action = np.zeros(4)
         reward = 0
-        obs, info = wrapped_env.reset()
+        obs, info = env.reset()
         info["ctrl_timestep"] = CTRL_DT
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
         # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
-        vicon_obs = [obs[0], 0, obs[2], 0, obs[4], 0, obs[6], obs[7], obs[8], 0, 0, 0]
-        ctrl = ctrl_class(vicon_obs, info, verbose=config.verbose)
-        gui_timer = p.addUserDebugText("", textPosition=[0, 0, 1], physicsClientId=env.PYB_CLIENT)
+        ctrl = ctrl_class(obs, info, verbose=config.verbose)
+        gui_timer = p.addUserDebugText(
+            "", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id
+        )
         i = 0
         while not done:
             curr_time = i * CTRL_DT
@@ -110,17 +111,16 @@ def simulate(
                 parentObjectUniqueId=0,
                 parentLinkIndex=-1,
                 replaceItemUniqueId=gui_timer,
-                physicsClientId=env.PYB_CLIENT,
+                physicsClientId=env.pyb_client_id,
             )
 
             # Get the observation from the motion capture system
-            vicon_obs = [obs[0], 0, obs[2], 0, obs[4], 0, obs[6], obs[7], obs[8], 0, 0, 0]
             # Compute control input.
-            command_type, args = ctrl.compute_control(curr_time, vicon_obs, reward, done, info)
+            command_type, args = ctrl.compute_control(curr_time, obs, reward, done, info)
             # Apply the control input to the drone. This is a deviation from the gym API as the
             # action is not applied in env.step()
-            apply_sim_command(wrapped_env, command_type, args)
-            obs, reward, done, info, action = wrapped_env.step(curr_time, action)
+            apply_sim_command(env, command_type, args)
+            obs, reward, done, info, action = env.step(curr_time, action)
             # Update the controller internal state and models.
             ctrl.step_learn(action, obs, reward, done, info)
             # Add up reward, collisions, violations.

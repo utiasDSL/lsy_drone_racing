@@ -13,7 +13,7 @@ available in the info dict, but since it is vital information for the agent, we 
 in the observation space.
 
 Warning:
-    The RL wrapper uses a reduced action space and an expanded observation space!
+    The RL wrapper uses a reduced action space and a transformed observation space!
 """
 
 from __future__ import annotations
@@ -129,7 +129,7 @@ class DroneRacingWrapper(Wrapper):
         obs, info = self.env.reset()
         # Store obstacle height for observation expansion during env steps.
         self._obstacle_height = info["obstacle_dimensions"]["height"]
-        obs = self._expand_obs(obs, info).astype(np.float32)
+        obs = self._obs_transform(obs, info).astype(np.float32)
         # assert obs in self.observation_space, f"Invalid observation: {obs}"
         return obs, info
 
@@ -147,7 +147,7 @@ class DroneRacingWrapper(Wrapper):
             # Wrapper has a reduced action space compared to the firmware env to make it compatible
             # with the gymnasium interface and popular RL libraries.
             raise InvalidAction(f"Invalid action: {action}")
-        action = self._action_tf(action)
+        action = self._action_transform(action)
         # The firmware does not use the action input in the step function
         zeros = np.zeros(3)
         self.env.sendFullStateCmd(action[:3], zeros, zeros, action[3], zeros, self._sim_time)
@@ -170,14 +170,14 @@ class DroneRacingWrapper(Wrapper):
         # Increment the sim time after the step if we are not yet done.
         if not terminated and not truncated:
             self._sim_time += self.env.ctrl_dt
-        obs = self._expand_obs(obs, info).astype(np.float32)
+        obs = self._obs_transform(obs, info).astype(np.float32)
         if obs not in self.observation_space:
             terminated = True
             reward = -1
         self._reset_required = terminated or truncated
         return obs, reward, terminated, truncated, info
 
-    def _action_tf(self, action: np.ndarray) -> np.ndarray:
+    def _action_transform(self, action: np.ndarray) -> np.ndarray:
         """Transform the action to the format expected by the firmware env.
 
         Scale the action from [-1, 1] to [-5, 5] for the position and [-pi, pi] for the yaw.
@@ -188,11 +188,11 @@ class DroneRacingWrapper(Wrapper):
         Returns:
             The transformed action.
         """
-        action_tf = np.zeros(14)
+        action_transform = np.zeros(14)
         scaled_action = action * self.action_scale
-        action_tf[:3] = scaled_action[:3]
-        action_tf[9] = scaled_action[3]
-        return action_tf
+        action_transform[:3] = scaled_action[:3]
+        action_transform[9] = scaled_action[3]
+        return action_transform
 
     def render(self):
         """Render the environment.
@@ -205,16 +205,103 @@ class DroneRacingWrapper(Wrapper):
         """
         assert self.pyb_client_id != -1, "PyBullet not initialized with active GUI"
 
-    def _expand_obs(self, obs: np.ndarray, info: dict[str, Any]) -> np.ndarray:
-        """Expand the observation to include additional information.
+    def _obs_transform(self, obs: np.ndarray, info: dict[str, Any]) -> np.ndarray:
+        """Transform the observation to include additional information.
 
         Args:
-            obs: The observation to expand.
+            obs: The observation to transform.
             info: Additional information to include in the observation.
 
         Returns:
-            The expanded observation.
+            The transformed observation.
         """
+        drone_pos = obs[0:6:2]
+        drone_yaw = obs[8]
+        # The initial info dict does not include the gate pose and range, but it does include the
+        # nominal gate positions and types, which we can use as a fallback for the first step.
+        initial = "nominal_gates_pos_and_type" in info
+        gate_type = info["gate_types"]
+        gate_pos = info["gates_pos"][:, :2]
+        gate_yaw = info["gates_pos"][:, 5]
+        if initial:
+            gate_pos = info["nominal_gates_pos_and_type"][:, :2]
+            gate_yaw = info["nominal_gates_pos_and_type"][:, 5]
+
+        z = np.where(gate_type == 1, Z_LOW, Z_HIGH)  # Infer gate z position based on type
+        gate_poses = np.concatenate([gate_pos, z[:, None], gate_yaw[:, None]], axis=1)
+        obstacle_pos = info["obstacles_pos"][:, :3]
+        obstacle_pos[:, 2] = self._obstacle_height
+        gate_id = info["current_gate_id"]
+        gates_in_range = info["gates_in_range"]
+        obstacles_in_range = info["obstacles_in_range"]
+        obs = np.concatenate(
+            [
+                drone_pos,
+                [drone_yaw],
+                gate_poses.flatten(),
+                gates_in_range,
+                obstacle_pos.flatten(),
+                obstacles_in_range,
+                [gate_id],
+            ]
+        )
+        return obs
+
+
+class DroneRacingObservationWrapper:
+    """Wrapper to transform the observation space the firmware wrapper.
+
+    This wrapper matches the observation space of the DroneRacingWrapper. See its definition for
+    more details. While we want to transform the observation space, we do not want to change the API
+    of the firmware wrapper. Therefore, we create a separate wrapper for the observation space.
+
+    Note:
+        This wrapper is not a subclass of the gymnasium ObservationWrapper because the firmware is
+        not compatible with the gymnasium API.
+    """
+
+    def __init__(self, env: FirmwareWrapper):
+        """Initialize the wrapper.
+
+        Args:
+            env: The firmware wrapper.
+        """
+        self.env = env
+        self._obstacle_height = None
+        self.pyb_client_id: int = env.env.PYB_CLIENT
+
+    def __getattribute__(self, name: str) -> Any:
+        """Get an attribute from the object.
+
+        If the attribute is not found in the wrapper, it is fetched from the firmware wrapper.
+
+        Args:
+            name: The name of the attribute.
+
+        Returns:
+            The attribute value.
+        """
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            return getattr(self.env, name)
+
+    def reset(self, *args: Any, **kwargs: dict[str, Any]) -> tuple[np.ndarray, dict]:
+        """Reset the environment.
+
+        Args:
+            args: Positional arguments to pass to the firmware wrapper.
+            kwargs: Keyword arguments to pass to the firmware wrapper.
+
+        Returns:
+            The transformed observation and the info dict.
+        """
+        obs, info = self.env.reset(*args, **kwargs)
+        self._obstacle_height = info["obstacle_dimensions"]["height"]
+        obs = self._obs_transform(obs, info)
+        return obs, info
+
+    def _obs_transform(self, obs: np.ndarray, info: dict[str, Any]) -> np.ndarray:
         drone_pos = obs[0:6:2]
         drone_yaw = obs[8]
         # The initial info dict does not include the gate pose and range, but it does include the

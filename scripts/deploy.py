@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import pickle
 import time
+from dataclasses import asdict
 from pathlib import Path
 
 import fire
@@ -22,7 +23,17 @@ from safe_control_gym.utils.configuration import ConfigFactory
 from safe_control_gym.utils.registration import make
 
 from lsy_drone_racing.command import Command, apply_command
-from lsy_drone_racing.constants import FIRMWARE_FREQ
+from lsy_drone_racing.constants import (
+    CTRL_FREQ,
+    CTRL_TIMESTEP,
+    FIRMWARE_FREQ,
+    QUADROTOR_KF,
+    QUADROTOR_KM,
+    HighGateDesc,
+    LowGateDesc,
+    ObstacleDesc,
+    QuadrotorPhysicParams,
+)
 from lsy_drone_racing.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils import check_gate_pass, load_controller
 from lsy_drone_racing.vicon import ViconWatcher
@@ -46,29 +57,19 @@ def create_init_info(
         constraint_values: The values of the environment constraints evaluated at the start state.
         x_reference: The reference state for the controller to stabilize the drone after the race.
     """
-    gate_dimensions_low = {"shape": "square", "height": 0.525, "edge": 0.45}
-    gate_dimensions_tall = {"shape": "square", "height": 1.0, "edge": 0.45}
-    gate_dimensions = {"low": gate_dimensions_low, "tall": gate_dimensions_tall}
-    obstacle_dimensions = {"shape": "cylinder", "height": 1.05, "radius": 0.05}
-    physical_params = {
-        "quadrotor_mass": 0.03454,
-        "quadrotor_ixx_inertia": 1.4e-05,
-        "quadrotor_iyy_inertia": 1.4e-05,
-        "quadrotor_izz_inertia": 2.17e-05,
-    }
     init_info = {
         "symbolic_model": env_info["symbolic_model"],
-        "nominal_physical_parameters": physical_params,
+        "nominal_physical_parameters": asdict(QuadrotorPhysicParams()),
         "x_reference": [x_reference[0], 0.0, x_reference[1], 0.0, x_reference[2], 0.0] + [0.0] * 6,
         "u_reference": [0.084623, 0.084623, 0.084623, 0.084623],
         "symbolic_constraints": env_info["symbolic_constraints"],
-        "ctrl_timestep": 1 / 30,
-        "ctrl_freq": 30,
+        "ctrl_timestep": CTRL_TIMESTEP,
+        "ctrl_freq": CTRL_FREQ,
         "episode_len_sec": 33,
-        "quadrotor_kf": 3.16e-10,
-        "quadrotor_km": 7.94e-12,
-        "gate_dimensions": gate_dimensions,
-        "obstacle_dimensions": obstacle_dimensions,
+        "quadrotor_kf": QUADROTOR_KF,
+        "quadrotor_km": QUADROTOR_KM,
+        "gate_dimensions": {"low": asdict(LowGateDesc()), "tall": asdict(HighGateDesc())},
+        "obstacle_dimensions": asdict(ObstacleDesc()),
         "nominal_gates_pos_and_type": gate_poses,
         "nominal_obstacles_pos": obstacle_poses,
         "initial_state_randomization": env_info["initial_state_randomization"],
