@@ -28,7 +28,7 @@
 ## Installation
 
 To run the LSY Autonomous Drone Racing project, you will need 3 main repositories:
-- [safe-control-gym](https://github.com/utiasDSL/safe-control-gym/tree/beta-iros-competition) - `beta-iros-competition` branch: The drone simulator and gym environments
+- [safe-control-gym](https://github.com/utiasDSL/safe-control-gym/tree/lsy_drone_racing) - `lsy_drone_racing` branch: The drone simulator and gym environments
 - [pycffirmware](https://github.com/utiasDSL/pycffirmware) - `main` branch: A simulator for the on-board controller response of the drones we are using to accurately model their behavior
 - [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the scripts to simulate and deploy the drones in the racing challenge
 
@@ -57,7 +57,7 @@ Next, download the `safe-control-gym` and `pycffirmware` repositories and instal
 
 ```bash
 cd ~/repos
-git clone -b beta-iros-competition https://github.com/utiasDSL/safe-control-gym.git
+git clone -b lsy_drone_racing https://github.com/utiasDSL/safe-control-gym.git
 cd safe-control-gym
 pip install .
 ```
