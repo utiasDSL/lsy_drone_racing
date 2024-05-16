@@ -333,3 +333,46 @@ class DroneRacingObservationWrapper:
             ]
         )
         return obs
+    
+
+def obs_transform(obs: np.ndarray, info: dict[str, Any]) -> np.ndarray:
+    """Transform the observation to include additional information.
+
+    Args:
+        obs: The observation to transform.
+        info: Additional information to include in the observation.
+
+    Returns:
+        The transformed observation.
+    """
+    drone_pos = obs[0:6:2]
+    drone_yaw = obs[8]
+    # The initial info dict does not include the gate pose and range, but it does include the
+    # nominal gate positions and types, which we can use as a fallback for the first step.
+    initial = "nominal_gates_pos_and_type" in info
+    gate_type = info["gate_types"]
+    gate_pos = info["gates_pos"][:, :2]
+    gate_yaw = info["gates_pos"][:, 5]
+    if initial:
+        gate_pos = info["nominal_gates_pos_and_type"][:, :2]
+        gate_yaw = info["nominal_gates_pos_and_type"][:, 5]
+
+    z = np.where(gate_type == 1, Z_LOW, Z_HIGH)  # Infer gate z position based on type
+    gate_poses = np.concatenate([gate_pos, z[:, None], gate_yaw[:, None]], axis=1)
+    obstacle_pos = info["obstacles_pos"][:, :3]
+    obstacle_pos[:, 2] = 0.5  # Not really relevant for learning TODO: don't hardcode
+    gate_id = info["current_gate_id"]
+    gates_in_range = info["gates_in_range"]
+    obstacles_in_range = info["obstacles_in_range"]
+    obs = np.concatenate(
+        [
+            drone_pos,
+            [drone_yaw],
+            gate_poses.flatten(),
+            gates_in_range,
+            obstacle_pos.flatten(),
+            obstacles_in_range,
+            [gate_id],
+        ]
+    )
+    return obs
