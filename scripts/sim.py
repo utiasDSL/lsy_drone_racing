@@ -135,7 +135,7 @@ def simulate(
                 sync(i, ep_start, CTRL_DT)
             i += 1
             # Break early after passing the last gate (=> gate -1) or task completion
-            if terminate_on_lap and info["current_target_gate_id"] == -1:
+            if terminate_on_lap and info["current_gate_id"] == -1:
                 info["task_completed"], lap_finished = True, True
             if info["task_completed"]:
                 done = True
@@ -149,7 +149,7 @@ def simulate(
         stats["collisions"] = 0
         stats["collision_objects"] = set()
         stats["violations"] = 0
-        ep_times.append(curr_time if info["current_target_gate_id"] == -1 else None)
+        ep_times.append(curr_time if info["current_gate_id"] == -1 else None)
 
     # Close the environment
     env.close()
@@ -158,7 +158,7 @@ def simulate(
 
 def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, lap_finished: bool):
     """Log the statistics of a single episode."""
-    stats["gates_passed"] = info["current_target_gate_id"]
+    stats["gates_passed"] = info["current_gate_id"]
     if stats["gates_passed"] == -1:  # The drone has passed the final gate
         stats["gates_passed"] = len(config.quadrotor_config.gates)
     if config.quadrotor_config.done_on_collision and info["collision"][1]:

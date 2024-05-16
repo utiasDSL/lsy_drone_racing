@@ -120,6 +120,13 @@ class Controller(BaseController):
                 initial_info["x_reference"][4],
             ]
         )
+        waypoints.append(
+            [
+                initial_info["x_reference"][0],
+                initial_info["x_reference"][2] - 0.2,
+                initial_info["x_reference"][4],
+            ]
+        )
         waypoints = np.array(waypoints)
 
         tck, u = interpolate.splprep([waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]], s=0.1)
