@@ -5,7 +5,8 @@ from pathlib import Path
 
 import fire
 
-from lsy_drone_racing.utils import check_race_track, load_config
+from lsy_drone_racing.utils import load_config
+from lsy_drone_racing.utils.ros_utils import check_race_track
 
 logger = logging.getLogger("rosout." + __name__)
 

@@ -11,15 +11,13 @@ from functools import partial
 from pathlib import Path
 
 import fire
-import yaml
-from munch import munchify
 from safe_control_gym.utils.registration import make
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
 
 from lsy_drone_racing.constants import FIRMWARE_FREQ
-from lsy_drone_racing.wrapper import DroneRacingWrapper
 from lsy_drone_racing.utils import load_config
+from lsy_drone_racing.wrapper import DroneRacingWrapper
 
 logger = logging.getLogger(__name__)
 
