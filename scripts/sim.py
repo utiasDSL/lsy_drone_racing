@@ -13,19 +13,22 @@ import logging
 import time
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import fire
 import numpy as np
 import pybullet as p
-import yaml
-from munch import Munch, munchify
 from safe_control_gym.utils.registration import make
 from safe_control_gym.utils.utils import sync
 
 from lsy_drone_racing.command import apply_sim_command
 from lsy_drone_racing.constants import FIRMWARE_FREQ
-from lsy_drone_racing.utils import load_controller
+from lsy_drone_racing.utils import load_config, load_controller
 from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
+
+if TYPE_CHECKING:
+    from munch import Munch
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +53,7 @@ def simulate(
         A list of episode times.
     """
     # Load configuration and check if firmare should be used.
-    path = Path(config)
-    assert path.exists(), f"Configuration file not found: {path}"
-    with open(path, "r") as file:
-        config = munchify(yaml.safe_load(file))
+    config = load_config(Path(config))
     # Overwrite config options
     config.quadrotor_config.gui = gui
     CTRL_FREQ = config.quadrotor_config["ctrl_freq"]

@@ -19,6 +19,7 @@ from stable_baselines3.common.env_checker import check_env
 
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.wrapper import DroneRacingWrapper
+from lsy_drone_racing.utils import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,7 @@ logger = logging.getLogger(__name__)
 def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     """Create the drone racing environment."""
     # Load configuration and check if firmare should be used.
-    assert config_path.exists(), f"Configuration file not found: {config_path}"
-    with open(config_path, "r") as file:
-        config = munchify(yaml.safe_load(file))
+    config = load_config(config_path)
     # Overwrite config options
     config.quadrotor_config.gui = gui
     CTRL_FREQ = config.quadrotor_config["ctrl_freq"]
