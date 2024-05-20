@@ -19,15 +19,13 @@ Warning:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 from gymnasium import Wrapper
 from gymnasium.error import InvalidAction
 from gymnasium.spaces import Box
-
-if TYPE_CHECKING:
-    from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
+from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +46,8 @@ class DroneRacingWrapper(Wrapper):
             env: The firmware wrapper.
             terminate_on_lap: Stop the simulation early when the drone has passed the last gate.
         """
+        if not isinstance(env, FirmwareWrapper):
+            raise TypeError(f"`env` must be an instance of `FirmwareWrapper`, is {type(env)}")
         super().__init__(env)
         # Patch the FirmwareWrapper to add any missing attributes required by the gymnasium API.
         self.env = env
@@ -246,6 +246,8 @@ class DroneRacingObservationWrapper:
         Args:
             env: The firmware wrapper.
         """
+        if not isinstance(env, FirmwareWrapper):
+            raise TypeError(f"`env` must be an instance of `FirmwareWrapper`, is {type(env)}")
         self.env = env
         self.pyb_client_id: int = env.env.PYB_CLIENT
 
