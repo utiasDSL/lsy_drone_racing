@@ -125,7 +125,7 @@ class DroneRacingWrapper(Wrapper):
         self._f_rotors[:] = 0.0
         obs, info = self.env.reset()
         # Store obstacle height for observation expansion during env steps.
-        obs = self._obs_transform(obs, info).astype(np.float32)
+        obs = self.observation_transform(obs, info).astype(np.float32)
         # assert obs in self.observation_space, f"Invalid observation: {obs}"
         return obs, info
 
@@ -166,7 +166,7 @@ class DroneRacingWrapper(Wrapper):
         # Increment the sim time after the step if we are not yet done.
         if not terminated and not truncated:
             self._sim_time += self.env.ctrl_dt
-        obs = self._obs_transform(obs, info).astype(np.float32)
+        obs = self.observation_transform(obs, info).astype(np.float32)
         if obs not in self.observation_space:
             terminated = True
             reward = -1
