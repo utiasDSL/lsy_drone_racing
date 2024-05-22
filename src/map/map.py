@@ -153,6 +153,8 @@ class Map:
             print("path not available")
         else:
             ax.plot(*np.array(path).T, '-', color = (0.9, 0.2, 0.5, 0.8), zorder = 5)
+            # mar path coordinates wit red dots
+            ax.scatter(*np.array(path).T, color = 'red', zorder = 5)
     
     def draw_scene(self, path):
         ax = self.create_map_sized_figure()
@@ -167,8 +169,8 @@ class Map:
       return (self.lower_bound <= p).all() and (p <= self.upper_bound).all()
 
 if __name__ == "__main__":
-    lower_bound = np.array([-4, -4, 0])
-    upper_bound = np.array([4, 4, 2])
+    lower_bound = np.array([-2, -2, 0])
+    upper_bound = np.array([2, 2, 2])
     map = Map(lower_bound, upper_bound, 0.1)
     # gates_pos_and_types = np.array([[
     #                                 0.45, -1.0, 0, 0, 0, 2.35, 1], 

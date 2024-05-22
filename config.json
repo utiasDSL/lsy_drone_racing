@@ -16,7 +16,8 @@
                     0.05,
                     0.755
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "support"
             },
             "bottom_bar": {
                 "position": [
@@ -29,7 +30,8 @@
                     0.05,
                     0.05
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "bottom_bar"
             },
             "top_bar": {
                 "position": [
@@ -42,7 +44,8 @@
                     0.05,
                     0.05
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "top_bar"
             },
             "left_bar": {
                 "position": [
@@ -55,7 +58,8 @@
                     0.05,
                     0.55
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "left_bar"
             },
             "right_bar": {
                 "position": [
@@ -68,7 +72,8 @@
                     0.05,
                     0.55
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "right_bar"
             },
             "filling": {
                 "position": [
@@ -81,7 +86,8 @@
                     0.05,
                     0.45
                 ],
-                "type": "filling"
+                "type": "filling",
+                "name": "filling"
             }
         },
         "small_portal": {
@@ -96,7 +102,8 @@
                     0.05,
                     0.3
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "support"
             },
             "bottom_bar": {
                 "position": [
@@ -109,7 +116,8 @@
                     0.05,
                     0.05
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "bottom_bar"
             },
             "top_bar": {
                 "position": [
@@ -122,7 +130,8 @@
                     0.05,
                     0.05
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "top_bar"
             },
             "left_bar": {
                 "position": [
@@ -135,7 +144,8 @@
                     0.05,
                     0.55
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "left_bar"
             },
             "right_bar": {
                 "position": [
@@ -148,7 +158,8 @@
                     0.05,
                     0.55
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "right_bar"
             },
             "filling": {
                 "position": [
@@ -161,7 +172,8 @@
                     0.05,
                     0.45
                 ],
-                "type": "filling"
+                "type": "filling",
+                "name": "filling"
             }
         },
         "obstacle": {
@@ -176,7 +188,8 @@
                     0.1,
                     1.05
                 ],
-                "type": "collision"
+                "type": "collision",
+                "name": "obstacle"
             }
         }
     },
@@ -190,21 +203,21 @@
     },
     "world_properties": {
         "inflate_radius": {
-            "gate": 0.2,
-            "obstacle": 0.2
+            "gate": 0.15,
+            "obstacle": 0.15
         },
         "lower_bound": [-2, -2, 0],
         "upper_bound": [2, 2, 2]
     },
     "path_planner_properties": {
-        "time_limit_online": 0.1,
+        "time_limit_online": 0.3,
         "time_limit_offline": 0.5,
         "optimality_threshold_percentage": 0.05,
-        "checkpoint_gate_offset": 0.35
+        "checkpoint_gate_offset": 0.25
     },
     "trajectory_generator_properties": {
-        "max_velocity": 8,
-        "max_acceleration": 10,
-        "sampling_interval": 0.1
+        "max_velocity": 3,
+        "max_acceleration": 5,
+        "sampling_interval": 0.2
     }
 }

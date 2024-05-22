@@ -29,15 +29,6 @@ if __name__ == "__main__":
     nominal_gates_pos_and_type = np.array(nominal_gates_pos_and_type)
     nomial_obstacle_pos = task["nomial_obstacle_pos"]
     nomial_obstacle_pos = np.array(nomial_obstacle_pos)
-    chekpoints = task["chekpoints"]
-    chekpoints = np.array(chekpoints)
-
-    path_file = "path_segments/path_4900.txt"
-    # path is stored as list of points coordinates comma separated
-    with open(path_file, "r") as f:
-        path = f.readlines()
-        path = [point.strip().split(" ") for point in path]
-        path = np.array(path, dtype=float)
 
     # create map and parse objects
     lower_bound = np.array([-2, -2, 0])
@@ -56,6 +47,13 @@ if __name__ == "__main__":
     map.parse_gates(gates)
     map.parse_obstacles(obstacles)
 
-    # plot map
-    map.draw_scene(path=path)
-
+    path_directory_path = "path_segments"
+    for file in os.listdir(path_directory_path):
+        path_file = os.path.join(path_directory_path, file)
+        # path is stored as list of points coordinates comma separated
+        with open(path_file, "r") as f:
+            path = f.readlines()
+            path = [point.strip().split(" ") for point in path]
+            path = np.array(path, dtype=float)
+        # plot map
+        map.draw_scene(path=path)
