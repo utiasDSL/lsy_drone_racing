@@ -216,8 +216,8 @@
         "checkpoint_gate_offset": 0.25
     },
     "trajectory_generator_properties": {
-        "max_velocity": 3,
+        "max_velocity": 5,
         "max_acceleration": 5,
-        "sampling_interval": 0.2
+        "sampling_interval": 0.1
     }
 }
