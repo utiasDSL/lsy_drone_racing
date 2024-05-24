@@ -165,7 +165,7 @@ class DroneRacingWrapper(Wrapper):
 
         self.observation_parser.update(obs, info)
         obs = self.observation_parser.get_observation().astype(np.float32)
-        if self.observation_parser.out_of_bounds:
+        if self.observation_parser.out_of_bounds():
             terminated = True
 
         # Compute the custom reward since we cannot modify the firmware environment for the

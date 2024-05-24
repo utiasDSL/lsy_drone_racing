@@ -55,7 +55,6 @@ class ObservationParser:
         # Hidden states that are not part of the observation space
         self.just_passed_gate: bool = False
 
-    @property
     def out_of_bounds(self) -> bool:
         """Check if the drone is out of bounds."""
         return self.observation_space.contains(self.get_observation())
@@ -148,7 +147,7 @@ class Rewarder:
         """
         reward = 0.0
 
-        if info["collision"][1] or obs.out_of_bounds:
+        if info["collision"][1] or obs.out_of_bounds():
             return self.collision
         if info["task_completed"]:
             return self.end_reached
