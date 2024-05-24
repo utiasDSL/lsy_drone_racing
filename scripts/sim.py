@@ -32,10 +32,11 @@ logger = logging.getLogger(__name__)
 
 def simulate(
     config: str = "config/getting_started.yaml",
-    controller: str = "examples/controller.py",
+    controller: str = "controllers/example/example_controller.py",
     n_runs: int = 1,
     gui: bool = True,
     terminate_on_lap: bool = True,
+    log_level: str = "INFO"
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
@@ -45,6 +46,7 @@ def simulate(
         n_runs: The number of episodes.
         gui: Enable/disable the simulation GUI.
         terminate_on_lap: Stop the simulation early when the drone has passed the last gate.
+        log_level: The logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
 
     Returns:
         A list of episode times.
@@ -59,6 +61,9 @@ def simulate(
     CTRL_FREQ = config.quadrotor_config["ctrl_freq"]
     CTRL_DT = 1 / CTRL_FREQ
 
+    # Set the logging level
+    assert log_level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+    logger.setLevel(log_level)
     # Create environment.
     assert config.use_firmware, "Firmware must be used for the competition."
     pyb_freq = config.quadrotor_config["pyb_freq"]
