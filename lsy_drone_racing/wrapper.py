@@ -22,10 +22,12 @@ import logging
 from typing import Any
 
 import numpy as np
-from gymnasium import Wrapper
+from gymnasium import Env, Wrapper
 from gymnasium.error import InvalidAction
 from gymnasium.spaces import Box
 from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
+
+from lsy_drone_racing.rotations import map2pi
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +63,16 @@ class DroneRacingWrapper(Wrapper):
         # yaw)      The desired yaw angle.
         # All values are scaled to [-1, 1]. Transformed back, x, y, z values of 1 correspond to 5m.
         # The yaw value of 1 corresponds to pi radians.
-        action_limits = np.ones(4)
-        self.action_scale = np.array([5, 5, 5, np.pi])
-        self.action_space = Box(-action_limits, action_limits, dtype=np.float32)
+        self.action_scale = np.array([1, 1, 1, np.pi])
+        self.action_space = Box(-1, 1, shape=(4,), dtype=np.float32)
 
         # Observation space:
-        # [drone_xyz_yaw, gates_xyz_yaw, gates_in_range, obstacles_xyz, obstacles_in_range, gate_id]
-        # drone_xyz_yaw)  x, y, z, yaw are the drone pose of the drone in the world frame. Position
-        #       is in meters and yaw is in radians.
+        # [drone_xyz, drone_rpy, drone_vxyz, drone vrpy, gates_xyz_yaw, gates_in_range,
+        # obstacles_xyz, obstacles_in_range, gate_id]
+        # drone_xyz)  Drone position in meters.
+        # drone_rpy)  Drone orientation in radians.
+        # drone_vxyz)  Drone velocity in m/s.
+        # drone_vrpy)  Drone angular velocity in rad/s.
         # gates_xyz_yaw)  The pose of the gates. Positions are in meters and yaw in radians. The
         #       length is dependent on the number of gates. Ordering is [x0, y0, z0, yaw0, x1,...].
         # gates_in_range)  A boolean array indicating if the drone is within the gates' range. The
@@ -80,7 +84,10 @@ class DroneRacingWrapper(Wrapper):
         # gate_id)  The ID of the current target gate. -1 if the task is completed.
         n_gates = env.env.NUM_GATES
         n_obstacles = env.env.n_obstacles
-        drone_limits = [5, 5, 5, np.pi]
+        # Velocity limits are set to 10 m/s for the drone and 10 rad/s for the angular velocity.
+        # While drones could go faster in theory, it's not safe in practice and we don't allow it in
+        # sim either.
+        drone_limits = [5, 5, 5, np.pi, np.pi, np.pi, 10, 10, 10, 10, 10, 10]
         gate_limits = [5, 5, 5, np.pi] * n_gates + [1] * n_gates  # Gate poses and range mask
         obstacle_limits = [5, 5, 5] * n_obstacles + [1] * n_obstacles  # Obstacle pos and range mask
         obs_limits = drone_limits + gate_limits + obstacle_limits + [n_gates]  # [1] for gate_id
@@ -96,6 +103,7 @@ class DroneRacingWrapper(Wrapper):
         # breaks the gymnasium interface. Instead, we keep track of the sim time here. On each step,
         # it is incremented by the control time step. On env reset, it is reset to 0.
         self._sim_time = 0.0
+        self._drone_pose = None
         # The firmware quadrotor env requires the rotor forces as input to the step function. These
         # are zero initially and updated by the step function. We automatically insert them to
         # ensure compatibility with the gymnasium interface.
@@ -126,7 +134,7 @@ class DroneRacingWrapper(Wrapper):
         obs, info = self.env.reset()
         # Store obstacle height for observation expansion during env steps.
         obs = self.observation_transform(obs, info).astype(np.float32)
-        # assert obs in self.observation_space, f"Invalid observation: {obs}"
+        self._drone_pose = obs[[0, 1, 2, 5]]
         return obs, info
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -144,6 +152,7 @@ class DroneRacingWrapper(Wrapper):
             # with the gymnasium interface and popular RL libraries.
             raise InvalidAction(f"Invalid action: {action}")
         action = self._action_transform(action)
+        assert action.shape[-1] == 4, "Action must have shape (..., 4)"
         # The firmware does not use the action input in the step function
         zeros = np.zeros(3)
         self.env.sendFullStateCmd(action[:3], zeros, zeros, action[3], zeros, self._sim_time)
@@ -167,6 +176,7 @@ class DroneRacingWrapper(Wrapper):
         if not terminated and not truncated:
             self._sim_time += self.env.ctrl_dt
         obs = self.observation_transform(obs, info).astype(np.float32)
+        self._drone_pose = obs[[0, 1, 2, 5]]
         if obs not in self.observation_space:
             terminated = True
             reward = -1
@@ -176,19 +186,15 @@ class DroneRacingWrapper(Wrapper):
     def _action_transform(self, action: np.ndarray) -> np.ndarray:
         """Transform the action to the format expected by the firmware env.
 
-        Scale the action from [-1, 1] to [-5, 5] for the position and [-pi, pi] for the yaw.
-
         Args:
             action: The action to transform.
 
         Returns:
             The transformed action.
         """
-        action_transform = np.zeros(14)
-        scaled_action = action * self.action_scale
-        action_transform[:3] = scaled_action[:3]
-        action_transform[9] = scaled_action[3]
-        return action_transform
+        action = self._drone_pose + (action * self.action_scale)
+        action[3] = map2pi(action[3])  # Ensure yaw is in [-pi, pi]
+        return action
 
     def render(self):
         """Render the environment.
@@ -213,11 +219,15 @@ class DroneRacingWrapper(Wrapper):
             The transformed observation.
         """
         drone_pos = obs[0:6:2]
-        drone_yaw = obs[8]
+        drone_vel = obs[1:6:2]
+        drone_rpy = obs[6:9]
+        drone_ang_vel = obs[8:11]
         obs = np.concatenate(
             [
                 drone_pos,
-                [drone_yaw],
+                drone_rpy,
+                drone_vel,
+                drone_ang_vel,
                 info["gates_pose"][:, [0, 1, 2, 5]].flatten(),
                 info["gates_in_range"],
                 info["obstacles_pose"][:, :3].flatten(),
@@ -296,3 +306,68 @@ class DroneRacingObservationWrapper:
         obs, reward, done, info, action = self.env.step(*args, **kwargs)
         obs = DroneRacingWrapper.observation_transform(obs, info)
         return obs, reward, done, info, action
+
+
+class RewardWrapper(Wrapper):
+    """Wrapper to alter the default reward function from the environment for RL training."""
+
+    def __init__(self, env: Env):
+        """Initialize the wrapper.
+
+        Args:
+            env: The firmware wrapper.
+        """
+        super().__init__(env)
+        self._last_pos = None
+        self._last_gate = None
+
+    def reset(self, *args: Any, **kwargs: dict[str, Any]) -> np.ndarray:
+        """Reset the environment.
+
+        Args:
+            args: Positional arguments to pass to the firmware wrapper.
+            kwargs: Keyword arguments to pass to the firmware wrapper.
+
+        Returns:
+            The initial observation of the next episode.
+        """
+        obs, info = self.env.reset(*args, **kwargs)
+        self._last_pos = obs[:3]
+        self._last_gate = info["current_gate_id"]
+        del info["symbolic_model"]
+        del info["symbolic_constraints"]
+        return obs, info
+
+    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
+        """Take a step in the environment.
+
+        Args:
+            action: The action to take in the environment. See action space for details.
+
+        Returns:
+            The next observation, the reward, the terminated and truncated flags, and the info dict.
+        """
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        reward = self._compute_reward(obs, reward, terminated, truncated, info)
+        return obs, reward, terminated, truncated, info
+
+    def _compute_reward(
+        self, obs: np.ndarray, reward: float, terminated: bool, truncated: bool, info: dict
+    ) -> float:
+        """Compute the reward for the current step.
+
+        Args:
+            obs: The current observation.
+            reward: The reward from the environment.
+            terminated: True if the episode is terminated.
+            truncated: True if the episode is truncated.
+            info: Additional information from the environment.
+
+        Returns:
+            The computed reward.
+        """
+        gate_id = info["current_gate_id"]
+        gate_reward = np.exp(-np.linalg.norm(info["gates_pose"][gate_id, :3] - obs[:3]))
+        gate_passed_reward = 0 if gate_id == self._last_gate else 0.1
+        crash_penality = -1 if terminated and not info["task_completed"] else 0
+        return gate_reward + crash_penality + gate_passed_reward
