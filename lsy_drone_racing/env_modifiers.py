@@ -160,6 +160,7 @@ class Rewarder:
             The custom reward.
         """
         reward = 0.0
+
         if info["collision"][1]:
             return self.collision
         if info["task_completed"]:
@@ -170,7 +171,7 @@ class Rewarder:
         reward += dist_to_gate * self.dist_to_gate_mul
 
         # Reward for avoiding obstacles
-        dist_to_obstacle = np.linalg.norm(obs.drone_pos - obs.obstacles_pos)
+        dist_to_obstacle = np.linalg.norm(obs.drone_pos - obs.obstacles_pos[obs.obstacles_in_range, :3])
         reward += dist_to_obstacle * self.dist_to_obstacle_mul
 
         # Reward for passing a gate
