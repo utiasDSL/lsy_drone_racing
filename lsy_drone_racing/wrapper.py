@@ -197,19 +197,14 @@ class DroneRacingWrapper(Wrapper):
         # action_transform[9] = scaled_action[3]
         # return action_transform
 
-        action = np.clip(action, -1, 1)  # Clip the action to be within [-1, 1]
+        #action = np.clip(action, -1, 1)  # Clip the action to be within [-1, 1]
 
-        # Sample action from a Gaussian distribution centered on the drone's current position
-        mean = self.observation_parser.drone_pos  # The current position of the drone
-        std_dev = self.action_scale[:3] / 2  # Standard deviation for x, y, z. Adjust as needed.
-        sampled_action = np.random.normal(mean[:3], std_dev)
-
-        # Clip sampled_action to ensure it stays within bounds
-        sampled_action = np.clip(sampled_action, -self.action_scale[:3], self.action_scale[:3])
-
+        # Adjust action to be relative to the current position of the drone
         centered_action = np.zeros(4)
-        centered_action[:3] = sampled_action
-        centered_action[3] = action[3] * self.action_scale[3]  # Use the original yaw action
+        centered_action[:3] = self.observation_parser.drone_pos + action[:3] * self.action_scale[:3]
+        centered_action[3] = action[3] * self.action_scale[3]
+
+        return centered_action
 
         return centered_action
 
