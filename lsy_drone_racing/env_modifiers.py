@@ -6,8 +6,7 @@ from typing import Any
 
 import numpy as np
 import yaml
-
-from lsy_drone_racing.constants import Z_HIGH, Z_LOW
+from gymnasium.spaces import Box
 
 
 class ObservationParser:
@@ -15,62 +14,51 @@ class ObservationParser:
 
     def __init__(
         self,
-        drone_pos: np.ndarray,
-        drone_yaw: float,
-        gates_poses: np.ndarray,
-        gates_in_range: np.ndarray,
-        obstacles_pos: np.ndarray,
-        obstacles_in_range: np.ndarray,
-        gate_id: int,
+        n_gates: int,
+        n_obstacles: int,
+        drone_pos_limits: list = [5, 5, 5],
+        drone_yaw_limits: list = [np.pi],
+        gate_pos_limits: list = [5, 5, 5],
+        gate_yaw_limits: list = [np.pi],
+        gate_in_range_limits: list = [1],
+        obstacle_pos_limits: list = [5, 5, 5],
+        obstacle_in_range_limits: list = [1],
     ):
         """Initialize the observation parser."""
-        self.drone_pos = drone_pos
-        self.drone_yaw = drone_yaw
-        self.gates_poses = gates_poses
-        self.gates_in_range = gates_in_range
-        self.obstacles_pos = obstacles_pos
-        self.obstacles_in_range = obstacles_in_range
-        self.gate_id = gate_id
+        self.n_gates = n_gates
+        self.n_obstacles = n_obstacles
+
+        obs_limits = (
+            drone_pos_limits
+            + drone_yaw_limits
+            + gate_pos_limits * n_gates
+            + gate_yaw_limits * n_gates
+            + gate_in_range_limits * n_gates
+            + obstacle_pos_limits * n_obstacles
+            + obstacle_in_range_limits * n_obstacles
+            + [n_gates]
+        )
+        obs_limits_high = np.array(obs_limits)
+        obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
+        self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
+
+        # Observable variables
+        self.drone_pos = None
+        self.drone_yaw = None
+        self.gates_pos = None
+        self.gates_yaw = None
+        self.gates_in_range = None
+        self.obstacles_pos = None
+        self.obstacles_in_range = None
+        self.gate_id = None
 
         # Hidden states that are not part of the observation space
         self.just_passed_gate: bool = False
 
-    @classmethod
-    def from_initial_observation(cls, obs: np.ndarray, info: dict[str, Any]):
-        """Transform the observation to include additional information.
-
-        Args:
-            obs: The observation to transform.
-            info: Additional information to include in the observation.
-
-        Returns:
-            The transformed observation.
-        """
-        drone_pos = obs[0:6:2]
-        drone_yaw = obs[8]
-        # The initial info dict does not include the gate pose and range, but it does include the
-        # nominal gate positions and types, which we can use as a fallback for the first step.
-        gate_type = info["gate_types"]
-        gate_pos = info["nominal_gates_pos_and_type"][:, :2]
-        gate_yaw = info["nominal_gates_pos_and_type"][:, 5]
-
-        z = np.where(gate_type == 1, Z_LOW, Z_HIGH)  # Infer gate z position based on type
-        gate_poses = np.concatenate([gate_pos, z[:, None], gate_yaw[:, None]], axis=1)
-        obstacle_pos = info["obstacles_pos"][:, :3]
-        obstacle_pos[:, 2] = 0.5
-        gate_id = info["current_gate_id"]
-        gates_in_range = info["gates_in_range"]
-        obstacles_in_range = info["obstacles_in_range"]
-
-        return cls(
-            drone_pos=drone_pos,
-            drone_yaw=drone_yaw,
-            gates_poses=gate_poses,
-            gates_in_range=gates_in_range,
-            obstacles_pos=obstacle_pos,
-            obstacles_in_range=obstacles_in_range,
-            gate_id=gate_id,
-        )
+    @property
+    def out_of_bounds(self) -> bool:
+        """Check if the drone is out of bounds."""
+        return self.observation_space.contains(self.get_observation())
 
     def update(self, obs: np.ndarray, info: dict[str, Any]):
         """Update the observation parser with the new observation and info dict.
@@ -84,12 +72,10 @@ class ObservationParser:
         """
         self.drone_pos = obs[0:6:2]
         self.drone_yaw = obs[8]
-        gates_pos = info["gates_pos"][:, :2]
-        gates_yaw = info["gates_pos"][:, 5]
-        gates_z = np.where(info["gate_types"] == 1, Z_LOW, Z_HIGH)
-        self.gates_poses = np.concatenate([gates_pos, gates_z[:, None], gates_yaw[:, None]], axis=1)
+        self.gates_pos = info["gates_pose"][:, :3]
+        self.gates_yaw = info["gates_pose"][:, 5]
         self.gates_in_range = info["gates_in_range"]
-        self.obstacles_pos = info["obstacles_pos"][:, :3]
+        self.obstacles_pos = info["obstacles_pose"][:, :3]
         self.obstacles_in_range = info["obstacles_in_range"]
         self.just_passed_gate = self.gate_id != info["current_gate_id"]
         self.gate_id = info["current_gate_id"]
@@ -104,7 +90,8 @@ class ObservationParser:
             [
                 self.drone_pos,
                 [self.drone_yaw],
-                self.gates_poses.flatten(),
+                self.gates_pos.flatten(),
+                self.gates_yaw,
                 self.gates_in_range,
                 self.obstacles_pos.flatten(),
                 self.obstacles_in_range,
@@ -161,17 +148,17 @@ class Rewarder:
         """
         reward = 0.0
 
-        if info["collision"][1]:
+        if info["collision"][1] or obs.out_of_bounds:
             return self.collision
         if info["task_completed"]:
             return self.end_reached
 
         # Reward for gating close to the next gate
-        dist_to_gate = np.linalg.norm(obs.drone_pos - obs.gates_poses[obs.gate_id, :3])
+        dist_to_gate = np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id])
         reward += dist_to_gate * self.dist_to_gate_mul
 
         # Reward for avoiding obstacles
-        dist_to_obstacle = np.linalg.norm(obs.drone_pos - obs.obstacles_pos[obs.obstacles_in_range, :3])
+        dist_to_obstacle = np.linalg.norm(obs.drone_pos - obs.obstacles_pos[obs.obstacles_in_range])
         reward += dist_to_obstacle * self.dist_to_obstacle_mul
 
         # Reward for passing a gate
@@ -185,6 +172,7 @@ def map_reward_to_color(reward: float) -> str:
     """Convert the reward to a color.
 
     We use a red-green color map, where red indicates a negative reward and green a positive reward.
+
     Args:
         reward: The reward.
 
@@ -194,4 +182,3 @@ def map_reward_to_color(reward: float) -> str:
     if reward < 0:
         return "red"
     return "green"
-

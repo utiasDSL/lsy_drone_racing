@@ -29,11 +29,10 @@ from gymnasium.spaces import Box
 from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
 from termcolor import colored
 
-from lsy_drone_racing.constants import Z_HIGH, Z_LOW
 from lsy_drone_racing.env_modifiers import ObservationParser, Rewarder, map_reward_to_color
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger(__file__)
+# logger.setLevel(logging.DEBUG)
 
 
 class DroneRacingWrapper(Wrapper):
@@ -70,28 +69,11 @@ class DroneRacingWrapper(Wrapper):
         self.action_space = Box(-action_limits, action_limits, dtype=np.float32)
 
         # Observation space:
-        # [drone_xyz_yaw, gates_xyz_yaw, gates_in_range, obstacles_xyz, obstacles_in_range, gate_id]
-        # drone_xyz_yaw)  x, y, z, yaw are the drone pose of the drone in the world frame. Position
-        #       is in meters and yaw is in radians.
-        # gates_xyz_yaw)  The pose of the gates. Positions are in meters and yaw in radians. The
-        #       length is dependent on the number of gates. Ordering is [x0, y0, z0, yaw0, x1,...].
-        # gates_in_range)  A boolean array indicating if the drone is within the gates' range. The
-        #       length is dependent on the number of gates.
-        # obstacles_xyz)  The pose of the obstacles. Positions are in meters. The length is
-        #       dependent on the number of obstacles. Ordering is [x0, y0, z0, x1,...].
-        # obstacles_in_range)  A boolean array indicating if the drone is within the obstacles'
-        #       range. The length is dependent on the number of obstacles.
-        # gate_id)  The ID of the current target gate. -1 if the task is completed.
-        n_gates = env.env.NUM_GATES
-        n_obstacles = env.env.n_obstacles
-        drone_limits = [5, 5, 5, np.pi]
-        gate_limits = [5, 5, 5, np.pi] * n_gates + [1] * n_gates  # Gate poses and range mask
-        obstacle_limits = [5, 5, 5] * n_obstacles + [1] * n_obstacles  # Obstacle pos and range mask
-        obs_limits = drone_limits + gate_limits + obstacle_limits + [n_gates]  # [1] for gate_id
-        obs_limits_high = np.array(obs_limits)
-        obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
-        self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
-        self.observation_parser = None
+        self.observation_parser = ObservationParser(
+            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
+        )
+        self.observation_space = self.observation_parser.observation_space
+        logger.debug(f"Observation space: {self.observation_space}")
 
         # Reward values TODO: Load from YAML
         self.rewarder = Rewarder()
@@ -132,15 +114,13 @@ class DroneRacingWrapper(Wrapper):
         self._sim_time = 0.0
         self._f_rotors[:] = 0.0
         obs, info = self.env.reset()
-        # Store obstacle height for observation expansion during env steps.
-        self._obstacle_height = info["obstacle_dimensions"]["height"]
-        self.observation_parser = ObservationParser.from_initial_observation(obs, info)
-        obs = self.observation_parser.get_observation().astype(np.float32)
-
         logger.debug(f"{colored('===Reset===', 'green')}")
-        logger.debug(f"Available keys in info: {pprint.pformat(info.keys())}")
         logger.debug(f"Collision: {pprint.pformat(info['collision'])}")
         logger.debug(f"Finished: {pprint.pformat(info['task_completed'])}")
+
+        # Store obstacle height for observation expansion during env steps.
+        self.observation_parser.update(obs, info)
+        obs = self.observation_parser.get_observation().astype(np.float32)
 
         # assert obs in self.observation_space, f"Invalid observation: {obs}"
         return obs, info
@@ -182,15 +162,15 @@ class DroneRacingWrapper(Wrapper):
         # Increment the sim time after the step if we are not yet done.
         if not terminated and not truncated:
             self._sim_time += self.env.ctrl_dt
+
         self.observation_parser.update(obs, info)
         obs = self.observation_parser.get_observation().astype(np.float32)
+        if self.observation_parser.out_of_bounds:
+            terminated = True
 
         # Compute the custom reward since we cannot modify the firmware environment for the
         # competion.
-        reward = self.rewarder.get_custon_reward(self.observation_parser, info)
-        if obs not in self.observation_space:
-            terminated = True
-            reward = self.rewarder.collision
+        reward = self.rewarder.get_custom_reward(self.observation_parser, info)
 
         logger.debug(f"{colored('===Step===', 'white')}")
         logger.debug(f"Collision: {pprint.pformat(info['collision'])}")
@@ -227,48 +207,6 @@ class DroneRacingWrapper(Wrapper):
             AssertionError: If PyBullet was not launched with an active GUI.
         """
         assert self.pyb_client_id != -1, "PyBullet not initialized with active GUI"
-
-    def observation_transform(self, obs: np.ndarray, info: dict[str, Any]) -> np.ndarray:
-        """Transform the observation to include additional information.
-
-        Args:
-            obs: The observation to transform.
-            info: Additional information to include in the observation.
-
-        Returns:
-            The transformed observation.
-        """
-        drone_pos = obs[0:6:2]
-        drone_yaw = obs[8]
-        # The initial info dict does not include the gate pose and range, but it does include the
-        # nominal gate positions and types, which we can use as a fallback for the first step.
-        initial = "nominal_gates_pos_and_type" in info
-        gate_type = info["gate_types"]
-        gate_pos = info["gates_pos"][:, :2]
-        gate_yaw = info["gates_pos"][:, 5]
-        if initial:
-            gate_pos = info["nominal_gates_pos_and_type"][:, :2]
-            gate_yaw = info["nominal_gates_pos_and_type"][:, 5]
-
-        z = np.where(gate_type == 1, Z_LOW, Z_HIGH)  # Infer gate z position based on type
-        gate_poses = np.concatenate([gate_pos, z[:, None], gate_yaw[:, None]], axis=1)
-        obstacle_pos = info["obstacles_pos"][:, :3]
-        obstacle_pos[:, 2] = self._obstacle_height
-        gate_id = info["current_gate_id"]
-        gates_in_range = info["gates_in_range"]
-        obstacles_in_range = info["obstacles_in_range"]
-        obs = np.concatenate(
-            [
-                drone_pos,
-                [drone_yaw],
-                gate_poses.flatten(),
-                gates_in_range,
-                obstacle_pos.flatten(),
-                obstacles_in_range,
-                [gate_id],
-            ]
-        )
-        return obs
 
 
 class DroneRacingObservationWrapper:
