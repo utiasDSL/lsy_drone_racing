@@ -39,9 +39,9 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
 
 
-def main(config: str = "config/getting_started.yaml", gui: bool = False):
+def main(config: str = "config/getting_started.yaml", gui: bool = False, log_level: int = logging.INFO):
     """Create the environment, check its compatibility with sb3, and run a PPO agent."""
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=log_level)
     config_path = Path(__file__).resolve().parents[1] / config
     env = create_race_env(config_path=config_path, gui=gui)
     # Sanity check to ensure the environment conforms to the sb3 API
@@ -50,7 +50,7 @@ def main(config: str = "config/getting_started.yaml", gui: bool = False):
 
     # Train the agent
     train_name = f"ppo_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
-    model.learn(total_timesteps=500_000, progress_bar=True,
+    model.learn(total_timesteps=1_000_000, progress_bar=True,
                 log_interval=1, tb_log_name=train_name)
     model.save(f"models/{train_name}")
 
