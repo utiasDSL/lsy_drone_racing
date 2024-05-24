@@ -32,9 +32,9 @@ quadrotor_config:
 
   # Nominal (pre-randomization) initial state
   init_state:
-    init_x: 1.0
+    init_x: 0.0
     init_x_dot: 0
-    init_y: 1.0
+    init_y: 0.0
     init_y_dot: 0
     init_z: 0.05
     init_z_dot: 0
