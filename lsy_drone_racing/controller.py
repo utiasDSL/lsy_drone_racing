@@ -39,13 +39,29 @@ class BaseController(ABC):
             constants, counters, pre-plan trajectories, etc.
 
         Args:
-            initial_obs: The initial observation of the quadrotor's state [x, x_dot, y, y_dot, z,
-                z_dot, phi, theta, psi, p, q, r].
+            initial_obs: The initial observation of the environment's state. Consists of
+                [drone_xyz_yaw, gates_xyz_yaw, gates_in_range, obstacles_xyz, obstacles_in_range,
+                gate_id]
             initial_info: The a priori information as a dictionary with keys 'symbolic_model',
                 'nominal_physical_parameters', 'nominal_gates_pos_and_type', etc.
             buffer_size: Size of the data buffers used in method `learn()`.
             verbose: Turn on and off additional printouts and plots.
         """
+        # Observation space:
+        # drone_xyz_yaw)  x, y, z, yaw are the drone pose of the drone in the world frame. Position
+        #       is in meters and yaw is in radians.
+        # gates_xyz_yaw)  The pose of the gates. Positions are in meters and yaw in radians. The
+        #       length is dependent on the number of gates. Ordering is [x0, y0, z0, yaw0, x1,...].
+        # gates_in_range)  A boolean array indicating if the drone is within the gates' range. The
+        #       length is dependent on the number of gates.
+        # obstacles_xyz)  The pose of the obstacles. Positions are in meters. The length is
+        #       dependent on the number of obstacles. Ordering is [x0, y0, z0, x1,...].
+        # obstacles_in_range)  A boolean array indicating if the drone is within the obstacles'
+        #       range. The length is dependent on the number of obstacles.
+        # gate_id)  The ID of the current target gate. -1 if the task is completed.
+        #
+        # Also see `lsy_drone_racing.wrapper.DroneRacingWrapper`.
+
         # Initialize data buffers for learning
         self.action_buffer = deque([], maxlen=buffer_size)
         self.obs_buffer = deque([], maxlen=buffer_size)
@@ -71,7 +87,8 @@ class BaseController(ABC):
 
         Args:
             ep_time: Episode's elapsed time, in seconds.
-            obs: The quadrotor's Vicon data [x, 0, y, 0, z, 0, phi, theta, psi, 0, 0, 0].
+            obs: The environment's observation [drone_xyz_yaw, gates_xyz_yaw, gates_in_range,
+                obstacles_xyz, obstacles_in_range, gate_id].
             reward: The reward signal.
             done: Wether the episode has terminated.
             info: Current step information as a dictionary with keys 'constraint_violation',
