@@ -39,7 +39,7 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
 
 
-def main(config: str = "config/getting_started.yaml", gui: bool = False, log_level: int = logging.INFO):
+def main(config: str = "../config/getting_started.yaml", gui: bool = False, log_level: int = logging.INFO):
     """Create the environment, check its compatibility with sb3, and run a PPO agent."""
     logging.basicConfig(level=log_level)
     config_path = Path(__file__).resolve().parents[1] / config
