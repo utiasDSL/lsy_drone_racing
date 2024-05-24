@@ -191,11 +191,22 @@ class DroneRacingWrapper(Wrapper):
         Returns:
             The transformed action.
         """
-        action_transform = np.zeros(14)
-        scaled_action = action * self.action_scale
-        action_transform[:3] = scaled_action[:3]
-        action_transform[9] = scaled_action[3]
-        return action_transform
+        # action_transform = np.zeros(14)
+        # scaled_action = action * self.action_scale
+        # action_transform[:3] = scaled_action[:3]
+        # action_transform[9] = scaled_action[3]
+        # return action_transform
+
+        #action = np.clip(action, -1, 1)  # Clip the action to be within [-1, 1]
+
+        # Adjust action to be relative to the current position of the drone
+        centered_action = np.zeros(4)
+        centered_action[:3] = self.observation_parser.drone_pos + action[:3] * self.action_scale[:3]
+        centered_action[3] = action[3] * self.action_scale[3]
+
+        return centered_action
+
+        return centered_action
 
     def render(self):
         """Render the environment.
