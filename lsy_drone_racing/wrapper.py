@@ -334,6 +334,8 @@ class RewardWrapper(Wrapper):
         obs, info = self.env.reset(*args, **kwargs)
         self._last_pos = obs[:3]
         self._last_gate = info["current_gate_id"]
+        # Delete CasADi models to enable multiprocessed environments. TODO: Put this in a separate
+        # wrapper.
         del info["symbolic_model"]
         del info["symbolic_constraints"]
         return obs, info

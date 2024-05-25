@@ -1,38 +1,64 @@
-from functools import partial
-from pathlib import Path
+from typing import Generator
 
+import numpy as np
 import pytest
-from safe_control_gym.utils.registration import make
+from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
+from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
-from lsy_drone_racing.constants import FIRMWARE_FREQ
-from lsy_drone_racing.utils import load_config
-from lsy_drone_racing.wrapper import DroneRacingObservationWrapper, DroneRacingWrapper
+from lsy_drone_racing.wrapper import (
+    DroneRacingObservationWrapper,
+    DroneRacingWrapper,
+    RewardWrapper,
+)
+from tests.utils import make_env
 
 
 @pytest.fixture(scope="session")
-def base_env():
+def env() -> Generator[FirmwareWrapper, None, None]:
     """Create the drone racing environment."""
-    # Load configuration and check if firmare should be used.
-    config_path = Path(__file__).resolve().parents[1] / "config/getting_started.yaml"
-    config = load_config(config_path)
-    # Overwrite config options
-    config.quadrotor_config.gui = False
-    CTRL_FREQ = config.quadrotor_config["ctrl_freq"]
-    # Create environment
-    assert config.use_firmware, "Firmware must be used for the competition."
-    pyb_freq = config.quadrotor_config["pyb_freq"]
-    assert pyb_freq % FIRMWARE_FREQ == 0, "pyb_freq must be a multiple of firmware freq"
-    config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
-    env_factory = partial(make, "quadrotor", **config.quadrotor_config)
-    yield make("firmware", env_factory, FIRMWARE_FREQ, CTRL_FREQ)
+    yield make_env()
 
 
 @pytest.mark.parametrize("terminate_on_lap", [True, False])
-def test_drone_racing_wrapper(base_env, terminate_on_lap: bool):
+def test_drone_racing_wrapper(env: FirmwareWrapper, terminate_on_lap: bool):
     """Test the DroneRacingWrapper."""
-    env = DroneRacingWrapper(base_env, terminate_on_lap=terminate_on_lap)
+    env = DroneRacingWrapper(env, terminate_on_lap=terminate_on_lap)
+    env.reset()
+    env.step(env.action_space.sample())
 
 
-def test_drone_racing_obs_wrapper(base_env):
+@pytest.mark.parametrize("terminate_on_lap", [True, False])
+def test_drone_racing_wrapper_sb3(env: FirmwareWrapper, terminate_on_lap: bool):
+    """Test the DroneRacingWrapper for compatibility with sb3's API."""
+    check_env(DroneRacingWrapper(env, terminate_on_lap=terminate_on_lap))
+
+
+def test_obs_wrapper(env: FirmwareWrapper):
     """Test the DroneRacingObservationWrapper."""
-    env = DroneRacingObservationWrapper(base_env)
+    DroneRacingObservationWrapper(env)
+
+
+def test_reward_wrapper(env: FirmwareWrapper):
+    """Test the DroneRacingRewardWrapper."""
+    env = RewardWrapper(DroneRacingWrapper(env))
+    env.reset()
+    env.step(env.action_space.sample())
+
+
+def test_reward_wrapper_sb3(env: FirmwareWrapper):
+    """Test the DroneRacingRewardWrapper for compatibility with sb3's API."""
+    check_env(RewardWrapper(DroneRacingWrapper(env)))
+
+
+def test_reward_wrapper_sb3_vecenv():
+    """Test if the reward wrapper can be used for sb3's vecenv."""
+    env = make_vec_env(
+        lambda: RewardWrapper(DroneRacingWrapper(make_env())),
+        n_envs=2,
+        vec_env_cls=SubprocVecEnv,
+        vec_env_kwargs={"start_method": "spawn"},
+    )
+    env.reset()
+    env.step(np.array([env.action_space.sample()] * 2))
