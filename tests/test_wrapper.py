@@ -10,6 +10,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from lsy_drone_racing.wrapper import (
     DroneRacingObservationWrapper,
     DroneRacingWrapper,
+    MultiProcessingWrapper,
     RewardWrapper,
 )
 from tests.utils import make_env
@@ -52,10 +53,22 @@ def test_reward_wrapper_sb3(env: FirmwareWrapper):
     check_env(RewardWrapper(DroneRacingWrapper(env)))
 
 
-def test_reward_wrapper_sb3_vecenv():
-    """Test if the reward wrapper can be used for sb3's vecenv."""
+def test_multiprocessing_wrapper():
+    """Test the MultiProcessingWrapper."""
     env = make_vec_env(
-        lambda: RewardWrapper(DroneRacingWrapper(make_env())),
+        lambda: MultiProcessingWrapper(DroneRacingWrapper(make_env())),
+        n_envs=2,
+        vec_env_cls=SubprocVecEnv,
+        vec_env_kwargs={"start_method": "spawn"},
+    )
+    env.reset()
+    env.step(np.array([env.action_space.sample()] * 2))
+
+
+def test_multiprocessing_wrapper_sb3():
+    """Test if the multiprocessing wrapper can be used for sb3's vecenv."""
+    env = make_vec_env(
+        lambda: MultiProcessingWrapper(DroneRacingWrapper(make_env())),
         n_envs=2,
         vec_env_cls=SubprocVecEnv,
         vec_env_kwargs={"start_method": "spawn"},

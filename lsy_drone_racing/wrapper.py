@@ -308,6 +308,39 @@ class DroneRacingObservationWrapper:
         return obs, reward, done, info, action
 
 
+class MultiProcessingWrapper(Wrapper):
+    """Wrapper to enable multiprocessing for vectorized environments.
+
+    The info dict returned by the firmware wrapper contains CasADi models. These models cannot be
+    pickled and therefore cannot be passed between processes. This wrapper removes the CasADi models
+    from the info dict to enable multiprocessing.
+    """
+
+    def __init__(self, env: Env):
+        """Initialize the wrapper.
+
+        Args:
+            env: The firmware wrapper.
+        """
+        super().__init__(env)
+
+    def reset(self, *args: Any, **kwargs: dict[str, Any]) -> tuple[np.ndarray, dict]:
+        """Reset the environment.
+
+        Returns:
+            The initial observation of the next episode.
+        """
+        obs, info = self.env.reset(*args, **kwargs)
+        return obs, self._remove_non_serializable(info)
+
+    def _remove_non_serializable(self, info: dict[str, Any]) -> dict[str, Any]:
+        """Remove non-serializable objects from the info dict."""
+        # CasADi models cannot be pickled and therefore cannot be passed between processes
+        info.pop("symbolic_model", None)
+        info.pop("symbolic_constraints", None)
+        return info
+
+
 class RewardWrapper(Wrapper):
     """Wrapper to alter the default reward function from the environment for RL training."""
 
@@ -318,7 +351,6 @@ class RewardWrapper(Wrapper):
             env: The firmware wrapper.
         """
         super().__init__(env)
-        self._last_pos = None
         self._last_gate = None
 
     def reset(self, *args: Any, **kwargs: dict[str, Any]) -> np.ndarray:
@@ -332,12 +364,7 @@ class RewardWrapper(Wrapper):
             The initial observation of the next episode.
         """
         obs, info = self.env.reset(*args, **kwargs)
-        self._last_pos = obs[:3]
         self._last_gate = info["current_gate_id"]
-        # Delete CasADi models to enable multiprocessed environments. TODO: Put this in a separate
-        # wrapper.
-        del info["symbolic_model"]
-        del info["symbolic_constraints"]
         return obs, info
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
