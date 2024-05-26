@@ -53,7 +53,11 @@ class DroneRacingWrapper(Wrapper):
         super().__init__(env)
         # Patch the FirmwareWrapper to add any missing attributes required by the gymnasium API.
         self.env = env
-        self.env.unwrapped = None  # Add an (empty) unwrapped attribute
+        # Unwrapped attribute is required for the gymnasium API. Some packages like stable-baselines
+        # use it to check if the environment is unique. Therefore, we cannot use None, as None is
+        # None returns True and falsely indicates that the environment is not unique. Lists have
+        # unique id()s, so we use lists as a dummy instead.
+        self.env.unwrapped = []
         self.env.render_mode = None
 
         # Gymnasium env required attributes

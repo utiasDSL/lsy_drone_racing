@@ -5,7 +5,7 @@ import pytest
 from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from lsy_drone_racing.wrapper import (
     DroneRacingObservationWrapper,
@@ -73,5 +73,12 @@ def test_multiprocessing_wrapper_sb3():
         vec_env_cls=SubprocVecEnv,
         vec_env_kwargs={"start_method": "spawn"},
     )
+    env.reset()
+    env.step(np.array([env.action_space.sample()] * 2))
+
+
+def test_sb3_dummy_vec():
+    """Test if the environment can be used for sb3's DummyVecEnv."""
+    env = make_vec_env(lambda: DroneRacingWrapper(make_env()), n_envs=2, vec_env_cls=DummyVecEnv)
     env.reset()
     env.step(np.array([env.action_space.sample()] * 2))
