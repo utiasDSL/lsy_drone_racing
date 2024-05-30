@@ -26,13 +26,20 @@ import numpy as np
 from gymnasium import Wrapper
 from gymnasium.error import InvalidAction
 from gymnasium.spaces import Box
+from rich.logging import RichHandler
 from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
 from termcolor import colored
 
-from lsy_drone_racing.env_modifiers import ObservationParser, Rewarder, map_reward_to_color
+from lsy_drone_racing.env_modifiers import ObservationParser, Rewarder, map_reward_to_color, transform_action
 
-logger = logging.getLogger(__file__)
-# logger.setLevel(logging.DEBUG)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
+logger = logging.getLogger("wrapper")
+logger.setLevel(logging.INFO)
 
 
 class DroneRacingWrapper(Wrapper):
@@ -57,7 +64,6 @@ class DroneRacingWrapper(Wrapper):
         self.env.unwrapped = None  # Add an (empty) unwrapped attribute
         self.env.render_mode = None
 
-        # Gymnasium env required attributes
         # Action space:
         # [x, y, z, yaw]
         # x, y, z)  The desired position of the drone in the world frame.
@@ -69,7 +75,7 @@ class DroneRacingWrapper(Wrapper):
         self.action_space = Box(-action_limits, action_limits, dtype=np.float32)
 
         # Observation space:
-        self.observation_parser = ObservationParser(
+        self.observation_parser: ObservationParser = ObservationParser(
             n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
         )
         self.observation_space = self.observation_parser.observation_space
@@ -83,9 +89,6 @@ class DroneRacingWrapper(Wrapper):
         self.terminate_on_lap = terminate_on_lap
         self._reset_required = False
         # The original firmware wrapper requires a sim time as input to the step function. This
-        # breaks the gymnasium interface. Instead, we keep track of the sim time here. On each step,
-        # it is incremented by the control time step. On env reset, it is reset to 0.
-        self._sim_time = 0.0
         # The firmware quadrotor env requires the rotor forces as input to the step function. These
         # are zero initially and updated by the step function. We automatically insert them to
         # ensure compatibility with the gymnasium interface.
@@ -114,7 +117,7 @@ class DroneRacingWrapper(Wrapper):
         self._sim_time = 0.0
         self._f_rotors[:] = 0.0
         obs, info = self.env.reset()
-        logger.debug(f"{colored('===Reset===', 'green')}")
+        logger.debug("===========RESET===========")
         logger.debug(f"Collision: {pprint.pformat(info['collision'])}")
         logger.debug(f"Finished: {pprint.pformat(info['task_completed'])}")
 
@@ -139,7 +142,8 @@ class DroneRacingWrapper(Wrapper):
             # Wrapper has a reduced action space compared to the firmware env to make it compatible
             # with the gymnasium interface and popular RL libraries.
             raise InvalidAction(f"Invalid action: {action}")
-        action = self._action_transform(action)
+        action_before_transform = action
+        action = transform_action(action, self.observation_parser)
         # The firmware does not use the action input in the step function
         zeros = np.zeros(3)
         self.env.sendFullStateCmd(action[:3], zeros, zeros, action[3], zeros, self._sim_time)
@@ -172,41 +176,23 @@ class DroneRacingWrapper(Wrapper):
         # competion.
         reward = self.rewarder.get_custom_reward(self.observation_parser, info)
 
-        logger.debug(f"{colored('===Step===', 'white')}")
+        logger.debug("===Step===")
         logger.debug(f"Collision: {pprint.pformat(info['collision'])}")
         logger.debug(f"Finished: {pprint.pformat(info['task_completed'])}")
-        logger.debug(f"Reward: {colored(pprint.pformat(reward), map_reward_to_color(reward))}")
+        logger.debug(f"Drone position: {self.observation_parser.drone_pos}")
+        logger.debug(f"Action: {action}")
+        logger.debug(f"Action previous: {action_before_transform}")
+
+        logger.debug(f"Available keys in info: {pprint.pformat(info.keys())}")
+
+        # logger.debug(f"{self.observation_parser.format_observation()}")
+        # logger.debug(f"{self.observation_parser.format_observation_space()}")
+        # logger.debug(f"In bounds: {self.observation_parser.check_in_observation_space()}")
+        # logger.debug(f"Out of bounds: {self.observation_parser.out_of_bounds()}")
+        logger.debug(f"Reward: {reward}")
 
         self._reset_required = terminated or truncated
         return obs, reward, terminated, truncated, info
-
-    def _action_transform(self, action: np.ndarray) -> np.ndarray:
-        """Transform the action to the format expected by the firmware env.
-
-        Scale the action from [-1, 1] to [-5, 5] for the position and [-pi, pi] for the yaw.
-
-        Args:
-            action: The action to transform.
-
-        Returns:
-            The transformed action.
-        """
-        # action_transform = np.zeros(14)
-        # scaled_action = action * self.action_scale
-        # action_transform[:3] = scaled_action[:3]
-        # action_transform[9] = scaled_action[3]
-        # return action_transform
-
-        #action = np.clip(action, -1, 1)  # Clip the action to be within [-1, 1]
-
-        # Adjust action to be relative to the current position of the drone
-        centered_action = np.zeros(4)
-        centered_action[:3] = self.observation_parser.drone_pos + action[:3] * self.action_scale[:3]
-        centered_action[3] = action[3] * self.action_scale[3]
-
-        return centered_action
-
-        return centered_action
 
     def render(self):
         """Render the environment.
@@ -242,12 +228,17 @@ class DroneRacingObservationWrapper:
             raise TypeError(f"`env` must be an instance of `FirmwareWrapper`, is {type(env)}")
         self.env = env
         self.pyb_client_id: int = env.env.PYB_CLIENT
-        self.observation_parser = None
+        self.observation_parser = ObservationParser(
+            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
+        )
         self.rewarder = Rewarder()  # TODO: Load from YAML
 
     def __getattribute__(self, name: str) -> Any:
         """Get an attribute from the object.
 
+        If the attribute is not found in the wrapper, it is fetched from the firmware wrapper.
+
+        Args:
         If the attribute is not found in the wrapper, it is fetched from the firmware wrapper.
 
         Args:
@@ -272,7 +263,7 @@ class DroneRacingObservationWrapper:
             The transformed observation and the info dict.
         """
         obs, info = self.env.reset(*args, **kwargs)
-        self.observation_parser = ObservationParser.from_initial_observation(obs, info)
+        self.observation_parser.update(obs, info)
         obs = self.observation_parser.get_observation()
 
         logger.debug(f"{colored('===Reset===', 'green')}")

@@ -7,7 +7,7 @@ from stable_baselines3 import PPO
 
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
-from lsy_drone_racing.wrapper import obs_transform
+from lsy_drone_racing.env_modifiers import ObservationParser, transform_action
 
 
 class Controller(BaseController):
@@ -37,6 +37,7 @@ class Controller(BaseController):
             verbose: Turn on and off additional printouts and plots.
         """
         super().__init__(initial_obs, initial_info, buffer_size, verbose)
+
         # Save environment and control parameters.
         self.CTRL_TIMESTEP = initial_info["ctrl_timestep"]
         self.CTRL_FREQ = initial_info["ctrl_freq"]
@@ -52,8 +53,12 @@ class Controller(BaseController):
         self.reset()
         self.episode_reset()
 
-        self.model_name = "models/ppo_2024-05-16_23-18-32"
+        self.model_name = "models/best_model_2024-05-30_13-55-04"
         self.model = PPO.load(self.model_name)
+
+        self.obs_parser = ObservationParser(
+            n_gates=len(self.NOMINAL_GATES), n_obstacles=len(self.NOMINAL_OBSTACLES)
+        )
 
     def compute_control(
         self,
@@ -82,9 +87,10 @@ class Controller(BaseController):
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
-        new_obs = obs_transform(obs=obs, info=info)
-        action, next_predicted_state = self.model.predict(
-            new_obs, deterministic=True)
+        self.obs_parser.update(obs=obs, info=info)
+        new_obs = self.obs_parser.get_observation()
+        action, next_predicted_state = self.model.predict(new_obs, deterministic=True)
+        action = transform_action(action, self.obs_parser)
 
         # Prepare the command to be sent to the quadrotor.
         command_type = Command.FULLSTATE
@@ -96,8 +102,7 @@ class Controller(BaseController):
         target_acc = np.zeros(3)
         target_yaw = float(action[3])
         target_rpy_rates = np.zeros(3)
-        args = [target_pos, target_vel, target_acc,
-                target_yaw, target_rpy_rates, ep_time]
+        args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
 
         # logger.info(f"Predicted action: {action}")
         # logger.info(f"Args: {args}")
