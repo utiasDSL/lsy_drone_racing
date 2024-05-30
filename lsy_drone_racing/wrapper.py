@@ -263,7 +263,7 @@ class DroneRacingObservationWrapper:
             The transformed observation and the info dict.
         """
         obs, info = self.env.reset(*args, **kwargs)
-        self.observation_parser.update(obs, info)
+        self.observation_parser.update(obs, info, initial=True)
         obs = self.observation_parser.get_observation()
 
         logger.debug(f"{colored('===Reset===', 'green')}")

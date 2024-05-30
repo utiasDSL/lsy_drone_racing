@@ -53,7 +53,7 @@ class Controller(BaseController):
         self.reset()
         self.episode_reset()
 
-        self.model_name = "models/best_model_2024-05-30_13-55-04"
+        self.model_name = "models/best_model"
         self.model = PPO.load(self.model_name)
 
         self.obs_parser = ObservationParser(

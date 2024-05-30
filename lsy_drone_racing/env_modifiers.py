@@ -54,6 +54,7 @@ class ObservationParser:
 
         # Hidden states that are not part of the observation space
         self.just_passed_gate: bool = False
+        self.previous_drone_pos: np.array = None
 
     def uninitialized(self) -> bool:
         """Check if the observation parser is uninitialized."""
@@ -63,7 +64,7 @@ class ObservationParser:
         """Check if the drone is out of bounds."""
         return not self.observation_space.contains(self.get_observation())
 
-    def update(self, obs: np.ndarray, info: dict[str, Any]):
+    def update(self, obs: np.ndarray, info: dict[str, Any], initial: bool = False):
         """Update the observation parser with the new observation and info dict.
 
         Remark:
@@ -72,7 +73,9 @@ class ObservationParser:
         Args:
             obs: The new observation.
             info: The new info dict.
+            initial: True if this is the initial observation.
         """
+        self.previous_drone_pos = self.drone_pos if not initial else obs[0:6:2]
         self.drone_pos = obs[0:6:2]
         self.drone_yaw = obs[8]
         self.gates_pos = info["gates_pose"][:, :3]
@@ -114,7 +117,7 @@ class Rewarder:
         times_up: float = -1000.0,
         end_reached: float = 1000.0,
         close_to_gate: float = 0.0,
-        dist_to_gate_mul: float = -1.0,
+        dist_to_gate_mul: float = 1.0,
         dist_to_obstacle_mul: float = 0.2,
         gate_reached: float = 1000.0,
     ):
@@ -165,9 +168,10 @@ class Rewarder:
         if info["task_completed"]:
             return self.end_reached
 
-        # Reward for gating close to the next gate
+        # Reward for getting closer to the gate
         dist_to_gate = np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id])
-        reward += self.close_to_gate + dist_to_gate * self.dist_to_gate_mul
+        previos_dist_to_gate = np.linalg.norm(obs.previous_drone_pos - obs.gates_pos[obs.gate_id])
+        reward += (previos_dist_to_gate - dist_to_gate) * self.dist_to_gate_mul
 
         # Reward for avoiding obstacles
         dist_to_obstacle = np.linalg.norm(obs.drone_pos - obs.obstacles_pos[obs.obstacles_in_range])
