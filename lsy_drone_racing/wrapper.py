@@ -30,7 +30,12 @@ from rich.logging import RichHandler
 from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
 from termcolor import colored
 
-from lsy_drone_racing.env_modifiers import ObservationParser, Rewarder, map_reward_to_color, transform_action
+from lsy_drone_racing.env_modifiers import (
+    ObservationParser,
+    Rewarder,
+    map_reward_to_color,
+    transform_action,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -122,7 +127,7 @@ class DroneRacingWrapper(Wrapper):
         logger.debug(f"Finished: {pprint.pformat(info['task_completed'])}")
 
         # Store obstacle height for observation expansion during env steps.
-        self.observation_parser.update(obs, info)
+        self.observation_parser.update(obs, info, initial=True)
         obs = self.observation_parser.get_observation().astype(np.float32)
 
         # assert obs in self.observation_space, f"Invalid observation: {obs}"

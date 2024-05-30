@@ -60,7 +60,7 @@ def main(config: str = "../config/train0.yaml", gui: bool = False, log_level: in
     model = PPO(
         "MlpPolicy",
         env,
-        learning_rate=6e-4,
+        learning_rate=3e-4,
         verbose=1,
         tensorboard_log="logs",
     )  # Train the agent

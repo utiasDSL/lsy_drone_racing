@@ -23,24 +23,39 @@ class ObservationParser:
         gate_in_range_limits: list = [1],
         obstacle_pos_limits: list = [5, 5, 5],
         obstacle_in_range_limits: list = [1],
+        observation_type: str = "relative_corners",
     ):
         """Initialize the observation parser."""
         self.n_gates = n_gates
         self.n_obstacles = n_obstacles
+        self.observation_type = observation_type
 
-        obs_limits = (
-            drone_pos_limits
-            + drone_yaw_limits
-            + gate_pos_limits * n_gates
-            + gate_yaw_limits * n_gates
-            + gate_in_range_limits * n_gates
-            + obstacle_pos_limits * n_obstacles
-            + obstacle_in_range_limits * n_obstacles
-            + [n_gates]
-        )
-        obs_limits_high = np.array(obs_limits)
-        obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
-        self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
+        if observation_type == "original":
+            obs_limits = (
+                drone_pos_limits
+                + drone_yaw_limits
+                + gate_pos_limits * n_gates
+                + gate_yaw_limits * n_gates
+                + gate_in_range_limits * n_gates
+                + obstacle_pos_limits * n_obstacles
+                + obstacle_in_range_limits * n_obstacles
+                + [n_gates]
+            )
+            obs_limits_high = np.array(obs_limits)
+            obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
+            self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
+        elif observation_type == "relative_corners":
+            n_corners = 4
+            relative_corners_limits = gate_pos_limits * n_gates * n_corners
+            obs_limits = (
+                drone_pos_limits +
+                drone_yaw_limits +
+                relative_corners_limits +
+                [n_gates]
+            )
+            obs_limits_high = np.array(obs_limits)
+            obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
+            self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
 
         # Observable variables
         self.drone_pos = None
@@ -54,6 +69,7 @@ class ObservationParser:
 
         # Hidden states that are not part of the observation space
         self.just_passed_gate: bool = False
+        self.gate_edge_size: float = None
         self.previous_drone_pos: np.array = None
 
     def uninitialized(self) -> bool:
@@ -76,6 +92,8 @@ class ObservationParser:
             initial: True if this is the initial observation.
         """
         self.previous_drone_pos = self.drone_pos if not initial else obs[0:6:2]
+        if initial:
+            self.gate_edge_size = info["gate_dimensions"]["tall"]["edge"]
         self.drone_pos = obs[0:6:2]
         self.drone_yaw = obs[8]
         self.gates_pos = info["gates_pose"][:, :3]
@@ -92,18 +110,40 @@ class ObservationParser:
         Returns:
             The current observation.
         """
-        obs = np.concatenate(
-            [
-                self.drone_pos,
-                [self.drone_yaw],
-                self.gates_pos.flatten(),
-                self.gates_yaw,
-                self.gates_in_range,
-                self.obstacles_pos.flatten(),
-                self.obstacles_in_range,
-                [self.gate_id],
-            ]
-        )
+        if self.observation_type == "original":
+            obs = np.concatenate(
+                [
+                    self.drone_pos,
+                    [self.drone_yaw],
+                    self.gates_pos.flatten(),
+                    self.gates_yaw,
+                    self.gates_in_range,
+                    self.obstacles_pos.flatten(),
+                    self.obstacles_in_range,
+                    [self.gate_id],
+                ]
+            )
+        elif self.observation_type == "relative_corners":
+            edge_cos = np.cos(self.gates_yaw)
+            edge_sin = np.sin(self.gates_yaw)
+            ones = np.ones_like(edge_cos)
+            edge_vector_pos = self.gate_edge_size / 2 * np.array([edge_cos, edge_sin, ones]).T
+            edge_vector_neg = self.gate_edge_size / 2 * np.array([-edge_cos, -edge_sin, ones]).T
+            first_corners = self.gates_pos + edge_vector_pos - self.drone_pos
+            second_corners = self.gates_pos + edge_vector_neg - self.drone_pos
+            third_corners = self.gates_pos - edge_vector_pos - self.drone_pos
+            fourth_corners = self.gates_pos - edge_vector_neg - self.drone_pos
+            relative_distance_corners = np.concatenate(
+                [first_corners, second_corners, third_corners, fourth_corners]
+            )
+            obs = np.concatenate(
+                [
+                    self.drone_pos,
+                    [self.drone_yaw],
+                    relative_distance_corners.flatten(),
+                    [self.gate_id],
+                ]
+            )
         return obs.astype(np.float32)
 
 
@@ -112,14 +152,14 @@ class Rewarder:
 
     def __init__(
         self,
-        collision: float = -1000.0,
-        out_of_bounds: float = -3000.0,
-        times_up: float = -1000.0,
-        end_reached: float = 1000.0,
+        collision: float = -10.0,
+        out_of_bounds: float = -30.0,
+        times_up: float = -10.0,
+        end_reached: float = 10.0,
         close_to_gate: float = 0.0,
         dist_to_gate_mul: float = 1.0,
         dist_to_obstacle_mul: float = 0.2,
-        gate_reached: float = 1000.0,
+        gate_reached: float = 10.0,
     ):
         """Initialize the rewarder."""
         self.collision = collision
@@ -165,7 +205,7 @@ class Rewarder:
         if obs.out_of_bounds():
             return self.out_of_bounds
 
-        if info["task_completed"]:
+        if info["task_completed"] and obs.current_gate_id == -1:
             return self.end_reached
 
         # Reward for getting closer to the gate
@@ -174,8 +214,8 @@ class Rewarder:
         reward += (previos_dist_to_gate - dist_to_gate) * self.dist_to_gate_mul
 
         # Reward for avoiding obstacles
-        dist_to_obstacle = np.linalg.norm(obs.drone_pos - obs.obstacles_pos[obs.obstacles_in_range])
-        reward += dist_to_obstacle * self.dist_to_obstacle_mul
+        # dist_to_obstacle = np.linalg.norm(obs.drone_pos - obs.obstacles_pos[obs.obstacles_in_range])
+        # reward += dist_to_obstacle * self.dist_to_obstacle_mul
 
         # Reward for passing a gate
         if obs.just_passed_gate:

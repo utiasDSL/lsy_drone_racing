@@ -8,7 +8,7 @@ def test_observation_parser():
     """Test the observation parser."""
     n_gates = 3
     n_obstacles = 2
-    obs_parser = ObservationParser(n_gates, n_obstacles)
+    obs_parser = ObservationParser(n_gates, n_obstacles, observation_type="original")
 
     # Check the uninitialized state
     assert obs_parser.uninitialized()
@@ -35,6 +35,21 @@ def test_observation_parser():
         print("Expected: True")
         print(f"Observation space: {obs_parser.observation_space}")
         print(f"Observation: {obs_parser.get_observation()}")
+
+    n_gates = 2
+    n_obstacles = 0
+
+    obs_parser = ObservationParser(n_gates, n_obstacles, observation_type="relative_corners")
+
+    obs_parser.drone_pos = np.array([1, 1, 1])
+    obs_parser.drone_yaw = 0
+    obs_parser.gates_pos = np.array([[1, 1, 1], [2, 2, 1]])
+    obs_parser.gates_yaw = np.array([3*np.pi/4, np.pi/4])
+    obs_parser.gate_edge_size = 2*np.sqrt(2)
+    obs_parser.gate_id = 0
+
+    obs = obs_parser.get_observation()
+    print(obs)
 
 
 if __name__ == "__main__":
