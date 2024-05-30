@@ -86,7 +86,6 @@ class Controller(BaseController):
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
-        logger.info(f"Observation: {obs}")
         action, next_predicted_state = self.model.predict(obs, deterministic=True)
         action = transform_action(action, drone_pos=obs[:3])
 

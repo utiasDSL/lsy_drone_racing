@@ -5,8 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import logging
 import yaml
 from gymnasium.spaces import Box
+
+logger = logging.getLogger(__name__)
 
 
 class ObservationParser:
@@ -47,12 +50,7 @@ class ObservationParser:
         elif observation_type == "relative_corners":
             n_corners = 4
             relative_corners_limits = gate_pos_limits * n_gates * n_corners
-            obs_limits = (
-                drone_pos_limits +
-                drone_yaw_limits +
-                relative_corners_limits +
-                [n_gates]
-            )
+            obs_limits = drone_pos_limits + drone_yaw_limits + relative_corners_limits + [n_gates]
             obs_limits_high = np.array(obs_limits)
             obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
             self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
@@ -154,25 +152,20 @@ class Rewarder:
 
     def __init__(
         self,
-        collision: float = -10.0,
-        out_of_bounds: float = -30.0,
-        times_up: float = -10.0,
+        collision: float = -1.0,
+        out_of_bounds: float = -1.0,
+        times_up: float = -1.0,
         end_reached: float = 10.0,
-        close_to_gate: float = 0.0,
-        dist_to_gate_mul: float = 1.0,
-        dist_to_obstacle_mul: float = 0.2,
         gate_reached: float = 10.0,
-        z_penalty: float = -1.0,
+        z_penalty: float = -3.0,
         z_penalty_threshold: float = 1.5,
     ):
         """Initialize the rewarder."""
         self.collision = collision
         self.out_of_bounds = out_of_bounds
         self.end_reached = end_reached
-        self.close_to_gate = close_to_gate
-        self.dist_to_gate_mul = dist_to_gate_mul
-        self.dist_to_obstacle_mul = dist_to_obstacle_mul
         self.gate_reached = gate_reached
+        self.times_up = times_up
         self.z_penalty = z_penalty
         self.z_penalty_threshold = z_penalty_threshold
 
@@ -190,7 +183,9 @@ class Rewarder:
             data = yaml.safe_load(file)
         return cls(**data)
 
-    def get_custom_reward(self, obs: ObservationParser, info: dict) -> float:
+    def get_custom_reward(
+        self, obs: ObservationParser, info: dict, terminated: bool = False
+    ) -> float:
         """Compute the custom reward.
 
         Args:
@@ -208,16 +203,17 @@ class Rewarder:
         if info["collision"][1]:
             return self.collision
 
+        if terminated and not info["task_completed"]:
+            return self.times_up
+
         if obs.out_of_bounds():
             return self.out_of_bounds
 
-        if info["task_completed"] and obs.gate_id == -1:
-            return self.end_reached
-
         # Reward for getting closer to the gate
-        dist_to_gate = np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id])
-        previos_dist_to_gate = np.linalg.norm(obs.previous_drone_pos - obs.gates_pos[obs.gate_id])
-        reward += (previos_dist_to_gate - dist_to_gate) * self.dist_to_gate_mul
+        # dist_to_gate = np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id])
+        # previos_dist_to_gate = np.linalg.norm(obs.previous_drone_pos - obs.gates_pos[obs.gate_id])
+        # reward += (previos_dist_to_gate - dist_to_gate) * self.dist_to_gate_mul
+        reward += np.exp(-np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id]))
 
         # Penalty for being too high
         if obs.drone_pos[2] > self.z_penalty_threshold:
@@ -230,6 +226,7 @@ class Rewarder:
         # Reward for passing a gate
         if obs.just_passed_gate:
             reward += self.gate_reached
+            logger.info(f"Passed gate {obs.gate_id}, hooraay!")
 
         return reward
 
@@ -254,7 +251,7 @@ def transform_action(
     raw_action: np.ndarray,
     transform_type: str = "relative",
     drone_pos: np.array = np.zeros(3),
-    pos_scaling: np.array = [1.0, 1.0, 1.0],
+    pos_scaling: np.array = [1.0, 1.0, 0.2],
     yaw_scaling: float = np.pi,
 ) -> np.ndarray:
     """Transform the raw action to the action space.

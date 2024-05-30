@@ -39,12 +39,18 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
 
 
-def main(config: str = "../config/train0.yaml", gui: bool = False, log_level: int = logging.INFO):
+def main(
+    config: str = "../config/train0.yaml",
+    gui: bool = False,
+    gui_eval: bool = False,
+    log_level: int = logging.INFO,
+    seed: int = 0,
+):
     """Create the environment, check its compatibility with sb3, and run a PPO agent."""
     logging.basicConfig(level=log_level)
     config_path = Path(__file__).resolve().parents[1] / config
 
-    env = create_race_env(config_path=config_path, gui=False)
+    env = create_race_env(config_path=config_path, gui=gui)
     eval_env = create_race_env(config_path=config_path, gui=gui)
 
     eval_callback = EvalCallback(
@@ -67,13 +73,14 @@ def main(config: str = "../config/train0.yaml", gui: bool = False, log_level: in
 
     train_name = f"ppo_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     model.learn(
-        total_timesteps=100_000,
+        total_timesteps=200_000,
         progress_bar=True,
         log_interval=1,
         tb_log_name=train_name,
         callback=eval_callback,
     )
     model.save(f"models/{train_name}")
+
 
 if __name__ == "__main__":
     fire.Fire(main)
