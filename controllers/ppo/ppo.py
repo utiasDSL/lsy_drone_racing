@@ -3,11 +3,14 @@
 from __future__ import annotations  # Python 3.10 type hints
 
 import numpy as np
+from safe_control_gym.controllers.firmware.firmware_wrapper import logging
 from stable_baselines3 import PPO
 
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.env_modifiers import ObservationParser, transform_action
+
+logger = logging.getLogger(__name__)
 
 
 class Controller(BaseController):
@@ -53,12 +56,8 @@ class Controller(BaseController):
         self.reset()
         self.episode_reset()
 
-        self.model_name = "models/ppo_2024-05-30_16-54-43.zip"
+        self.model_name = "models/best_model"
         self.model = PPO.load(self.model_name)
-
-        self.obs_parser = ObservationParser(
-            n_gates=len(self.NOMINAL_GATES), n_obstacles=len(self.NOMINAL_OBSTACLES)
-        )
 
     def compute_control(
         self,
@@ -87,10 +86,9 @@ class Controller(BaseController):
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
-        self.obs_parser.update(obs=obs, info=info)
-        new_obs = self.obs_parser.get_observation()
-        action, next_predicted_state = self.model.predict(new_obs, deterministic=True)
-        action = transform_action(action, self.obs_parser)
+        logger.info(f"Observation: {obs}")
+        action, next_predicted_state = self.model.predict(obs, deterministic=True)
+        action = transform_action(action, drone_pos=obs[:3])
 
         # Prepare the command to be sent to the quadrotor.
         command_type = Command.FULLSTATE

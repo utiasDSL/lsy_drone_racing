@@ -44,7 +44,7 @@ logging.basicConfig(
     handlers=[RichHandler(rich_tracebacks=True)],
 )
 logger = logging.getLogger("wrapper")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 class DroneRacingWrapper(Wrapper):
@@ -148,7 +148,7 @@ class DroneRacingWrapper(Wrapper):
             # with the gymnasium interface and popular RL libraries.
             raise InvalidAction(f"Invalid action: {action}")
         action_before_transform = action
-        action = transform_action(action, self.observation_parser)
+        action = transform_action(action, drone_pos=self.observation_parser.drone_pos)
         # The firmware does not use the action input in the step function
         zeros = np.zeros(3)
         self.env.sendFullStateCmd(action[:3], zeros, zeros, action[3], zeros, self._sim_time)
@@ -295,9 +295,12 @@ class DroneRacingObservationWrapper:
         obs = self.observation_parser.get_observation()
         reward = self.rewarder.get_custom_reward(self.observation_parser, info)
 
-        logger.debug(f"{colored('===Step===', 'white')}")
+        logger.debug("===Step===")
         logger.debug(f"Collision: {pprint.pformat(info['collision'])}")
         logger.debug(f"Finished: {pprint.pformat(info['task_completed'])}")
-        logger.debug(f"Reward: {colored(pprint.pformat(reward), map_reward_to_color(reward))}")
+        logger.debug(f"Reward: {reward}")
+        logger.debug(f"Drone position: {self.observation_parser.drone_pos}")
+        logger.debug(f"Gate ID: {self.observation_parser.gate_id}")
+        logger.debug(f"Action: {action}")
 
         return obs, reward, done, info, action

@@ -56,6 +56,8 @@ class ObservationParser:
             obs_limits_high = np.array(obs_limits)
             obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
             self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
+        else:
+            raise ValueError("Invalid observation type.")
 
         # Observable variables
         self.drone_pos = None
@@ -205,7 +207,7 @@ class Rewarder:
         if obs.out_of_bounds():
             return self.out_of_bounds
 
-        if info["task_completed"] and obs.current_gate_id == -1:
+        if info["task_completed"] and obs.gate_id == -1:
             return self.end_reached
 
         # Reward for getting closer to the gate
@@ -242,8 +244,8 @@ def map_reward_to_color(reward: float) -> str:
 
 def transform_action(
     raw_action: np.ndarray,
-    observation_parser: ObservationParser,
     transform_type: str = "relative",
+    drone_pos: np.array = np.zeros(3),
     pos_scaling: np.array = [1.0, 1.0, 1.0],
     yaw_scaling: float = np.pi,
 ) -> np.ndarray:
@@ -253,6 +255,7 @@ def transform_action(
         raw_action: The raw action from the model is in the range [-1, 1].
         observation_parser: The observation parser.
         transform_type: The type of transformation, either "relative" or "absolute".
+        drone_pos: The current position of the drone.
         pos_scaling: The scaling of the position.
         yaw_scaling: The scaling of the angle
 
@@ -261,7 +264,7 @@ def transform_action(
     """
     if transform_type == "relative":
         action_transform = np.zeros(14)
-        action_transform[:3] = observation_parser.drone_pos + raw_action[:3]
+        action_transform[:3] = drone_pos + raw_action[:3]
         action_transform[9] = yaw_scaling * raw_action[3]
 
     elif transform_type == "absolute":
