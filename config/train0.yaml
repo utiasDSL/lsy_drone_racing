@@ -48,7 +48,8 @@ quadrotor_config:
   # Nominal (pre-randomization) positions of gates and obstacles
   gates:
     [  # x, y, z, r, p, y, type (0: `tall` obstacle, 1: `low` obstacle)
-      [1, 0.5, 0, 0, 0, 0, 1],
+      [1, 1, 0, 0, 0, 1.57, 1],
+      [2, 2, 0, 0, 0, 1.57, 1],
       # [1.0, -1.55, 0, 0, 0, -0.78, 0],
       # [0.0, 0.5, 0, 0, 0, 0, 1],
       # [-0.5, -0.5, 0, 0, 0, 3.14, 0]
