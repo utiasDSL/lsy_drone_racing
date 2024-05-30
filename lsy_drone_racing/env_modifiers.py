@@ -162,6 +162,8 @@ class Rewarder:
         dist_to_gate_mul: float = 1.0,
         dist_to_obstacle_mul: float = 0.2,
         gate_reached: float = 10.0,
+        z_penalty: float = -1.0,
+        z_penalty_threshold: float = 1.5,
     ):
         """Initialize the rewarder."""
         self.collision = collision
@@ -171,6 +173,8 @@ class Rewarder:
         self.dist_to_gate_mul = dist_to_gate_mul
         self.dist_to_obstacle_mul = dist_to_obstacle_mul
         self.gate_reached = gate_reached
+        self.z_penalty = z_penalty
+        self.z_penalty_threshold = z_penalty_threshold
 
     @classmethod
     def from_yaml(cls, file_path: str) -> Rewarder:  # noqa: ANN102
@@ -214,6 +218,10 @@ class Rewarder:
         dist_to_gate = np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id])
         previos_dist_to_gate = np.linalg.norm(obs.previous_drone_pos - obs.gates_pos[obs.gate_id])
         reward += (previos_dist_to_gate - dist_to_gate) * self.dist_to_gate_mul
+
+        # Penalty for being too high
+        if obs.drone_pos[2] > self.z_penalty_threshold:
+            reward += self.z_penalty
 
         # Reward for avoiding obstacles
         # dist_to_obstacle = np.linalg.norm(obs.drone_pos - obs.obstacles_pos[obs.obstacles_in_range])
