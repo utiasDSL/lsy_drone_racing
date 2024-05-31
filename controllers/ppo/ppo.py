@@ -56,7 +56,7 @@ class Controller(BaseController):
         self.reset()
         self.episode_reset()
 
-        self.model_name = "models/best_model"
+        self.model_name = "models/best_model_night_2024-05-31"
         self.model = PPO.load(self.model_name)
 
     def compute_control(
