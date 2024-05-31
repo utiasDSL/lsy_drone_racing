@@ -44,7 +44,7 @@ logging.basicConfig(
     handlers=[RichHandler(rich_tracebacks=True)],
 )
 logger = logging.getLogger("wrapper")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 class DroneRacingWrapper(Wrapper):

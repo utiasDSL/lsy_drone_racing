@@ -70,6 +70,7 @@ class ObservationParser:
         # Hidden states that are not part of the observation space
         self.just_passed_gate: bool = False
         self.gate_edge_size: float = None
+        self.previous_action: np.array = np.zeros(4)
         self.previous_drone_pos: np.array = None
 
     def uninitialized(self) -> bool:
@@ -80,7 +81,7 @@ class ObservationParser:
         """Check if the drone is out of bounds."""
         return not self.observation_space.contains(self.get_observation())
 
-    def update(self, obs: np.ndarray, info: dict[str, Any], initial: bool = False):
+    def update(self, obs: np.ndarray, info: dict[str, Any], initial: bool = False, action: np.ndarray = None):
         """Update the observation parser with the new observation and info dict.
 
         Remark:
@@ -90,10 +91,13 @@ class ObservationParser:
             obs: The new observation.
             info: The new info dict.
             initial: True if this is the initial observation.
+            action: The previous action.
         """
         self.previous_drone_pos = self.drone_pos if not initial else obs[0:6:2]
         if initial:
             self.gate_edge_size = info["gate_dimensions"]["tall"]["edge"]
+        if action is not None:
+            self.previous_action = action
         self.drone_pos = obs[0:6:2]
         self.drone_yaw = obs[8]
         self.gates_pos = info["gates_pose"][:, :3]
@@ -142,6 +146,7 @@ class ObservationParser:
                     [self.drone_yaw],
                     relative_distance_corners.flatten(),
                     [self.gate_id],
+                    # self.previous_action,
                 ]
             )
         return obs.astype(np.float32)
@@ -155,10 +160,12 @@ class Rewarder:
         collision: float = -1.0,
         out_of_bounds: float = -1.0,
         times_up: float = -1.0,
-        end_reached: float = 10.0,
+        dist_to_gate_mul: float = 1.0,
+        end_reached: float = 100.0,
         gate_reached: float = 10.0,
         z_penalty: float = -3.0,
         z_penalty_threshold: float = 1.5,
+        action_smoothness: float = 1e-4
     ):
         """Initialize the rewarder."""
         self.collision = collision
@@ -166,8 +173,10 @@ class Rewarder:
         self.end_reached = end_reached
         self.gate_reached = gate_reached
         self.times_up = times_up
+        self.dist_to_gate_mul = dist_to_gate_mul
         self.z_penalty = z_penalty
         self.z_penalty_threshold = z_penalty_threshold
+        self.action_smoothness = action_smoothness
 
     @classmethod
     def from_yaml(cls, file_path: str) -> Rewarder:  # noqa: ANN102
@@ -184,7 +193,7 @@ class Rewarder:
         return cls(**data)
 
     def get_custom_reward(
-        self, obs: ObservationParser, info: dict, terminated: bool = False
+        self, obs: ObservationParser, info: dict, terminated: bool = False,
     ) -> float:
         """Compute the custom reward.
 
@@ -210,10 +219,10 @@ class Rewarder:
             return self.out_of_bounds
 
         # Reward for getting closer to the gate
-        # dist_to_gate = np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id])
-        # previos_dist_to_gate = np.linalg.norm(obs.previous_drone_pos - obs.gates_pos[obs.gate_id])
-        # reward += (previos_dist_to_gate - dist_to_gate) * self.dist_to_gate_mul
-        reward += np.exp(-np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id]))
+        dist_to_gate = np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id])
+        previos_dist_to_gate = np.linalg.norm(obs.previous_drone_pos - obs.gates_pos[obs.gate_id])
+        reward += (previos_dist_to_gate - dist_to_gate) * self.dist_to_gate_mul
+        # reward += np.exp(-np.linalg.norm(obs.drone_pos - obs.gates_pos[obs.gate_id]))
 
         # Penalty for being too high
         if obs.drone_pos[2] > self.z_penalty_threshold:
@@ -222,6 +231,10 @@ class Rewarder:
         # Reward for avoiding obstacles
         # dist_to_obstacle = np.linalg.norm(obs.drone_pos - obs.obstacles_pos[obs.obstacles_in_range])
         # reward += dist_to_obstacle * self.dist_to_obstacle_mul
+
+        # Reward for changing action smoothly
+        # if action is not None:
+            # reward += -np.linalg.norm(action - obs.previous_action) * self.action_smoothness
 
         # Reward for passing a gate
         if obs.just_passed_gate:
