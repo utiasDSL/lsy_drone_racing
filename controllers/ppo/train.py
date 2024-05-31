@@ -72,13 +72,17 @@ def main(
     )  # Train the agent
 
     train_name = f"ppo_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
-    model.learn(
-        total_timesteps=200_000,
-        progress_bar=True,
-        log_interval=1,
-        tb_log_name=train_name,
-        callback=eval_callback,
-    )
+    try:
+        model.learn(
+            total_timesteps=5_000_000,
+            progress_bar=True,
+            log_interval=1,
+            tb_log_name=train_name,
+            callback=eval_callback,
+        )
+    except KeyboardInterrupt:
+        logger.info("Training interrupted. Saving model.")
+
     model.save(f"models/{train_name}")
 
 
