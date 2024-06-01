@@ -35,7 +35,7 @@ def play_trained_model(model_path: str, config_path: str, gui: bool = True):
     return ret, episode_length
 
 if __name__ == '__main__':
-    model_path = "trained_models/2024-06-01_18-47-44/model_2024-06-01_18-47-44.zip"
+    model_path = "trained_models/2024-06-01_19-15-32/model_2024-06-01_19-15-32.zip"
     config_path = "config/getting_started.yaml"
     ret, episode_length = play_trained_model(model_path, config_path)
     print(f"Return: {ret}, Episode length: {episode_length}")

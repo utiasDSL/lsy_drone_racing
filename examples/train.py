@@ -27,10 +27,22 @@ from train_utils import save_observations, process_observation
 logger = logging.getLogger(__name__)
 
 
-
 def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
-    """Create the drone racing environment."""
-    # Load configuration and check if firmare should be used.
+    """
+    Creates a drone racing environment.
+
+    Args:
+        config_path (Path): The path to the configuration file.
+        gui (bool, optional): Flag indicating whether to enable GUI. Defaults to False.
+
+    Returns:
+        DroneRacingWrapper: The drone racing environment.
+
+    Raises:
+        AssertionError: If firmware must be used for the competition.
+        AssertionError: If pyb_freq is not a multiple of firmware freq.
+    """
+    # Load configuration and check if firmware should be used.
     config = load_config(config_path)
     # Overwrite config options
     config.quadrotor_config.gui = gui
@@ -47,22 +59,33 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
 
 def main(config: str = "config/getting_started.yaml", gui: bool = False):
     """Create the environment, check its compatibility with sb3, and run a PPO agent."""
+
+    # Create a directory to save the trained model
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    save_path = Path(__file__).resolve().parents[1] / f"trained_models/{current_datetime}/"
+    save_path.mkdir(parents=True, exist_ok=True)
+    #log_path = Path(__file__).resolve().parents[1] / (save_path / "logs/")
+    #log_path.mkdir(parents=True, exist_ok=True)
+
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config
     env = create_race_env(config_path=config_path, gui=gui)
     check_env(env)  # Sanity check to ensure the environment conforms to the sb3 API
 
-    model = PPO("MlpPolicy", env, verbose=1)
-    model.learn(total_timesteps=4096*1)
+    epochs = 100
+    model = PPO("MlpPolicy", 
+                env, verbose=1,
+                learning_rate=1e-5, 
+                # tensorboard_log=log_path,
+    )
+    model.learn(total_timesteps=2048*epochs, progress_bar=True, log_interval=5)
 
-    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    save_path = Path(__file__).resolve().parents[1] / f"trained_models/{current_datetime}/"
-    save_path.mkdir(parents=True, exist_ok=True)
     model.save(save_path / f"model_{current_datetime}.zip")
 
     # Get the observations from the environment
     obs_list = []
     vec_env = model.get_env()
+
     x = vec_env.reset()
 
     process_observation(x, True)
@@ -79,6 +102,8 @@ def main(config: str = "config/getting_started.yaml", gui: bool = False):
         obs_list.append(process_observation(x, False))
 
     save_observations(obs_list, save_path, current_datetime)
+
+    print(save_path)
     
     
 
