@@ -19,6 +19,7 @@ from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_config
 from lsy_drone_racing.wrapper import DroneRacingWrapper
 import datetime
+import csv
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,24 @@ def main(config: str = "config/getting_started.yaml", gui: bool = False):
     save_path = Path(__file__).resolve().parents[1] / "trained_models"
     save_path.mkdir(parents=True, exist_ok=True)
     model.save(save_path / f"trained_model_{current_datetime}.zip")
+
+    # Get the observations from the environment
+    observations = []
+
+    obs = env.reset()
+    done = False
+
+    while not done:
+        observations.append(obs)
+        action = model.predict(obs)[0]
+        obs, reward, done, _ = env.step(action)
+
+    # Save the observations to a CSV file
+    csv_file = save_path / f"observations_{current_datetime}.csv"
+
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(observations)
 
 
 if __name__ == "__main__":
