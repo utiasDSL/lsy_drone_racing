@@ -178,25 +178,12 @@ class Controller(BaseController):
         if not(current_target_gate_pos != None and current_target_gate_id != None and current_target_gate_in_range != None):
             pass
         else:
-
             if self.last_gate_id != current_target_gate_id:
                 self.last_gate_id = current_target_gate_id
                 self.next_potential_switching_time = ep_time + 1.0
             
             if ep_time > self.next_potential_switching_time:
-                gate_updated = self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
-            else:
-                gate_updated = False
-
-            if gate_updated and self.VERBOSE:
-                #print(f"Eo time {ep_time}, gate updated {current_target_gate_id}")
-                remove_trajectory()
-                traj = self.traj_generator_cpp.get_planned_traj()
-                traj_positions = traj[:, [0, 3, 6]]
-                traj_times = traj[:, -1]
-               # print(traj_times)
-                draw_traj_without_ref(self.initial_info, traj_positions)
-
+                self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
         
         traj_end_time = 100 # ToDo
         traj_has_ended = ep_time > traj_end_time
