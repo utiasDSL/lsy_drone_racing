@@ -6,6 +6,8 @@ Note:
 
 from __future__ import annotations
 
+import torch
+
 import logging
 from functools import partial
 from pathlib import Path
@@ -19,9 +21,11 @@ from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_config
 from lsy_drone_racing.wrapper import DroneRacingWrapper
 import datetime
-import csv
+
+from train_utils import save_observations, process_observation
 
 logger = logging.getLogger(__name__)
+
 
 
 def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
@@ -52,27 +56,31 @@ def main(config: str = "config/getting_started.yaml", gui: bool = False):
     model.learn(total_timesteps=4096*1)
 
     current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    save_path = Path(__file__).resolve().parents[1] / "trained_models"
+    save_path = Path(__file__).resolve().parents[1] / f"trained_models/{current_datetime}/"
     save_path.mkdir(parents=True, exist_ok=True)
-    model.save(save_path / f"trained_model_{current_datetime}.zip")
+    model.save(save_path / f"model_{current_datetime}.zip")
 
     # Get the observations from the environment
-    observations = []
+    obs_list = []
+    vec_env = model.get_env()
+    x = vec_env.reset()
 
-    obs = env.reset()
+    process_observation(x, True)
+
     done = False
 
+    ret = 0.
+    episode_length = 0
     while not done:
-        observations.append(obs)
-        action = model.predict(obs)[0]
-        obs, reward, done, _ = env.step(action)
+        action, *_ = model.predict(x)
+        x, r, done ,info = vec_env.step(action)
+        ret += r
+        episode_length += 1
+        obs_list.append(process_observation(x, False))
 
-    # Save the observations to a CSV file
-    csv_file = save_path / f"observations_{current_datetime}.csv"
-
-    with open(csv_file, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerows(observations)
+    save_observations(obs_list, save_path, current_datetime)
+    
+    
 
 
 if __name__ == "__main__":
