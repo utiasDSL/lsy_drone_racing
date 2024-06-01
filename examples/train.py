@@ -18,6 +18,7 @@ from stable_baselines3.common.env_checker import check_env
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_config
 from lsy_drone_racing.wrapper import DroneRacingWrapper
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,14 @@ def main(config: str = "config/getting_started.yaml", gui: bool = False):
     config_path = Path(__file__).resolve().parents[1] / config
     env = create_race_env(config_path=config_path, gui=gui)
     check_env(env)  # Sanity check to ensure the environment conforms to the sb3 API
+
     model = PPO("MlpPolicy", env, verbose=1)
-    model.learn(total_timesteps=4096)
+    model.learn(total_timesteps=4096*1)
+
+    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    save_path = Path(__file__).resolve().parents[1] / "trained_models"
+    save_path.mkdir(parents=True, exist_ok=True)
+    model.save(save_path / f"trained_model_{current_datetime}.zip")
 
 
 if __name__ == "__main__":
