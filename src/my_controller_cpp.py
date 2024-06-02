@@ -123,8 +123,7 @@ class Controller(BaseController):
         self._take_off = False
         self._setpoint_land = False
         self._land = False
-        self.last_gate_id = 0
-        self.last_gate_switching_time = 0
+        self.last_traj_recalc_time = None
         #########################
         # REPLACE THIS (END) ####
         #########################
@@ -158,19 +157,10 @@ class Controller(BaseController):
        
         #########################
         # REPLACE THIS (START) ##
-        #########################
-
-        # Handcrafted solution for getting_stated scenario.
-
-        #print info
-        # if self.VERBOSE:
-        #     for key, value in info.items():
-        #         print(f"  {key}: {value}")
+        ########################
         
         current_drone_pos = np.array([obs[0], obs[2], obs[4]])
         current_drone_rot = np.array([obs[6], obs[7], obs[8]])
-
-    
 
         current_target_gate_pos = info.get("current_target_gate_pos", None)
         current_target_gate_id = info.get("current_target_gate_id", None)
@@ -178,13 +168,19 @@ class Controller(BaseController):
         if not(current_target_gate_pos != None and current_target_gate_id != None and current_target_gate_in_range != None):
             pass
         else:
-            # if self.last_gate_id != current_target_gate_id:
-            #     self.last_gate_id = current_target_gate_id
-            #     self.next_potential_switching_time = ep_time + 1.0
-            
-            # if ep_time > self.next_potential_switching_time:
-            self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
+            pos_updated = self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
+            if pos_updated: 
+                self.last_traj_recalc_time = ep_time
         
+        traj_calc_duration = 0.2
+        if self.VERBOSE and self.last_traj_recalc_time and ep_time - self.last_traj_recalc_time > traj_calc_duration:
+            remove_trajectory()
+            traj = self.traj_generator_cpp.get_planned_traj()
+            traj_positions = traj[:, [0, 3, 6]]
+            draw_traj_without_ref(self.initial_info, traj_positions)
+            self.last_traj_recalc_time = None
+
+
         traj_end_time = 100 # ToDo
         traj_has_ended = ep_time > traj_end_time
 
