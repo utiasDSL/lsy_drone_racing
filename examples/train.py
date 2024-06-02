@@ -16,6 +16,8 @@ import fire
 from safe_control_gym.utils.registration import make
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, EvalCallback
+
 
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_config
@@ -64,23 +66,44 @@ def main(config: str = "config/getting_started.yaml", gui: bool = False):
     current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     save_path = Path(__file__).resolve().parents[1] / f"trained_models/{current_datetime}/"
     save_path.mkdir(parents=True, exist_ok=True)
-    #log_path = Path(__file__).resolve().parents[1] / (save_path / "logs/")
-    #log_path.mkdir(parents=True, exist_ok=True)
+
+    # Create a directory to save the tensorboard logs
+    log_path = Path(__file__).resolve().parents[1] / f"trained_models/logs/{current_datetime}/"
+    log_path.mkdir(parents=True, exist_ok=True)
+
 
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config
     env = create_race_env(config_path=config_path, gui=gui)
     check_env(env)  # Sanity check to ensure the environment conforms to the sb3 API
 
-    epochs = 100
+    epochs = 200
+    n_steps = 2048
+
+    checkpoint_callback = CheckpointCallback(save_freq=10000, save_path=save_path, name_prefix="model")
+    eval_env = env
+    eval_callback = EvalCallback(eval_env=eval_env, eval_freq=20000, best_model_save_path=save_path, deterministic=True, render=False)
+
+    callback = CallbackList([checkpoint_callback, eval_callback])
+
+    # for tensorboard logging start tensorboard with the following command in a seperate terminal:
+    # tensorboard --logdir trained_models/logs
+
     model = PPO("MlpPolicy", 
                 env, verbose=1,
-                learning_rate=1e-5, 
-                # tensorboard_log=log_path,
-    )
-    model.learn(total_timesteps=2048*epochs, progress_bar=True, log_interval=5)
+                learning_rate=3e-5,
+                n_steps=n_steps,
+                tensorboard_log=log_path,
+    )      
 
-    model.save(save_path / f"model_{current_datetime}.zip")
+    model.learn(total_timesteps=epochs * n_steps, 
+                #log_interval=5, 
+                progress_bar=True,
+                tb_log_name=f"PPO",
+                callback=callback,
+    )
+
+    model.save(save_path / f"model.zip")
 
     # Get the observations from the environment
     obs_list = []
