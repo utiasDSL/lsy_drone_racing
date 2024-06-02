@@ -15,6 +15,7 @@ from pathlib import Path
 import fire
 from safe_control_gym.utils.registration import make
 from stable_baselines3 import PPO
+from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, EvalCallback
 
@@ -77,7 +78,7 @@ def main(config: str = "config/getting_started.yaml", gui: bool = False):
     env = create_race_env(config_path=config_path, gui=gui)
     check_env(env)  # Sanity check to ensure the environment conforms to the sb3 API
 
-    epochs = 200
+    epochs = 1000
     n_steps = 2048
 
     checkpoint_callback = CheckpointCallback(save_freq=10000, save_path=save_path, name_prefix="model")
@@ -89,11 +90,12 @@ def main(config: str = "config/getting_started.yaml", gui: bool = False):
     # for tensorboard logging start tensorboard with the following command in a seperate terminal:
     # tensorboard --logdir trained_models/logs
 
-    model = PPO("MlpPolicy", 
+    model = RecurrentPPO("MlpLstmPolicy", 
                 env, verbose=1,
                 learning_rate=3e-5,
                 n_steps=n_steps,
                 tensorboard_log=log_path,
+                ent_coef=0.01,              # Entropy coefficient to encourage exploration
     )      
 
     model.learn(total_timesteps=epochs * n_steps, 

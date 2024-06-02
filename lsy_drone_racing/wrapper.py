@@ -401,6 +401,15 @@ class RewardWrapper(Wrapper):
         """
         gate_id = info["current_gate_id"]
         gate_reward = np.exp(-np.linalg.norm(info["gates_pose"][gate_id, :3] - obs[:3]))
-        gate_passed_reward = 0 if gate_id == self._last_gate else 0.1
-        crash_penality = -1 if terminated and not info["task_completed"] else 0
-        return gate_reward + crash_penality + gate_passed_reward
+        if gate_id == self._last_gate:
+            gate_passed_reward = 0 
+        else:
+            gate_passed_reward = 0.1
+        if terminated and not info["task_completed"]: 
+            crash_penality = -1 
+        else:
+            crash_penality = 0
+        
+        rew = gate_reward + crash_penality + gate_passed_reward
+        print(f"Reward from _compute_reward: {rew}")
+        return rew
