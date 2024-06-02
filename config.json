@@ -203,7 +203,7 @@
     },
     "world_properties": {
         "inflate_radius": {
-            "gate": 0.05,
+            "gate": 0.08,
             "obstacle": 0.15
         },
         "lower_bound": [-2, -2, 0],
@@ -213,7 +213,8 @@
         "time_limit_online": 0.1,
         "time_limit_offline": 0.5,
         "optimality_threshold_percentage": 0.05,
-        "checkpoint_gate_offset": 0.15
+        "checkpoint_gate_offset": 0.13,
+        "range": 0.7
     },
     "trajectory_generator_properties": {
         "max_velocity": 5,

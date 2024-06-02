@@ -61,7 +61,7 @@ quadrotor_config:
     ]
 
   # Randomization of the initial state
-  randomized_init: False
+  randomized_init: True
   init_state_randomization_info:
     init_x: 
       distrib: "uniform"
@@ -89,7 +89,7 @@ quadrotor_config:
       high: 0.1
 
   # Randomization of the quadrotor inertial properties
-  randomized_inertial_prop: False
+  randomized_inertial_prop: True
   inertial_prop_randomization_info:
     M:
       distrib: "uniform"
