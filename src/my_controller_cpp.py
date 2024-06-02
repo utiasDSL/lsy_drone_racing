@@ -178,12 +178,12 @@ class Controller(BaseController):
         if not(current_target_gate_pos != None and current_target_gate_id != None and current_target_gate_in_range != None):
             pass
         else:
-            if self.last_gate_id != current_target_gate_id:
-                self.last_gate_id = current_target_gate_id
-                self.next_potential_switching_time = ep_time + 1.0
+            # if self.last_gate_id != current_target_gate_id:
+            #     self.last_gate_id = current_target_gate_id
+            #     self.next_potential_switching_time = ep_time + 1.0
             
-            if ep_time > self.next_potential_switching_time:
-                self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
+            # if ep_time > self.next_potential_switching_time:
+            self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
         
         traj_end_time = 100 # ToDo
         traj_has_ended = ep_time > traj_end_time

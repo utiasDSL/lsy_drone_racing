@@ -213,7 +213,7 @@
         "time_limit_online": 0.1,
         "time_limit_offline": 0.5,
         "optimality_threshold_percentage": 0.05,
-        "checkpoint_gate_offset": 0.25
+        "checkpoint_gate_offset": 0.15
     },
     "trajectory_generator_properties": {
         "max_velocity": 5,
