@@ -48,7 +48,7 @@ if __name__ == "__main__":
     map.parse_obstacles(obstacles)
 
     path_directory_path = "path_segments"
-    for file in os.listdir(path_directory_path):
+    for file in sorted(os.listdir(path_directory_path)):
         path_file = os.path.join(path_directory_path, file)
         # path is stored as list of points coordinates comma separated
         with open(path_file, "r") as f:
