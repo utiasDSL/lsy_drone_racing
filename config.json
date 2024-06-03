@@ -83,7 +83,7 @@
                 ],
                 "size": [
                     0.45,
-                    0.05,
+                    0.00000001,
                     0.45
                 ],
                 "type": "filling",
@@ -169,7 +169,7 @@
                 ],
                 "size": [
                     0.45,
-                    0.05,
+                    0.00000001,
                     0.45
                 ],
                 "type": "filling",
@@ -210,7 +210,7 @@
         "upper_bound": [2, 2, 2]
     },
     "path_planner_properties": {
-        "time_limit_online": 0.1,
+        "time_limit_online": 0.07,
         "time_limit_offline": 0.5,
         "optimality_threshold_percentage": 0.05,
         "checkpoint_gate_offset": 0.13,
@@ -219,6 +219,6 @@
     "trajectory_generator_properties": {
         "max_velocity": 5,
         "max_acceleration": 5,
-        "sampling_interval": 0.1
+        "sampling_interval": 0.05
     }
 }

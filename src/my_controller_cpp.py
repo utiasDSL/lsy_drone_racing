@@ -34,6 +34,7 @@ from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.utils import draw_trajectory, draw_traj_without_ref, remove_trajectory
 from online_traj_planner import OnlineTrajGenerator
 from src.utils.config_reader import ConfigReader
+from src.state_estimator import StateEstimator
 
 
 
@@ -103,6 +104,8 @@ class Controller(BaseController):
         self.current_gate_id = 0
         self.last_gate_id = 0
         self.next_potential_switching_time = 0
+        self.state_estimator = StateEstimator(4)
+        self.state_estimator.reset()
 
 
         #########################
@@ -160,7 +163,8 @@ class Controller(BaseController):
         ########################
         
         current_drone_pos = np.array([obs[0], obs[2], obs[4]])
-        current_drone_rot = np.array([obs[6], obs[7], obs[8]])
+        self.state_estimator.add_measurement(current_drone_pos, ep_time)
+        current_drone_vel, current_drone_acc = self.state_estimator.estimate_state()
 
         current_target_gate_pos = info.get("current_target_gate_pos", None)
         current_target_gate_id = info.get("current_target_gate_id", None)
@@ -194,7 +198,8 @@ class Controller(BaseController):
                 args = []
             
             elif not traj_has_ended:
-                traj_sample = self.traj_generator_cpp.sample_traj(ep_time)
+                cur_segment_id = current_target_gate_id
+                traj_sample = self.traj_generator_cpp.sample_traj_with_recompute(current_drone_pos, current_drone_vel, current_drone_acc, ep_time, cur_segment_id)
                 desired_pos = np.array([traj_sample[0], traj_sample[3], traj_sample[6]])
                 desired_vel = np.array([traj_sample[1], traj_sample[4], traj_sample[7]])
                 desired_acc = np.array([traj_sample[2], traj_sample[5], traj_sample[8]])
