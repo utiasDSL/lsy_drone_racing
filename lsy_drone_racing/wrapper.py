@@ -31,9 +31,8 @@ from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapp
 from termcolor import colored
 
 from lsy_drone_racing.env_modifiers import (
-    ObservationParser,
     Rewarder,
-    map_reward_to_color,
+    make_observation_parser,
     transform_action,
 )
 
@@ -56,7 +55,7 @@ class DroneRacingWrapper(Wrapper):
 
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, env: FirmwareWrapper, terminate_on_lap: bool = True):
+    def __init__(self, env: FirmwareWrapper, terminate_on_lap: bool = False):
         """Initialize the wrapper.
 
         Args:
@@ -76,12 +75,12 @@ class DroneRacingWrapper(Wrapper):
         # All values are scaled to [-1, 1]. Transformed back, x, y, z values of 1 correspond to 5m.
         # The yaw value of 1 corresponds to pi radians.
         action_limits = np.ones(4)
-        self.action_scale = np.array([5, 5, 5, np.pi])
         self.action_space = Box(-action_limits, action_limits, dtype=np.float32)
 
         # Observation space:
-        self.observation_parser: ObservationParser = ObservationParser(
-            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
+        self.observation_parser = make_observation_parser(
+            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles,
+            observation_parser_type="relative_corners_obstacles"
         )
         self.observation_space = self.observation_parser.observation_space
         logger.debug(f"Observation space: {self.observation_space}")
@@ -122,6 +121,7 @@ class DroneRacingWrapper(Wrapper):
         self._sim_time = 0.0
         self._f_rotors[:] = 0.0
         obs, info = self.env.reset()
+
         logger.debug("===========RESET===========")
         logger.debug(f"Collision: {pprint.pformat(info['collision'])}")
         logger.debug(f"Finished: {pprint.pformat(info['task_completed'])}")
@@ -166,7 +166,7 @@ class DroneRacingWrapper(Wrapper):
         elif self.terminate_on_lap and info["current_gate_id"] == -1:
             info["task_completed"] = True
             terminated = True
-        elif self.terminate_on_lap and done:  # Done, but last gate not passed -> terminate
+        elif done:  # Done, but last gate not passed -> terminate
             terminated = True
         # Increment the sim time after the step if we are not yet done.
         if not terminated and not truncated:
@@ -233,8 +233,9 @@ class DroneRacingObservationWrapper:
             raise TypeError(f"`env` must be an instance of `FirmwareWrapper`, is {type(env)}")
         self.env = env
         self.pyb_client_id: int = env.env.PYB_CLIENT
-        self.observation_parser = ObservationParser(
-            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
+        self.observation_parser = make_observation_parser(
+            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles,
+            observation_parser_type="relative_corners"
         )
         self.rewarder = Rewarder()  # TODO: Load from YAML
 

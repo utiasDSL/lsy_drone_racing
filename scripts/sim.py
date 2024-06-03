@@ -35,7 +35,7 @@ def simulate(
     controller: str = "controllers/example/example_controller.py",
     n_runs: int = 1,
     gui: bool = True,
-    terminate_on_lap: bool = True,
+    terminate_on_lap: bool = False,
     log_level: str = "INFO"
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
@@ -142,8 +142,11 @@ def simulate(
             # Break early after passing the last gate (=> gate -1) or task completion
             if terminate_on_lap and info["current_gate_id"] == -1:
                 info["task_completed"], lap_finished = True, True
+            
             if info["task_completed"]:
+                logger.info("Task completed.")
                 done = True
+                lap_finished = True
 
         # Learn after the episode if the controller supports it
         ctrl.episode_learn()  # Update the controller internal state and models.
