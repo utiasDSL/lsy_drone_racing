@@ -7,10 +7,10 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 import os
 
 
-def play_trained_model(model_path: str, config_path: str, gui: bool = True):
+def play_trained_model(model_path: str, config_path: str, gui: bool = False,episodes_path: str = "episodes/"):
     """Load a trained model and play it in the environment."""
     # Create environment
-    env = DummyVecEnv([lambda: create_race_env(Path(config_path), gui=gui)])
+    env = DummyVecEnv([lambda: create_race_env(Path(config_path), gui=False)])
     # Load the trained model
     model = PPO.load(model_path)
     # Set the model's environment
@@ -31,6 +31,7 @@ def play_trained_model(model_path: str, config_path: str, gui: bool = True):
             episode_length += 1
             obs_list.append(process_observation(x, False))
         # Save the observations
+        print(f"Episode {i}: Episode Length: {episode_length}")
         save_path = episodes_path + "episodes"
         save_path = Path(save_path)
         save_path.mkdir(parents=True, exist_ok=True)
@@ -39,8 +40,8 @@ def play_trained_model(model_path: str, config_path: str, gui: bool = True):
     return ret, episode_length
 
 if __name__ == '__main__':
-    model_path = "trained_models/2024-06-02_21-10-26/best_model.zip"
+    model_path = "trained_models/2024-06-03_10-00-58/model_10000_steps.zip"
     episodes_path = os.path.dirname(model_path) + "/"
     config_path = "config/getting_started.yaml"
-    ret, episode_length = play_trained_model(model_path, config_path, episodes_path)
+    ret, episode_length = play_trained_model(model_path, config_path, 100, episodes_path)
     print(f"Return: {ret}, Episode length: {episode_length}")
