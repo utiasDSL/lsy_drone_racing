@@ -80,7 +80,7 @@ class DroneRacingWrapper(Wrapper):
         # Observation space:
         self.observation_parser = make_observation_parser(
             n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles,
-            observation_parser_type="relative_corners_obstacles"
+            observation_parser_type="scaramuzza"
         )
         self.observation_space = self.observation_parser.observation_space
         logger.debug(f"Observation space: {self.observation_space}")

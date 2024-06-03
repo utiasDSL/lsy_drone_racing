@@ -79,7 +79,7 @@ class ObservationParser(ABC):
         self.drone_pos = obs[0:6:2]
         self.drone_speed = obs[1:6:2]
         self.drone_rpy = obs[6:9]
-        self.drone_rpy_speed = obs[9:12]
+        self.drone_angular_speed = obs[9:12]
         self.gates_pos = info["gates_pose"][:, :3]
         self.gates_yaw = info["gates_pose"][:, 5]
         self.gates_in_range = info["gates_in_range"]
@@ -130,12 +130,11 @@ class ScaramuzzaObservationParser(ObservationParser):
         self,
         n_gates: int,
         n_obstacles: int,
-        drone_pos_limits: list = [3, 3, 2],
-        drone_yaw_limits: list = [np.pi],
         drone_speed_limits: list = [2] * 3,
-        drone_yaw_speed_limits: list = [np.pi],
-        gate_pos_limits: list = [5, 5, 5],
-        obstacle_pos_limits: list = [5, 5, 5],
+        drone_rpy_limits: list = [np.pi] * 3,
+        drone_angular_speed_limits: list = [np.pi] * 3,
+        gate_pos_limits: list = [10] * 3,
+        obstacle_pos_limits: list = [10] * 3,
     ):
         """Initialize the Scaramuzza observation parser."""
         super().__init__(n_gates, n_obstacles)
@@ -143,8 +142,8 @@ class ScaramuzzaObservationParser(ObservationParser):
         relative_corners_limits = gate_pos_limits * n_gates * n_corners
         obs_limits = (
             drone_speed_limits
-            + drone_yaw_limits
-            + drone_yaw_speed_limits
+            + drone_angular_speed_limits
+            + drone_rpy_limits
             + relative_corners_limits
             + obstacle_pos_limits * n_obstacles
             + [n_gates]
@@ -153,7 +152,6 @@ class ScaramuzzaObservationParser(ObservationParser):
         obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
         self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
 
-
     def get_observation(self) -> np.ndarray:
         """Return the current observation."""
         relative_corners = self.get_relative_corners()
@@ -161,8 +159,8 @@ class ScaramuzzaObservationParser(ObservationParser):
         obs = np.concatenate(
             [
                 self.drone_speed,
-                [self.drone_yaw],
-                [self.drone_yaw_speed],
+                self.drone_angular_speed,
+                self.drone_rpy,
                 relative_corners.flatten(),
                 relative_obstacles.flatten(),
                 [self.gate_id],
