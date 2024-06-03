@@ -36,10 +36,11 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
     env_factory = partial(make, "quadrotor", **config.quadrotor_config)
     firmware_env = make("firmware", env_factory, FIRMWARE_FREQ, CTRL_FREQ)
-    return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
+    return DroneRacingWrapper(firmware_env, terminate_on_lap=False)
 
 
 def main(
+    config: str = "../config/level0_train.yaml",
     gui: bool = False,
     gui_eval: bool = False,
     log_level: int = logging.INFO,
@@ -50,7 +51,7 @@ def main(
     config_path = Path(__file__).resolve().parents[1] / config
 
     env = create_race_env(config_path=config_path, gui=gui)
-    eval_env = create_race_env(config_path=config_path, gui=gui)
+    eval_env = create_race_env(config_path=config_path, gui=gui_eval)
 
     eval_callback = EvalCallback(
         eval_env,
@@ -75,7 +76,6 @@ def main(
         model.learn(
             total_timesteps=5_000_000,
             progress_bar=True,
-            log_interval=1,
             tb_log_name=train_name,
             callback=eval_callback,
         )

@@ -56,7 +56,7 @@ class Controller(BaseController):
         self.reset()
         self.episode_reset()
 
-        self.model_name = "models/best_model_morning_2024-05-31"
+        self.model_name = "models/best_model_night_2024_06_01"
         self.model = PPO.load(self.model_name)
 
     def compute_control(
@@ -105,65 +105,3 @@ class Controller(BaseController):
         # logger.info(f"Args: {args}")
         return command_type, args
 
-    def step_learn(
-        self,
-        action: list,
-        obs: np.ndarray,
-        reward: float | None = None,
-        done: bool | None = None,
-        info: dict | None = None,
-    ):
-        """Learning and controller updates called between control steps.
-
-        INSTRUCTIONS:
-            Use the historically collected information in the five data buffers of actions,
-            observations, rewards, done flags, and information dictionaries to learn, adapt, and/or
-            re-plan.
-
-        Args:
-            action: Most recent applied action.
-            obs: Most recent observation of the quadrotor state.
-            reward: Most recent reward.
-            done: Most recent done flag.
-            info: Most recent information dictionary.
-
-        """
-        #########################
-        # REPLACE THIS (START) ##
-        #########################
-
-        # Store the last step's events.
-        self.action_buffer.append(action)
-        self.obs_buffer.append(obs)
-        self.reward_buffer.append(reward)
-        self.done_buffer.append(done)
-        self.info_buffer.append(info)
-
-        # Implement some learning algorithm here if needed
-
-        #########################
-        # REPLACE THIS (END) ####
-        #########################
-
-    def episode_learn(self):
-        """Learning and controller updates called between episodes.
-
-        INSTRUCTIONS:
-            Use the historically collected information in the five data buffers of actions,
-            observations, rewards, done flags, and information dictionaries to learn, adapt, and/or
-            re-plan.
-
-        """
-        #########################
-        # REPLACE THIS (START) ##
-        #########################
-
-        _ = self.action_buffer
-        _ = self.obs_buffer
-        _ = self.reward_buffer
-        _ = self.done_buffer
-        _ = self.info_buffer
-
-        #########################
-        # REPLACE THIS (END) ####
-        #########################
