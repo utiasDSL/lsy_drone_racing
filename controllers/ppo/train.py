@@ -40,7 +40,6 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
 
 
 def main(
-    config: str = "../config/train0.yaml",
     gui: bool = False,
     gui_eval: bool = False,
     log_level: int = logging.INFO,
