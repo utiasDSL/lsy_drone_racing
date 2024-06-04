@@ -24,7 +24,7 @@ from safe_control_gym.utils.registration import make
 from lsy_drone_racing.command import Command, apply_command
 from lsy_drone_racing.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils import check_gate_pass, load_controller
-from lsy_drone_racing.vicon import ViconWatcher
+from lsy_drone_racing.vicon import Vicon
 
 logger = logging.getLogger(__name__)
 
@@ -93,15 +93,9 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     time_helper = swarm.timeHelper
     cf = swarm.allcfs.crazyflies[0]
 
-    vicon = ViconWatcher()  # TODO: Integrate autodetection of gate and obstacle positions
-
-    timeout = 5.0
-    tstart = time.time()
-    while not vicon.active:
-        logger.info("Waiting for vicon...")
-        time.sleep(1)
-        if time.time() - tstart > timeout:
-            raise TimeoutError("Vicon unavailable.")
+    gate_names = [f"gate{i}" for i in range(1, len(config.quadrotor_config.gates) + 1)]
+    obstacle_names = [f"obstacle{i}" for i in range(1, len(config.quadrotor_config.obstacles) + 1)]
+    vicon = Vicon(track_names=gate_names + obstacle_names, timeout=1.0)
 
     config_path = Path(config).resolve()
     assert config_path.is_file(), "Config file does not exist!"
@@ -137,8 +131,9 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     _, env_info = env.reset()
 
     # Override environment state and evaluate constraints
-    drone_pos_and_vel = [vicon.pos["cf"][0], 0, vicon.pos["cf"][1], 0, vicon.pos["cf"][2], 0]
-    drone_rot_and_agl_vel = [vicon.rpy["cf"][0], vicon.rpy["cf"][1], vicon.rpy["cf"][2], 0, 0, 0]
+    drone_pos, drone_rot = vicon.pos[vicon.drone_name], vicon.rpy[vicon.drone_name]
+    drone_pos_and_vel = [drone_pos[0], 0, drone_pos[1], 0, drone_pos[2], 0]
+    drone_rot_and_agl_vel = [drone_rot[0], drone_rot[1], drone_rot[2], 0, 0, 0]
     env.state = drone_pos_and_vel + drone_rot_and_agl_vel
     constraint_values = env.constraints.get_values(env, only_state=True)
     x_reference = config.quadrotor_config.task_info.stabilization_goal
@@ -179,13 +174,17 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
             p = vicon.pos["cf"]
             # This only looks at the x-y plane, could be improved
             # TODO: Replace with 3D distance once gate poses are given with height
-            gate_dist = np.sqrt(np.sum((p[0:2] - gate_poses[target_gate_id][0:2]) ** 2))
+            gate_dist = np.sqrt(np.sum((p[0:2] - vicon.pos[gate_names[target_gate_id]][0:2]) ** 2))
+            if gate_dist < 0.45:
+                current_target_gate_pos = vicon.pos[gate_names[target_gate_id]]
+            else:
+                current_target_gate_pos = gate_poses[target_gate_id][0:6]
             info = {
                 "mse": np.sum(state_error**2),
                 "collision": (None, False),  # Leave always false in sim2real
                 "current_target_gate_id": target_gate_id,
                 "current_target_gate_in_range": gate_dist < 0.45,
-                "current_target_gate_pos": gate_poses[target_gate_id][0:6],  # Always "exact"
+                "current_target_gate_pos": current_target_gate_pos,
                 "current_target_gate_type": gate_poses[target_gate_id][6],
                 "at_goal_position": False,  # Leave always false in sim2real
                 "task_completed": False,  # Leave always false in sim2real
@@ -194,19 +193,21 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
             }
 
             # Check if the drone has passed the current gate
-            if check_gate_pass(gate_poses[target_gate_id], vicon.pos["cf"], last_drone_pos):
+            if check_gate_pass(
+                gate_poses[target_gate_id], vicon.pos[vicon.drone_name], last_drone_pos
+            ):
                 target_gate_id += 1
                 print(f"Gate {target_gate_id} passed in {curr_time:.4}s")
-            last_drone_pos = vicon.pos["cf"].copy()
+            last_drone_pos = vicon.pos[vicon.drone_name].copy()
 
             if target_gate_id == len(gate_poses):  # Reached the end
                 target_gate_id = -1
                 total_time = time.time() - start_time
 
             # Get the latest vicon observation and call the controller
-            p = vicon.pos["cf"]
+            p = vicon.pos[vicon.drone_name]
             drone_pos_and_vel = [p[0], 0, p[1], 0, p[2], 0]
-            r = vicon.rpy["cf"]
+            r = vicon.rpy[vicon.drone_name]
             drone_rot_and_agl_vel = [r[0], r[1], r[2], 0, 0, 0]
             vicon_obs = drone_pos_and_vel + drone_rot_and_agl_vel
             # In sim2real: Reward always 0, done always false

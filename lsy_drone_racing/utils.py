@@ -37,6 +37,18 @@ def euler_from_quaternion(x: float, y: float, z: float, w: float) -> tuple[float
     return roll_x, pitch_y, yaw_z  # in radians
 
 
+def map2pi(angle: np.ndarray) -> np.ndarray:
+    """Map an angle or array of angles to the interval of [-pi, pi].
+
+    Args:
+        angle: Number or array of numbers.
+
+    Returns:
+        The remapped angles.
+    """
+    return ((angle + np.pi) % (2 * np.pi)) - np.pi
+
+
 def load_controller(path: Path) -> Type[BaseController]:
     """Load the controller module from the given path and return the Controller class.
 
