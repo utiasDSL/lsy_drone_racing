@@ -9,7 +9,7 @@ from rosgraph import Master
 from tf2_msgs.msg import TFMessage
 
 from lsy_drone_racing.import_utils import get_ros_package_path
-from lsy_drone_racing.rotations import euler_from_quaternion
+from lsy_drone_racing.rotations import euler_from_quaternion, map2pi
 
 
 class Vicon:
@@ -38,18 +38,18 @@ class Vicon:
             ...  # ROS node is already running which is fine for us
         self.drone_name = None
         if auto_track_drone:
-            config_path = get_ros_package_path("crazyswarm") / "launch/crazyflies.yaml"
-            assert config_path.exists(), "Crazyfly config file missing!"
-            with open(config_path, "r") as f:
+            with open(get_ros_package_path("crazyswarm") / "launch/crazyflies.yaml", "r") as f:
                 config = yaml.load(f, yaml.SafeLoader)
             assert len(config["crazyflies"]) == 1, "Only one crazyfly allowed at a time!"
             self.drone_name = f"cf{config['crazyflies'][0]['id']}"
             track_names.insert(0, self.drone_name)
+        self.track_names = track_names
         # Register the Vicon subscribers for the drone and any other tracked object
         self.pos: dict[str, np.ndarray] = {}
         self.rpy: dict[str, np.ndarray] = {}
-        for track_name in track_names:  # Initialize the objects' pose
-            self.pos[track_name], self.rpy[track_name] = np.array([]), np.array([])
+        self.vel: dict[str, np.ndarray] = {}
+        self.ang_vel: dict[str, np.ndarray] = {}
+        self.time: dict[str, float] = {}
 
         self.sub = rospy.Subscriber("/tf", TFMessage, self.save_pose)
         if timeout:
@@ -57,10 +57,9 @@ class Vicon:
             while not self.active and time.time() - tstart < timeout:
                 time.sleep(0.01)
             if not self.active:
-                missing = [k for k, v in self.pos.items() if not v.size]
                 raise TimeoutError(
                     "Timeout while fetching initial position updates for all tracked objects."
-                    f"Missing objects: {missing}"
+                    f"Missing objects: {[k for k in self.track_names if k not in self.ang_vel]}"
                 )
 
     def save_pose(self, data: TFMessage):
@@ -74,8 +73,14 @@ class Vicon:
             if name not in self.pos:
                 continue
             T, R = tf.transform.translation, tf.transform.rotation
-            self.pos[name] = np.array([T.x, T.y, T.z])
-            self.rpy[name] = np.array(euler_from_quaternion(R.x, R.y, R.z, R.w))
+            pos = np.array([T.x, T.y, T.z])
+            rpy = np.array(euler_from_quaternion(R.x, R.y, R.z, R.w))
+            if self.pos[name]:
+                self.vel[name] = (pos - self.pos[name]) / (time.time() - self.time[name])
+                self.ang_vel[name] = map2pi(rpy - self.rpy[name]) / (time.time() - self.time[name])
+            self.time[name] = time.time()
+            self.pos[name] = pos
+            self.rpy[name] = rpy
 
     def pose(self, name: str) -> tuple[np.ndarray, np.ndarray]:
         """Get the latest pose of a tracked object.
@@ -101,4 +106,4 @@ class Vicon:
     @property
     def active(self) -> bool:
         """Check if Vicon has sent data for each object."""
-        return all(p.size > 0 for p in self.pos.values())
+        return all([name in self.ang_vel for name in self.track_names])

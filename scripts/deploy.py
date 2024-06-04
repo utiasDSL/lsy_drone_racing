@@ -121,8 +121,10 @@ def get_observation(info: dict, vicon: Vicon) -> np.ndarray:
     Returns:
         An observation from real data that matches the simulated observation space.
     """
-    pos, yaw = vicon.pos[vicon.drone_name], vicon.rpy[vicon.drone_name][2]
-    obs = np.array([pos[0], 0, pos[1], 0, pos[2], 0, 0, 0, yaw])
+    pos, rpy = vicon.pos[vicon.drone_name], vicon.rpy[vicon.drone_name]
+    vel = vicon.vel[vicon.drone_name]
+    ang_vel = vicon.ang_vel[vicon.drone_name]
+    obs = np.array([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2], *rpy, *ang_vel])
     return DroneRacingWrapper.observation_transform(obs, info)
 
 
@@ -167,6 +169,7 @@ def get_info(env: Quadrotor, vicon: Vicon, gate_id: int, config: Munch) -> dict:
         "current_gate_id": gate_id,
         "at_goal_position": False,  # Leave always False for deployment
         "task_completed": False,  # Leave always False for deployment
+        "drone_pose": np.concatenate(vicon.pose(vicon.drone_name)),
         "constraint_values": env.constraints.get_values(env, only_state=True),
         "constraint_violation": 1 if env.cnstr_violation else 0,
     }
