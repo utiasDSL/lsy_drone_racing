@@ -74,7 +74,7 @@ def main(
     train_name = f"ppo_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     try:
         model.learn(
-            total_timesteps=5_000_000,
+            total_timesteps=500_000,
             progress_bar=True,
             tb_log_name=train_name,
             callback=eval_callback,
