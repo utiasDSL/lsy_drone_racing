@@ -80,7 +80,7 @@ class DroneRacingWrapper(Wrapper):
         # Observation space:
         self.observation_parser = make_observation_parser(
             n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles,
-            observation_parser_type="scaramuzza"
+            observation_parser_type="relative_position"
         )
         self.observation_space = self.observation_parser.observation_space
         logger.debug(f"Observation space: {self.observation_space}")
@@ -147,16 +147,19 @@ class DroneRacingWrapper(Wrapper):
             # Wrapper has a reduced action space compared to the firmware env to make it compatible
             # with the gymnasium interface and popular RL libraries.
             raise InvalidAction(f"Invalid action: {action}")
-        action_before_transform = action
+
         action = transform_action(action, drone_pos=self.observation_parser.drone_pos)
+
         # The firmware does not use the action input in the step function
         zeros = np.zeros(3)
         self.env.sendFullStateCmd(action[:3], zeros, zeros, action[3], zeros, self._sim_time)
+
         # The firmware quadrotor env requires the sim time as input to the step function. It also
         # returns the desired rotor forces. Both modifications are not part of the gymnasium
         # interface. We automatically insert the sim time and reuse the last rotor forces.
         obs, reward, done, info, f_rotors = self.env.step(self._sim_time, action=self._f_rotors)
         self._f_rotors[:] = f_rotors
+
         # We set truncated to True if the task is completed but the drone has not yet passed the
         # final gate. We set terminated to True if the task is completed and the drone has passed
         # the final gate.
@@ -168,14 +171,16 @@ class DroneRacingWrapper(Wrapper):
             terminated = True
         elif done:  # Done, but last gate not passed -> terminate
             terminated = True
-        # Increment the sim time after the step if we are not yet done.
-        if not terminated and not truncated:
-            self._sim_time += self.env.ctrl_dt
 
         self.observation_parser.update(obs, info)
         obs = self.observation_parser.get_observation().astype(np.float32)
+
         if self.observation_parser.out_of_bounds():
             terminated = True
+
+        # Increment the sim time after the step if we are not yet done.
+        if not terminated and not truncated:
+            self._sim_time += self.env.ctrl_dt
 
         # Compute the custom reward since we cannot modify the firmware environment for the
         # competion.
@@ -186,14 +191,7 @@ class DroneRacingWrapper(Wrapper):
         logger.debug(f"Finished: {pprint.pformat(info['task_completed'])}")
         logger.debug(f"Drone position: {self.observation_parser.drone_pos}")
         logger.debug(f"Action: {action}")
-        logger.debug(f"Action previous: {action_before_transform}")
-
         logger.debug(f"Available keys in info: {pprint.pformat(info.keys())}")
-
-        # logger.debug(f"{self.observation_parser.format_observation()}")
-        # logger.debug(f"{self.observation_parser.format_observation_space()}")
-        # logger.debug(f"In bounds: {self.observation_parser.check_in_observation_space()}")
-        # logger.debug(f"Out of bounds: {self.observation_parser.out_of_bounds()}")
         logger.debug(f"Reward: {reward}")
 
         self._reset_required = terminated or truncated
@@ -235,7 +233,7 @@ class DroneRacingObservationWrapper:
         self.pyb_client_id: int = env.env.PYB_CLIENT
         self.observation_parser = make_observation_parser(
             n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles,
-            observation_parser_type="relative_corners"
+            observation_parser_type="relative_position"
         )
         self.rewarder = Rewarder()  # TODO: Load from YAML
 
