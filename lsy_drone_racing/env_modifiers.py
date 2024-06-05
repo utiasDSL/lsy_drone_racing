@@ -102,25 +102,139 @@ class ObservationParser(ABC):
         """
         raise NotImplementedError
 
-    def get_relative_corners(self) -> np.ndarray:
+    def get_relative_corners(self, include_reference_position: bool = False) -> np.ndarray:
         """Return the relative position of the corners of the gates with respect to the drone."""
-        edge_cos = np.cos(self.gates_yaw)
-        edge_sin = np.sin(self.gates_yaw)
+        gates_pos = (
+            np.vstack([self.gates_pos, self.reference_position])
+            if include_reference_position
+            else self.gates_pos
+        )
+        gates_yaw = np.hstack([self.gates_yaw, 0]) if include_reference_position else self.gates_yaw
+
+        edge_cos = np.cos(gates_yaw)
+        edge_sin = np.sin(gates_yaw)
         ones = np.ones_like(edge_cos)
         edge_vector_pos = self.gate_edge_size / 2 * np.array([edge_cos, edge_sin, ones]).T
         edge_vector_neg = self.gate_edge_size / 2 * np.array([-edge_cos, -edge_sin, ones]).T
-        first_corners = self.gates_pos + edge_vector_pos - self.drone_pos
-        second_corners = self.gates_pos + edge_vector_neg - self.drone_pos
-        third_corners = self.gates_pos - edge_vector_pos - self.drone_pos
-        fourth_corners = self.gates_pos - edge_vector_neg - self.drone_pos
-        relative_distance_corners = np.concatenate(
+
+        first_corners = gates_pos + edge_vector_pos - self.drone_pos
+        second_corners = gates_pos + edge_vector_neg - self.drone_pos
+        third_corners = gates_pos - edge_vector_pos - self.drone_pos
+        fourth_corners = gates_pos - edge_vector_neg - self.drone_pos
+
+        relative_distance_corners = np.array(
             [first_corners, second_corners, third_corners, fourth_corners]
         )
+        # relative_distance_corners = np.concatenate(
+        # [first_corners, second_corners, third_corners, fourth_corners]
+        # )
         return relative_distance_corners
 
     def get_relative_obstacles(self) -> np.ndarray:
         """Return the relative position of the obstacles."""
         return self.obstacles_pos - self.drone_pos
+
+    def get_relative_gates(self) -> np.ndarray:
+        """Return the relative position of the gates."""
+        return self.gates_pos - self.drone_pos
+
+class MinimalObservationParser(ObservationParser):
+    """Class to parse the observation space of the firmware environment, to only include the drone information."""
+
+    def __init__(
+        self,
+        n_gates: int,
+        n_obstacles: int,
+        drone_pos_limits: list = [3, 3, 2],
+        drone_speed_limits: list = [10] * 3,
+        drone_rpy_limits: list = [np.pi] * 3,
+        drone_angular_speed_limits: list = [10] * 3,
+    ):
+        """Initialize the Scaramuzza observation parser."""
+        super().__init__(n_gates, n_obstacles)
+        obs_limits = (
+            drone_pos_limits
+            + drone_speed_limits
+            + drone_rpy_limits
+            + drone_angular_speed_limits
+            + [n_gates]
+        )
+        obs_limits_high = np.array(obs_limits)
+        obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
+        self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
+
+    def get_observation(self) -> np.ndarray:
+        """Return the current observation."""
+        obs = np.concatenate(
+            [
+                self.drone_pos,
+                self.drone_speed,
+                self.drone_rpy,
+                self.drone_angular_speed,
+                [self.gate_id],
+            ]
+        )
+        return obs.astype(np.float32)
+
+class RelativePositionObservationParser(ObservationParser):
+    """Class to parse the observation space of the firmware environment as provided by the Scaramuzza lab."""
+
+    def __init__(
+        self,
+        n_gates: int,
+        n_obstacles: int,
+        n_gates_in_sight: int = 2,
+        drone_speed_limits: list = [10] * 3,
+        drone_rpy_limits: list = [np.pi] * 3,
+        drone_angular_speed_limits: list = [10] * 3,
+        gate_pos_limits: list = [5] * 3,
+        gate_yaw_limits: list = [np.pi],
+        obstacle_pos_limits: list = [5] * 3,
+    ):
+        """Initialize the Scaramuzza observation parser."""
+        super().__init__(n_gates, n_obstacles)
+        self.n_gates_in_sight = n_gates_in_sight
+        obs_limits = (
+            drone_speed_limits
+            + drone_angular_speed_limits
+            + drone_rpy_limits
+            + gate_pos_limits * n_gates_in_sight
+            + gate_yaw_limits * n_gates_in_sight
+            + obstacle_pos_limits * n_obstacles
+            + [n_gates]
+        )
+        obs_limits_high = np.array(obs_limits)
+        obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
+        self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
+
+    def get_observation(self) -> np.ndarray:
+        """Return the current observation."""
+        gates_relative_pos = self.get_relative_gates()
+
+        if self.gate_id == -1:
+            gates_in_sight = [self.reference_position - self.drone_pos] * self.n_gates_in_sight
+            gates_yaw_in_sight = [0] * self.n_gates_in_sight
+        else:
+            gates_ids_in_sight = range(self.gate_id, self.gate_id + self.n_gates_in_sight)
+            gates_ids_in_sight = [i if i < self.n_gates else -1 for i in gates_ids_in_sight]
+            gates_in_sight = [
+                gates_relative_pos[i] if i != -1 else self.reference_position - self.drone_pos
+                for i in gates_ids_in_sight
+            ]
+            gates_yaw_in_sight = [self.gates_yaw[i] if i != -1 else 0 for i in gates_ids_in_sight]
+        relative_obstacles = self.get_relative_obstacles()
+        obs = np.concatenate(
+            [
+                self.drone_speed,
+                self.drone_angular_speed,
+                self.drone_rpy,
+                np.array(gates_in_sight).ravel(),
+                np.array(gates_yaw_in_sight).ravel(),
+                relative_obstacles.flatten(),
+                [self.gate_id],
+            ]
+        )
+        return obs.astype(np.float32)
 
 
 class ScaramuzzaObservationParser(ObservationParser):
@@ -130,16 +244,18 @@ class ScaramuzzaObservationParser(ObservationParser):
         self,
         n_gates: int,
         n_obstacles: int,
-        drone_speed_limits: list = [2] * 3,
+        n_gates_in_sight: int = 2,
+        drone_speed_limits: list = [10] * 3,
         drone_rpy_limits: list = [np.pi] * 3,
-        drone_angular_speed_limits: list = [np.pi] * 3,
+        drone_angular_speed_limits: list = [10] * 3,
         gate_pos_limits: list = [10] * 3,
         obstacle_pos_limits: list = [10] * 3,
     ):
         """Initialize the Scaramuzza observation parser."""
         super().__init__(n_gates, n_obstacles)
         n_corners = 4
-        relative_corners_limits = gate_pos_limits * n_gates * n_corners
+        self.n_gates_in_sight = n_gates_in_sight
+        relative_corners_limits = gate_pos_limits * n_gates_in_sight * n_corners
         obs_limits = (
             drone_speed_limits
             + drone_angular_speed_limits
@@ -154,14 +270,21 @@ class ScaramuzzaObservationParser(ObservationParser):
 
     def get_observation(self) -> np.ndarray:
         """Return the current observation."""
-        relative_corners = self.get_relative_corners()
+        relative_corners = self.get_relative_corners(include_reference_position=True)
+        if self.gate_id == -1:
+            relative_corners_in_sight = [relative_corners[:, -1, :]] * self.n_gates_in_sight
+        else:
+            gates_ids_in_sight = range(self.gate_id, self.gate_id + self.n_gates_in_sight)
+            gates_ids_in_sight = [i if i < self.n_gates else -1 for i in gates_ids_in_sight]
+            relative_corners_in_sight = [relative_corners[:, i, :] for i in gates_ids_in_sight]
+
         relative_obstacles = self.get_relative_obstacles()
         obs = np.concatenate(
             [
                 self.drone_speed,
                 self.drone_angular_speed,
                 self.drone_rpy,
-                relative_corners.flatten(),
+                np.array(relative_corners_in_sight).ravel(),
                 relative_obstacles.flatten(),
                 [self.gate_id],
             ]
@@ -177,9 +300,7 @@ class RelativeCornersObservationParser(ObservationParser):
         n_gates: int,
         n_obstacles: int,
         drone_pos_limits: list = [3, 3, 2],
-        drone_speed_limits: list = [2] * 3,
         drone_yaw_limits: list = [np.pi],
-        drone_yaw_speed_limits: list = [np.pi],
         gate_pos_limits: list = [5, 5, 5],
         gate_yaw_limits: list = [np.pi],
         gate_in_range_limits: list = [1],
@@ -273,7 +394,7 @@ class ClassicObservationParser(ObservationParser):
 def make_observation_parser(
     n_gates: int,
     n_obstacles: int,
-    observation_parser_type: str = "relative_corners",
+    observation_parser_type: str = "relative_position",
     **kwargs: Any,
 ) -> ObservationParser:
     """Create an observation parser.
@@ -287,6 +408,10 @@ def make_observation_parser(
     Returns:
         The observation parser.
     """
+    if observation_parser_type == "minimal":
+        return MinimalObservationParser(n_gates, n_obstacles, **kwargs)
+    if observation_parser_type == "relative_position":
+        return RelativePositionObservationParser(n_gates, n_obstacles, **kwargs)
     if observation_parser_type == "scaramuzza":
         return ScaramuzzaObservationParser(n_gates, n_obstacles, **kwargs)
     if observation_parser_type == "relative_corners":
@@ -306,10 +431,11 @@ class Rewarder:
         times_up: float = -1.0,
         dist_to_gate_mul: float = 1.0,
         end_reached: float = 10.0,
-        gate_reached: float = 10.0,
-        z_penalty: float = -3.0,
+        gate_reached: float = 3.0, 
+        z_penalty: float = -0.1,
         z_penalty_threshold: float = 1.5,
         action_smoothness: float = 1e-4,
+        body_rate_penalty: float = -1e-3,
     ):
         """Initialize the rewarder."""
         self.collision = collision
@@ -321,6 +447,7 @@ class Rewarder:
         self.z_penalty = z_penalty
         self.z_penalty_threshold = z_penalty_threshold
         self.action_smoothness = action_smoothness
+        self.body_rate_penalty = body_rate_penalty
 
     @classmethod
     def from_yaml(cls, file_path: str) -> Rewarder:  # noqa: ANN102
@@ -366,7 +493,6 @@ class Rewarder:
             return self.out_of_bounds
 
         if info["task_completed"]:
-            logger.info("Task completed, hoorray!")
             return self.end_reached
 
         if obs_parser.gate_id == -1:
@@ -387,6 +513,9 @@ class Rewarder:
 
         if obs_parser.drone_pos[2] > self.z_penalty_threshold:
             reward += self.z_penalty
+
+        body_rate_penality = np.linalg.norm(obs_parser.drone_angular_speed) * self.body_rate_penalty
+        reward += body_rate_penality
 
         # if action is not None:
         # reward += -np.linalg.norm(action - obs.previous_action) * self.action_smoothness
@@ -417,7 +546,7 @@ def transform_action(
     raw_action: np.ndarray,
     transform_type: str = "relative",
     drone_pos: np.array = np.zeros(3),
-    pos_scaling: np.array = [1.0, 1.0, 0.2],
+    pos_scaling: np.array = [0.2, 0.2, 0.05],
     yaw_scaling: float = np.pi,
 ) -> np.ndarray:
     """Transform the raw action to the action space.
