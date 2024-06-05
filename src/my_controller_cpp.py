@@ -199,7 +199,8 @@ class Controller(BaseController):
             
             elif not traj_has_ended:
                 cur_segment_id = current_target_gate_id
-                traj_sample = self.traj_generator_cpp.sample_traj_with_recompute(current_drone_pos, current_drone_vel, current_drone_acc, ep_time, cur_segment_id)
+                #traj_sample = self.traj_generator_cpp.sample_traj_with_recompute(current_drone_pos, current_drone_vel, current_drone_acc, ep_time, cur_segment_id)
+                traj_sample = self.traj_generator_cpp.sample_traj(ep_time)
                 desired_pos = np.array([traj_sample[0], traj_sample[3], traj_sample[6]])
                 desired_vel = np.array([traj_sample[1], traj_sample[4], traj_sample[7]])
                 desired_acc = np.array([traj_sample[2], traj_sample[5], traj_sample[8]])
