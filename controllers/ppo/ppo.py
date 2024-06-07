@@ -3,11 +3,14 @@
 from __future__ import annotations  # Python 3.10 type hints
 
 import numpy as np
+from safe_control_gym.controllers.firmware.firmware_wrapper import logging
 from stable_baselines3 import PPO
 
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
-from lsy_drone_racing.wrapper import obs_transform
+from lsy_drone_racing.env_modifiers import ObservationParser, transform_action
+
+logger = logging.getLogger(__name__)
 
 
 class Controller(BaseController):
@@ -37,6 +40,7 @@ class Controller(BaseController):
             verbose: Turn on and off additional printouts and plots.
         """
         super().__init__(initial_obs, initial_info, buffer_size, verbose)
+
         # Save environment and control parameters.
         self.CTRL_TIMESTEP = initial_info["ctrl_timestep"]
         self.CTRL_FREQ = initial_info["ctrl_freq"]
@@ -52,7 +56,11 @@ class Controller(BaseController):
         self.reset()
         self.episode_reset()
 
-        self.model_name = "models/ppo_2024-05-16_23-18-32"
+        # self.model_name = "models/best_model_morning_2024-05-31"
+        # self.model_name = "models/ppo_2024-06-05_23-34-37"
+        # self.model_name = "models/ppo_2024-06-06_08-08-15"
+        # self.model_name = "models/ppo_2024-06-05_09-43-45"
+        self.model_name = "models/best_model"
         self.model = PPO.load(self.model_name)
 
     def compute_control(
@@ -82,9 +90,8 @@ class Controller(BaseController):
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
-        new_obs = obs_transform(obs=obs, info=info)
-        action, next_predicted_state = self.model.predict(
-            new_obs, deterministic=True)
+        action, next_predicted_state = self.model.predict(obs, deterministic=True)
+        action = transform_action(action, drone_pos=obs[:3])
 
         # Prepare the command to be sent to the quadrotor.
         command_type = Command.FULLSTATE
@@ -96,72 +103,9 @@ class Controller(BaseController):
         target_acc = np.zeros(3)
         target_yaw = float(action[3])
         target_rpy_rates = np.zeros(3)
-        args = [target_pos, target_vel, target_acc,
-                target_yaw, target_rpy_rates, ep_time]
+        args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
 
         # logger.info(f"Predicted action: {action}")
         # logger.info(f"Args: {args}")
         return command_type, args
 
-    def step_learn(
-        self,
-        action: list,
-        obs: np.ndarray,
-        reward: float | None = None,
-        done: bool | None = None,
-        info: dict | None = None,
-    ):
-        """Learning and controller updates called between control steps.
-
-        INSTRUCTIONS:
-            Use the historically collected information in the five data buffers of actions,
-            observations, rewards, done flags, and information dictionaries to learn, adapt, and/or
-            re-plan.
-
-        Args:
-            action: Most recent applied action.
-            obs: Most recent observation of the quadrotor state.
-            reward: Most recent reward.
-            done: Most recent done flag.
-            info: Most recent information dictionary.
-
-        """
-        #########################
-        # REPLACE THIS (START) ##
-        #########################
-
-        # Store the last step's events.
-        self.action_buffer.append(action)
-        self.obs_buffer.append(obs)
-        self.reward_buffer.append(reward)
-        self.done_buffer.append(done)
-        self.info_buffer.append(info)
-
-        # Implement some learning algorithm here if needed
-
-        #########################
-        # REPLACE THIS (END) ####
-        #########################
-
-    def episode_learn(self):
-        """Learning and controller updates called between episodes.
-
-        INSTRUCTIONS:
-            Use the historically collected information in the five data buffers of actions,
-            observations, rewards, done flags, and information dictionaries to learn, adapt, and/or
-            re-plan.
-
-        """
-        #########################
-        # REPLACE THIS (START) ##
-        #########################
-
-        _ = self.action_buffer
-        _ = self.obs_buffer
-        _ = self.reward_buffer
-        _ = self.done_buffer
-        _ = self.info_buffer
-
-        #########################
-        # REPLACE THIS (END) ####
-        #########################

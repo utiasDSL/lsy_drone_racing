@@ -12,13 +12,12 @@ import yaml
 from munch import munchify
 from safe_control_gym.utils.registration import make
 from stable_baselines3 import PPO
-from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.callbacks import EvalCallback
 
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.wrapper import DroneRacingWrapper
 
 logger = logging.getLogger(__name__)
-
 
 
 def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
@@ -37,22 +36,52 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
     env_factory = partial(make, "quadrotor", **config.quadrotor_config)
     firmware_env = make("firmware", env_factory, FIRMWARE_FREQ, CTRL_FREQ)
-    return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
+    return DroneRacingWrapper(firmware_env, terminate_on_lap=False)
 
 
-def main(config: str = "../config/train0.yaml", gui: bool = False, log_level: int = logging.INFO):
+def main(
+    config: str = "../config/level0_train.yaml",
+    gui: bool = False,
+    gui_eval: bool = False,
+    log_level: int = logging.INFO,
+    seed: int = 0,
+):
     """Create the environment, check its compatibility with sb3, and run a PPO agent."""
     logging.basicConfig(level=log_level)
     config_path = Path(__file__).resolve().parents[1] / config
-    env = create_race_env(config_path=config_path, gui=gui)
-    # Sanity check to ensure the environment conforms to the sb3 API
-    check_env(env)
-    model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="logs", learning_rate=0.02)
 
-    # Train the agent
+    env = create_race_env(config_path=config_path, gui=gui)
+    eval_env = create_race_env(config_path=config_path, gui=gui_eval)
+
+    eval_callback = EvalCallback(
+        eval_env,
+        best_model_save_path="./models/",
+        log_path="./logs/",
+        eval_freq=100_000,
+        deterministic=True,
+    )
+
+    # Sanity check to ensure the environment conforms to the sb3 API
+    # check_env(env)
+    model = PPO(
+        "MlpPolicy",
+        env,
+        learning_rate=3e-4,
+        verbose=1,
+        tensorboard_log="logs",
+    )  # Train the agent
+
     train_name = f"ppo_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
-    model.learn(total_timesteps=100_000, progress_bar=True,
-                log_interval=1, tb_log_name=train_name)
+    try:
+        model.learn(
+            total_timesteps=500_000,
+            progress_bar=True,
+            tb_log_name=train_name,
+            callback=eval_callback,
+        )
+    except KeyboardInterrupt:
+        logger.info("Training interrupted. Saving model.")
+
     model.save(f"models/{train_name}")
 
 
