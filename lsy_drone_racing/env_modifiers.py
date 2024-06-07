@@ -138,6 +138,7 @@ class ObservationParser(ABC):
         """Return the relative position of the gates."""
         return self.gates_pos - self.drone_pos
 
+
 class MinimalObservationParser(ObservationParser):
     """Class to parse the observation space of the firmware environment, to only include the drone information."""
 
@@ -175,6 +176,7 @@ class MinimalObservationParser(ObservationParser):
             ]
         )
         return obs.astype(np.float32)
+
 
 class RelativePositionObservationParser(ObservationParser):
     """Class to parse the observation space of the firmware environment as provided by the Scaramuzza lab."""
@@ -431,7 +433,7 @@ class Rewarder:
         times_up: float = -1.0,
         dist_to_gate_mul: float = 1.0,
         end_reached: float = 10.0,
-        gate_reached: float = 3.0, 
+        gate_reached: float = 3.0,
         z_penalty: float = -0.1,
         z_penalty_threshold: float = 1.5,
         action_smoothness: float = 1e-4,
@@ -546,7 +548,8 @@ def transform_action(
     raw_action: np.ndarray,
     transform_type: str = "relative",
     drone_pos: np.array = np.zeros(3),
-    pos_scaling: np.array = [0.2, 0.2, 0.05],
+    # pos_scaling: np.array = [0.2, 0.2, 0.05],
+    pos_scaling: np.array = 1.0 / 10.0 * np.ones(3),
     yaw_scaling: float = np.pi,
 ) -> np.ndarray:
     """Transform the raw action to the action space.
@@ -564,8 +567,8 @@ def transform_action(
     """
     if transform_type == "relative":
         action_transform = np.zeros(14)
-        action_transform[:3] = drone_pos + raw_action[:3]
-        action_transform[9] = yaw_scaling * raw_action[3]
+        action_transform[:3] = drone_pos + raw_action[:3] * pos_scaling
+        action_transform[9] = yaw_scaling * raw_action[3] * yaw_scaling
 
     elif transform_type == "absolute":
         action_transform = np.zeros(14)

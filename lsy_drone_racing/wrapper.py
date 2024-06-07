@@ -80,7 +80,7 @@ class DroneRacingWrapper(Wrapper):
         # Observation space:
         self.observation_parser = make_observation_parser(
             n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles,
-            observation_parser_type="relative_position"
+            observation_parser_type="minimal"
         )
         self.observation_space = self.observation_parser.observation_space
         logger.debug(f"Observation space: {self.observation_space}")
@@ -233,7 +233,7 @@ class DroneRacingObservationWrapper:
         self.pyb_client_id: int = env.env.PYB_CLIENT
         self.observation_parser = make_observation_parser(
             n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles,
-            observation_parser_type="relative_position"
+            observation_parser_type="minimal"
         )
         self.rewarder = Rewarder()  # TODO: Load from YAML
 
@@ -291,7 +291,7 @@ class DroneRacingObservationWrapper:
         """
         obs, reward, done, info, action = self.env.step(*args, **kwargs)
         self.observation_parser.update(obs, info)
-        obs = self.observation_parser.get_observation()
+        obs = self.observation_parser.get_observation().astype(np.float32)
         reward = self.rewarder.get_custom_reward(self.observation_parser, info)
 
         logger.debug("===Step===")
