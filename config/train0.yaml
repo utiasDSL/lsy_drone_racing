@@ -27,7 +27,7 @@ quadrotor_config:
 
   task: stabilization
   task_info:
-    stabilization_goal: [2, 1.5, 0.0]
+    stabilization_goal: [2, 1.5, 0.5]
     stabilization_goal_tolerance: 0.15
 
   # Nominal (pre-randomization) initial state

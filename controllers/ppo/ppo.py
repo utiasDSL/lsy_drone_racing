@@ -66,6 +66,15 @@ class Controller(BaseController):
         self._take_off = False
         self._setpoint_land = False
         self._land = False
+        self._goto = False
+        self.stamp = 0
+        self._goal = np.array(
+            [
+                initial_info["x_reference"][0],
+                initial_info["x_reference"][2],
+                initial_info["x_reference"][4],
+            ]
+        )
 
     # TODO testen State-Machine
 
@@ -102,10 +111,11 @@ class Controller(BaseController):
             args = [0.1, 2]  # height, duration
             self._take_off = True  # only send takeoff command once
 
-        
         else:
             # use policy until reaching last gate
-            if ep_time - 2 > 0 and info["current_gate_id"] != -1 : # Account for 2s delay due to takeoff
+            if (
+                ep_time - 2 > 0 and info["current_gate_id"] != -1
+            ):  # Account for 2s delay due to takeoff
                 action, next_predicted_state = self.model.predict(obs, deterministic=True)
                 action = transform_action(action, drone_pos=obs[:3])
 
@@ -120,23 +130,35 @@ class Controller(BaseController):
                 target_rpy_rates = np.zeros(3)
                 command_type = Command.FULLSTATE
                 args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
-                
+
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
-            elif info["current_gate_id"] == -1 and not self._setpoint_land: #TODO testen zum punkt fliegen wo er landen soll
+            elif (
+                info["current_gate_id"] == -1 and not self._setpoint_land
+            ):  # TODO testen zum punkt fliegen wo er landen soll
                 command_type = Command.NOTIFYSETPOINTSTOP
                 args = []
+                self.time_stamp = ep_time
                 self._setpoint_land = True
 
-            elif info["current_gate_id"] == -1 and not self._land: # TODO testen landen
-                t_0 = ep_time
-                if ep_time - t_0 > 5:
-                    command_type = Command.LAND
-                    args = [0.0, 2.0]  # Height, duration
-                    self._land = True  # Send landing command only once
-                else:
-                    command_type = Command.NONE
-                    args = []
+            elif (
+                info["current_gate_id"] == -1 and not self._goto
+            ):  # TODO testen zum punkt fliegen wo er landen soll
+                command_type = Command.GOTO
+                # Prepare the command to be sent to the quadrotor.
+
+                # target_pos = np.array([x, y, z])
+                args = [self._goal, 0.0, 3.0, False]
+                self.time_stamp = ep_time
+                self._goto = True
+                self.stamp = ep_time
+
+            elif (
+                info["current_gate_id"] == -1 and info["at_goal_position"] and not self._land
+            ):  # TODO testen landen
+                command_type = Command.LAND
+                args = [0.0, 10]  # Height, duration
+                self._land = True  # Send landing command only once
 
             elif self._land:
                 command_type = Command.FINISHED
@@ -146,6 +168,4 @@ class Controller(BaseController):
                 command_type = Command.NONE
                 args = []
 
-        # logger.info(f"Predicted action: {action}")
-        # logger.info(f"Args: {args}")
         return command_type, args
