@@ -1,4 +1,4 @@
-from enum import Enum, auto
+from enum import Enum, auto  # noqa: D100
 from typing import Any, Dict
 
 import numpy as np
@@ -8,6 +8,7 @@ from lsy_drone_racing.command import Command
 
 class DroneState(Enum):
     """Class to define the Drone State Machine states."""
+
     TAKEOFF = auto()
     POLICY_CONTROL = auto()
     NOTIFY_SETPOINT_STOP = auto()
@@ -19,6 +20,7 @@ class DroneState(Enum):
 
 class StateMachine:
     """Class to handle the Drone State Machine transitions."""
+
     def __init__(self, initial_goal: np.ndarray):
         """Initialize the State Machine.
 
