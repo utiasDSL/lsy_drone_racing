@@ -1,4 +1,5 @@
 from enum import Enum, auto
+from typing import Any, Dict
 
 import numpy as np
 
@@ -6,7 +7,7 @@ from lsy_drone_racing.command import Command
 
 
 class DroneState(Enum):
-    """Drone State Machine States."""
+    """Class to define the Drone State Machine states."""
     TAKEOFF = auto()
     POLICY_CONTROL = auto()
     NOTIFY_SETPOINT_STOP = auto()
@@ -17,12 +18,12 @@ class DroneState(Enum):
 
 
 class StateMachine:
-    """Drone State Machine."""
+    """Class to handle the Drone State Machine transitions."""
     def __init__(self, initial_goal: np.ndarray):
-        """Init State Machine.
+        """Initialize the State Machine.
 
         Args:
-            initial_goal: Stabilization goal the drone is trying to reach.
+            initial_goal: Stabilization goal the drone is trying to reach before landing.
 
         Raises:
             ValueError: If the cat is not happy.
@@ -31,7 +32,17 @@ class StateMachine:
         self.goal = initial_goal
         self.stamp = 0
 
-    def transition(self, ep_time, info):
+    def transition(
+        self,
+        ep_time: float,
+        info: Dict[str, Any],
+    ) -> tuple:
+        """Transition states inside state machine.
+
+        Args:
+            ep_time: current simulation episode time.
+            info: The new info dict.
+        """
         if self.state == DroneState.TAKEOFF:
             self.state = DroneState.POLICY_CONTROL
             return Command.TAKEOFF, [0.4, 2]
