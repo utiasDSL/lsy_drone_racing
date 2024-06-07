@@ -4,3 +4,4 @@
 submission.csv
 .ropeproject/
 logs
+build/lib/

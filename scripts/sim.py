@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 def simulate(
     config: str = "config/getting_started.yaml",
     controller: str = "controllers/example/example_controller.py",
-    n_runs: int = 5,
+    n_runs: int = 1,
     gui: bool = True,
     terminate_on_lap: bool = False,
     log_level: str = "INFO"
