@@ -6,7 +6,7 @@ import numpy as np
 from safe_control_gym.controllers.firmware.firmware_wrapper import logging
 from stable_baselines3 import PPO
 
-from controllers.ppo.ppo_deploy import StateMachine
+from controllers.ppo.ppo_deploy import DroneStateMachine
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.env_modifiers import ObservationParser, transform_action
@@ -24,7 +24,22 @@ class Controller(BaseController):
         buffer_size: int = 100,
         verbose: bool = False,
     ):
-        """Initialization of the controller."""
+        """Initialization of the controller.
+
+        INSTRUCTIONS:
+            The controller's constructor has access the initial state `initial_obs` and the a priori
+            infromation contained in dictionary `initial_info`. Use this method to initialize
+            constants, counters, pre-plan trajectories, etc.
+
+        Args:
+            initial_obs: The initial observation of the environment's state. Consists of
+                [drone_xyz_yaw, gates_xyz_yaw, gates_in_range, obstacles_xyz, obstacles_in_range,
+                gate_id]
+            initial_info: The a priori information as a dictionary with keys 'symbolic_model',
+                'nominal_physical_parameters', 'nominal_gates_pos_and_type', etc.
+            buffer_size: Size of the data buffers used in method `learn()`.
+            verbose: Turn on and off additional printouts and plots.
+        """
         super().__init__(initial_obs, initial_info, buffer_size, verbose)
 
         self.CTRL_TIMESTEP = initial_info["ctrl_timestep"]
@@ -49,7 +64,7 @@ class Controller(BaseController):
                 initial_info["x_reference"][4],
             ]
         )
-        self.state_machine = StateMachine(self._goal)
+        self.state_machine = DroneStateMachine(self._goal, self.model)
 
     def compute_control(
         self,
@@ -59,21 +74,24 @@ class Controller(BaseController):
         done: bool | None = None,
         info: dict | None = None,
     ) -> tuple[Command, list]:
-        """Pick command sent to the quadrotor through a Crazyswarm/Crazyradio-like interface."""
-        if ep_time - 2 > 0 and info["current_gate_id"] != -1:
-            action, next_predicted_state = self.model.predict(obs, deterministic=True)
-            action = transform_action(action, drone_pos=obs[:3])
+        """Pick command sent to the quadrotor through a Crazyswarm/Crazyradio-like interface.
+        
+        INSTRUCTIONS:
+            Re-implement this method to return the target position, velocity, acceleration,
+            attitude, and attitude rates to be sent from Crazyswarm to the Crazyflie using, e.g., a
+            `cmdFullState` call.
 
-            x = float(action[0])
-            y = float(action[1])
-            z = float(action[2])
-            target_pos = np.array([x, y, z])
-            target_vel = np.zeros(3)
-            target_acc = np.zeros(3)
-            target_yaw = float(action[3])
-            target_rpy_rates = np.zeros(3)
-            command_type = Command.FULLSTATE
-            args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
-            return command_type, args
+        Args:
+            ep_time: Episode's elapsed time, in seconds.
+            obs: The environment's observation [drone_xyz_yaw, gates_xyz_yaw, gates_in_range,
+                obstacles_xyz, obstacles_in_range, gate_id].
+            reward: The reward signal.
+            done: Wether the episode has terminated.
+            info: Current step information as a dictionary with keys 'constraint_violation',
+                'current_target_gate_pos', etc.
 
-        return self.state_machine.transition(ep_time, info)
+        Returns:
+            The command type and arguments to be sent to the quadrotor. See `Command`.
+        """
+        command, args = self.state_machine.transition(ep_time, obs, info)
+        return command, args
