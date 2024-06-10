@@ -31,9 +31,12 @@ from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapp
 from termcolor import colored
 
 from lsy_drone_racing.env_modifiers import (
+    ActionTransformer,
+    MinimalObservationParser,
+    ObservationParser,
+    RelativeActionTransformer,
+    RelativePositionObservationParser,
     Rewarder,
-    make_observation_parser,
-    transform_action,
 )
 
 logging.basicConfig(
@@ -45,7 +48,6 @@ logging.basicConfig(
 logger = logging.getLogger("wrapper")
 logger.setLevel(logging.INFO)
 
-
 class DroneRacingWrapper(Wrapper):
     """Drone racing firmware wrapper to make the environment compatible with the gymnasium API.
 
@@ -55,12 +57,22 @@ class DroneRacingWrapper(Wrapper):
 
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, env: FirmwareWrapper, terminate_on_lap: bool = False):
+    def __init__(
+        self,
+        env: FirmwareWrapper,
+        terminate_on_lap: bool = False,
+        observation_parser_path: str = None,
+        rewarder_path: str = None,
+        action_transformer_path: str = None,
+    ):
         """Initialize the wrapper.
 
         Args:
             env: The firmware wrapper.
             terminate_on_lap: Stop the simulation early when the drone has passed the last gate.
+            observation_parser_path: The path to the observation parser configuration file.
+            rewarder_path: The path to the rewarder configuration file.
+            action_transformer_path: The path to the action transformer configuration file.
         """
         super().__init__(env)
         # Patch the FirmwareWrapper to add any missing attributes required by the gymnasium API.
@@ -68,25 +80,50 @@ class DroneRacingWrapper(Wrapper):
         self.env.unwrapped = None  # Add an (empty) unwrapped attribute
         self.env.render_mode = None
 
-        # Action space:
-        # [x, y, z, yaw]
-        # x, y, z)  The desired position of the drone in the world frame.
-        # yaw)      The desired yaw angle.
-        # All values are scaled to [-1, 1]. Transformed back, x, y, z values of 1 correspond to 5m.
-        # The yaw value of 1 corresponds to pi radians.
+        # Action space for the model. The action space is later transformed and finally converted to
+        # the firmware action.
         action_limits = np.ones(4)
         self.action_space = Box(-action_limits, action_limits, dtype=np.float32)
 
         # Observation space:
-        self.observation_parser = make_observation_parser(
-            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles,
-            observation_parser_type="minimal"
-        )
+        if observation_parser_path:
+            try:
+                self.observation_parser = ObservationParser.from_yaml(
+                    n_gates=env.env.NUM_GATES,
+                    n_obstacles=env.env.n_obstacles,
+                    file_path=observation_parser_path,
+                )
+            except Exception as e:
+                logger.error(f"Failed to load observation parser from YAML: {e}")
+                logger.error("Using default minimal observation parser.")
+                self.observation_parser = MinimalObservationParser(
+                    n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
+                )
+        else:
+            self.observation_parser = MinimalObservationParser(
+                n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
+            )
         self.observation_space = self.observation_parser.observation_space
-        logger.debug(f"Observation space: {self.observation_space}")
 
-        # Reward values TODO: Load from YAML
-        self.rewarder = Rewarder()
+        # Loading the rewarder
+        if rewarder_path:
+            try:
+                self.rewarder = Rewarder.from_yaml(rewarder_path)
+            except Exception as e:
+                logger.error(f"Failed to load rewarder from YAML: {e}")
+                logger.error("Using default rewarder.")
+                self.rewarder = Rewarder()
+        else:
+            self.rewarder = Rewarder()
+
+        # Loading the action transformer
+        if action_transformer_path:
+            try:
+                self.action_transformer = ActionTransformer.from_yaml(file_path=action_transformer_path)
+            except Exception as e:
+                logger.error(f"Failed to load action transformer from YAML: {e}")
+                logger.error("Using action transformer with relative actions.")
+                self.action_transformer = RelativeActionTransformer()
 
         self.pyb_client_id: int = env.env.PYB_CLIENT
         # Config and helper flags
@@ -130,7 +167,6 @@ class DroneRacingWrapper(Wrapper):
         self.observation_parser.update(obs, info, initial=True)
         obs = self.observation_parser.get_observation().astype(np.float32)
 
-        # assert obs in self.observation_space, f"Invalid observation: {obs}"
         return obs, info
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -148,11 +184,14 @@ class DroneRacingWrapper(Wrapper):
             # with the gymnasium interface and popular RL libraries.
             raise InvalidAction(f"Invalid action: {action}")
 
-        action = transform_action(action, drone_pos=self.observation_parser.drone_pos)
-
-        # The firmware does not use the action input in the step function
-        zeros = np.zeros(3)
-        self.env.sendFullStateCmd(action[:3], zeros, zeros, action[3], zeros, self._sim_time)
+        # Transform the action using a custom action transformer and then adapt it to the firmware
+        action = self.action_transformer.transform(
+            raw_action=action, drone_pos=self.observation_parser.drone_pos
+        )
+        firmware_action = self.action_transformer.create_firmware_action(
+            action, sim_time=self._sim_time
+        )
+        self.env.sendFullStateCmd(*firmware_action)
 
         # The firmware quadrotor env requires the sim time as input to the step function. It also
         # returns the desired rotor forces. Both modifications are not part of the gymnasium
@@ -172,6 +211,7 @@ class DroneRacingWrapper(Wrapper):
         elif done:  # Done, but last gate not passed -> terminate
             terminated = True
 
+        # Update the observation parser and get the observation.
         self.observation_parser.update(obs, info)
         obs = self.observation_parser.get_observation().astype(np.float32)
 
@@ -182,8 +222,7 @@ class DroneRacingWrapper(Wrapper):
         if not terminated and not truncated:
             self._sim_time += self.env.ctrl_dt
 
-        # Compute the custom reward since we cannot modify the firmware environment for the
-        # competion.
+        # Compute the custom reward
         reward = self.rewarder.get_custom_reward(self.observation_parser, info)
 
         logger.debug("===Step===")
@@ -231,11 +270,11 @@ class DroneRacingObservationWrapper:
             raise TypeError(f"`env` must be an instance of `FirmwareWrapper`, is {type(env)}")
         self.env = env
         self.pyb_client_id: int = env.env.PYB_CLIENT
-        self.observation_parser = make_observation_parser(
-            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles,
-            observation_parser_type="minimal"
+        self.observation_parser = RelativePositionObservationParser(
+            n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
         )
         self.rewarder = Rewarder()  # TODO: Load from YAML
+        self.action_transformer = RelativeActionTransformer()  # TODO: Load from YAML
 
     def __getattribute__(self, name: str) -> Any:
         """Get an attribute from the object.
@@ -287,11 +326,16 @@ class DroneRacingObservationWrapper:
             kwargs: Keyword arguments to pass to the firmware wrapper.
 
         Returns:
-            The transformed observation and the info dict.
+            obs: The transformed observation.
+            reward: The reward signal.
+            done: Whether the episode has terminated.
+            info: The info dictionary.
+            action: The action taken by the agent in the firmware format.
         """
         obs, reward, done, info, action = self.env.step(*args, **kwargs)
         self.observation_parser.update(obs, info)
         obs = self.observation_parser.get_observation().astype(np.float32)
+
         reward = self.rewarder.get_custom_reward(self.observation_parser, info)
 
         logger.debug("===Step===")
