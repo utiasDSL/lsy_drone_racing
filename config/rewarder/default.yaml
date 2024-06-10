@@ -1,0 +1,10 @@
+collision:  -1.0
+out_of_bounds: -1.0
+times_up: -1.0
+dist_to_gate_mul: 1.0
+end_reached: 3.0
+gate_reached: 3.0
+z_penalty: -0.001
+z_penalty_threshold: 1.5
+action_smoothness: 0.0001
+body_rate_penalty: -0.001
