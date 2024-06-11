@@ -127,6 +127,9 @@ class Controller(BaseController):
         self._setpoint_land = False
         self._land = False
         self.last_traj_recalc_time = None
+        self.last_gate_change_time = 0
+        self.last_gate_id = 0
+
         #########################
         # REPLACE THIS (END) ####
         #########################
@@ -172,9 +175,16 @@ class Controller(BaseController):
         if not(current_target_gate_pos != None and current_target_gate_id != None and current_target_gate_in_range != None):
             pass
         else:
-            pos_updated = self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
-            if pos_updated: 
-                self.last_traj_recalc_time = ep_time
+            if current_target_gate_id != self.last_gate_id:
+                print(f"update last gate change time at {ep_time}")
+                self.last_gate_id = current_target_gate_id
+                self.last_gate_change_time = ep_time
+            
+            update_time = 0.5
+            if ep_time - self.last_gate_change_time > update_time:
+                pos_updated = self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
+                if pos_updated: 
+                    self.last_traj_recalc_time = ep_time
         
         traj_calc_duration = 0.2
         if self.VERBOSE and self.last_traj_recalc_time and ep_time - self.last_traj_recalc_time > traj_calc_duration:

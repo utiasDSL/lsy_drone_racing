@@ -62,7 +62,8 @@ quadrotor_config:
       [1.0, -0.5, 0, 0, 0, 0],
       [0.5, -1.5, 0, 0, 0, 0],
       [-0.5, 0, 0, 0, 0, 0],
-      [0, 1.0, 0, 0, 0, 0]
+      [0, 1.0, 0, 0, 0, 0],
+       [0.75, -1.25, 0,0,0,0]
     ]
 
   # Randomization of the initial state
@@ -122,8 +123,8 @@ quadrotor_config:
       high: 0.15
     obstacles:
       distrib: "uniform"
-      low: -0.15
-      high: 0.15
+      low: -0.0
+      high: 0.0
 
   # Constraints
   constraints:
