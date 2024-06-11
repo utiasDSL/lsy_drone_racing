@@ -17,7 +17,7 @@ def main(config: str = "config/level3.yaml"):
     Args:
         config: Path to the race configuration.
     """
-    config = load_config(Path(__file__).parents[1] / config)
+    config = load_config(Path(__file__).resolve().parents[1] / config)
     check_race_track(config)
     logger.info("Race track check passed")
 
