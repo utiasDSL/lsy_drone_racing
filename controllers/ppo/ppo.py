@@ -86,7 +86,7 @@ class Controller(BaseController):
         info: dict | None = None,
     ) -> tuple[Command, list]:
         """Pick command sent to the quadrotor through a Crazyswarm/Crazyradio-like interface.
-        
+
         INSTRUCTIONS:
             Re-implement this method to return the target position, velocity, acceleration,
             attitude, and attitude rates to be sent from Crazyswarm to the Crazyflie using, e.g., a

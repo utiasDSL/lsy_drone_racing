@@ -607,136 +607,15 @@ def map_reward_to_color(reward: float) -> str:
     return "green"
 
 
-class ActionTransformer(ABC):
-    """Class to transform the action space."""
-
-    def __init__(self):
-        """Initialize the action transformer."""
-        pass
-
-    @abstractmethod
-    def transform(self, raw_action: np.ndarray, drone_pos: np.array) -> np.ndarray:
-        """Transform the raw action to the action space."""
-        raise NotImplementedError
-
-    def create_firmware_action(self, action: np.ndarray, sim_time: float) -> np.ndarray:
-        """Create the firmware action, from the transformed action.
-
-        Args:
-            action: The transformed action which has the form [x, y, z, yaw].
-            sim_time: The simulation time.
-
-        Returns:
-            The firmware action. The firmware action is a 14-dimensional vector.
-        """
-        zeros3 = np.zeros(3)
-        action = [action[:3], zeros3, zeros3, action[3], zeros3, sim_time]
-        return action
-
-    @classmethod
-    def from_yaml(cls, file_path: str) -> ActionTransformer:  # noqa: ANN102
-        """Load the action transformer from a YAML file.
-
-        Args:
-            file_path: The path to the YAML file.
-
-        Returns:
-            The action transformer.
-        """
-        with open(file_path, "r") as file:
-            data = yaml.safe_load(file)
-        return make_action_transformer(data)
-    
-    @abstractmethod
-    def get_shortname(self) -> str:
-        """Return shortname to identify learned model after training."""
-        raise NotImplementedError
-
-
-class RelativeActionTransformer(ActionTransformer):
-    """Class to transform the action space to relative actions."""
-
-    def __init__(
-        self,
-        pos_scaling: np.array = 0.5 * np.ones(3),
-        yaw_scaling: float = np.pi,
-        **kwargs: Any,
-    ):
-        """Initialize the relative action transformer."""
-        super().__init__()
-        self.pos_scaling = pos_scaling
-        self.yaw_scaling = yaw_scaling
-
-    @classmethod
-    def from_yaml(cls, file_path: str) -> RelativeActionTransformer:  # noqa: ANN102
-        """Load the action transformer from a YAML file.
-
-        Args:
-            file_path: The path to the YAML file.
-
-        Returns:
-            The action transformer.
-        """
-        with open(file_path, "r") as file:
-            data = yaml.safe_load(file)
-        return cls(**data)
-
-    def transform(self, raw_action: np.ndarray, drone_pos: np.array) -> np.ndarray:
-        """Transform the raw action to the action space.
-
-        Args:
-            raw_action: The raw action from the model is in the range [-1, 1].
-            drone_pos: The current position of the drone.
-
-        Returns:
-            The transformed action to control the drone as a 4-dimensional vector.
-        """
-        action_transform = np.zeros(4)
-        action_transform[:3] = drone_pos + raw_action[:3] * self.pos_scaling
-        action_transform[3] = self.yaw_scaling * raw_action[3]
-        return action_transform
-
-    def get_shortname(self) -> str:
-        """Return shortname to identify learned model after training."""
-        return "rel"
-
-
-class AbsoluteActionTransformer(ActionTransformer):
-    """Class to transform the action space to absolute actions."""
-
-    def __init__(
-        self, pos_scaling: np.array = 5.0 * np.ones(3), yaw_scaling: float = np.pi, **kwargs: Any
-    ):
-        """Initialize the absolute action transformer."""
-        super().__init__()
-        self.pos_scaling = pos_scaling
-        self.yaw_scaling = yaw_scaling
-
-    def transform(self, raw_action: np.ndarray, drone_pos: np.array) -> np.ndarray:
-        """Transform the raw action to the action space.
-
-        Args:
-            raw_action: The raw action from the model is in the range [-1, 1].
-            drone_pos: The current position of the drone.
-
-        Returns:
-            The transformed action to control the drone.
-        """
-        action_transform = np.zeros(4)
-        scaled_action = raw_action * np.concatenate([self.pos_scaling, [self.yaw_scaling]])
-        action_transform[:3] = scaled_action[:3]
-        action_transform[3] = scaled_action[3]
-        return action_transform
-
-    def get_shortname(self) -> str:
-        """Return shortname to identify learned model after training."""
-        return "abs"
-
-
-def make_action_transformer(
-    data: dict,
-) -> ActionTransformer:
-    """Create an action transformer.
+def transform_action(
+    raw_action: np.ndarray,
+    transform_type: str = "relative",
+    drone_pos: np.array = np.zeros(3),
+    # pos_scaling: np.array = [0.2, 0.2, 0.05],
+    pos_scaling: np.array = 2.5 / 5.0 * np.ones(3),
+    yaw_scaling: float = np.pi,
+) -> np.ndarray:
+    """Transform the raw action to the action space.
 
     Args:
         data: The data to create the action transformer.

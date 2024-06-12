@@ -83,7 +83,10 @@ def create_init_info(
     return init_info
 
 
-def main(config: str = "config/getting_started.yaml", controller: str = "examples/controller.py"):
+def main(
+    config: str = "config/train0_standard.yaml",
+    controller: str = "controllers/ppo/ppo.py",
+):
     """Deployment script to run the controller on the real drone."""
     start_time = time.time()
 
@@ -95,10 +98,6 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     time_helper = swarm.timeHelper
     cf = swarm.allcfs.crazyflies[0]
 
-    gate_names = [f"gate{i}" for i in range(1, len(config.quadrotor_config.gates) + 1)]
-    obstacle_names = [f"obstacle{i}" for i in range(1, len(config.quadrotor_config.obstacles) + 1)]
-    vicon = Vicon(track_names=gate_names + obstacle_names, timeout=1.0)
-
     config_path = Path(config).resolve()
     assert config_path.is_file(), "Config file does not exist!"
     with open(config_path, "r") as f:
@@ -107,11 +106,16 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     config_factory.base_dict = config
     config = config_factory.merge()
 
+    # gate_names = [f"gate{i}" for i in range(1, len(config.quadrotor_config.gates) + 1)]
+    # obstacle_names = [f"obstacle{i}" for i in range(1, len(config.quadrotor_config.obstacles) + 1)]
+    # vicon = Vicon(track_names=gate_names + obstacle_names, timeout=1.0)
+    vicon = Vicon(timeout=1.0)
+
     # Check if the real drone position matches the settings
     tol = 0.1
     init_state = config.quadrotor_config.init_state
     drone_pos = np.array([init_state[key] for key in ("init_x", "init_y", "init_z")])
-    if d := np.linalg.norm(drone_pos - vicon.pos["cf"]) > tol:
+    if d := np.linalg.norm(drone_pos - vicon.pos[vicon.drone_name]) > tol:
         raise RuntimeError(
             (
                 f"Distance between drone and starting position too great ({d:.2f}m)"
@@ -147,13 +151,13 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     CTRL_FREQ = init_info["ctrl_freq"]
 
     # Create controller
-    vicon_obs = drone_pos_and_vel + drone_rot_and_agl_vel
+    vicon_obs = drone_pos_and_vel + drone_rot_and_agl_vel + [0]
     ctrl = Controller(vicon_obs, init_info, True)
 
     # Helper parameters
     target_gate_id = 0  # Initial gate.
     log_cmd = []  # Log commands as [current time, ros time, command type, args]
-    last_drone_pos = vicon.pos["cf"].copy()  # Gate crossing helper
+    last_drone_pos = vicon.pos[vicon.drone_name].copy()  # Gate crossing helper
     completed = False
     print(f"Setup time: {time.time() - start_time:.3}s")
 
@@ -165,7 +169,7 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
             curr_time = time.time() - start_time
 
             # Override environment state and evaluate constraints
-            p, r = vicon.pos["cf"], vicon.rpy["cf"]
+            p, r = vicon.pos[vicon.drone_name], vicon.rpy[vicon.drone_name]
             env.state = [p[0], 0, p[1], 0, p[2], 0, r[0], r[1], r[2], 0, 0, 0]
             state_error = (env.state - env.X_GOAL) * env.info_mse_metric_state_weight
             constraint_values = env.constraints.get_values(env, only_state=True)
@@ -173,14 +177,15 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
             env.cnstr_violation = env.constraints.is_violated(env, c_value=constraint_values)
             cnstr_num = 1 if env.cnstr_violation else 0
 
-            p = vicon.pos["cf"]
+            p = vicon.pos[vicon.drone_name]
             # This only looks at the x-y plane, could be improved
             # TODO: Replace with 3D distance once gate poses are given with height
-            gate_dist = np.sqrt(np.sum((p[0:2] - vicon.pos[gate_names[target_gate_id]][0:2]) ** 2))
-            if gate_dist < 0.45:
-                current_target_gate_pos = vicon.pos[gate_names[target_gate_id]]
-            else:
-                current_target_gate_pos = gate_poses[target_gate_id][0:6]
+            # gate_dist = np.sqrt(np.sum((p[0:2] - vicon.pos[gate_names[target_gate_id]][0:2]) ** 2))
+            # if gate_dist < 0.45:
+            #    current_target_gate_pos = vicon.pos[gate_names[target_gate_id]]
+            # else:
+            current_target_gate_pos = gate_poses[target_gate_id][0:6]
+            gate_dist = np.sqrt(np.sum((p[0:2] - current_target_gate_pos[0:2]) ** 2))
             info = {
                 "mse": np.sum(state_error**2),
                 "collision": (None, False),  # Leave always false in sim2real
@@ -211,7 +216,7 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
             drone_pos_and_vel = [p[0], 0, p[1], 0, p[2], 0]
             r = vicon.rpy[vicon.drone_name]
             drone_rot_and_agl_vel = [r[0], r[1], r[2], 0, 0, 0]
-            vicon_obs = drone_pos_and_vel + drone_rot_and_agl_vel
+            vicon_obs = drone_pos_and_vel + drone_rot_and_agl_vel + [info["current_target_gate_id"]]
             # In sim2real: Reward always 0, done always false
             command_type, args = ctrl.compute_control(curr_time, vicon_obs, 0, False, info)
             log_cmd.append([curr_time, rospy.get_time(), command_type, args])  # Save for logging

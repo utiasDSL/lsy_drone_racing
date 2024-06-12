@@ -56,7 +56,7 @@ class DroneStateMachine:
             self.state = DroneState.POLICY_CONTROL
             return Command.TAKEOFF, [0.4, 2]
 
-        elif self.state == DroneState.POLICY_CONTROL:          
+        elif self.state == DroneState.POLICY_CONTROL:
             return self.policy_control(ep_time, obs, info)
 
         elif self.state == DroneState.NOTIFY_SETPOINT_STOP and info["current_gate_id"] == -1:
@@ -97,7 +97,7 @@ class DroneStateMachine:
             command_type = Command.FULLSTATE
             return command_type, firmware_action
 
-        if info["current_gate_id"] == -1:
+        if info["current_target_gate_id"] == -1:
             self.state = DroneState.NOTIFY_SETPOINT_STOP
             return Command.NOTIFYSETPOINTSTOP, []
 

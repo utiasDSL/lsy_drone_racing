@@ -70,12 +70,12 @@ class Vicon:
         """
         for tf in data.transforms:
             name = tf.child_frame_id.split("/")[-1]
-            if name not in self.pos:
+            if name not in self.track_names:
                 continue
             T, R = tf.transform.translation, tf.transform.rotation
             pos = np.array([T.x, T.y, T.z])
             rpy = np.array(euler_from_quaternion(R.x, R.y, R.z, R.w))
-            if self.pos[name]:
+            if self.pos.get(name) is not None:
                 self.vel[name] = (pos - self.pos[name]) / (time.time() - self.time[name])
                 self.ang_vel[name] = map2pi(rpy - self.rpy[name]) / (time.time() - self.time[name])
             self.time[name] = time.time()
