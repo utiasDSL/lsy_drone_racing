@@ -217,11 +217,15 @@
         "range": 0.7,
         "pos_divergence_recalculate": 0.01,
         "rot_divergence_recalculate": 0.01,
-        "min_dist_check_traj_collision": 0.2
+        "min_dist_check_traj_collision": 0.1,
+        "prune_path": true
     },
     "trajectory_generator_properties": {
-        "max_velocity": 7,
-        "max_acceleration": 7,
+        "max_velocity": 10,
+        "max_acceleration": 10,
         "sampling_interval": 0.05
-    }
+    },
+    "additional_statics_obstacles": [
+        [[0.75, -1.25, 0,0,0,0]]
+    ]
 }

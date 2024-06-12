@@ -35,7 +35,7 @@ from lsy_drone_racing.utils import draw_trajectory, draw_traj_without_ref, remov
 from online_traj_planner import OnlineTrajGenerator
 from src.utils.config_reader import ConfigReader
 from src.state_estimator import StateEstimator
-
+import json
 
 
 class Controller(BaseController):
@@ -73,7 +73,8 @@ class Controller(BaseController):
             
         # load config
         config_path = "./config.json"
-        self.config_reader = ConfigReader.create(config_path)
+        with open(config_path, "r") as f:
+            self.config = json.load(f)
 
         # Save environment and control parameters.
         self.initial_info = initial_info
@@ -96,6 +97,10 @@ class Controller(BaseController):
 
         self.traj_generator_cpp = OnlineTrajGenerator(start_point, goal_point, self.NOMINAL_GATES, self.NOMINAL_OBSTACLES, config_path)
         self.traj_generator_cpp.pre_compute_traj(self.takeoff_time)
+
+        # Append extra info to scenario
+        additional_static_obstacles = self.config["additional_statics_obstacles"]
+        self.NOMINAL_OBSTACLES.extend(additional_static_obstacles)
 
         # Reset counters and buffers.
         self.reset()
@@ -133,6 +138,7 @@ class Controller(BaseController):
         #########################
         # REPLACE THIS (END) ####
         #########################
+
 
     def compute_control(
         self,
