@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "config/level3.yaml",
-    controller: str = "src/my_controller_cpp.py",
+    config: str = "config/level1.yaml",
+    controller: str = "src/my_controller_static_world.py",
    #controller: str = "examples/controller.py",
     n_runs: int = 1,
     gui: bool = True,
