@@ -35,7 +35,7 @@ def simulate(
     controller: str = "controllers/example/example_controller.py",
     n_runs: int = 1,
     gui: bool = True,
-    terminate_on_lap: bool = True,
+    terminate_on_lap: bool = False,
     log_level: str = "INFO"
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
@@ -96,6 +96,7 @@ def simulate(
         action = np.zeros(4)
         reward = 0
         obs, info = env.reset()
+        #logger.info(info)
         info["ctrl_timestep"] = CTRL_DT
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
@@ -134,6 +135,7 @@ def simulate(
                 stats["collisions"] += 1
                 stats["collision_objects"].add(info["collision"][0])
             stats["violations"] += "constraint_violation" in info and info["constraint_violation"]
+
 
             # Synchronize the GUI.
             if config.quadrotor_config.gui:

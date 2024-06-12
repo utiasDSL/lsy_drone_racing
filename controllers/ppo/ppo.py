@@ -6,6 +6,7 @@ import numpy as np
 from safe_control_gym.controllers.firmware.firmware_wrapper import logging
 from stable_baselines3 import PPO
 
+from controllers.ppo.ppo_deploy import DroneStateMachine
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.env_modifiers import ObservationParser, transform_action
@@ -41,27 +42,29 @@ class Controller(BaseController):
         """
         super().__init__(initial_obs, initial_info, buffer_size, verbose)
 
-        # Save environment and control parameters.
         self.CTRL_TIMESTEP = initial_info["ctrl_timestep"]
         self.CTRL_FREQ = initial_info["ctrl_freq"]
         self.initial_obs = initial_obs
         self.VERBOSE = verbose
         self.BUFFER_SIZE = buffer_size
 
-        # Store a priori scenario information.
         self.NOMINAL_GATES = initial_info["nominal_gates_pos_and_type"]
         self.NOMINAL_OBSTACLES = initial_info["nominal_obstacles_pos"]
 
-        # Reset counters and buffers.
         self.reset()
         self.episode_reset()
 
-        # self.model_name = "models/best_model_morning_2024-05-31"
-        # self.model_name = "models/ppo_2024-06-05_23-34-37"
-        # self.model_name = "models/ppo_2024-06-06_08-08-15"
-        # self.model_name = "models/ppo_2024-06-05_09-43-45"
-        self.model_name = "models/best_model"
+        self.model_name = "models/best_model_minimal_train0"
         self.model = PPO.load(self.model_name)
+
+        self._goal = np.array(
+            [
+                initial_info["x_reference"][0],
+                initial_info["x_reference"][2],
+                initial_info["x_reference"][4],
+            ]
+        )
+        self.state_machine = DroneStateMachine(self._goal, self.model)
 
     def compute_control(
         self,
@@ -72,7 +75,7 @@ class Controller(BaseController):
         info: dict | None = None,
     ) -> tuple[Command, list]:
         """Pick command sent to the quadrotor through a Crazyswarm/Crazyradio-like interface.
-
+        
         INSTRUCTIONS:
             Re-implement this method to return the target position, velocity, acceleration,
             attitude, and attitude rates to be sent from Crazyswarm to the Crazyflie using, e.g., a
@@ -90,22 +93,5 @@ class Controller(BaseController):
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
-        action, next_predicted_state = self.model.predict(obs, deterministic=True)
-        action = transform_action(action, drone_pos=obs[:3])
-
-        # Prepare the command to be sent to the quadrotor.
-        command_type = Command.FULLSTATE
-        x = float(action[0])
-        y = float(action[1])
-        z = float(action[2])
-        target_pos = np.array([x, y, z])
-        target_vel = np.zeros(3)
-        target_acc = np.zeros(3)
-        target_yaw = float(action[3])
-        target_rpy_rates = np.zeros(3)
-        args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
-
-        # logger.info(f"Predicted action: {action}")
-        # logger.info(f"Args: {args}")
-        return command_type, args
-
+        command, args = self.state_machine.transition(ep_time, obs, info)
+        return command, args

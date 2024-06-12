@@ -549,7 +549,7 @@ def transform_action(
     transform_type: str = "relative",
     drone_pos: np.array = np.zeros(3),
     # pos_scaling: np.array = [0.2, 0.2, 0.05],
-    pos_scaling: np.array = 1.0 / 10.0 * np.ones(3),
+    pos_scaling: np.array = 1.0 / 5.0 * np.ones(3),
     yaw_scaling: float = np.pi,
 ) -> np.ndarray:
     """Transform the raw action to the action space.
