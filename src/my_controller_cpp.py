@@ -180,19 +180,24 @@ class Controller(BaseController):
         current_target_gate_pos = info.get("current_target_gate_pos", None)
         current_target_gate_id = info.get("current_target_gate_id", None)
         current_target_gate_in_range = info.get("current_target_gate_in_range", None)
+        #print(f"Current target gate id {current_target_gate_id} In range {current_target_gate_in_range} pos {current_target_gate_pos}")
         if not(current_target_gate_pos != None and current_target_gate_id != None and current_target_gate_in_range != None):
             pass
         else:
-            if current_target_gate_id != self.last_gate_id:
-                print(f"update last gate change time at {ep_time}")
-                self.last_gate_id = current_target_gate_id
-                self.last_gate_change_time = ep_time
+            # if current_target_gate_id != self.last_gate_id:
+            #     print(f"update last gate change time at {ep_time}")
+            #     self.last_gate_id = current_target_gate_id
+            #     self.last_gate_change_time = ep_time
             
-            update_time = 0.5
-            if ep_time - self.last_gate_change_time > update_time:
-                pos_updated = self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
-                if pos_updated: 
-                    self.last_traj_recalc_time = ep_time
+            # update_time = 0.5
+            # if ep_time - self.last_gate_change_time > update_time:
+            #     pos_updated = self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
+            #     if pos_updated: 
+            #         self.last_traj_recalc_time = ep_time
+
+            pos_updated = self.traj_generator_cpp.update_gate_pos(current_target_gate_id, current_target_gate_pos, current_drone_pos, current_target_gate_in_range, ep_time)
+            if pos_updated: 
+                self.last_traj_recalc_time = ep_time
         
         traj_calc_duration = 0.2
         if self.VERBOSE and self.last_traj_recalc_time and ep_time - self.last_traj_recalc_time > traj_calc_duration:

@@ -203,26 +203,27 @@
     },
     "world_properties": {
         "inflate_radius": {
-            "gate": 0.1,
-            "obstacle": 0.1
+            "gate": 0.08,
+            "obstacle": 0.2
         },
         "lower_bound": [-3, -3, 0],
         "upper_bound": [3, 3, 1.5]
     },
     "path_planner_properties": {
-        "time_limit_online": 0.1,
-        "time_limit_offline": 0.5,
+        "time_limit_online": 0.25,
+        "time_limit_offline": 0.8,
         "optimality_threshold_percentage": 0.05,
-        "checkpoint_gate_offset": 0.2,
+        "checkpoint_gate_offset": 0.23,
         "range": 0.7,
         "pos_divergence_recalculate": 0.01,
         "rot_divergence_recalculate": 0.01,
-        "min_dist_check_traj_collision": 0.1,
+        "min_dist_check_traj_collision": 0.2,
+        "min_dist_must_pass_goal_center": 0.2,
         "prune_path": true
     },
     "trajectory_generator_properties": {
-        "max_velocity": 10,
-        "max_acceleration": 10,
+        "max_velocity": 7,
+        "max_acceleration": 7,
         "sampling_interval": 0.05
     },
     "additional_statics_obstacles": [

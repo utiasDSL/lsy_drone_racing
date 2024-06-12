@@ -179,6 +179,7 @@ def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, 
         (
             f"Flight time (s): {curr_time}\n"
             f"Reason for termination: {termination}\n"
+            f"Collision info: {info['collision']}\n"
             f"Gates passed: {stats['gates_passed']}\n"
             f"Total reward: {stats['ep_reward']}\n"
             f"Number of collisions: {stats['collisions']}\n"
