@@ -84,7 +84,8 @@ class DroneStateMachine:
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
-        if ep_time - 2 > 0 and info["current_gate_id"] != -1:
+        gate_id = info["current_gate_id"] if "current_gate_id" in info.keys() else info["current_target_gate_id"]
+        if ep_time - 2 > 0 and gate_id != -1:
             if isinstance(obs, ObservationParser):
                 drone_pos = obs.drone_pos
                 obs = obs.get_observation()
@@ -97,7 +98,7 @@ class DroneStateMachine:
             command_type = Command.FULLSTATE
             return command_type, firmware_action
 
-        if info["current_target_gate_id"] == -1:
+        if gate_id == -1:
             self.state = DroneState.NOTIFY_SETPOINT_STOP
             return Command.NOTIFYSETPOINTSTOP, []
 
