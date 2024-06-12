@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["lsy_drone_racing"]
+packages = ["lsy_drone_racing", "controllers"]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -50,7 +50,7 @@ exclude = [
     "site-packages",
     "venv",
 ]
-line-length = 100
+line-length = 120
 indent-width = 4
 target-version = "py38"
 

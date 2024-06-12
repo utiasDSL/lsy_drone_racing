@@ -1,6 +1,8 @@
 """Controller using a PPO agent trained with stable-baselines3."""
 
-from __future__ import annotations  # Python 3.10 type hints
+from __future__ import annotations
+
+from typing import Any  # Python 3.10 type hints
 
 import numpy as np
 from safe_control_gym.controllers.firmware.firmware_wrapper import logging
@@ -8,7 +10,7 @@ from stable_baselines3 import PPO
 
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
-from lsy_drone_racing.env_modifiers import ObservationParser, transform_action
+from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser, RelativeActionTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,9 @@ class Controller(BaseController):
         initial_info: dict,
         buffer_size: int = 100,
         verbose: bool = False,
+        model_name: str | None = None,
+        action_transformer: str | None = None,
+        **kwargs: Any,
     ):
         """Initialization of the controller.
 
@@ -38,6 +43,9 @@ class Controller(BaseController):
                 'nominal_physical_parameters', 'nominal_gates_pos_and_type', etc.
             buffer_size: Size of the data buffers used in method `learn()`.
             verbose: Turn on and off additional printouts and plots.
+            model_name: The path to the trained model.
+            action_transformer: The action transformer object.
+            **kwargs: Additional keyword arguments.
         """
         super().__init__(initial_obs, initial_info, buffer_size, verbose)
 
@@ -56,17 +64,16 @@ class Controller(BaseController):
         self.reset()
         self.episode_reset()
 
-        # self.model_name = "models/best_model_morning_2024-05-31"
-        # self.model_name = "models/ppo_2024-06-05_23-34-37"
-        # self.model_name = "models/ppo_2024-06-06_08-08-15"
-        # self.model_name = "models/ppo_2024-06-05_09-43-45"
-        self.model_name = "models/best_model"
+        self.model_name = model_name if model_name else "models/working_model"
         self.model = PPO.load(self.model_name)
+        self.action_transformer = (
+            ActionTransformer.from_yaml(action_transformer) if action_transformer else RelativeActionTransformer()
+        )
 
     def compute_control(
         self,
         ep_time: float,
-        obs: np.ndarray,
+        obs: ObservationParser | np.ndarray,
         reward: float | None = None,
         done: bool | None = None,
         info: dict | None = None,
@@ -90,22 +97,13 @@ class Controller(BaseController):
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
+        if isinstance(obs, ObservationParser):
+            drone_pos = obs.drone_pos
+            obs = obs.get_observation()
+        else:
+            drone_pos = obs[:3]
+
         action, next_predicted_state = self.model.predict(obs, deterministic=True)
-        action = transform_action(action, drone_pos=obs[:3])
-
-        # Prepare the command to be sent to the quadrotor.
-        command_type = Command.FULLSTATE
-        x = float(action[0])
-        y = float(action[1])
-        z = float(action[2])
-        target_pos = np.array([x, y, z])
-        target_vel = np.zeros(3)
-        target_acc = np.zeros(3)
-        target_yaw = float(action[3])
-        target_rpy_rates = np.zeros(3)
-        args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
-
-        # logger.info(f"Predicted action: {action}")
-        # logger.info(f"Args: {args}")
-        return command_type, args
-
+        transformed_action = self.action_transformer.transform(raw_action=action, drone_pos=drone_pos)
+        firmware_action = self.action_transformer.create_firmware_action(transformed_action, sim_time=ep_time)
+        return Command.FULLSTATE, firmware_action

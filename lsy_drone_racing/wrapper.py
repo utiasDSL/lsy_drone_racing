@@ -48,6 +48,7 @@ logging.basicConfig(
 logger = logging.getLogger("wrapper")
 logger.setLevel(logging.INFO)
 
+
 class DroneRacingWrapper(Wrapper):
     """Drone racing firmware wrapper to make the environment compatible with the gymnasium API.
 
@@ -142,9 +143,7 @@ class DroneRacingWrapper(Wrapper):
         """Return the current simulation time in seconds."""
         return self._sim_time
 
-    def reset(
-        self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> tuple[np.ndarray, dict]:
+    def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[np.ndarray, dict]:
         """Reset the environment.
 
         Args:
@@ -185,12 +184,8 @@ class DroneRacingWrapper(Wrapper):
             raise InvalidAction(f"Invalid action: {action}")
 
         # Transform the action using a custom action transformer and then adapt it to the firmware
-        action = self.action_transformer.transform(
-            raw_action=action, drone_pos=self.observation_parser.drone_pos
-        )
-        firmware_action = self.action_transformer.create_firmware_action(
-            action, sim_time=self._sim_time
-        )
+        action = self.action_transformer.transform(raw_action=action, drone_pos=self.observation_parser.drone_pos)
+        firmware_action = self.action_transformer.create_firmware_action(action, sim_time=self._sim_time)
         self.env.sendFullStateCmd(*firmware_action)
 
         # The firmware quadrotor env requires the sim time as input to the step function. It also
@@ -260,21 +255,30 @@ class DroneRacingObservationWrapper:
         not compatible with the gymnasium API.
     """
 
-    def __init__(self, env: FirmwareWrapper):
+    def __init__(
+        self,
+        env: FirmwareWrapper,
+        observation_parser: ObservationParser = None,
+        rewarder: Rewarder = None,
+        action_transformer: ActionTransformer = None,
+    ):
         """Initialize the wrapper.
 
         Args:
             env: The firmware wrapper.
+            observation_parser: The observation parser to use. If None, a default parser is used.
+            rewarder: The rewarder to use. If None, a default rewarder is used.
+            action_transformer: The action transformer to use. If None, a default transformer is used.
         """
         if not isinstance(env, FirmwareWrapper):
             raise TypeError(f"`env` must be an instance of `FirmwareWrapper`, is {type(env)}")
         self.env = env
         self.pyb_client_id: int = env.env.PYB_CLIENT
-        self.observation_parser = RelativePositionObservationParser(
+        self.observation_parser = observation_parser if observation_parser else RelativePositionObservationParser(
             n_gates=env.env.NUM_GATES, n_obstacles=env.env.n_obstacles
         )
-        self.rewarder = Rewarder()  # TODO: Load from YAML
-        self.action_transformer = RelativeActionTransformer()  # TODO: Load from YAML
+        self.rewarder = rewarder if rewarder else Rewarder()
+        self.action_transformer = action_transformer if action_transformer else RelativeActionTransformer()
 
     def __getattribute__(self, name: str) -> Any:
         """Get an attribute from the object.
@@ -316,9 +320,7 @@ class DroneRacingObservationWrapper:
 
         return obs, info
 
-    def step(
-        self, *args: Any, **kwargs: dict[str, Any]
-    ) -> tuple[np.ndarray, float, bool, dict, np.ndarray]:
+    def step(self, *args: Any, **kwargs: dict[str, Any]) -> tuple[np.ndarray, float, bool, dict, np.ndarray]:
         """Take a step in the current environment.
 
         Args:

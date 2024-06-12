@@ -689,11 +689,11 @@ class RelativeActionTransformer(ActionTransformer):
             drone_pos: The current position of the drone.
 
         Returns:
-            The transformed action to control the drone.
+            The transformed action to control the drone as a 4-dimensional vector.
         """
-        action_transform = np.zeros(14)
+        action_transform = np.zeros(4)
         action_transform[:3] = drone_pos + raw_action[:3] * self.pos_scaling
-        action_transform[9] = self.yaw_scaling * raw_action[3]
+        action_transform[3] = self.yaw_scaling * raw_action[3]
         return action_transform
 
     def get_shortname(self) -> str:
@@ -722,10 +722,10 @@ class AbsoluteActionTransformer(ActionTransformer):
         Returns:
             The transformed action to control the drone.
         """
-        action_transform = np.zeros(14)
+        action_transform = np.zeros(4)
         scaled_action = raw_action * np.concatenate([self.pos_scaling, [self.yaw_scaling]])
         action_transform[:3] = scaled_action[:3]
-        action_transform[9] = scaled_action[3]
+        action_transform[3] = scaled_action[3]
         return action_transform
 
     def get_shortname(self) -> str:

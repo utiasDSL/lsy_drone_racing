@@ -24,6 +24,7 @@ from safe_control_gym.utils.utils import sync
 
 from lsy_drone_racing.command import apply_sim_command
 from lsy_drone_racing.constants import FIRMWARE_FREQ
+from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser, Rewarder
 from lsy_drone_racing.utils import load_controller
 from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
@@ -31,18 +32,20 @@ logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "config/getting_started.yaml",
-    controller: str = "controllers/example/example_controller.py",
+    config: str = "config/level/level0.yaml",
+    controller: str = "controllers/ppo/ppo.py",
+    controller_params: str = "models/working_model/params.yaml",
     n_runs: int = 1,
     gui: bool = True,
     terminate_on_lap: bool = True,
-    log_level: str = "INFO"
+    log_level: str = "INFO",
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
     Args:
         config: The path to the configuration file.
         controller: The path to the controller module.
+        controller_params: The path to the controller parameters.
         n_runs: The number of episodes.
         gui: Enable/disable the simulation GUI.
         terminate_on_lap: Stop the simulation early when the drone has passed the last gate.
@@ -64,6 +67,26 @@ def simulate(
     # Set the logging level
     assert log_level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
     logger.setLevel(log_level)
+
+    # Load the controller module
+    path = Path(__file__).parents[1] / controller
+    ctrl_class = load_controller(path)  # This returns a class, not an instance
+
+    controller_args = {}
+    extra_env_args = {}
+    if controller == "controllers/ppo/ppo.py":
+        # Load the controller parameters
+        path = Path(__file__).parents[1] / controller_params
+        assert path.exists(), f"Controller parameters file not found: {path}, and needed for PPO."
+        with open(path, "r") as file:
+            controller_args = yaml.safe_load(file)
+            # TODO: dont hardcode the observation parser 
+            extra_env_args["observation_parser"] = ObservationParser.from_yaml(
+                n_gates=3, n_obstacles=1, file_path=controller_args["observation_parser"]
+            )
+            extra_env_args["action_transformer"] = ActionTransformer.from_yaml(controller_args["action_transformer"])
+            extra_env_args["rewarder"] = Rewarder.from_yaml(controller_args["rewarder"])
+
     # Create environment.
     assert config.use_firmware, "Firmware must be used for the competition."
     pyb_freq = config.quadrotor_config["pyb_freq"]
@@ -73,11 +96,7 @@ def simulate(
     # user sends ctrl signals, not the firmware.
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
     env_func = partial(make, "quadrotor", **config.quadrotor_config)
-    env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ))
-
-    # Load the controller module
-    path = Path(__file__).parents[1] / controller
-    ctrl_class = load_controller(path)  # This returns a class, not an instance
+    env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ), **extra_env_args)
 
     # Create a statistics collection
     stats = {
@@ -100,10 +119,8 @@ def simulate(
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
         # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
-        ctrl = ctrl_class(obs, info, verbose=config.verbose)
-        gui_timer = p.addUserDebugText(
-            "", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id
-        )
+        ctrl = ctrl_class(obs, info, verbose=config.verbose, **controller_args)
+        gui_timer = p.addUserDebugText("", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id)
         i = 0
         while not done:
             curr_time = i * CTRL_DT
@@ -121,7 +138,7 @@ def simulate(
 
             # Get the observation from the motion capture system
             # Compute control input.
-            command_type, args = ctrl.compute_control(curr_time, obs, reward, done, info)
+            command_type, args = ctrl.compute_control(curr_time, env.observation_parser, reward, done, info)
             # Apply the control input to the drone. This is a deviation from the gym API as the
             # action is not applied in env.step()
             apply_sim_command(env, command_type, args)
@@ -142,7 +159,7 @@ def simulate(
             # Break early after passing the last gate (=> gate -1) or task completion
             if terminate_on_lap and info["current_gate_id"] == -1:
                 info["task_completed"], lap_finished = True, True
-            
+
             if info["task_completed"]:
                 logger.info("Task completed.")
                 done = True

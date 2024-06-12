@@ -122,7 +122,24 @@ def main(
         ]
     )
 
-    best_model_save_path = f"models/{train_name}_best"
+    best_model_save_path = f"models/{train_name}/best_model"
+
+    # We save the params as a yaml file for reproducibility
+    Path(f"models/{train_name}").mkdir(parents=True, exist_ok=True)
+    with open(f"models/{train_name}/params.yaml", "w") as file:
+        yaml.dump(
+            {
+                "level": level,
+                "observation_parser": observation_parser,
+                "rewarder": rewarder,
+                "action_transformer": action_transformer,
+                "gui": gui,
+                "seed": seed,
+                "num_timesteps": num_timesteps,
+                "model_name": f"{best_model_save_path}/best_model"
+            },
+            file,
+        )
 
     eval_callback = EvalCallback(
         eval_env,
@@ -152,7 +169,7 @@ def main(
     except KeyboardInterrupt:
         logger.info("Training interrupted. Saving model.")
 
-    model.save(f"models/{train_name}")
+    model.save(f"models/{train_name}/{train_name}")
 
 
 if __name__ == "__main__":
