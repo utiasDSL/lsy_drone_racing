@@ -117,9 +117,7 @@ class ObservationParser(ABC):
     def get_relative_corners(self, include_reference_position: bool = False) -> np.ndarray:
         """Return the relative position of the corners of the gates with respect to the drone."""
         gates_pos = (
-            np.vstack([self.gates_pos, self.reference_position])
-            if include_reference_position
-            else self.gates_pos
+            np.vstack([self.gates_pos, self.reference_position]) if include_reference_position else self.gates_pos
         )
         gates_yaw = np.hstack([self.gates_yaw, 0]) if include_reference_position else self.gates_yaw
 
@@ -134,9 +132,7 @@ class ObservationParser(ABC):
         third_corners = gates_pos - edge_vector_pos - self.drone_pos
         fourth_corners = gates_pos - edge_vector_neg - self.drone_pos
 
-        relative_distance_corners = np.array(
-            [first_corners, second_corners, third_corners, fourth_corners]
-        )
+        relative_distance_corners = np.array([first_corners, second_corners, third_corners, fourth_corners])
         return relative_distance_corners
 
     def get_relative_obstacles(self) -> np.ndarray:
@@ -163,9 +159,7 @@ class MinimalObservationParser(ObservationParser):
     ):
         """Initialize the Scaramuzza observation parser."""
         super().__init__(n_gates, n_obstacles)
-        obs_limits = (
-            drone_pos_limits + drone_speed_limits + drone_rpy_limits + drone_angular_speed_limits + [n_gates]
-        )
+        obs_limits = drone_pos_limits + drone_speed_limits + drone_rpy_limits + drone_angular_speed_limits + [n_gates]
         obs_limits_high = np.array(obs_limits)
         obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
         self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
@@ -498,7 +492,6 @@ class Rewarder:
 
         self.shortname = shortname
 
-
     def __repr__(self) -> str:
         """Return the string representation of the rewarder."""
         return (
@@ -563,14 +556,10 @@ class Rewarder:
         if obs_parser.gate_id == -1:
             # Reward for getting closer to the reference position
             dist_to_ref = np.linalg.norm(obs_parser.drone_pos - obs_parser.reference_position)
-            previos_dist_to_ref = np.linalg.norm(
-                obs_parser.previous_drone_pos - obs_parser.reference_position
-            )
+            previos_dist_to_ref = np.linalg.norm(obs_parser.previous_drone_pos - obs_parser.reference_position)
             reward += (previos_dist_to_ref - dist_to_ref) * self.dist_to_gate_mul
         else:
-            dist_to_gate = np.linalg.norm(
-                obs_parser.drone_pos - obs_parser.gates_pos[obs_parser.gate_id]
-            )
+            dist_to_gate = np.linalg.norm(obs_parser.drone_pos - obs_parser.gates_pos[obs_parser.gate_id])
             previos_dist_to_gate = np.linalg.norm(
                 obs_parser.previous_drone_pos - obs_parser.gates_pos[obs_parser.gate_id]
             )
@@ -607,15 +596,134 @@ def map_reward_to_color(reward: float) -> str:
     return "green"
 
 
-def transform_action(
-    raw_action: np.ndarray,
-    transform_type: str = "relative",
-    drone_pos: np.array = np.zeros(3),
-    # pos_scaling: np.array = [0.2, 0.2, 0.05],
-    pos_scaling: np.array = 2.5 / 5.0 * np.ones(3),
-    yaw_scaling: float = np.pi,
-) -> np.ndarray:
-    """Transform the raw action to the action space.
+class ActionTransformer(ABC):
+    """Class to transform the action space."""
+
+    def __init__(self):
+        """Initialize the action transformer."""
+        pass
+
+    @abstractmethod
+    def transform(self, raw_action: np.ndarray, drone_pos: np.array) -> np.ndarray:
+        """Transform the raw action to the action space."""
+        raise NotImplementedError
+
+    def create_firmware_action(self, action: np.ndarray, sim_time: float) -> np.ndarray:
+        """Create the firmware action, from the transformed action.
+
+        Args:
+            action: The transformed action which has the form [x, y, z, yaw].
+            sim_time: The simulation time.
+
+        Returns:
+            The firmware action. The firmware action is a 14-dimensional vector.
+        """
+        zeros3 = np.zeros(3)
+        action = [action[:3], zeros3, zeros3, action[3], zeros3, sim_time]
+        return action
+
+    @classmethod
+    def from_yaml(cls, file_path: str) -> ActionTransformer:  # noqa: ANN102
+        """Load the action transformer from a YAML file.
+
+        Args:
+            file_path: The path to the YAML file.
+
+        Returns:
+            The action transformer.
+        """
+        with open(file_path, "r") as file:
+            data = yaml.safe_load(file)
+        return make_action_transformer(data)
+
+    @abstractmethod
+    def get_shortname(self) -> str:
+        """Return shortname to identify learned model after training."""
+        raise NotImplementedError
+
+
+class RelativeActionTransformer(ActionTransformer):
+    """Class to transform the action space to relative actions."""
+
+    def __init__(
+        self,
+        pos_scaling: np.array = 0.5 * np.ones(3),
+        yaw_scaling: float = np.pi,
+        **kwargs: Any,
+    ):
+        """Initialize the relative action transformer."""
+        super().__init__()
+        self.pos_scaling = pos_scaling
+        self.yaw_scaling = yaw_scaling
+
+    @classmethod
+    def from_yaml(cls, file_path: str) -> RelativeActionTransformer:  # noqa: ANN102
+        """Load the action transformer from a YAML file.
+
+        Args:
+            file_path: The path to the YAML file.
+
+        Returns:
+            The action transformer.
+        """
+        with open(file_path, "r") as file:
+            data = yaml.safe_load(file)
+        return cls(**data)
+
+    def transform(self, raw_action: np.ndarray, drone_pos: np.array) -> np.ndarray:
+        """Transform the raw action to the action space.
+
+        Args:
+            raw_action: The raw action from the model is in the range [-1, 1].
+            drone_pos: The current position of the drone.
+
+        Returns:
+            The transformed action to control the drone as a 4-dimensional vector.
+        """
+        action_transform = np.zeros(4)
+        action_transform[:3] = drone_pos + raw_action[:3] * self.pos_scaling
+        action_transform[3] = self.yaw_scaling * raw_action[3]
+        return action_transform
+
+    def get_shortname(self) -> str:
+        """Return shortname to identify learned model after training."""
+        return "rel"
+
+
+class AbsoluteActionTransformer(ActionTransformer):
+    """Class to transform the action space to absolute actions."""
+
+    def __init__(self, pos_scaling: np.array = 5.0 * np.ones(3), yaw_scaling: float = np.pi, **kwargs: Any):
+        """Initialize the absolute action transformer."""
+        super().__init__()
+        self.pos_scaling = pos_scaling
+        self.yaw_scaling = yaw_scaling
+
+    def transform(self, raw_action: np.ndarray, drone_pos: np.array) -> np.ndarray:
+        """Transform the raw action to the action space.
+
+        Args:
+            raw_action: The raw action from the model is in the range [-1, 1].
+            drone_pos: The current position of the drone.
+
+        Returns:
+            The transformed action to control the drone.
+        """
+        action_transform = np.zeros(4)
+        scaled_action = raw_action * np.concatenate([self.pos_scaling, [self.yaw_scaling]])
+        action_transform[:3] = scaled_action[:3]
+        action_transform[3] = scaled_action[3]
+        return action_transform
+
+    def get_shortname(self) -> str:
+        """Return shortname to identify learned model after training."""
+        return "abs"
+
+
+def make_action_transformer(
+    data: dict,
+) -> ActionTransformer:
+    """Create an action transformer.
 
     Args:
         data: The data to create the action transformer.
