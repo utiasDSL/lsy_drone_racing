@@ -1,4 +1,4 @@
-"""Simulate the competition as in the IROS 2022 Safe Robot Learning competition.
+"""Simulate the competition as in the IROS 2022 Safe Robot Learning competition.sim.
 
 Run as:
 

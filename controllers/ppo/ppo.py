@@ -75,7 +75,7 @@ class Controller(BaseController):
                 initial_info["x_reference"][4],
             ]
         )
-        self.state_machine = DroneStateMachine(self._goal, self.model)
+        self.state_machine = DroneStateMachine(self._goal, self.model, self.action_transformer) 
 
     def compute_control(
         self,
@@ -104,15 +104,5 @@ class Controller(BaseController):
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
-        if isinstance(obs, ObservationParser):
-            drone_pos = obs.drone_pos
-            obs = obs.get_observation()
-        else:
-            drone_pos = obs[:3]
-
-        action, next_predicted_state = self.model.predict(obs, deterministic=True)
-        transformed_action = self.action_transformer.transform(raw_action=action, drone_pos=drone_pos)
-        firmware_action = self.action_transformer.create_firmware_action(transformed_action, sim_time=ep_time)
-        return Command.FULLSTATE, firmware_action
         command, args = self.state_machine.transition(ep_time, obs, info)
         return command, args

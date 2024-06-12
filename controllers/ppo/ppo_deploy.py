@@ -5,7 +5,7 @@ import numpy as np
 from safe_control_gym.controllers.firmware.firmware_wrapper import logging
 
 from lsy_drone_racing.command import Command
-from lsy_drone_racing.env_modifiers import transform_action
+from lsy_drone_racing.env_modifiers import ActionTransformer, ObservationParser
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +25,18 @@ class DroneState(Enum):
 class DroneStateMachine:
     """Class to handle the Drone State Machine transitions."""
 
-    def __init__(self, initial_goal: np.ndarray, model: Any):
+    def __init__(self, initial_goal: np.ndarray, model: Any, action_transformer: ActionTransformer):
         """Initialize the State Machine.
 
         Args:
             initial_goal: Stabilization goal the drone is trying to reach before landing.
             model: Trained PPO model for policy control.
+            action_transformer: The action transformer object.
         """
         self.state = DroneState.TAKEOFF
         self.goal = initial_goal
         self.model = model
+        self.action_transformer = action_transformer
         self.stamp = 0
 
     def transition(
@@ -83,20 +85,17 @@ class DroneStateMachine:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
         if ep_time - 2 > 0 and info["current_gate_id"] != -1:
-            action, next_predicted_state = self.model.predict(obs, deterministic=True)
-            action = transform_action(action, drone_pos=obs[:3])
+            if isinstance(obs, ObservationParser):
+                drone_pos = obs.drone_pos
+                obs = obs.get_observation()
+            else:
+                drone_pos = obs[:3]
 
-            x = float(action[0])
-            y = float(action[1])
-            z = float(action[2])
-            target_pos = np.array([x, y, z])
-            target_vel = np.zeros(3)
-            target_acc = np.zeros(3)
-            target_yaw = float(action[3])
-            target_rpy_rates = np.zeros(3)
+            action, next_predicted_state = self.model.predict(obs, deterministic=True)
+            transformed_action = self.action_transformer.transform(raw_action=action, drone_pos=drone_pos)
+            firmware_action = self.action_transformer.create_firmware_action(transformed_action, sim_time=ep_time)
             command_type = Command.FULLSTATE
-            args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
-            return command_type, args
+            return command_type, firmware_action
 
         if info["current_gate_id"] == -1:
             self.state = DroneState.NOTIFY_SETPOINT_STOP

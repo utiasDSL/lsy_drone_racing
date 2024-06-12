@@ -1,4 +1,8 @@
-# Train 0
+# Level 0
+
+# | Evaluation Scenario | Constraints  | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes | Notes             |
+# | :-----------------: | :----------: | :-----------------------: | :-------------------------: | :--------------------: | :---------------: |
+# | `level0.yaml`       | **Yes**      | *No*                      | *No*                        | *No*                   | Perfect knowledge |
 
 # Configuration
 num_episodes: 5 # Customizable number of episodes (NOTE: solutions that require fewer episode will receive higher scores)
@@ -22,24 +26,29 @@ quadrotor_config:
   done_on_violation: True # Whether `done` becomes True when a constraint is violated
   done_on_completion: True # Whether `done` becomes True when the task is completed (traveled all gates and 2'' hover at stabilization_goal)
   done_on_collision: True # Whether `done` becomes True when a collision happens
-  cost: rl_reward  # Sparse reward function, if you desire, re-implement it in Quadrotor._get_reward()
+  cost: competition  # Sparse reward function, if you desire, re-implement it in Quadrotor._get_reward()
                      # github.com/utiasDSL/safe-control-gym/blob/beta-iros-competition/safe_control_gym/envs/gym_pybullet_drones/quadrotor.py
-
+  
   task: stabilization
   task_info:
-    stabilization_goal: [2, 1.5, 0.0]
+    stabilization_goal: [0, -1.5, 1.0]  # Final goal (target position in x-y-z)
     stabilization_goal_tolerance: 0.15
 
   # Nominal (pre-randomization) initial state
+  # HACK: quick hack to make initialization in other gates possible. Safe bullet gym should be 
+  # modified as well
   init_state:
     [
-      [0.0, 0.0, 0.0, 0.0, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0],
-      #[1.0, 0.0, 0.0, 0.0, 0.525, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1],
-      #[2.0, 0.0, -1.0, 0.0, 0.525, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2],
-  ] 
-    #init_x: 0.0
+      # x, x_dot, ..., gate_id
+      [0.0, 0.0, 1.0, 0.0, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0],
+      [0.0, 0.0, 0.0, 0.0, 0.525, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1],
+      #[-0.5, 0.0, -0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 3.14, 0.0, 0.0, 0.0, 0.0, 4]
+    ]
+    
+  #init_state:
+    #init_x: 1.0
     #init_x_dot: 0
-    #init_y: 0.0
+    #init_y: 1.0
     #init_y_dot: 0
     #init_z: 0.05
     #init_z_dot: 0
@@ -53,45 +62,41 @@ quadrotor_config:
   # Nominal (pre-randomization) positions of gates and obstacles
   gates:
     [  # x, y, z, r, p, y, type (0: `tall` obstacle, 1: `low` obstacle)
-      [1, 0, 0, 0, 0, 1.57, 1],
-      [2, -1, 0, 0, 0, 0, 1],
-      [2, -2, 0, 0, 0, 0, 1],
-      # [1.0, -1.55, 0, 0, 0, -0.78, 0],
-      # [0.0, 0.5, 0, 0, 0, 0, 1],
-      # [-0.5, -0.5, 0, 0, 0, 3.14, 0]
+      [0.0, 0.0, 0, 0, 0, 0.0, 1],
+      [0.0, -1.0, 0, 0, 0, 0.0, 0],
     ]
   obstacles:
     [  # x, y, z, r, p, y
-       [0.5, -1.5, 0, 0, 0, 0],
+       [-1.0, 1.0, 0, 0, 0, 0],
     ]
 
   # Randomization of the initial state
-  randomized_init: True
-  init_state_randomization_info:
-    init_x: 
-      distrib: "uniform"
-      low: -0.1
-      high: 0.1
-    init_y: 
-      distrib: "uniform"
-      low: -0.1
-      high: 0.1
-    init_z:
-      distrib: "uniform"
-      low: 0.0
-      high: 0.02
-    init_phi:
-      distrib: "uniform"
-      low: -0.1
-      high: 0.1
-    init_theta:
-      distrib: "uniform"
-      low: -0.1
-      high: 0.1
-    init_psi:
-      distrib: "uniform"
-      low: -0.1
-      high: 0.1
+  randomized_init: False
+  # init_state_randomization_info:
+  #   init_x: 
+  #     distrib: "uniform"
+  #     low: -0.1
+  #     high: 0.1
+  #   init_y: 
+  #     distrib: "uniform"
+  #     low: -0.1
+  #     high: 0.1
+  #   init_z:
+  #     distrib: "uniform"
+  #     low: 0.0
+  #     high: 0.02
+  #   init_phi:
+  #     distrib: "uniform"
+  #     low: -0.1
+  #     high: 0.1
+  #   init_theta:
+  #     distrib: "uniform"
+  #     low: -0.1
+  #     high: 0.1
+  #   init_psi:
+  #     distrib: "uniform"
+  #     low: -0.1
+  #     high: 0.1
 
   # Randomization of the quadrotor inertial properties
   randomized_inertial_prop: False

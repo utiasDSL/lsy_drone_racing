@@ -1,0 +1,8 @@
+action_transformer: config/action_transformer/slow.yaml
+gui: false
+level: config/level/train3.yaml
+model_name: models/ppo_t3_obs_rel_rew_default_act_rel_num_timesteps_1000000_time_06-12-14-42/best_model/best_model
+num_timesteps: 1000000
+observation_parser: config/observation_parser/relative.yaml
+rewarder: config/rewarder/beta_june07_rewarder.yaml
+seed: 0
