@@ -54,7 +54,7 @@ class DroneStateMachine:
             self.state = DroneState.POLICY_CONTROL
             return Command.TAKEOFF, [0.4, 2]
 
-        elif self.state == DroneState.POLICY_CONTROL:          
+        elif self.state == DroneState.POLICY_CONTROL:
             return self.policy_control(ep_time, obs, info)
 
         elif self.state == DroneState.NOTIFY_SETPOINT_STOP and info["current_gate_id"] == -1:
@@ -82,7 +82,7 @@ class DroneStateMachine:
         Returns:
             The command type and arguments to be sent to the quadrotor. See `Command`.
         """
-        if ep_time - 2 > 0 and info["current_gate_id"] != -1:
+        if ep_time - 2 > 0 and info["current_target_gate_id"] != -1:
             action, next_predicted_state = self.model.predict(obs, deterministic=True)
             action = transform_action(action, drone_pos=obs[:3])
 
@@ -98,7 +98,7 @@ class DroneStateMachine:
             args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
             return command_type, args
 
-        if info["current_gate_id"] == -1:
+        if info["current_target_gate_id"] == -1:
             self.state = DroneState.NOTIFY_SETPOINT_STOP
             return Command.NOTIFYSETPOINTSTOP, []
 
