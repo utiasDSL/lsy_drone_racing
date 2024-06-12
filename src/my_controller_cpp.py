@@ -90,6 +90,8 @@ class Controller(BaseController):
 
         # Store a priori scenario information.
         self.NOMINAL_GATES = initial_info["nominal_gates_pos_and_type"]
+        print("Nominal gates")
+        print(type(self.NOMINAL_GATES))
         self.NOMINAL_OBSTACLES = initial_info["nominal_obstacles_pos"]
         self.GATE_TYPES = initial_info["gate_dimensions"]
         start_point = np.array([initial_obs[0], initial_obs[2], self.takeoff_height])
