@@ -60,6 +60,7 @@ class Gate:
     @staticmethod
     def from_nomial_gate_pos_and_type(gate_pos_and_type: np.ndarray):
         pos = np.array(gate_pos_and_type[:3])
+        pos[2] = 0
         rot = np.array(gate_pos_and_type[3:6])
         type = int(gate_pos_and_type[6])
         return Gate(pos, rot, type)

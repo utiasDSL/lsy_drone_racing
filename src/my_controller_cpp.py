@@ -208,7 +208,7 @@ class Controller(BaseController):
             self.last_traj_recalc_time = None
 
 
-        traj_end_time = 100 # ToDo
+        traj_end_time = self.traj_generator_cpp.get_traj_end_time()
         traj_has_ended = ep_time > traj_end_time
 
         if not self._take_off:
