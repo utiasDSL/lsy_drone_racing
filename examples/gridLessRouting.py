@@ -69,9 +69,9 @@ for i in range(len(gate_list)):
 
     delta_x_ = np.cos(rot + np.pi/2)
     delta_y_ = np.sin(rot + np.pi/2)
-    gates.append([gate_list[i][0] -delta_x_ * 0.2, gate_list[i][1] - delta_y_ * 0.2, gate_list[i][2], 0, 0, 0, 0])
+    gates.append([gate_list[i][0] -delta_x_ * 0.1, gate_list[i][1] - delta_y_ * 0.1, gate_list[i][2], 0, 0, 0, 0])
     gates.append(gate_list[i])
-    gates.append([gate_list[i][0] + delta_x_ * 0.2, gate_list[i][1] + delta_y_ * 0.2, gate_list[i][2], 0, 0, 0, 0])
+    gates.append([gate_list[i][0] + delta_x_ * 0.1, gate_list[i][1] + delta_y_ * 0.1, gate_list[i][2], 0, 0, 0, 0])
     gate_frames.append([gate_list[i][0] - delta_x * 0.25, gate_list[i][1] - delta_y * 0.3, gate_list[i][2], 0, 0, 0])
     gate_frames.append([gate_list[i][0] + delta_x * 0.3, gate_list[i][1] + delta_y * 0.3, gate_list[i][2], 0, 0, 0])
     gate_frames.append([gate_list[i][0], gate_list[i][1], gate_list[i][2] + 0.3, 0, 0, 1])
@@ -100,8 +100,8 @@ model.gate_range = pyo.RangeSet(0, model.gates-1)
 model.n_steps = pyo.RangeSet(0, model.Step-1)
 model.dim_range = pyo.RangeSet(0, model.dim-1)
 
-model.obstacle_width = [0.2, 0.2, 0.8]
-model.obstacle_top = [0.3, 0.3, 0.2]
+model.obstacle_width = [0.1, 0.1, 0.8]
+model.obstacle_top = [0.3, 0.3, 0.1]
 
 
 model.x = pyo.Var(model.dim_range, model.n_steps, within=pyo.Reals, bounds=(lower_constraints[0],upper_constraints[0]))

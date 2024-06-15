@@ -84,6 +84,7 @@ class Controller(BaseController):
         # REPLACE THIS (START) ##
         #########################
         self.OFFSET_CORRECTION_FACTOR = 5
+        self.initial_info = initial_info
 
         self.start = initial_obs[0:4]
         self.gates =list([initial_obs[12:12+4], initial_obs[16:16+4], initial_obs[20:20+4], initial_obs[24:24+4]])
@@ -214,7 +215,7 @@ class Controller(BaseController):
 
                 # Generate the time vector
                 duration = 10
-                t = np.linspace(ep_time, ep_time + 1, int(duration * self.CTRL_FREQ))
+                t = np.linspace(0, 1, int(duration * self.CTRL_FREQ))
 
                 # Interpolate to get the interpolated path
                 x_interpolated = interp_x(t)
@@ -222,6 +223,7 @@ class Controller(BaseController):
                 z_interpolated = interp_z(t)
                 self.ref_x, self.ref_y, self.ref_z = x_interpolated, y_interpolated, z_interpolated
                 self.step = iteration
+                draw_trajectory(self.initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
 
         if self.trajectory_planner_active == True:
             #hover as long as new solution is calculated
