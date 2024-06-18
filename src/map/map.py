@@ -33,8 +33,8 @@ class Map:
     
     def parse_gates(self, gates: List[Gate]):
     
-        for gate in gates:
-            print(f"Gate type {gate.gate_type}")
+        for i, gate in enumerate(gates):
+            print(f"Gate {i}")
             component = self.config_reader.get_gate_geometry_by_type(gate.gate_type)
             object = Object.transform_urdf_component_into_object(component)
             center = np.array(gate.pos)
@@ -43,8 +43,12 @@ class Map:
 
             object.translate(center)
             object.rotate_z(rotation[2])
-            for obb in object.obbs:
+            for i, obb in enumerate(object.obbs):
                 self._add_obb(obb)
+                print(f"Obb {i}. Center: {obb.center}")
+            
+
+            
 
     
     def parse_obstacles(self, obstacles: List[Obstacle]):
@@ -156,11 +160,13 @@ class Map:
             # mar path coordinates wit red dots
             ax.scatter(*np.array(path).T, color = 'red', zorder = 5)
     
-    def draw_scene(self, path):
+    def draw_scene(self, path, checkpoints=None):
         ax = self.create_map_sized_figure()
         self.add_objects_to_plot(ax)
         self.draw_path(ax, path)
-
+        if checkpoints is not None:
+            for checkpoint in checkpoints:
+                ax.scatter(*checkpoint, color='green', zorder=5)
         plt.show()
 
     

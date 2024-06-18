@@ -28,7 +28,14 @@ def parse_objects(path):
     
     return np.array(res)
 
-
+def parse_checkpoints(path):
+    checkpoints = []
+    with open(path, "r") as f:
+        for line in f:
+            numbers = re.findall(r"-?\d+\.\d+|-?\d+", line)
+            info = [float(x) for x in numbers]
+            checkpoints.append(info)
+    return np.array(checkpoints)
 
 
 if __name__ == "__main__":
@@ -37,6 +44,7 @@ if __name__ == "__main__":
 
     nominal_gates_pos_and_type = parse_objects("./path_segments/gates.txt")
     nomial_obstacle_pos = parse_objects("./path_segments/obstacles.txt")
+    checkpoints = parse_checkpoints("./path_segments/checkpoints.txt")
 
     # create map and parse objects
     lower_bound = np.array([-2, -2, 0])
@@ -66,4 +74,4 @@ if __name__ == "__main__":
             path = [point.strip().split(" ") for point in path]
             path = np.array(path, dtype=float)
         # plot map
-        map.draw_scene(path=path)
+        map.draw_scene(path=path, checkpoints=checkpoints)
