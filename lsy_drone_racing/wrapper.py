@@ -62,11 +62,15 @@ class DroneRacingWrapper(Wrapper):
 
         # Gymnasium env required attributes
         # Action space:
-        # [x, y, z, yaw]
-        # x, y, z)  The desired position of the drone in the world frame.
-        # yaw)      The desired yaw angle.
-        # All values are scaled to [-1, 1]. Transformed back, x, y, z values of 1 correspond to 5m.
-        # The yaw value of 1 corresponds to pi radians.
+        # [dx, dy, dz, dyaw]
+        # dx, dy, dz)   Desired position change of the drone relative to its current location.
+        # dyaw)         Desired yaw angle change of the drone relative to its current orientation.
+        # dx, dy, dz remain unscaled, i.e. they represent a desired position change in meters. dyaw
+        # is scaled up to [-pi, pi]. The yaw value of 1, e.g., corresponds to pi radians.
+        # Example:
+        #       An action of [0, 0, 0, 0] corresponds to no change
+        #       An action of [1, 0, -1, 1] at pose [0.5, 1.0, 2.3, 0] corresponds to a desired
+        #       pose of [1.5, 1, 1.3, np.pi].
         self.action_scale = np.array([1, 1, 1, np.pi])
         self.action_space = Box(-1, 1, shape=(4,), dtype=np.float32)
 
