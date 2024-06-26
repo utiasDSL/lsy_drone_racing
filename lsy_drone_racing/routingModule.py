@@ -22,8 +22,9 @@ def initialize_model_variables(start, goal, gates, obstacles, steps):
     model.n_steps = steps[len(steps)-1] + 40
     model.M = 10000
     model.dim = 3
-    model.obstacle_width = [0.1, 0.1, 0.55]
-    model.obstacle_top = [0.25, 0.25, 0.1]
+    model.gate_width = [0.2, 0.2, 0.3]
+    model.obstacle_width = [0.2, 0.2, 0.65]
+    model.obstacle_top = [0.25, 0.25, 0.2]
     model.upper_constraints = [3, 3, 2]
     model.lower_constraints = [-3, -3, 0]
 
@@ -51,41 +52,53 @@ def travel_only_one_direction_1(model, step, dim):
 def travel_only_one_direction_2(model, step, dim):
     if step == model.n_steps-1:
         return pyo.Constraint.Skip
-    return model.x[dim, step] >= model.x[dim, step+1] - model.bx[dim, step] * model.M
+    return model.x[dim, step] >= model.x[dim, step + 1] - model.bx[dim, step] * model.M
 def travel_only_one_direction_3(model, step):
     return model.bx[0, step] + model.bx[1, step] + model.bx[2, step] == 1
 
 
 def avoid_objects_1(model, object, step, dim):
-    if model.obstacles[object][-1] == 0:
+    if model.obstacles[object][-1] <= 0.5:
         return model.x[dim, step] <= model.obstacles[object][dim] - model.obstacle_width[dim] + model.bobject[dim, object, 0, step] * model.M
+    elif model.obstacles[object][-1] <= 1.5:
+        return model.x[dim, step] <= model.obstacles[object][dim] - model.obstacle_top[dim] + model.bobject[
+            dim, object, 0, step] * model.M
     else:
-        return model.x[dim, step] <= model.obstacles[object][dim] - model.obstacle_top[dim] + model.bobject[dim, object, 0, step] * model.M
+        return model.x[dim, step] <= model.obstacles[object][dim] - model.gate_width[dim] + model.bobject[dim, object, 0, step] * model.M
 def avoid_objects_2(model, object, step, dim):
     if step == model.n_steps-1:
         return pyo.Constraint.Skip
-    if model.obstacles[object][-1] == 0:
-        return model.x[dim, step+1] <= model.obstacles[object][dim] - model.obstacle_width[dim] + model.bobject[dim, object, 1, step] * model.M
+    if model.obstacles[object][-1] <= 0.5:
+        return model.x[dim, step + 1] <= model.obstacles[object][dim] - model.obstacle_width[dim] + model.bobject[dim, object, 0, step] * model.M
+    elif model.obstacles[object][-1] <= 1.5:
+        return model.x[dim, step + 1] <= model.obstacles[object][dim] - model.obstacle_top[dim] + model.bobject[
+            dim, object, 0, step] * model.M
     else:
-        return model.x[dim, step+1] <= model.obstacles[object][dim] - model.obstacle_top[dim] + model.bobject[dim, object, 1, step] * model.M
+        return model.x[dim, step + 1] <= model.obstacles[object][dim] - model.gate_width[dim] + model.bobject[dim, object, 0, step] * model.M
 def avoid_objects_3(model, object, step, dim):
-    if model.obstacles[object][-1] == 0:
-        return model.x[dim, step] >= model.obstacles[object][dim] + model.obstacle_width[dim] - model.bobject[dim, object, 2, step] * model.M
+    if model.obstacles[object][-1] <= 0.5:
+        return model.x[dim, step] >= -(model.obstacles[object][dim] + model.obstacle_width[dim]) - model.bobject[dim, object, 1, step] * model.M
+    elif model.obstacles[object][-1] <= 1.5:
+        return model.x[dim, step] >= -(model.obstacles[object][dim] + model.obstacle_top[dim]) - model.bobject[
+            dim, object, 1, step] * model.M
     else:
-        return model.x[dim, step] >= model.obstacles[object][dim] + model.obstacle_top[dim] - model.bobject[dim, object, 2, step] * model.M
+        return model.x[dim, step] >= -(model.obstacles[object][dim] + model.gate_width[dim]) - model.bobject[dim, object, 1, step] * model.M
 def avoid_objects_4(model, object, step, dim):
     if step == model.n_steps-1:
         return pyo.Constraint.Skip
-    if model.obstacles[object][-1] == 0:
-        return model.x[dim, step+1] >= model.obstacles[object][dim] + model.obstacle_width[dim] - model.bobject[dim, object, 3, step] * model.M
+    if model.obstacles[object][-1] <= 0.5:
+        return model.x[dim, step + 1] >= -(model.obstacles[object][dim] + model.obstacle_width[dim]) - model.bobject[dim, object, 1, step] * model.M
+    elif model.obstacles[object][-1] <= 1.5:
+        return model.x[dim, step + 1] >= -(model.obstacles[object][dim] + model.obstacle_top[dim]) - model.bobject[
+            dim, object, 1, step] * model.M
     else:
-        return model.x[dim, step + 1] >= model.obstacles[object][dim] + model.obstacle_top[dim] - model.bobject[dim, object, 3, step] * model.M
+        return model.x[dim, step + 1] >= -(model.obstacles[object][dim] + model.gate_width[dim]) - model.bobject[dim, object, 1, step] * model.M
 def avoid_objects_5(model, object, step):
     sum = 0
-    for dim in range(0,3):
-        for var in range(0,4):
+    for dim in range(0, 3):
+        for var in range(0, 2):
             sum += model.bobject[dim, object, var, step]
-    return 10 == sum
+    return 5 >= sum
 
 def fly_through_gates_easy(model, dim, gate):
     return model.x[dim, model.steps[gate]] == model.gates[gate][dim]
@@ -109,7 +122,7 @@ def length_rule_3(model, step):
     return  model.length[step] >= 0.0001
 
 def length_rule_4(model, step):
-    return  model.length[step] <= 0.3
+    return  model.length[step] <= 0.5
 
 def objective_rule(model):
     sum = 0
@@ -162,11 +175,10 @@ def update_model(model, start, goal, gates, obstacles):
     model.start = start
     model.goal = goal
 
-    print(start)
-    print(goal)
-    print(gates)
-    print(obstacles)
-
+    print('gates: \n', gates)
+    print('obstacles: \n', obstacles)
+    print('start: \n', start)
+    print('goal: \n', goal)
 
     #update constraints that are necessary to update
     model.del_component('start_rule')
@@ -175,6 +187,7 @@ def update_model(model, start, goal, gates, obstacles):
     model.del_component('avoid_obstacle_3')
     model.del_component('avoid_obstacle_2')
     model.del_component('avoid_obstacle_4')
+    #model.del_component('avoid_obstacle_5')
     model.del_component('pass_gates_easy')
 
     model.start_rule = pyo.Constraint(model.dim_range, rule=start_at_start)
@@ -183,6 +196,7 @@ def update_model(model, start, goal, gates, obstacles):
     model.avoid_obstacle_2 = pyo.Constraint(model.obstacle_range, model.step_range, model.dim_range, rule=avoid_objects_2)
     model.avoid_obstacle_3 = pyo.Constraint(model.obstacle_range, model.step_range, model.dim_range, rule=avoid_objects_3)
     model.avoid_obstacle_4 = pyo.Constraint(model.obstacle_range, model.step_range, model.dim_range, rule=avoid_objects_4)
+    #model.avoid_obstacle_5 = pyo.Constraint(model.obstacle_range, model.step_range, rule=avoid_objects_5)
     model.pass_gates_easy = pyo.Constraint(model.dim_range, model.gate_range, rule=fly_through_gates_easy)
 
     return model
@@ -193,12 +207,12 @@ def update_model(model, start, goal, gates, obstacles):
 
 def run_optimizer(model):
     optimizer = pyo.SolverFactory('gurobi')
-    optimizer.options['SolutionLimit'] = 10
-    optimizer.options['TimeLimit'] = 60
+    optimizer.options['SolutionLimit'] = 5
+    optimizer.options['TimeLimit'] = 30
     optimizer.options['ResultFile'] = 'model.ilp'
 
     print("Calling Gurobi Optimizer to solve optimization problem...\n")
-    optimizer.solve(model, tee=True)
+    optimizer.solve(model, tee=True, keepfiles=True)
 
     waypoints = np.zeros((3, model.n_steps))
     for i in range(0, model.n_steps):

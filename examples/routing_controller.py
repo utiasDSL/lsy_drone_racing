@@ -37,6 +37,18 @@ from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.utils import draw_trajectory
 
 
+import importlib.util
+import logging
+import sys
+import time
+from pathlib import Path
+from typing import TYPE_CHECKING, Type
+
+import numpy as np
+import pybullet as p
+import yaml
+from munch import munchify
+
 class Controller(BaseController):
     """Template controller class."""
 
@@ -89,6 +101,7 @@ class Controller(BaseController):
         self.goal = [0, -1.5, 0.5]
         self.gates =list([initial_obs[12:12+4], initial_obs[16:16+4], initial_obs[20:20+4], initial_obs[24:24+4]])
         self.obstacles = list([initial_obs[32:32+3], initial_obs[35:35+3], initial_obs[38:38+3], initial_obs[41:41+3]])
+
         for i in range(len(self.obstacles)):
             self.obstacles[i][2] = 0.5
         self.gates_in_range = initial_obs[28:28+4]
@@ -115,7 +128,7 @@ class Controller(BaseController):
         gates_array, obstacles_array, steps =self._env_preprocessing(gates_array, obstacles_array)
 
         self.model = initialize_model_variables(self.start, self.goal, gates_array, obstacles_array, steps)
-        self.model = initialize_constraints(self.model)
+        self.model = initialize_constraints(self.model, three_degrees_of_freedom=False)
         self.process_handler = None
         #waypoints = run_optimizer(self.model)
         #print(waypoints)
@@ -129,7 +142,7 @@ class Controller(BaseController):
         #waypoints = np.unique(waypoints, axis=0)
         #tck, u = interpolate.splprep([waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]], s=0.1)
         #self.waypoints = waypoints
-        #duration = 15
+        duration = 10
         #t = np.linspace(0, 1, int(duration * self.CTRL_FREQ))
         #self.ref_x, self.ref_y, self.ref_z = interpolate.splev(t, tck)
         #assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
@@ -187,23 +200,94 @@ class Controller(BaseController):
 
         gate_update = self._update_gate_parameter(obs)
         obstacle_update = self._update_obstacle_parameter(obs)
+        #print(obstacle_update)
+
+        #if gate_update or obstacle_update:
+            #if self.trajectory_planner_active == False:
+                #print(obs)
+                #self.process_handler = self._start_trajectory_planner(pos)
+
+        #if self.trajectory_planner_active == True:
+            #if self.process_handler.done():
+                #self.trajectory_planner_active = False
+                # calculate new waypoints
+                #waypoints = self.process_handler.result()
+                #self._interpolate_waypoints(waypoints, iteration)
+        step = iteration - self.step
 
         if gate_update or obstacle_update:
-            if self.trajectory_planner_active == False:
-                print(obs)
-                self.process_handler = self._start_trajectory_planner(pos)
+            print("Starting new path calculation")
+            self.trajectory_planner_active = False
+            gates, obstacles= self._convert_to_routing_format(np.array(self.gates),
+                                                                           np.array(self.obstacles))
+            obstacles_array = self._gen_obstacle_points(gates, obstacles)
+            next_gate_index = self._find_next_gate()
 
-        if self.trajectory_planner_active == True:
-            if self.process_handler.done():
-                self.trajectory_planner_active = False
-                # calculate new waypoints
-                waypoints = self.process_handler.result()
-                self._interpolate_waypoints(waypoints, iteration)
 
-        step = iteration - self.step
+            if next_gate_index < 2:
+                goal = (gates[next_gate_index + 1, 0:3] + gates[next_gate_index + 2, 0:3])/2
+            else:
+                goal = self.goal
+
+            if next_gate_index < 3:
+                gates_array = gates[next_gate_index:next_gate_index + 2, :]
+            else:
+                gates_array = gates[next_gate_index:-1, :]
+
+            self.hover_position = pos
+            # gates_array, obstacles_array, steps = self._env_preprocessing(gates_array, obstacles_array)
+            gates_array, steps = self._gen_gate_points(gates_array, obstacles)
+
+            for obstacle in obstacles_array:
+                urdf_path = Path(self.initial_info["urdf_dir"]) / "sphere.urdf"
+                p.loadURDF(
+                    str(urdf_path),
+                    [obstacle[0], obstacle[1], obstacle[2]],
+                    p.getQuaternionFromEuler([0, 0, 0]),
+                    physicsClientId=self.initial_info["pyb_client"],
+                )
+            start = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])
+            self.model = update_model(self.model, start=start, goal=goal, gates=gates_array, obstacles=obstacles_array)
+            waypoints = run_optimizer(self.model)
+            self._interpolate_waypoints(waypoints, iteration)
+
+
+
         if self.trajectory_planner_active == False:
             if step >= len(self.ref_x) and not self._setpoint_land and self.passed_gates != [1,1,1,1]:
-                self.process_handler = self._start_trajectory_planner(pos)
+                print("Starting new path calculation")
+                self.trajectory_planner_active = False
+                print(self.gates)
+                gates_array, obstacles_array = self._convert_to_routing_format(np.array(self.gates),
+                                                                               np.array(self.obstacles))
+                obstacles_array = self._gen_obstacle_points(gates_array, obstacles_array)
+                next_gate_index = self._find_next_gate()
+
+                if next_gate_index < 2:
+                    goal = (gates[next_gate_index + 1, 0:3] + gates[next_gate_index + 2, 0:3]) / 2
+                else:
+                    goal = self.goal
+                if next_gate_index < 3:
+                    gates_array = gates_array[next_gate_index:next_gate_index + 2, :]
+                else:
+                    gates_array = gates_array[next_gate_index:-1, :]
+
+                self.hover_position = pos
+                #gates_array, obstacles_array, steps = self._env_preprocessing(gates_array, obstacles_array)
+                gates_array, steps = self._gen_gate_points(gates_array, obstacles_array)
+                for obstacle in obstacles_array:
+                    urdf_path = Path(self.initial_info["urdf_dir"]) / "sphere.urdf"
+                    p.loadURDF(
+                        str(urdf_path),
+                        [obstacle[0], obstacle[1], obstacle[2]],
+                        p.getQuaternionFromEuler([0, 0, 0]),
+                        physicsClientId=self.initial_info["pyb_client"],
+                    )
+
+                self.model = update_model(self.model, start=self.waypoints[-1, :], goal=goal, gates=gates_array,
+                                          obstacles=obstacles_array)
+                waypoints = run_optimizer(self.model)
+                self._interpolate_waypoints(waypoints, iteration)
 
         if self.trajectory_planner_active == True:
             #hover as long as new solution is calculated
@@ -333,14 +417,15 @@ class Controller(BaseController):
         list_index = 0
         update = False
         for i in range(32, 42, 3):
-            if not np.array_equal(obs[i:i + 3], self.obstacles[list_index]) and self.updated_obstacles[list_index] == 0:
+            if not np.array_equal(obs[i:i + 2], self.obstacles[list_index][0:2]) and self.updated_obstacles[list_index] == 0:
                 self.obstacles[list_index] = obs[i : i + 3]
                 self.obstacles[list_index][2] = 0.5
                 self.updated_obstacles[list_index] = 1
                 if self._check_if_on_path(self.obstacles[list_index]):
                     update = True
+                #update = True
             list_index += 1
-        return update     #updated gate parameter route recalculation necessary
+        return update     #updated obstacle parameter route recalculation necessary
 
     def _check_if_gate_passed(self, pos):
         for gate in range(0, len(self.gates[0])):
@@ -373,16 +458,27 @@ class Controller(BaseController):
         elif self.passed_gates == [1, 1, 1, 0]:
             goal = self.goal
         else:
-            goal = gates_array[next_gate_index + 1, 0:3]
+            goal = (gates_array[next_gate_index + 1, 0:3] + gates_array[next_gate_index + 2, 0:3])/2
         if next_gate_index < 3:
             gates_array = gates_array[next_gate_index:next_gate_index + 2, :]
         else:
             gates_array = gates_array[next_gate_index:-1, :]
 
         self.hover_position = pos
-        print(gates_array)
         gates_array, obstacles_array, steps = self._env_preprocessing(gates_array, obstacles_array)
-        print(gates_array)
+        print('gates: \n', gates_array)
+        print('obstacles: \n', obstacles_array)
+
+        for obstacle in obstacles_array:
+            urdf_path = Path(self.initial_info["urdf_dir"]) / "sphere.urdf"
+            p.loadURDF(
+            str(urdf_path),
+        [obstacle[0], obstacle[1], obstacle[2]],
+        p.getQuaternionFromEuler([0, 0, 0]),
+        physicsClientId=self.initial_info["pyb_client"],
+        )
+
+
         self.model = update_model(self.model, start=pos, goal=goal, gates=gates_array, obstacles=obstacles_array)
         return asynchronous_optimization(self.model)
 
@@ -410,11 +506,14 @@ class Controller(BaseController):
             i += 1
             if i >= len(u) - 2:
                 break
+        path_lengths = np.sqrt(np.diff(x) ** 2 + np.diff(y) ** 2 + np.diff(z) ** 2)
+        path_lengths = np.insert(np.cumsum(path_lengths), 0, 0)  # Add a 0 at the beginning
+        u = path_lengths / path_lengths[-1]
 
         # Create PCHIP interpolators for each coordinate
-        interp_x = interpolate.Akima1DInterpolator(u, x)
-        interp_y = interpolate.Akima1DInterpolator(u, y)
-        interp_z = interpolate.Akima1DInterpolator(u, z)
+        interp_x = interpolate.interp1d(u, x)
+        interp_y = interpolate.interp1d(u, y)
+        interp_z = interpolate.interp1d(u, z)
 
         # Store the waypoints
         self.waypoints = waypoints
@@ -428,33 +527,38 @@ class Controller(BaseController):
         y_interpolated = interp_y(t)
         z_interpolated = interp_z(t)
         self.ref_x, self.ref_y, self.ref_z = x_interpolated, y_interpolated, z_interpolated
+        #self.ref_x, self.ref_y, self.ref_z = waypoints[:,0], waypoints[:, 1], waypoints[:, 2]
         self.step = iteration
         draw_trajectory(self.initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
 
     def _resolve_collision(self, gates, obstacles, gate_pos, rot, direction):
-        allowed_rot = [0, np.pi / 5, -np.pi / 5, np.pi/2, - np.pi/2]
+        allowed_rot = [0, np.pi / 5, -np.pi / 5, np.pi / 4, -np.pi / 4, np.pi / 8, -np.pi / 8]
+        lengths = [0.3, 0.4, 0.5, 0.2, 0.1]
 
-        for offset in allowed_rot:
-            blocked = [False, False]
+        for length in lengths:
+            for offset in allowed_rot:
+                blocked = [False, False]
 
-            delta_x_ = np.cos(rot + np.pi / 2 + offset)
-            delta_y_ = np.sin(rot + np.pi / 2 + offset)
+                delta_x_ = np.cos(rot + np.pi / 2 + offset)
+                delta_y_ = np.sin(rot + np.pi / 2 + offset)
 
-            goal_pos = [gate_pos[0] + direction * delta_x_ * 0.4, gate_pos[1] + direction * delta_y_ * 0.4,
-                        gate_pos[2]]
-            for obstacle in obstacles:
-                for dim in range(0, 2):
-                    if obstacle[dim] - 0.2 < goal_pos[dim] < obstacle[dim] + 0.2:
-                        blocked[dim] = True
-            if blocked != [True, True]:
-                gates.append(goal_pos)
-                return gates
+                goal_pos = [gate_pos[0] + direction * delta_x_ * length, gate_pos[1] + direction * delta_y_ * length,
+                            gate_pos[2]]
+                for obstacle in obstacles:
+                    for dim in range(0, 2):
+                        if obstacle[dim] - 0.20 < goal_pos[dim] < obstacle[dim] + 0.2:
+                            blocked[dim] = True
+                if blocked != [True, True]:
+                    gates.append(goal_pos)
+                    return gates
         print("Error no valid position found")
+        gates.append(gate_pos)
+        return gates
 
     def _check_if_on_path(self, obstacle):
         obstacle = np.array(obstacle[0:2])
         for i in range(np.shape(self.waypoints)[0]):
-            if np.linalg.norm(self.waypoints[i, 0:2] - obstacle) < 0.0001:
+            if np.linalg.norm(self.waypoints[i, 0:2] - obstacle) < 0.2 * np.sqrt(2):
                 return True
         return False
 
@@ -466,22 +570,56 @@ class Controller(BaseController):
             rot = gate_list[i][5]
             delta_x = np.cos(rot)
             delta_y = np.sin(rot)
-            #gates = self._resolve_collision(gates, obstacles, gate_list[i], rot, -1)
+            gates = self._resolve_collision(gates, obstacles, gate_list[i], rot, -1)
             gates.append(gate_list[i])
-            #gates = self._resolve_collision(gates, obstacles, gate_list[i], rot, 1)
+            gates = self._resolve_collision(gates, obstacles, gate_list[i], rot, 1)
             gate_frames.append(
-                [gate_list[i][0] - delta_x * 0.25, gate_list[i][1] - delta_y * 0.25, gate_list[i][2], 0, 0, 0])
+                [gate_list[i][0] - delta_x * 0.225, gate_list[i][1] - delta_y * 0.225, gate_list[i][2], 0, 0, 2])
             gate_frames.append(
-                [gate_list[i][0] + delta_x * 0.25, gate_list[i][1] + delta_y * 0.25, gate_list[i][2], 0, 0, 0])
+                [gate_list[i][0] + delta_x * 0.225, gate_list[i][1] + delta_y * 0.225, gate_list[i][2], 0, 0, 2])
             gate_frames.append([gate_list[i][0], gate_list[i][1], gate_list[i][2] + 0.225, 0, 0, 1])
             gate_frames.append([gate_list[i][0], gate_list[i][1], gate_list[i][2] - 0.225, 0, 0, 1])
 
         steps = []
         for i in range(len(gate_list)):
-            step_points = [(i + 1) * 50 - 15, (i + 1) * 50, (i + 1) * 50 + 15]
+            step_points = [(i + 1) * 30 - 10, (i + 1) * 30, (i + 1) * 30 + 10]
+            #step_points = [(i+1)*50]
             steps = steps + step_points
 
         obstacles = list(obstacles) + list(gate_frames)
-        print(obstacles)
 
         return gates, obstacles, steps
+
+    def _gen_gate_points(self, gate_list, obstacles):
+        gates = []
+        for i in range(len(gate_list)):
+            rot = gate_list[i][5]
+
+            gates = self._resolve_collision(gates, obstacles, gate_list[i], rot, -1)
+            gates.append(gate_list[i])
+            gates = self._resolve_collision(gates, obstacles, gate_list[i], rot, 1)
+
+        steps = []
+        for i in range(len(gate_list)):
+            step_points = [(i + 1) * 30 - 10, (i + 1) * 30, (i + 1) * 30 + 10]
+            # step_points = [(i+1)*50]
+            steps = steps + step_points
+        return gates, steps
+
+    def _gen_obstacle_points(self, gate_list, obstacles):
+        gate_frames = []
+
+        for i in range(len(gate_list)):
+            rot = gate_list[i][5]
+            delta_x = np.cos(rot)
+            delta_y = np.sin(rot)
+            gate_frames.append(
+                [gate_list[i][0] - delta_x * 0.225, gate_list[i][1] - delta_y * 0.225, gate_list[i][2], 0, 0, 2])
+            gate_frames.append(
+                [gate_list[i][0] + delta_x * 0.225, gate_list[i][1] + delta_y * 0.225, gate_list[i][2], 0, 0, 2])
+            gate_frames.append([gate_list[i][0], gate_list[i][1], gate_list[i][2] + 0.225, 0, 0, 1])
+            gate_frames.append([gate_list[i][0], gate_list[i][1], gate_list[i][2] - 0.225, 0, 0, 1])
+
+        obstacles = list(obstacles) + list(gate_frames)
+        return obstacles
+
