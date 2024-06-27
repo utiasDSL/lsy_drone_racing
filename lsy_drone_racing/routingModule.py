@@ -22,8 +22,8 @@ def initialize_model_variables(start, goal, gates, obstacles, steps):
     model.n_steps = steps[len(steps)-1] + 40
     model.M = 10000
     model.dim = 3
-    model.gate_width = [0.2, 0.2, 0.3]
-    model.obstacle_width = [0.2, 0.2, 0.65]
+    model.gate_width = [0.21, 0.21, 0.3]
+    model.obstacle_width = [0.35, 0.35, 0.65]
     model.obstacle_top = [0.25, 0.25, 0.2]
     model.upper_constraints = [3, 3, 2]
     model.lower_constraints = [-3, -3, 0]
@@ -122,7 +122,7 @@ def length_rule_3(model, step):
     return  model.length[step] >= 0.0001
 
 def length_rule_4(model, step):
-    return  model.length[step] <= 0.5
+    return  model.length[step] <= 0.3
 
 def objective_rule(model):
     sum = 0
@@ -175,10 +175,10 @@ def update_model(model, start, goal, gates, obstacles):
     model.start = start
     model.goal = goal
 
-    print('gates: \n', gates)
-    print('obstacles: \n', obstacles)
-    print('start: \n', start)
-    print('goal: \n', goal)
+    #print('gates: \n', gates)
+    #print('obstacles: \n', obstacles)
+    #print('start: \n', start)
+    #print('goal: \n', goal)
 
     #update constraints that are necessary to update
     model.del_component('start_rule')
@@ -207,12 +207,13 @@ def update_model(model, start, goal, gates, obstacles):
 
 def run_optimizer(model):
     optimizer = pyo.SolverFactory('gurobi')
-    optimizer.options['SolutionLimit'] = 5
-    optimizer.options['TimeLimit'] = 30
+    optimizer.options['SolutionLimit'] = 3
+    optimizer.options['TimeLimit'] = 15
     optimizer.options['ResultFile'] = 'model.ilp'
 
     print("Calling Gurobi Optimizer to solve optimization problem...\n")
-    optimizer.solve(model, tee=True, keepfiles=True)
+    #optimizer.solve(model, tee=True, keepfiles=True)
+    optimizer.solve(model)
 
     waypoints = np.zeros((3, model.n_steps))
     for i in range(0, model.n_steps):

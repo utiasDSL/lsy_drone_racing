@@ -429,7 +429,7 @@ class Controller(BaseController):
 
     def _check_if_gate_passed(self, pos):
         for gate in range(0, len(self.gates[0])):
-            if np.allclose(pos, self.gates[gate][0:3], atol=0.1):
+            if np.allclose(pos, self.gates[gate][0:3], atol=0.05):
                 self.passed_gates[gate] = 1
 
     def _convert_to_routing_format(self, gates, obstacles):
@@ -533,7 +533,7 @@ class Controller(BaseController):
 
     def _resolve_collision(self, gates, obstacles, gate_pos, rot, direction):
         allowed_rot = [0, np.pi / 5, -np.pi / 5, np.pi / 4, -np.pi / 4, np.pi / 8, -np.pi / 8]
-        lengths = [0.3, 0.4, 0.5, 0.2, 0.1]
+        lengths = [0.5, 0.4, 0.3, 0.2, 0.1]
 
         for length in lengths:
             for offset in allowed_rot:
@@ -546,7 +546,7 @@ class Controller(BaseController):
                             gate_pos[2]]
                 for obstacle in obstacles:
                     for dim in range(0, 2):
-                        if obstacle[dim] - 0.20 < goal_pos[dim] < obstacle[dim] + 0.2:
+                        if obstacle[dim] - 0.3 < goal_pos[dim] < obstacle[dim] + 0.3:
                             blocked[dim] = True
                 if blocked != [True, True]:
                     gates.append(goal_pos)
