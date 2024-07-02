@@ -91,7 +91,7 @@ class Controller(BaseController):
         self.updated_gates = [0, 0, 0, 0]
         self.updated_obstacles = [0, 0, 0, 0]
         self.passed_gates = [0, 0, 0, 0]
-        self.goal_duration = 12
+        self.goal_duration = 14
 
         # Example: Hard-code waypoints through the gates. Obviously this is a crude way of
         # completing the challenge that is highly susceptible to noise and does not generalize at
