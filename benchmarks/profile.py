@@ -2,7 +2,7 @@ from pathlib import Path
 
 import gymnasium
 
-import lsy_drone_racing
+import lsy_drone_racing  # noqa: F401, required for gymnasium.make
 from lsy_drone_racing.utils import load_config
 
 

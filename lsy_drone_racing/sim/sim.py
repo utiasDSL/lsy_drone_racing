@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-import gymnasium
 import numpy as np
 import numpy.typing as npt
 import pybullet as p
@@ -60,7 +59,7 @@ class SimSettings:
         )
 
 
-class Sim(gymnasium.Env):
+class Sim:
     """Drone simulation based on gym-pybullet-drones."""
 
     URDF_DIR = Path(__file__).resolve().parent / "assets"
@@ -93,6 +92,7 @@ class Sim(gymnasium.Env):
             physics: The physics backend to use for the simulation. For more information, see the
                 PhysicsMode enum.
         """
+        self.np_random = np.random.default_rng()
         assert n_drones == 1, "Only one drone is supported at the moment."
         self.drone = Drone(controller="mellinger")
         self.n_drones = n_drones
