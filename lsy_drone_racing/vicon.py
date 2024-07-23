@@ -9,7 +9,7 @@ from rosgraph import Master
 from tf2_msgs.msg import TFMessage
 
 from lsy_drone_racing.import_utils import get_ros_package_path
-from lsy_drone_racing.rotations import euler_from_quaternion, map2pi
+from lsy_drone_racing.utils.rotations import euler_from_quaternion, map2pi
 
 
 class Vicon:

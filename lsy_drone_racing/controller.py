@@ -13,23 +13,18 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import numpy as np
-
-    from lsy_drone_racing.command import Command
+    import numpy.typing as npt
 
 
 class BaseController(ABC):
     """Base class for controller implementations."""
 
     def __init__(
-        self,
-        initial_obs: np.ndarray,
-        initial_info: dict,
-        buffer_size: int = 100,
-        verbose: bool = False,
+        self, initial_obs: npt.NDArray[np.floating], initial_info: dict, buffer_size: int = 100
     ):
         """Initialization of the controller.
 
@@ -39,88 +34,75 @@ class BaseController(ABC):
             constants, counters, pre-plan trajectories, etc.
 
         Args:
-            initial_obs: The initial observation of the environment's state. Consists of
-                [drone_xyz_yaw, gates_xyz_yaw, gates_in_range, obstacles_xyz, obstacles_in_range,
-                gate_id]
-            initial_info: The a priori information as a dictionary with keys 'symbolic_model',
-                'nominal_physical_parameters', 'nominal_gates_pos_and_type', etc.
+            initial_obs: The initial observation of the environment's state. See the environment's
+                observation space for details.
+            initial_info: Additional environment information from the reset.
             buffer_size: Size of the data buffers used in method `learn()`.
-            verbose: Turn on and off additional printouts and plots.
         """
-        # Observation space:
-        # drone_xyz_yaw)  x, y, z, yaw are the drone pose of the drone in the world frame. Position
-        #       is in meters and yaw is in radians.
-        # gates_xyz_yaw)  The pose of the gates. Positions are in meters and yaw in radians. The
-        #       length is dependent on the number of gates. Ordering is [x0, y0, z0, yaw0, x1,...].
-        # gates_in_range)  A boolean array indicating if the drone is within the gates' range. The
-        #       length is dependent on the number of gates.
-        # obstacles_xyz)  The pose of the obstacles. Positions are in meters. The length is
-        #       dependent on the number of obstacles. Ordering is [x0, y0, z0, x1,...].
-        # obstacles_in_range)  A boolean array indicating if the drone is within the obstacles'
-        #       range. The length is dependent on the number of obstacles.
-        # gate_id)  The ID of the current target gate. -1 if the task is completed.
-        #
-        # Also see `lsy_drone_racing.wrapper.DroneRacingWrapper`.
-
-        # Initialize data buffers for learning
-        self.action_buffer = deque([], maxlen=buffer_size)
-        self.obs_buffer = deque([], maxlen=buffer_size)
-        self.reward_buffer = deque([], maxlen=buffer_size)
-        self.done_buffer = deque([], maxlen=buffer_size)
-        self.info_buffer = deque([], maxlen=buffer_size)
+        self._buffer_size = buffer_size  # Initialize data buffers for learning
+        self.buffers = {
+            k: deque([], maxlen=buffer_size)
+            for k in ["action", "obs", "reward", "terminated", "truncated", "info"]
+        }
 
     @abstractmethod
     def compute_control(
-        self,
-        ep_time: float,
-        obs: np.ndarray,
-        reward: Optional[float] = None,
-        done: Optional[bool] = None,
-        info: Optional[dict] = None,
-    ) -> tuple[Command, list]:
-        """Pick command sent to the quadrotor through a Crazyswarm/Crazyradio-like interface.
+        self, obs: npt.NDArray[np.floating], info: dict | None = None
+    ) -> npt.NDarray[np.floating]:
+        """Compute the next desired position and orientation of the drone.
 
         INSTRUCTIONS:
-            Re-implement this method to return the target position, velocity, acceleration,
-            attitude, and attitude rates to be sent from Crazyswarm to the Crazyflie using, e.g., a
-            `cmdFullState` call.
+            Re-implement this method to return the target pose to be sent from Crazyswarm to the
+            Crazyflie using the `cmdFullState` call.
 
         Args:
-            ep_time: Episode's elapsed time, in seconds.
-            obs: The environment's observation [drone_xyz_yaw, gates_xyz_yaw, gates_in_range,
-                obstacles_xyz, obstacles_in_range, gate_id].
-            reward: The reward signal.
-            done: Wether the episode has terminated.
-            info: Current step information as a dictionary with keys 'constraint_violation',
-                'current_target_gate_pos', etc.
+            obs: The current observation of the environment. See the environment's observation space
+                for details.
+            info: Optional additional information as a dictionary.
 
         Returns:
-            Command: selected type of command (takeOff, cmdFullState, etc., see `Command`).
-            List: arguments for the type of command (see comments in class `Command`)
+            The drone pose [x_des, y_des, z_des, yaw_des] in absolute coordinates as a numpy array.
         """
+        #########################
+        # REPLACE THIS (START) ##
+        #########################
 
-    def step_learn(self, action: list, obs: list, reward: float, done: bool, info: dict):
+        pass
+
+        #########################
+        # REPLACE THIS (END) ####
+        #########################
+
+    def step_learn(
+        self,
+        action: npt.NDArray[np.floating],
+        obs: npt.NDArray[np.floating],
+        reward: float,
+        terminated: bool,
+        truncated: bool,
+        info: dict,
+    ):
         """Learning and controller updates called between control steps.
 
         INSTRUCTIONS:
-            Use the historically collected information in the five data buffers of actions,
-            observations, rewards, done flags, and information dictionaries to learn, adapt, and/or
-            re-plan.
+            Use the historically collected information in the data buffers of actions, observations,
+            rewards, terminated, truncated flags, and information dictionaries to learn, adapt,
+            and/or re-plan.
 
         Args:
-            action: Most recent applied action.
-            obs: Most recent observation of the quadrotor state.
-            reward: Most recent reward.
-            done: Most recent done flag.
-            info: Most recent information dictionary.
-
+            action: Latest applied action.
+            obs: Latest environment observation.
+            reward: Latest reward.
+            terminated: Latest terminated flag.
+            truncated: Latest truncated flag.
+            info: Latest information dictionary.
         """
-        # Store the last step's events.
-        self.action_buffer.append(action)
-        self.obs_buffer.append(obs)
-        self.reward_buffer.append(reward)
-        self.done_buffer.append(done)
-        self.info_buffer.append(info)
+        self.buffers["action"].append(action)
+        self.buffers["obs"].append(obs)
+        self.buffers["reward"].append(reward)
+        self.buffers["terminated"].append(terminated)
+        self.buffers["truncated"].append(truncated)
+        self.buffers["info"].append(info)
 
         #########################
         # REPLACE THIS (START) ##
@@ -136,19 +118,14 @@ class BaseController(ABC):
         """Learning and controller updates called between episodes.
 
         INSTRUCTIONS:
-            Use the historically collected information in the five data buffers of actions,
-            observations, rewards, done flags, and information dictionaries to learn, adapt, and/or
+            Use the historically collected information in the data buffers to learn, adapt, and/or
             re-plan.
         """
         #########################
         # REPLACE THIS (START) ##
         #########################
 
-        _ = self.action_buffer
-        _ = self.obs_buffer
-        _ = self.reward_buffer
-        _ = self.done_buffer
-        _ = self.info_buffer
+        pass
 
         #########################
         # REPLACE THIS (END) ####
@@ -156,12 +133,8 @@ class BaseController(ABC):
 
     def reset(self):
         """Initialize/reset data buffers and counters."""
-        # Data buffers.
-        self.action_buffer = deque([], maxlen=self.BUFFER_SIZE)
-        self.obs_buffer = deque([], maxlen=self.BUFFER_SIZE)
-        self.reward_buffer = deque([], maxlen=self.BUFFER_SIZE)
-        self.done_buffer = deque([], maxlen=self.BUFFER_SIZE)
-        self.info_buffer = deque([], maxlen=self.BUFFER_SIZE)
+        for buffer in self.buffers.values():
+            buffer.clear()
 
     def episode_reset(self):
         """Reset the controller's internal state and models if necessary."""

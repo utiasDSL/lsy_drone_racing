@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 
-from lsy_drone_racing.rotations import map2pi
+from lsy_drone_racing.utils.rotations import map2pi
 from lsy_drone_racing.vicon import Vicon
 
 if TYPE_CHECKING:

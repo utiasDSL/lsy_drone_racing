@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Type
 
 import numpy as np
 import pybullet as p
-import yaml
+import toml
 from munch import munchify
 
 from lsy_drone_racing.controller import BaseController
@@ -52,8 +52,9 @@ def load_config(path: Path) -> Munch:
         The munchified config dict.
     """
     assert path.exists(), f"Configuration file not found: {path}"
-    with open(path, "r") as file:
-        return munchify(yaml.safe_load(file))
+    assert path.suffix == ".toml", f"Configuration file has to be a TOML file: {path}"
+    with open(path, "r") as f:
+        return munchify(toml.load(f))
 
 
 def check_gate_pass(

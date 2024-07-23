@@ -6,3 +6,4 @@ logs
 secrets
 **/*.secret
 saves
+.pytest_cache

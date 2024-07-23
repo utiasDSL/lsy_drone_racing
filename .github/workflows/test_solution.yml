@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+  workflow_dispatch:
 
 
 jobs:
@@ -25,22 +26,17 @@ jobs:
             bash
           cache-environment: true
           post-cleanup: 'all'
-      # - run: |
-      #     pip install setuptools==65.5.0 pip==21
-      #     pip install wheel==0.38.0
-      - name: Install safe-control-gym
-        run: |
-          git clone -b beta-iros-competition https://github.com/utiasDSL/safe-control-gym.git
-          cd safe-control-gym
-          pip install . --no-deps 
-          cd ..
-        shell: bash -el {0}
       - name: Install cffirmware
         run: |
           git clone https://github.com/utiasDSL/pycffirmware.git
           cd pycffirmware
           git submodule update --init --recursive
           ./wrapper/build_linux.sh
+      - name: Install stable baselines
+        run: pip install stable-baselines3
+        shell: bash -el {0}
+      - name: Install stable baselines
+        run: pip install stable-baselines3
         shell: bash -el {0}
       - run: pip install .
         shell: bash -el {0}

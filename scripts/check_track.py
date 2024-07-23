@@ -11,7 +11,7 @@ from lsy_drone_racing.utils.ros_utils import check_race_track
 logger = logging.getLogger("rosout." + __name__)
 
 
-def main(config: str = "config/level3.yaml"):
+def main(config: str = "config/level3.toml"):
     """Check if the real race track conforms to the race configuration.
 
     Args:

@@ -27,10 +27,9 @@
 
 ## Installation
 
-To run the LSY Autonomous Drone Racing project, you will need 3 main repositories:
-- [safe-control-gym](https://github.com/utiasDSL/safe-control-gym/tree/lsy_drone_racing) - `lsy_drone_racing` branch: The drone simulator and gym environments
+To run the LSY Autonomous Drone Racing project, you will need 2 repositories:
 - [pycffirmware](https://github.com/utiasDSL/pycffirmware) - `main` branch: A simulator for the on-board controller response of the drones we are using to accurately model their behavior
-- [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the scripts to simulate and deploy the drones in the racing challenge
+- [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the drone simulation, environments, and scripts to simulate and deploy the drones in the racing challenge
 
 ### Fork lsy_drone_racing
 
@@ -52,21 +51,14 @@ conda activate drone
 ```
 
 > **Note:** It is important you stick with **Python 3.8**. Yes, it is outdated. Yes, we'd also like to upgrade. However, there are serious issues beyond our control when deploying the code on the real drones with any other version.
-
-Next, download the `safe-control-gym` and `pycffirmware` repositories and install them. Make sure you have your conda/mamba environment active!
+Now you can install the lsy_drone_racing package in editable mode from the repository root
 
 ```bash
-cd ~/repos
-git clone -b lsy_drone_racing https://github.com/utiasDSL/safe-control-gym.git
-cd safe-control-gym
-pip install .
+cd ~/repos/lsy_drone_racing
+pip install --upgrade pip
+pip install -e .
 ```
-
-> **Note:** If you receive an error installing safe-control-gym related to gym==0.21.0, run
-> ```bash
->    pip install setuptools==65.5.0 pip==21 wheel==0.38.4
-> ```
-> first
+In addition, you also need to install the pycffirmware package from source with
 
 ```bash
 cd ~/repos
@@ -77,14 +69,6 @@ sudo apt update
 sudo apt install build-essential
 conda install swig
 ./wrapper/build_linux.sh
-```
-
-Now you can install the lsy_drone_racing package in editable mode from the repository root
-
-```bash
-cd ~/repos/lsy_drone_racing
-pip install --upgrade pip
-pip install -e .
 ```
 
 Finally, you can test if the installation was successful by running 

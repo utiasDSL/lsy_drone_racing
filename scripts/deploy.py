@@ -10,22 +10,19 @@ python deploy.py <path/to/controller.py> <path/to/config.yaml>
 from __future__ import annotations
 
 import logging
-import pickle
 import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import fire
+import gymnasium
 import numpy as np
-import rospy
-from safe_control_gym.utils.registration import make
 
-from lsy_drone_racing.command import Command, apply_command
+from lsy_drone_racing.command import Command
 from lsy_drone_racing.constants import (
     CTRL_FREQ,
     CTRL_TIMESTEP,
-    FIRMWARE_FREQ,
     QUADROTOR_KF,
     QUADROTOR_KM,
     SENSOR_RANGE,
@@ -37,19 +34,13 @@ from lsy_drone_racing.constants import (
     QuadrotorPhysicParams,
 )
 from lsy_drone_racing.import_utils import get_ros_package_path, pycrazyswarm
-from lsy_drone_racing.utils import (
-    check_drone_start_pos,
-    check_gate_pass,
-    check_race_track,
-    load_config,
-    load_controller,
-)
+from lsy_drone_racing.utils import load_config, load_controller
+from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
 from lsy_drone_racing.vicon import Vicon
 from lsy_drone_racing.wrapper import DroneRacingWrapper
 
 if TYPE_CHECKING:
     from munch import Munch
-    from safe_control_gym.envs.gym_pybullet_drones.quadrotor import Quadrotor
 
 # rospy.init_node changes the default logging configuration of Python, which is bad practice at
 # best. As a workaround, we can create loggers under the ROS root logger `rosout`.
@@ -177,93 +168,59 @@ def get_info(env: Quadrotor, vicon: Vicon, gate_id: int, config: Munch) -> dict:
 
 
 def main(config: str = "config/getting_started.yaml", controller: str = "examples/controller.py"):
-    """Deployment script to run the controller on the real drone."""
-    start_time = time.time()
+    """Deployment script to run the controller on the real drone.
 
-    # Load the config and check if the race track is within tolerances of the config
+    Args:
+        config: Path to the competition configuration.
+        controller: Path to the controller implementation.
+    """
     config = load_config(Path(config))
 
-    gates_pose = np.array(config.quadrotor_config.gates)
-
-    # Load the controller and initialize the crazyfly interface
-    Controller = load_controller(Path(controller))
-    crazyswarm_config_path = get_ros_package_path("crazyswarm") / "launch/crazyflies.yaml"
+    # Initialize the crazyfly interface
     # pycrazyswarm expects strings, not Path objects, so we need to convert it first
+    crazyswarm_config_path = get_ros_package_path("crazyswarm") / "launch/crazyflies.yaml"
     swarm = pycrazyswarm.Crazyswarm(str(crazyswarm_config_path))
     time_helper = swarm.timeHelper
-    cf = swarm.allcfs.crazyflies[0]
 
-    # Check if the gates, obstacles and drone are positioned correctly. This needs to be called
-    # after initializing crazyswarm. Vicon and crazyswarm attempt to initialize a ROS node. Vicon
-    # handles the case that a node is already running, but crazyswarm does not
+    # Check if the gates, obstacles and drone are positioned within tolerances. This needs to be
+    # called after initializing crazyswarm. Vicon and crazyswarm attempt to initialize a ROS node.
+    # Vicon handles the case that a node is already running, but crazyswarm does not
     check_race_track(config)
     check_drone_start_pos(config)
 
-    # Start Vicon interface with all gates, obstacles and the drone
-    gate_names = [f"gate{i}" for i in range(1, len(config.quadrotor_config.gates) + 1)]
-    obstacle_names = [f"obstacle{i}" for i in range(1, len(config.quadrotor_config.obstacles) + 1)]
-    vicon = Vicon(track_names=gate_names + obstacle_names, timeout=1.0)
+    # Initialize the environment with ROS as backend instead of the simulator
+    kwargs = {"drone": swarm.allcfs.crazyflies[0]}
+    env = gymnasium.make("DroneRacing-v0", config=config, backend="ros", backend_kwargs=kwargs)
+    obs, info = env.reset()
 
-    # Create a safe-control-gym environment from which to take the symbolic models
-    config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
-    env = make("quadrotor", **config.quadrotor_config)
-    _, env_info = env.reset()
-    # Override environment state and evaluate constraints
-    sync_env(env=env, vicon=vicon)
-    constraint_values = env.constraints.get_values(env, only_state=True)
-
-    # Create controller
-    info = get_init_info(env, env_info, vicon, constraint_values, config)
-    obs = get_observation(info, vicon)
+    Controller = load_controller(Path(controller))
     ctrl = Controller(obs, info)
 
-    # Helper parameters
-    gate_id = 0  # Initial gate.
-    log_cmd = []  # Log commands as [current time, ros time, command type, args]
-    last_drone_pos = vicon.pos[vicon.drone_name].copy()  # Gate crossing helper
-    completed = False
-    logger.info(f"Setup time: {time.time() - start_time:.3}s")
-
+    # Run the main control loop
     try:
-        # Run the main control loop
         start_time = time.time()
-        total_time = None
         while not time_helper.isShutdown():
-            curr_time = time.time() - start_time
-            # Override environment state and evaluate constraints
-            sync_env(env=env, vicon=vicon)
-            # Check if the drone has passed the current gate
-            if check_gate_pass(gates_pose[gate_id], vicon.pos[vicon.drone_name], last_drone_pos):
-                gate_id += 1
-                logger.info(f"Gate {gate_id} passed in {curr_time:.4}s")
-            last_drone_pos = vicon.pos[vicon.drone_name].copy()
-            # Check if we have reached the end of the track
-            if gate_id == len(gates_pose):
-                gate_id = -1
-                if total_time is None:
-                    total_time = time.time() - start_time
-            # Get the latest observation and call the controller
-            info = get_info(env, vicon, gate_id, config)
-            obs = get_observation(info, vicon)
-            # For deploy: Reward always 0, done always false
-            command_type, args = ctrl.compute_control(curr_time, obs, 0, False, info)
-            log_cmd.append([curr_time, rospy.get_time(), command_type, args])  # Save for logging
-            apply_command(cf, command_type, args)  # Send the command to the drone controller
-
-            time_helper.sleepForRate(CTRL_FREQ)  # Maintain the control loop frequency
-
-            if command_type == Command.FINISHED or completed:
+            t_loop = time.perf_counter()
+            # Use the latest observation of the environment, i.e. the latest state from Vicon
+            obs, info = env.obs, env.info
+            if last_obs.get("gate_id", 1) != obs["gate_id"]:
+                logger.info(
+                    f"Gate {last_obs.get("gate_id", 1)} passed in {time.time() - start_time:.4}s"
+                )
+            action = ctrl.compute_control(env.obs, env.info)
+            next_obs, reward, terminated, truncated, info = env.step(action)
+            ctrl.step_learn(action, next_obs, reward, terminated, truncated, info)
+            if terminated or truncated:
                 break
-
-        logger.info(f"Total time: {total_time:.3f}s" if total_time else "Task not completed")
-        # Save the commands for logging
-        save_dir = Path(__file__).resolve().parents[1] / "logs"
-        save_dir.mkdir(parents=True, exist_ok=True)
-        with open(save_dir / "log.pkl", "wb") as f:
-            pickle.dump(log_cmd, f)
+            if dt := (time.perf_counter() - t_loop) < CTRL_TIMESTEP:
+                time.sleep(CTRL_TIMESTEP - dt)  # Maintain the control loop frequency
+            next_obs = env.obs  # Update the observation after the control loop
+        total_time = time.time() - start_time
+        ctrl.episode_learn()
+        logger.info(f"Total time: {total_time:.3f}s" if obs["gate"] == -1 else "Task not completed")
     finally:
-        apply_command(cf, Command.NOTIFYSETPOINTSTOP, [])
-        apply_command(cf, Command.LAND, [0.0, 2.0])  # Args are height and duration
+        env.apply(Command.NOTIFYSETPOINTSTOP, [])
+        env.apply(Command.LAND, [0.0, 2.0])  # Args are height and duration
 
 
 if __name__ == "__main__":

@@ -6,8 +6,9 @@ from math import asin, atan2
 from typing import TypeVar
 
 import numpy as np
+import numpy.typing as npt
 
-T = TypeVar("T", float, np.ndarray)
+T = TypeVar("T", float, npt.NDArray[np.floating])
 
 
 def euler_from_quaternion(x: float, y: float, z: float, w: float) -> tuple[float, float, float]:

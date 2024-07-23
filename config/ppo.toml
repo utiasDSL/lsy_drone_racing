@@ -1,0 +1,39 @@
+[model]
+learning_rate = 3e-4
+n_steps = 64
+batch_size = 512
+n_epochs = 10
+gamma = 0.99
+gae_lambda = 0.95
+clip_range = 0.2
+max_grad_norm = 0.5
+[model.policy_kwargs]
+activation_fn = "ReLU"
+share_features_extractor = false # True by default
+[model.policy_kwargs.net_arch]
+pis = [256, 256]
+vf = [256, 256]
+
+[learn]
+total_timesteps = 6_000_000
+
+[placticity]
+freq = 100
+std = 0.000_001
+gamma = 0.998
+
+[env]
+n_envs = 64
+
+[eval]
+n_envs = 1
+freq = 2_000_000
+n_episodes = 128
+
+[rng]
+seed = 1
+
+[wandb]
+project = "lsy_drone_racing"
+entity = "amacati"
+group = "ppo"

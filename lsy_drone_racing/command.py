@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pycrazyswarm import Crazyflie
-    from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
+    from safe_control_gym.envs.firmware_wrapper import FirmwareWrapper
 
 
 class Command(Enum):
