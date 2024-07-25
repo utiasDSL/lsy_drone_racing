@@ -4,15 +4,6 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-# -- Path setup --------------------------------------------------------------
-
-import os
-import sys
-
-on_rtd = os.environ.get("READTHEDOCS", None) == "True"
-if on_rtd:
-    sys.path.insert(0, os.path.abspath("../."))
-
 # -- Project information -----------------------------------------------------
 
 project = "lsy_drone_racing"

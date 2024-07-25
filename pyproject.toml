@@ -20,7 +20,7 @@ classifiers = [
 dependencies = [
     "fire >= 0.6.0",
     "munch >= 4.0.0",
-    "numpy >= 1.24.1",
+    "numpy >= 1.24.1, < 2.0.0",
     "pandas >= 2.0.3",
     "pybullet >= 3.2.6",
     "PyYAML >= 6.0.1",
@@ -29,7 +29,7 @@ dependencies = [
     "gymnasium >= 0.29.1",
     "toml >= 0.10.2",
     "casadi >= 3.6.5",
-    "swig >= 4.2.1",       # Required for pycffirmware
+    "swig >= 4.2.1",            # Required for pycffirmware
 ]
 
 [project.optional-dependencies]
@@ -37,8 +37,8 @@ test = ["pytest>=8.0.0"]
 rl = ["stable-baselines3"]
 
 
-[tool.setuptools]
-packages = ["lsy_drone_racing", "lsy_drone_racing.utils"]
+[tool.setuptools.packages]
+find = {}
 
 [tool.pytest.ini_options]
 markers = ["unit", "integration"]
@@ -61,6 +61,7 @@ exclude = [
     "dist",
     "site-packages",
     "venv",
+    "docs/conf.py",
 ]
 
 line-length = 100

@@ -1,5 +1,7 @@
-LSY drone racing documentation
-==============================
+LSY Drone Racing
+================
+
+Docs are work in progress. Please check back later.
 
 .. toctree::
    :hidden:
@@ -15,9 +17,9 @@ LSY drone racing documentation
    :caption: The Challenge
 
    challenge/overview
-   challenge/core
-   server_stack/monitoring
-   server_stack/infrastructure
+   challenge/simulation
+   challenge/deployment
+   challenge/online_competition
 
 .. toctree::
    :hidden:
