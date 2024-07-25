@@ -15,16 +15,16 @@ logger = logging.getLogger(__name__)
 def main():
     """Run the simulation N times and save the results as 'submission.csv'."""
     n_runs = 10
-    controller = "examples/controller.py"
-    ep_times = simulate(config="config/level3.yaml", controller=controller,n_runs=n_runs, gui=False)
-    # Log the number of failed runs if any
+    ctrl_path = "examples/controller.py"
+    ep_times = simulate(config="config/level3.toml", controller=ctrl_path, n_runs=n_runs, gui=False)
 
+    # Log the number of failed runs if any
     if failed := [x for x in ep_times if x is None]:
         logger.warning(f"{len(failed)} runs failed out of {n_runs}!")
     else:
         logger.info("All runs completed successfully!")
 
-    # Abort if all runs failed
+    # Abort if more than half of the runs failed
     if len(failed) > n_runs / 2:
         logger.error("More than 50% of all runs failed! Aborting submission.")
         raise RuntimeError("Too many runs failed!")

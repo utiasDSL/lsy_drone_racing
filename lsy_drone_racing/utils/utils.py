@@ -3,38 +3,35 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 import sys
-from math import asin, atan2
 from pathlib import Path
-from typing import Type
+from typing import TYPE_CHECKING, Type
 
 import numpy as np
+import numpy.typing as npt
 import pybullet as p
+import toml
+from munch import munchify
 
 from lsy_drone_racing.controller import BaseController
 
+if TYPE_CHECKING:
+    from munch import Munch
 
-def euler_from_quaternion(x: float, y: float, z: float, w: float) -> tuple[float, float, float]:
-    """Convert a quaternion into euler angles (roll, pitch, yaw).
+logger = logging.getLogger(__name__)
 
-    roll is rotation around x in radians (counterclockwise)
-    pitch is rotation around y in radians (counterclockwise)
-    yaw is rotation around z in radians (counterclockwise)
+
+def map2pi(angle: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+    """Map an angle or array of angles to the interval of [-pi, pi].
+
+    Args:
+        angle: Number or array of numbers.
+
+    Returns:
+        The remapped angles.
     """
-    t0 = +2.0 * (w * x + y * z)
-    t1 = +1.0 - 2.0 * (x * x + y * y)
-    roll_x = atan2(t0, t1)
-
-    t2 = +2.0 * (w * y - z * x)
-    t2 = +1.0 if t2 > +1.0 else t2
-    t2 = -1.0 if t2 < -1.0 else t2
-    pitch_y = asin(t2)
-
-    t3 = +2.0 * (w * z + x * y)
-    t4 = +1.0 - 2.0 * (y * y + z * z)
-    yaw_z = atan2(t3, t4)
-
-    return roll_x, pitch_y, yaw_z  # in radians
+    return ((angle + np.pi) % (2 * np.pi)) - np.pi
 
 
 def map2pi(angle: np.ndarray) -> np.ndarray:
@@ -61,13 +58,28 @@ def load_controller(path: Path) -> Type[BaseController]:
     controller_module = importlib.util.module_from_spec(spec)
     sys.modules["controller"] = controller_module
     spec.loader.exec_module(controller_module)
-    assert hasattr(controller_module, "Controller")
+    assert hasattr(controller_module, "Controller"), f"Controller class not found in {path}"
     assert issubclass(controller_module.Controller, BaseController)
 
     try:
         return controller_module.Controller
     except ImportError as e:
         raise e
+
+
+def load_config(path: Path) -> Munch:
+    """Load the race config file.
+
+    Args:
+        path: Path to the config file.
+
+    Returns:
+        The munchified config dict.
+    """
+    assert path.exists(), f"Configuration file not found: {path}"
+    assert path.suffix == ".toml", f"Configuration file has to be a TOML file: {path}"
+    with open(path, "r") as f:
+        return munchify(toml.load(f))
 
 
 def check_gate_pass(

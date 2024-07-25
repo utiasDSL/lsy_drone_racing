@@ -3,3 +3,7 @@
 **/__pycache__/
 submission.csv
 logs
+secrets
+**/*.secret
+saves
+.pytest_cache

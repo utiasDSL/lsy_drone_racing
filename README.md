@@ -15,6 +15,7 @@
     - [Setting up your GitHub repo for the competition](#setting-up-your-github-repo-for-the-competition)
     - [Submitting your latest iteration](#submitting-your-latest-iteration)
   - [Creating your own controller](#creating-your-own-controller)
+  - [Common errors](#common-errors)
   - [Deployment (**NOT IMPORTANT FOR STUDENTS FOR NOW**)](#deployment-not-important-for-students-for-now)
     - [Hardware setup](#hardware-setup)
     - [Common errors](#common-errors)
@@ -26,10 +27,9 @@
 
 ## Installation
 
-To run the LSY Autonomous Drone Racing project, you will need 3 main repositories:
-- [safe-control-gym](https://github.com/utiasDSL/safe-control-gym/tree/beta-iros-competition) - `beta-iros-competition` branch: The drone simulator and gym environments
+To run the LSY Autonomous Drone Racing project, you will need 2 repositories:
 - [pycffirmware](https://github.com/utiasDSL/pycffirmware) - `main` branch: A simulator for the on-board controller response of the drones we are using to accurately model their behavior
-- [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the scripts to simulate and deploy the drones in the racing challenge
+- [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the drone simulation, environments, and scripts to simulate and deploy the drones in the racing challenge
 
 ### Fork lsy_drone_racing
 
@@ -51,21 +51,14 @@ conda activate drone
 ```
 
 > **Note:** It is important you stick with **Python 3.8**. Yes, it is outdated. Yes, we'd also like to upgrade. However, there are serious issues beyond our control when deploying the code on the real drones with any other version.
-
-Next, download the `safe-control-gym` and `pycffirmware` repositories and install them. Make sure you have your conda/mamba environment active!
+Now you can install the lsy_drone_racing package in editable mode from the repository root
 
 ```bash
-cd ~/repos
-git clone -b beta-iros-competition https://github.com/utiasDSL/safe-control-gym.git
-cd safe-control-gym
-pip install .
+cd ~/repos/lsy_drone_racing
+pip install --upgrade pip
+pip install -e .
 ```
-
-> **Note:** If you receive an error installing safe-control-gym related to gym==0.21.0, run
-> ```bash
->    pip install setuptools==65.5.0 pip==21 wheel==0.38.4
-> ```
-> first
+In addition, you also need to install the pycffirmware package from source with
 
 ```bash
 cd ~/repos
@@ -76,14 +69,6 @@ sudo apt update
 sudo apt install build-essential
 conda install swig
 ./wrapper/build_linux.sh
-```
-
-Now you can install the lsy_drone_racing package in editable mode from the repository root
-
-```bash
-cd ~/repos/lsy_drone_racing
-pip install --upgrade pip
-pip install -e .
 ```
 
 Finally, you can test if the installation was successful by running 
@@ -152,6 +137,35 @@ Once you have pushed your latest iteration, a GitHub action runner will start te
 ## Creating your own controller
 
 To implement your own controller, have a look at the [example implementation](./examples/controller.py). We recommend altering the existing example controller instead of creating your own file to not break the testing pipeline. Please also read through the documentation of the controller. You **must not** alter its function signatures. If you encounter problems implementing something with the given interface, contact one of the lecturers.
+
+## Common errors
+
+### GLIBCXX
+If you were able to install everything without any issues, but the simulation crashes when running the sim script, you should check the error messages for any errors related to `LIBGL` and `GLIBCXX_3.4.30`. If you don't find any conclusive evidence about what has happened, you might also want to run the simulation in verbose mode for `LIBGL` with
+
+```bash
+LIBGL_DEBUG=verbose python scripts/sim.py
+```
+
+Next, you should check if your system has the required library installed
+
+```bash
+strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX_3.4.30
+```
+
+or if it is installed in your conda environment
+
+```bash
+strings /path-to-your-conda/envs/your-env-name/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
+```
+
+If neither of those yield any results, you are missing this library and can install it with
+
+```bash
+conda install -c conda-forge gcc=12.1.0
+```
+
+If the program still crashes and complains about not finding `GLIBCXX_3.4.30`, please update your `LD_LIBRARY_PATH` variable to point to your conda environment's lib folder.
 
 ## Deployment (**NOT IMPORTANT FOR STUDENTS FOR NOW**)
 
