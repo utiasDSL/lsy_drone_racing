@@ -449,7 +449,7 @@ class DroneParams:
     min_rpm: float = 0.0
     max_rpm: float = 0.0
     gnd_eff_min_height_clip: float = 0.0
-    J_inv: npt.NDArray[np.float64] = field(default_factory=np.zeros((3, 3)))
+    J_inv: npt.NDArray[np.float64] = field(default=np.zeros((3, 3)))
     firmware_freq: int = 500  # Firmware frequency in Hz
     supply_voltage: float = 3.0  # Power supply voltage
     thrust_curve_a: float = -0.0006239  # Thrust curve parameters for brushed motors
