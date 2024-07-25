@@ -23,7 +23,7 @@ std = 0.000_001
 gamma = 0.998
 
 [env]
-n_envs = 64
+n_envs = 1
 
 [eval]
 n_envs = 1

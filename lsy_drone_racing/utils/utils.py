@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Type
 
 import numpy as np
+import numpy.typing as npt
 import pybullet as p
 import toml
 from munch import munchify
@@ -19,6 +20,18 @@ if TYPE_CHECKING:
     from munch import Munch
 
 logger = logging.getLogger(__name__)
+
+
+def map2pi(angle: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+    """Map an angle or array of angles to the interval of [-pi, pi].
+
+    Args:
+        angle: Number or array of numbers.
+
+    Returns:
+        The remapped angles.
+    """
+    return ((angle + np.pi) % (2 * np.pi)) - np.pi
 
 
 def load_controller(path: Path) -> Type[BaseController]:
@@ -33,7 +46,7 @@ def load_controller(path: Path) -> Type[BaseController]:
     controller_module = importlib.util.module_from_spec(spec)
     sys.modules["controller"] = controller_module
     spec.loader.exec_module(controller_module)
-    assert hasattr(controller_module, "Controller")
+    assert hasattr(controller_module, "Controller"), f"Controller class not found in {path}"
     assert issubclass(controller_module.Controller, BaseController)
 
     try:

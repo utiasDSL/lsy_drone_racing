@@ -19,7 +19,6 @@ import fire
 import gymnasium
 import numpy as np
 
-from lsy_drone_racing.command import Command
 from lsy_drone_racing.constants import (
     CTRL_FREQ,
     CTRL_TIMESTEP,
@@ -33,14 +32,15 @@ from lsy_drone_racing.constants import (
     ObstacleDesc,
     QuadrotorPhysicParams,
 )
-from lsy_drone_racing.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils import load_config, load_controller
+from lsy_drone_racing.utils.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
-from lsy_drone_racing.vicon import Vicon
 from lsy_drone_racing.wrapper import DroneRacingWrapper
 
 if TYPE_CHECKING:
     from munch import Munch
+
+    from lsy_drone_racing.vicon import Vicon
 
 # rospy.init_node changes the default logging configuration of Python, which is bad practice at
 # best. As a workaround, we can create loggers under the ROS root logger `rosout`.

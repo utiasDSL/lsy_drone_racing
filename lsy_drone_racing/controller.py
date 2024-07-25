@@ -12,7 +12,6 @@ method to update the controller at runtime.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections import deque
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -23,9 +22,7 @@ if TYPE_CHECKING:
 class BaseController(ABC):
     """Base class for controller implementations."""
 
-    def __init__(
-        self, initial_obs: npt.NDArray[np.floating], initial_info: dict, buffer_size: int = 100
-    ):
+    def __init__(self, initial_obs: npt.NDArray[np.floating], initial_info: dict):
         """Initialization of the controller.
 
         INSTRUCTIONS:
@@ -39,11 +36,6 @@ class BaseController(ABC):
             initial_info: Additional environment information from the reset.
             buffer_size: Size of the data buffers used in method `learn()`.
         """
-        self._buffer_size = buffer_size  # Initialize data buffers for learning
-        self.buffers = {
-            k: deque([], maxlen=buffer_size)
-            for k in ["action", "obs", "reward", "terminated", "truncated", "info"]
-        }
 
     @abstractmethod
     def compute_control(
@@ -97,13 +89,6 @@ class BaseController(ABC):
             truncated: Latest truncated flag.
             info: Latest information dictionary.
         """
-        self.buffers["action"].append(action)
-        self.buffers["obs"].append(obs)
-        self.buffers["reward"].append(reward)
-        self.buffers["terminated"].append(terminated)
-        self.buffers["truncated"].append(truncated)
-        self.buffers["info"].append(info)
-
         #########################
         # REPLACE THIS (START) ##
         #########################
@@ -132,10 +117,7 @@ class BaseController(ABC):
         #########################
 
     def reset(self):
-        """Initialize/reset data buffers and counters."""
-        for buffer in self.buffers.values():
-            buffer.clear()
+        """Reset data buffers and counters if necessary."""
 
     def episode_reset(self):
         """Reset the controller's internal state and models if necessary."""
-        pass

@@ -36,14 +36,14 @@ class RaceStatsCallback(BaseCallback):
         # Check if the episode is done
         if any(self.locals["dones"]):
             infos = [self.locals["infos"][i] for i in np.where(self.locals["dones"])[0]]
-            successes = [x["task_completed"] for x in infos]
-            gate_ids = [x["current_gate_id"] for x in infos]
+            gate_ids = [x["target_gate"] for x in infos]
+            successes = [x == -1 for x in gate_ids]
             # Taking the mean is slightly misleading. If two episodes are done, and one is a success
             # and one is a failure, the mean has more significance than if only one env was done. We
             # do not track this in WandB, so the stats are off. However, we expect this to average
             # out over time.
-            drones_pos = np.array([x["drone_pose"][:3] for x in infos])
-            gates_pos = infos[0]["gates_pose"][gate_ids, :3]
+            drones_pos = np.array([x["drone.pos"] for x in infos])
+            gates_pos = infos[0]["gates.pos"][gate_ids, :]
             distances = np.linalg.norm(drones_pos - gates_pos, axis=1)
             self.logger.record("rollout/gate_distance", distances.mean())
             self.logger.record("rollout/success", np.mean(successes))

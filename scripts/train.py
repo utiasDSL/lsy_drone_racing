@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import fire
+import gymnasium
 import pip._vendor.tomli as tomllib
 import torch
 import wandb
@@ -18,7 +18,6 @@ from stable_baselines3.common.env_util import SubprocVecEnv, make_vec_env
 from stable_baselines3.common.logger import Logger
 from stable_baselines3.common.noise import NormalActionNoise
 
-from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_config
 from lsy_drone_racing.utils.sb3 import (
     NeuralStatsCallback,
@@ -46,16 +45,9 @@ def create_race_env(config_path: Path, gui: bool = False) -> RewardWrapper:
     # Load configuration and check if firmare should be used.
     config = load_config(config_path)
     # Overwrite config options
-    config.quadrotor_config.gui = gui
-    CTRL_FREQ = config.quadrotor_config["ctrl_freq"]
-    # Create environment
-    assert config.use_firmware, "Firmware must be used for the competition."
-    pyb_freq = config.quadrotor_config["pyb_freq"]
-    assert pyb_freq % FIRMWARE_FREQ == 0, "pyb_freq must be a multiple of firmware freq"
-    config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
-    env_factory = partial(make, "quadrotor", **config.quadrotor_config)
-    firmware_env = make("firmware", env_factory, FIRMWARE_FREQ, CTRL_FREQ)
-    env = DroneRacingWrapper(firmware_env, terminate_on_lap=True)
+    config.gui = gui
+    config.env.seed = None
+    env = DroneRacingWrapper(gymnasium.make("DroneRacing-v0", config=config))
     return ObsWrapper(RewardWrapper(MultiProcessingWrapper(env)))
 
 
@@ -99,7 +91,7 @@ def model_kwargs(kwargs: dict) -> dict:
     return new_kwargs
 
 
-def main(config: str = "config/learning.yaml", wandb: bool = True, algo: str = "sac"):
+def main(config: str = "config/learning.toml", wandb: bool = True, algo: str = "ppo"):
     """Train a drone racing agent."""
     algo = algo.lower()
     assert algo in algos, f"Algorithm {algo} not supported. Choose from {algos.keys()}."

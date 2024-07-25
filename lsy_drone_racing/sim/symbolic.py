@@ -6,7 +6,6 @@ import casadi as cs
 from casadi import MX
 
 from lsy_drone_racing.sim.physics import GRAVITY
-from lsy_drone_racing.utils.transformations import csRotXYZ
 
 if TYPE_CHECKING:
     from lsy_drone_racing.sim.drone import Drone
@@ -208,3 +207,25 @@ def symbolic(drone: Drone, dt: float) -> SymbolicModel:
     dynamics = {"dyn_eqn": X_dot, "obs_eqn": Y, "vars": {"X": X, "U": U}}
     cost = {"cost_func": cost_func, "vars": {"X": X, "U": U, "Xr": Xr, "Ur": Ur, "Q": Q, "R": R}}
     return SymbolicModel(dynamics=dynamics, cost=cost, dt=dt)
+
+
+def csRotXYZ(phi: float, theta: float, psi: float) -> cs.MX:
+    """Rotation matrix from euler angles.
+
+    This represents the extrinsic X-Y-Z (or quivalently the intrinsic Z-Y-X (3-2-1)) euler angle
+    rotation.
+
+    Args:
+        phi: roll (or rotation about X).
+        theta: pitch (or rotation about Y).
+        psi: yaw (or rotation about Z).
+
+    Returns:
+        R: casadi Rotation matrix
+    """
+    rx = cs.blockcat([[1, 0, 0], [0, cs.cos(phi), -cs.sin(phi)], [0, cs.sin(phi), cs.cos(phi)]])
+    ry = cs.blockcat(
+        [[cs.cos(theta), 0, cs.sin(theta)], [0, 1, 0], [-cs.sin(theta), 0, cs.cos(theta)]]
+    )
+    rz = cs.blockcat([[cs.cos(psi), -cs.sin(psi), 0], [cs.sin(psi), cs.cos(psi), 0], [0, 0, 1]])
+    return rz @ ry @ rx

@@ -21,7 +21,7 @@ from lsy_drone_racing.sim.drone import Drone
 from lsy_drone_racing.sim.noise import NoiseList
 from lsy_drone_racing.sim.physics import GRAVITY, Physics, PhysicsMode
 from lsy_drone_racing.sim.symbolic import SymbolicModel, symbolic
-from lsy_drone_racing.utils.rotations import map2pi
+from lsy_drone_racing.utils import map2pi
 
 logger = logging.getLogger(__name__)
 
