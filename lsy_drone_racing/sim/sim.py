@@ -26,39 +26,6 @@ from lsy_drone_racing.utils import map2pi
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class SimSettings:
-    """Simulation settings dataclass."""
-
-    sim_freq: int = 500
-    ctrl_freq: int = 500
-    gui: bool = False
-    pybullet_id: int = 0
-    # Camera settings
-    render_resolution: tuple[int, int] = (640, 480)
-    camera_view: tuple[float, ...] = (0,) * 16
-    camera_projection: tuple[float, ...] = (0,) * 16
-
-    def __post_init__(self):
-        """Compute the camera projection and view matrices based on the settings."""
-        assert self.sim_freq % self.ctrl_freq == 0, "sim_freq must be divisible by ctrl_freq."
-        self.camera_projection = p.computeProjectionMatrixFOV(
-            fov=60.0,
-            aspect=self.render_resolution[0] / self.render_resolution[1],
-            nearVal=0.1,
-            farVal=1000.0,
-        )
-        self.camera_view = p.computeViewMatrixFromYawPitchRoll(
-            distance=3,
-            yaw=-30,
-            pitch=-30,
-            roll=0,
-            cameraTargetPosition=[0, 0, 0],
-            upAxisIndex=2,
-            physicsClientId=0,
-        )
-
-
 class Sim:
     """Drone simulation based on gym-pybullet-drones."""
 
@@ -445,3 +412,36 @@ class Sim:
         ) / self.drone.params.pwm2rpm_scale
         pwm = np.clip(pwm, self.drone.params.min_pwm, self.drone.params.max_pwm)
         return self.drone.params.pwm2rpm_const + self.drone.params.pwm2rpm_scale * pwm
+
+
+@dataclass
+class SimSettings:
+    """Simulation settings dataclass."""
+
+    sim_freq: int = 500
+    ctrl_freq: int = 500
+    gui: bool = False
+    pybullet_id: int = 0
+    # Camera settings
+    render_resolution: tuple[int, int] = (640, 480)
+    camera_view: tuple[float, ...] = (0,) * 16
+    camera_projection: tuple[float, ...] = (0,) * 16
+
+    def __post_init__(self):
+        """Compute the camera projection and view matrices based on the settings."""
+        assert self.sim_freq % self.ctrl_freq == 0, "sim_freq must be divisible by ctrl_freq."
+        self.camera_projection = p.computeProjectionMatrixFOV(
+            fov=60.0,
+            aspect=self.render_resolution[0] / self.render_resolution[1],
+            nearVal=0.1,
+            farVal=1000.0,
+        )
+        self.camera_view = p.computeViewMatrixFromYawPitchRoll(
+            distance=3,
+            yaw=-30,
+            pitch=-30,
+            roll=0,
+            cameraTargetPosition=[0, 0, 0],
+            upAxisIndex=2,
+            physicsClientId=0,
+        )

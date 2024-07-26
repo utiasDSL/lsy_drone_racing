@@ -40,9 +40,7 @@ from lsy_drone_racing.wrapper import ObsWrapper
 class Controller(BaseController):
     """Template controller class."""
 
-    def __init__(
-        self, initial_obs: npt.NDArray[np.floating], initial_info: dict, buffer_size: int = 100
-    ):
+    def __init__(self, initial_obs: npt.NDArray[np.floating], initial_info: dict):
         """Initialization of the controller.
 
         INSTRUCTIONS:
@@ -54,9 +52,8 @@ class Controller(BaseController):
             initial_obs: The initial observation of the environment's state. See the environment's
                 observation space for details.
             initial_info: Additional environment information from the reset.
-            buffer_size: Size of the data buffers used in method `learn()`.
         """
-        super().__init__(initial_obs, initial_info, buffer_size)
+        super().__init__(initial_obs, initial_info)
         self.policy = PPO.load(Path(__file__).resolve().parents[1] / "models/ppo/model.zip")
         self._last_action = np.zeros(3)
 
