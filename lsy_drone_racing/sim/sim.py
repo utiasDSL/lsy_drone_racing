@@ -19,7 +19,13 @@ from gymnasium.utils import seeding
 
 from lsy_drone_racing.sim.drone import Drone
 from lsy_drone_racing.sim.noise import NoiseList
-from lsy_drone_racing.sim.physics import GRAVITY, Physics, PhysicsMode
+from lsy_drone_racing.sim.physics import (
+    GRAVITY,
+    PhysicsMode,
+    apply_force_torques,
+    force_torques,
+    pybullet_step,
+)
 from lsy_drone_racing.sim.symbolic import SymbolicModel, symbolic
 from lsy_drone_racing.utils import map2pi
 
@@ -65,7 +71,7 @@ class Sim:
         self.n_drones = n_drones
         self.pyb_client = p.connect(p.GUI if gui else p.DIRECT)
         self.settings = SimSettings(sim_freq, ctrl_freq, gui, pybullet_id=self.pyb_client)
-        self.physics = Physics(self.pyb_client, 1 / sim_freq, PhysicsMode(physics))
+        self.physics_mode = PhysicsMode(physics)
 
         # Create the state and action spaces of the simulation. Note that the state space is
         # different from the observation space of any derived environment.
@@ -119,7 +125,6 @@ class Sim:
         self.n_obstacles = len(self.obstacles)
 
         # Helper variables
-        self._recording = None  # PyBullet recording.
         self.reset()  # TODO: Avoid double reset.
 
     def step(self, desired_thrust: npt.NDArray[np.floating]):
@@ -135,9 +140,10 @@ class Sim:
             disturb_force = self.disturbances["dynamics"].apply(disturb_force)
         for _ in range(self.settings.sim_freq // self.settings.ctrl_freq):
             self.drone.rpm[:] = rpm  # Save the last applied action (e.g. to compute drag)
-            force_torques = self.physics.calculate_force_torques(self.drone, rpm, [])
-            self.physics.apply(self.drone, force_torques, disturb_force)
-            self.physics.step(self.drone)
+            dt = 1 / self.settings.sim_freq
+            ft = force_torques(self.drone, rpm, self.physics_mode, dt, self.pyb_client)
+            apply_force_torques(self.pyb_client, self.drone, ft, disturb_force)
+            pybullet_step(self.pyb_client, self.drone, self.physics_mode)
             self._sync_pyb_to_sim()
 
     def reset(self):
@@ -198,27 +204,8 @@ class Sim:
         )
         return np.reshape(rgb, (h, w, 4))
 
-    def record(self, path: Path):
-        """Start the recording of a video output.
-
-        The format of the video output is .mp4 and only recorded if the gui is activated.
-
-        Args:
-            path: The path to save the video output.
-        """
-        if not self.settings.gui:
-            logger.warning("Cannot record video without GUI.")
-            return
-        self._recording = p.startStateLogging(
-            loggingType=p.STATE_LOGGING_VIDEO_MP4,
-            fileName=str(path.absolute()),
-            physicsClientId=self.pyb_client,
-        )
-
     def close(self):
         """Stop logging and disconnect from the PyBullet simulation."""
-        if self._recording is not None:
-            p.stopStateLogging(self._recording, physicsClientId=self.pyb_client)
         if self.pyb_client >= 0:
             p.disconnect(physicsClientId=self.pyb_client)
         self.pyb_client = -1
