@@ -1,0 +1,7 @@
+services:
+  sim:
+    build:
+      dockerfile: ./docker/Dockerfile
+      context: .
+    volumes:
+      - ./:/home/lsy_drone_racing
