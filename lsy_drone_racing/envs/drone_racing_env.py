@@ -11,6 +11,7 @@ from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.drone import Drone
 from lsy_drone_racing.sim.sim import Sim
+from lsy_drone_racing.utils import check_gate_pass
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class DroneRacingEnv(gymnasium.Env):
             sim_freq=config.sim.sim_freq,
             ctrl_freq=config.sim.ctrl_freq,
             disturbances=config.sim.disturbances,
+            randomization=getattr(config.env, "randomization", {}),
             gui=config.sim.gui,
             n_drones=1,
             physics=config.sim.physics,
@@ -47,6 +49,7 @@ class DroneRacingEnv(gymnasium.Env):
         self.symbolic = config.env.symbolic
         self._steps = 0
         self._debug_time = 0  # TODO: Remove this
+        self._last_drone_pos = np.zeros(3)
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         if self.config.env.reseed:
@@ -63,6 +66,7 @@ class DroneRacingEnv(gymnasium.Env):
         vel = obs["vel"]
         ang_vel = obs["ang_vel"]
         self.drone.reset(pos, rpy, vel)
+        self._last_drone_pos[:] = pos
         obs = np.concatenate(
             [np.array([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2]]), rpy, ang_vel]
         )
@@ -89,7 +93,10 @@ class DroneRacingEnv(gymnasium.Env):
         while self.drone.tick / self.drone.firmware_freq < (self._steps + 1) / self.step_freq:
             self.sim.step(thrust)
             t1 = time.perf_counter()
-            self.check_gate_progress()
+            if self.gate_passed():
+                self.target_gate += 1
+                if self.target_gate == self.sim.n_gates:
+                    self.target_gate = -1
             t2 = time.perf_counter()
             self._debug_time += t2 - t1
             obs = self.obs
@@ -101,10 +108,12 @@ class DroneRacingEnv(gymnasium.Env):
                 collision = True
             thrust = self.drone.step_controller(pos, rpy, vel)[::-1]
         self.sim.drone.desired_thrust[:] = thrust
+        self._last_drone_pos[:] = self.sim.drone.pos
         self._steps += 1
         terminated = self.terminated or collision
-        # if terminated: TODO: Revise the gate checking logic
-        # print(f"Time spent in check_gate_progress: {self._debug_time:.5f} s")
+        if terminated:
+            ...
+            # print(f"Time spent in check_gate_progress: {self._debug_time:.5f} s")
         return obs.astype(np.float32), self.reward, terminated, False, self.info
 
     @property
@@ -166,7 +175,7 @@ class DroneRacingEnv(gymnasium.Env):
             info["symbolic.model"] = self.sim.symbolic()
         return info
 
-    def check_gate_progress(self):
+    def gate_passed(self) -> bool:
         # TODO: Check with an analytical solution instead of ray
         if self.sim.n_gates > 0 and self.target_gate < self.sim.n_gates and self.target_gate != -1:
             x, y, z = self.sim.gates[self.target_gate]["pos"]
@@ -185,9 +194,18 @@ class DroneRacingEnv(gymnasium.Env):
                 rayFromPositions=fr, rayToPositions=to, physicsClientId=self.sim.pyb_client
             )
             if any(r[2] < 0.9999 and r[0] == self.sim.drone.id for r in rays):
-                self.target_gate += 1
-            if self.target_gate == self.sim.n_gates:
-                self.target_gate = -1
+                return True
+        return False
+
+    def gate_passed_v2(self) -> bool:
+        if self.sim.n_gates > 0 and self.target_gate < self.sim.n_gates and self.target_gate != -1:
+            gate_pos = self.sim.gates[self.target_gate]["pos"]
+            gate_rot = R.from_euler("xyz", self.sim.gates[self.target_gate]["rpy"])
+            drone_pos = self.sim.drone.pos
+            last_drone_pos = self._last_drone_pos
+            gate_size = (0.4, 0.4)  # TODO: Load from URDF
+            return check_gate_pass(gate_pos, gate_rot, gate_size, drone_pos, last_drone_pos)
+        return False
 
     def render(self):
         self.sim.render()

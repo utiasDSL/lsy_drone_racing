@@ -196,7 +196,7 @@ class DroneRacingObservationWrapper:
         """
         # if not isinstance(env, DroneRacingEnv):
         #     raise TypeError(f"`env` must be an instance of `DroneRacingEnv`, is {type(env)}")
-        self.env = env.unwrapped
+        self.env = env
         self.pyb_client: int = self.env.unwrapped.sim.pyb_client
 
     def __getattribute__(self, name: str) -> Any:

@@ -59,13 +59,3 @@ pos = [1.0, 1.0, 0.05]
 rpy = [0, 0, 0]
 vel = [0, 0, 0]
 ang_vel = [0, 0, 0]
-
-[[env.constraints]]
-type = "DefaultConstraint"
-ctype = "input"
-[[env.constraints]]
-type = "BoundedConstraint"
-ctype = "state"
-active_dims = [0, 2, 4]
-upper_bounds = [3, 3, 2]
-lower_bounds = [-3.0, -3.0, -0.1]

@@ -13,6 +13,7 @@ import numpy.typing as npt
 import pybullet as p
 import toml
 from munch import munchify
+from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.controller import BaseController
 
@@ -83,7 +84,11 @@ def load_config(path: Path) -> Munch:
 
 
 def check_gate_pass(
-    gate_pose: np.ndarray, drone_pos: np.ndarray, last_drone_pos: np.ndarray
+    gate_pos: np.ndarray,
+    gate_rot: R,
+    gate_size: np.ndarray,
+    drone_pos: np.ndarray,
+    last_drone_pos: np.ndarray,
 ) -> bool:
     """Check if the drone has passed the current gate.
 
@@ -99,32 +104,23 @@ def check_gate_pass(
         goal changes.
 
     Args:
-        gate_pose: The pose of the gate in the world frame.
+        gate_pos: The position of the gate in the world frame.
+        gate_rot: The rotation of the gate in the world frame.
+        gate_size: The size of the gate box in meters.
         drone_pos: The position of the drone in the world frame.
         last_drone_pos: The position of the drone in the world frame at the last time step.
     """
     # Transform last and current drone position into current gate frame.
-    cos_goal, sin_goal = np.cos(gate_pose[5]), np.sin(gate_pose[5])
-    last_dpos = last_drone_pos - gate_pose[0:3]
-    last_drone_pos_gate = np.array(
-        [
-            cos_goal * last_dpos[0] - sin_goal * last_dpos[1],
-            sin_goal * last_dpos[0] + cos_goal * last_dpos[1],
-            last_dpos[2],
-        ]
-    )
-    dpos = drone_pos - gate_pose[0:3]
-    drone_pos_gate = np.array(
-        [cos_goal * dpos[0] - sin_goal * dpos[1], sin_goal * dpos[0] + cos_goal * dpos[1], dpos[2]]
-    )
+    assert isinstance(gate_rot, R), "gate_rot has to be a Rotation object."
+    last_pos_local = gate_rot.apply(last_drone_pos - gate_pos)
+    pos_local = gate_rot.apply(drone_pos - gate_pos)
     # Check the plane intersection. If passed, calculate the point of the intersection and check if
     # it is within the gate box.
-    if last_drone_pos_gate[1] < 0 and drone_pos_gate[1] > 0:  # Drone has passed the goal plane
-        alpha = -last_drone_pos_gate[1] / (drone_pos_gate[1] - last_drone_pos_gate[1])
-        x_intersect = alpha * (drone_pos_gate[0]) + (1 - alpha) * last_drone_pos_gate[0]
-        z_intersect = alpha * (drone_pos_gate[2]) + (1 - alpha) * last_drone_pos_gate[2]
-        # TODO: Replace with autodetection of gate width
-        if abs(x_intersect) < 0.45 and abs(z_intersect) < 0.45:
+    if last_pos_local[1] < 0 and pos_local[1] > 0:  # Drone has passed the goal plane
+        alpha = -last_pos_local[1] / (pos_local[1] - last_pos_local[1])
+        x_intersect = alpha * (pos_local[0]) + (1 - alpha) * last_pos_local[0]
+        z_intersect = alpha * (pos_local[2]) + (1 - alpha) * last_pos_local[2]
+        if abs(x_intersect) < gate_size[0] and abs(z_intersect) < gate_size[1]:
             return True
     return False
 

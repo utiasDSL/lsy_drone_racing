@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 
 import fire
 import gymnasium
-import numpy as np
 import pybullet as p
 
 from lsy_drone_racing.utils import load_config, load_controller
@@ -49,23 +48,19 @@ def simulate(
     # Load configuration and check if firmare should be used.
     config = load_config(Path(config))
     config.sim.gui = gui
-
-    env = DroneRacingObservationWrapper(gymnasium.make("DroneRacing-v0", config=config))
-
     # Load the controller module
     path = Path(__file__).parents[1] / controller
     ctrl_class = load_controller(path)  # This returns a class, not an instance
-
     # Create a statistics collection
     stats = {"ep_reward": 0, "collisions": 0, "violations": 0, "gates_passed": 0}
     ep_times = []
 
-    # Run the episodes.
-    for _ in range(n_runs):
+    # Create the racing environment
+    env = DroneRacingObservationWrapper(gymnasium.make("DroneRacing-v0", config=config))
+
+    for _ in range(n_runs):  # Run n_runs episodes with the controller
         ep_start = time.time()
         done = False
-        action = np.zeros(4)
-        reward = 0
         obs, info = env.reset()
         info["ctrl_timestep"] = config.env.freq
         info["ctrl_freq"] = 1 / config.env.freq
