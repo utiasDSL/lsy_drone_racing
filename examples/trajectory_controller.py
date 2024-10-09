@@ -65,7 +65,7 @@ class Controller(BaseController):
                 [-0.5, -1.0, 0.8],
             ]
         )
-        t = np.arange(len(waypoints)) * 2
+        t = np.arange(len(waypoints))
         self.trajectory = CubicSpline(t, waypoints)
         self._tick = 0
 
