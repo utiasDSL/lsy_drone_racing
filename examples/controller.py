@@ -34,7 +34,6 @@ import numpy.typing as npt
 from stable_baselines3 import PPO
 
 from lsy_drone_racing.controller import BaseController
-from lsy_drone_racing.wrapper import ObsWrapper
 
 
 class Controller(BaseController):
@@ -74,20 +73,49 @@ class Controller(BaseController):
         Returns:
             The drone pose [x_des, y_des, z_des, yaw_des] as a numpy array.
         """
-        obs_tf = ObsWrapper.observation_transform(obs, info, self._last_action)
+        obs_tf = self.obs_transform(obs, info, self._last_action)
         action, _ = self.policy.predict(obs_tf, deterministic=True)
         self._last_action[:] = action
-        target_pos = self.action_transform(action, obs)
-        action = np.zeros(4)
-        action[:3] = target_pos
-        return action
+        return np.concatenate([obs["pos"] + action, [0]]).astype(np.float64)
 
-    @staticmethod
-    def action_transform(
-        action: npt.NDArray[np.floating], obs: npt.NDArray[np.floating]
+    def obs_transform(
+        self, obs: npt.NDArray[np.floating], info: dict, action: npt.NDArray[np.floating] | None
     ) -> npt.NDArray[np.floating]:
-        drone_pos = obs[:3]
-        return drone_pos + action
+        gate_vec = info["gates.pos"][info["target_gate"]].copy()
+        gate_vec /= np.linalg.norm(gate_vec)
+        gate_angle = info["gates.rpy"][info["target_gate"], 2]
+        gate_direction = np.array([np.cos(gate_angle), np.sin(gate_angle)])
+        to_obstacles = info["obstacles.pos"] - obs["pos"]
+        gate_id_onehot = np.zeros(info["gates.pos"].shape[0])
+        gate_id_onehot[info["target_gate"]] = 1
+
+        gates_pose = np.concatenate(
+            [np.concatenate([p, [y]]) for p, y in zip(info["gates.pos"], info["gates.rpy"][:, 2])]
+        )
+        state = np.concatenate(
+            [
+                obs["pos"],
+                obs["rpy"],
+                obs["vel"],
+                obs["ang_vel"],
+                gates_pose,
+                info["gates.in_range"],
+                info["obstacles.pos"].flatten(),
+                info["obstacles.in_range"],
+            ]
+        )
+        obs = np.concatenate(
+            [
+                state,
+                gate_id_onehot,
+                (info["gates.pos"] - obs["pos"]).flatten(),
+                to_obstacles.flatten(),
+                gate_vec,
+                gate_direction,
+                action,
+            ]
+        )
+        return obs.astype(np.float32)
 
     def episode_reset(self):
         self._last_action = np.zeros(3)

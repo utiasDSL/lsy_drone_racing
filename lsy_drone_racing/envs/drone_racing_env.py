@@ -34,7 +34,7 @@ class DroneRacingEnv(gymnasium.Env):
             track=config.env.track,
             sim_freq=config.sim.sim_freq,
             ctrl_freq=config.sim.ctrl_freq,
-            disturbances=config.sim.disturbances,
+            disturbances=getattr(config.sim, "disturbances", {}),
             randomization=getattr(config.env, "randomization", {}),
             gui=config.sim.gui,
             n_drones=1,
