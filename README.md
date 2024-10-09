@@ -80,17 +80,20 @@ python scripts/sim.py
 
 If everything is installed correctly, this opens the simulator and simulates a drone flying through four gates.
 
+### Using Docker
+TODO: Add docker instructions
+
 ## Difficulty levels
-The complete problem is specified by a YAML file, e.g. [`getting_started.yaml`](config/getting_started.yaml)
+The complete problem is specified by a TOML file, e.g. [`getting_started.toml`](config/getting_started.toml)
 
 The config folder contains settings for progressively harder scenarios:
 
 |         Evaluation Scenario         | Constraints | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes |         Notes         |
 | :---------------------------------: | :---------: | :-----------------------: | :-------------------------: | :--------------------: | :-------------------: |
-| [`level0.yaml`](config/level0.yaml) |   **Yes**   |           *No*            |            *No*             |          *No*          |   Perfect knowledge   |
-| [`level1.yaml`](config/level1.yaml) |   **Yes**   |          **Yes**          |            *No*             |          *No*          |       Adaptive        |
-| [`level2.yaml`](config/level2.yaml) |   **Yes**   |          **Yes**          |           **Yes**           |          *No*          | Learning, re-planning |
-| [`level3.yaml`](config/level3.yaml) |   **Yes**   |          **Yes**          |           **Yes**           |        **Yes**         |      Robustness       |
+| [`level0.toml`](config/level0.toml) |   **Yes**   |           *No*            |            *No*             |          *No*          |   Perfect knowledge   |
+| [`level1.toml`](config/level1.toml) |   **Yes**   |          **Yes**          |            *No*             |          *No*          |       Adaptive        |
+| [`level2.toml`](config/level2.toml) |   **Yes**   |          **Yes**          |           **Yes**           |          *No*          | Learning, re-planning |
+| [`level3.toml`](config/level3.toml) |   **Yes**   |          **Yes**          |           **Yes**           |        **Yes**         |      Robustness       |
 |                                     |             |                           |                             |                        |                       |
 |              sim2real               |   **Yes**   |    Real-life hardware     |           **Yes**           |          *No*          |   Sim2real transfer   |
 
@@ -100,7 +103,7 @@ The config folder contains settings for progressively harder scenarios:
 You can choose which configuration to use by changing the `--config` command line option. To e.g. run the example controller on the hardest scenario, you can use the following command
 
 ```bash
-python scripts/sim.py --config config/level3.yaml
+python scripts/sim.py --config config/level3.toml
 ```
 
 ## The online competition
@@ -274,7 +277,7 @@ roslaunch crazyswarm cf_sim2real.launch
 In a second terminal:
 
 ```bash
-python scripts/deploy.py --controller <path/to/your/controller.py> --config config/level3.yaml
+python scripts/deploy.py --controller <path/to/your/controller.py> --config config/level3.toml
 ```
 
 where `<path/to/your/controller.py>` implements a controller that inherits from `lsy_drone_racing.controller.BaseController`

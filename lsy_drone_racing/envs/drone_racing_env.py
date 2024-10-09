@@ -51,7 +51,7 @@ class DroneRacingEnv(gymnasium.Env):
             }
         )
         self.target_gate = 0
-        self.symbolic = config.env.symbolic
+        self.symbolic = self.sim.symbolic() if config.env.symbolic else None
         self._steps = 0
         self._debug_time = 0  # TODO: Remove this
         self._last_drone_pos = np.zeros(3)
@@ -116,14 +116,14 @@ class DroneRacingEnv(gymnasium.Env):
             "vel": self.sim.drone.vel.astype(np.float32),
             "ang_vel": self.sim.drone.ang_vel.astype(np.float32),
         }
-        obs["ang_vel"][:] = R.from_euler("XYZ", obs["rpy"]).as_matrix().T @ obs["ang_vel"]
+        obs["ang_vel"][:] = R.from_euler("XYZ", obs["rpy"]).inv().apply(obs["ang_vel"])
         if "observation" in self.sim.disturbances:
             obs = self.sim.disturbances["observation"].apply(obs)
         return obs
 
     @property
     def reward(self) -> float:
-        return -1
+        return -1.0
 
     @property
     def terminated(self) -> bool:
@@ -162,9 +162,7 @@ class DroneRacingEnv(gymnasium.Env):
         obstacles_pos[in_range] = np.stack([o["pos"] for o in obstacles.values()])[in_range]
         info["obstacles.pos"] = obstacles_pos
         info["obstacles.in_range"] = in_range
-
-        if self.symbolic:
-            info["symbolic.model"] = self.sim.symbolic()
+        info["symbolic.model"] = self.symbolic
         return info
 
     def gate_passed(self) -> bool:
@@ -195,7 +193,7 @@ class DroneRacingEnv(gymnasium.Env):
             gate_rot = R.from_euler("xyz", self.sim.gates[self.target_gate]["rpy"])
             drone_pos = self.sim.drone.pos
             last_drone_pos = self._last_drone_pos
-            gate_size = (0.4, 0.4)  # TODO: Load from URDF
+            gate_size = (0.45, 0.45)
             return check_gate_pass(gate_pos, gate_rot, gate_size, drone_pos, last_drone_pos)
         return False
 

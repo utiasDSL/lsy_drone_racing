@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING
 
 import gymnasium
 import numpy as np
-import pycrazyswarm
+from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.sim.drone import Drone
-from lsy_drone_racing.sim.symbolic import symbolic
-from lsy_drone_racing.utils.import_utils import get_ros_package_path
+from lsy_drone_racing.sim.sim import Sim
+from lsy_drone_racing.utils.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
 from lsy_drone_racing.vicon import Vicon
 
@@ -27,16 +27,32 @@ class DroneRacingDeployEnv(gymnasium.Env):
     def __init__(self, config: dict | Munch):
         super().__init__()
         self.config = config
-        self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(4,))
-        self.observation_space = gymnasium.spaces.Box(low=-np.inf, high=np.inf, shape=(13,))
+        self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(7,))
+        self.observation_space = spaces.Dict(
+            {
+                "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+            }
+        )
         self.target_gate = 0
         crazyswarm_config_path = get_ros_package_path("crazyswarm") / "launch/crazyflies.yaml"
         # pycrazyswarm expects strings, not Path objects, so we need to convert it first
         swarm = pycrazyswarm.Crazyswarm(str(crazyswarm_config_path))
         self.cf = swarm.allcfs.crazyflies[0]
         self.vicon = Vicon(track_names=[], timeout=5)
+        self.symbolic = None
         if config.env.symbolic:
-            self.symbolic_model = symbolic(Drone(self.CONTROLLER), 1 / config.sim.ctrl_freq)
+            sim = Sim(
+                track=config.env.track,
+                sim_freq=config.sim.sim_freq,
+                ctrl_freq=config.sim.ctrl_freq,
+                disturbances=getattr(config.sim, "disturbances", {}),
+                randomization=getattr(config.env, "randomization", {}),
+                physics=config.sim.physics,
+            )
+            self.symbolic = sim.symbolic()
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         """Reset the environment.
@@ -52,9 +68,12 @@ class DroneRacingDeployEnv(gymnasium.Env):
     def step(
         self, action: NDArray[np.floating]
     ) -> tuple[NDArray[np.floating], float, bool, bool, dict]:
-        pos, vel, acc, yaw, rpy_rates = action[:3], action[3:6], action[6:9], action[9], action[10:]
-        self.cf.cmdFullState(pos, vel, acc, yaw, rpy_rates)
-        return self.obs, 0, False, False, {}
+        tstart = time.perf_counter()
+        pos, vel, yaw = action[:3], action[3:6], action[6]
+        self.cf.cmdFullState(pos, vel, np.zeros(3), yaw, np.zeros(3))
+        if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
+            time.sleep(1 / self.config.env.freq - dt)
+        return self.obs, -1.0, False, False, self.info
 
     def close(self):
         self.cf.notifySetpointsStop()
@@ -63,11 +82,12 @@ class DroneRacingDeployEnv(gymnasium.Env):
     @property
     def obs(self) -> dict:
         drone = self.vicon.drone_name
+        rpy = self.vicon.rpy[drone]
         obs = {
             "pos": self.vicon.pos[drone],
-            "rpy": self.vicon.rpy[drone],
+            "rpy": rpy,
             "vel": self.vicon.vel[drone],
-            "ang_vel": R.from_euler("xyz", self.vicon.rpy[drone]).apply(self.vicon.ang_vel[drone]),
+            "ang_vel": R.from_euler("xyz", rpy).inv().apply(self.vicon.ang_vel[drone]),
         }
         return obs
 
@@ -99,10 +119,21 @@ class DroneRacingDeployEnv(gymnasium.Env):
         obstacles_pos[in_range] = real_obstacles_pos[in_range]
         info["obstacles.pos"] = obstacles_pos
         info["obstacles.in_range"] = in_range
+        info["symbolic.model"] = self.symbolic
+        assert all(
+            k in info
+            for k in (
+                "collisions",
+                "target_gate",
+                "drone.pos",
+                "gates.pos",
+                "gates.rpy",
+                "gates.in_range",
+                "obstacles.pos",
+                "obstacles.in_range",
+                "symbolic.model",
+            )
+        )
+        return info
 
-        if self.config.env.symbolic:
-            info["symbolic.model"] = self.symbolic_model
-        return {}
-
-    def check_gate_progress(self):
-        ...
+    def check_gate_progress(self): ...

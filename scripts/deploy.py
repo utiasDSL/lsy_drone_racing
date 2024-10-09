@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("rosout." + __name__)
 
 
-def main(config: str = "config/getting_started.yaml", controller: str = "examples/controller.py"):
+def main(config: str = "config/level0.toml", controller: str = "examples/trajectory_controller.py"):
     """Deployment script to run the controller on the real drone.
 
     Args:
@@ -38,25 +38,25 @@ def main(config: str = "config/getting_started.yaml", controller: str = "example
     config = load_config(Path(config))
     env: DroneRacingDeployEnv = gymnasium.make("DroneRacingDeploy-v0", config=config)
     obs, info = env.reset()
-    terminated = False
 
-    Controller = load_controller(Path(controller))
-    ctrl = Controller(obs, info)
+    controller_cls = load_controller(Path(controller))
+    controller = controller_cls(obs, info)
 
     try:
         start_time = time.perf_counter()
         while True:
             t_loop = time.perf_counter()
-            action = ctrl.compute_control(env.obs, env.info)
+            action = controller.compute_control(env.obs, env.info)
             next_obs, reward, terminated, truncated, info = env.step(action)
-            ctrl.step_learn(action, next_obs, reward, terminated, truncated, info)
+            controller.step_learn(action, next_obs, reward, terminated, truncated, info)
             if terminated or truncated:
                 break
             if dt := (time.perf_counter() - t_loop) < config.env.freq:
                 time.sleep(config.env.freq - dt)  # Maintain the control loop frequency
-        total_time = time.perf_counter() - start_time
-        ctrl.episode_learn()
-        logger.info(f"Total time: {total_time:.3f}s" if obs["gate"] == -1 else "Task not completed")
+        ep_time = time.perf_counter() - start_time
+        controller.episode_learn()
+        logger.info(f"Track time: {ep_time:.3f}s" if obs["gate"] == -1 else "Task not completed")
+        return ep_time
     finally:
         env.close()
 
