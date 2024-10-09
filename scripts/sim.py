@@ -2,7 +2,7 @@
 
 Run as:
 
-    $ python scripts/sim.py --config config/getting_started.yaml
+    $ python scripts/sim.py --config config/level0.toml
 
 Look for instructions in `README.md` and `edit_this.py`.
 """
@@ -19,7 +19,6 @@ import gymnasium
 import pybullet as p
 
 from lsy_drone_racing.utils import load_config, load_controller
-from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
 if TYPE_CHECKING:
     from munch import Munch
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "config/getting_started.toml",
+    config: str = "config/level0.toml",
     controller: str = "examples/controller.py",
     n_runs: int = 1,
     gui: bool = True,
@@ -56,7 +55,7 @@ def simulate(
     ep_times = []
 
     # Create the racing environment
-    env = DroneRacingObservationWrapper(gymnasium.make("DroneRacing-v0", config=config))
+    env = gymnasium.make("DroneRacing-v0", config=config)
 
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         ep_start = time.time()
@@ -66,7 +65,9 @@ def simulate(
         info["ctrl_freq"] = 1 / config.env.freq
         # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
         ctrl = ctrl_class(obs, info)
-        gui_timer = p.addUserDebugText("", textPosition=[0, 0, 1], physicsClientId=env.pyb_client)
+        gui_timer = p.addUserDebugText(
+            "", textPosition=[0, 0, 1], physicsClientId=env.unwrapped.sim.pyb_client
+        )
         i = 0
         while not done:
             curr_time = i / config.env.freq
@@ -79,7 +80,7 @@ def simulate(
                 parentObjectUniqueId=0,
                 parentLinkIndex=-1,
                 replaceItemUniqueId=gui_timer,
-                physicsClientId=env.pyb_client,
+                physicsClientId=env.unwrapped.sim.pyb_client,
             )
 
             # Get the observation from the motion capture system
@@ -122,11 +123,11 @@ def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float):
     if stats["gates_passed"] == -1:  # The drone has passed the final gate
         stats["gates_passed"] = len(config.env.track.gates)
     if info["collisions"]:
-        termination = "COLLISION"
+        termination = "Collision"
     elif info["target_gate"] == -1:
-        termination = "TASK COMPLETED"
+        termination = "Task completed"
     else:
-        termination = "MAX EPISODE DURATION"
+        termination = "Unknown"
     logger.info(
         (
             f"Flight time (s): {curr_time}\n"

@@ -7,6 +7,7 @@ import gymnasium
 import numpy as np
 import numpy.typing as npt
 import pybullet as p
+from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.drone import Drone
@@ -40,11 +41,19 @@ class DroneRacingEnv(gymnasium.Env):
             physics=config.sim.physics,
         )
         self.sim.seed(config.env.seed)
-        self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(4,))
-        fm = np.finfo(np.float32).max
-        low = np.array([-5, -fm, -5, -fm, -0.25, -fm, -np.pi, -np.pi, -np.pi, -fm, -fm, -fm])
-        high = np.array([5, fm, 5, fm, 2.5, fm, np.pi, np.pi, np.pi, fm, fm, fm])
-        self.observation_space = gymnasium.spaces.Box(low=low, high=high, dtype=np.float32)
+        self.action_space = spaces.Box(low=-1, high=1, shape=(4,))
+        self.observation_space = spaces.Dict(
+            {
+                "pos": spaces.Box(
+                    low=-np.array([5, 5, 0], np.float32),
+                    high=np.array([5, 5, 3], np.float32),
+                    shape=(3,),
+                ),
+                "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+            }
+        )
         self.target_gate = 0
         self.symbolic = config.env.symbolic
         self._steps = 0
@@ -60,19 +69,11 @@ class DroneRacingEnv(gymnasium.Env):
         self.target_gate = 0
         self._debug_time = 0  # TODO: Remove this
         self._steps = 0
-        obs = self.obs
-        pos = obs["pos"]
-        rpy = obs["rpy"]
-        vel = obs["vel"]
-        ang_vel = obs["ang_vel"]
-        self.drone.reset(pos, rpy, vel)
-        self._last_drone_pos[:] = pos
-        obs = np.concatenate(
-            [np.array([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2]]), rpy, ang_vel]
-        )
+        self.drone.reset(self.sim.drone.pos, self.sim.drone.rpy, self.sim.drone.vel)
+        self._last_drone_pos[:] = self.sim.drone.pos
         if self.sim.n_drones > 1:
             raise NotImplementedError("Firmware wrapper does not support multiple drones.")
-        return obs.astype(np.float32), self.info
+        return self.obs, self.info
 
     def step(self, action: np.ndarray):
         """Step the firmware_wrapper class and its environment.
@@ -99,13 +100,9 @@ class DroneRacingEnv(gymnasium.Env):
                     self.target_gate = -1
             t2 = time.perf_counter()
             self._debug_time += t2 - t1
-            obs = self.obs
-            pos, vel, rpy, ang_vel = obs["pos"], obs["vel"], obs["rpy"], obs["ang_vel"]
-            obs = np.concatenate(
-                [np.array([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2]]), rpy, ang_vel]
-            )
             if self.sim.collisions:
                 collision = True
+            pos, rpy, vel = self.sim.drone.pos, self.sim.drone.rpy, self.sim.drone.vel
             thrust = self.drone.step_controller(pos, rpy, vel)[::-1]
         self.sim.drone.desired_thrust[:] = thrust
         self._last_drone_pos[:] = self.sim.drone.pos
@@ -114,17 +111,17 @@ class DroneRacingEnv(gymnasium.Env):
         if terminated:
             ...
             # print(f"Time spent in check_gate_progress: {self._debug_time:.5f} s")
-        return obs.astype(np.float32), self.reward, terminated, False, self.info
+        return self.obs, self.reward, terminated, False, self.info
 
     @property
     def obs(self) -> dict[str, npt.ndarray[np.floating]]:
         obs = {
-            "pos": self.sim.drone.pos.copy(),
-            "rpy": self.sim.drone.rpy.copy(),
-            "vel": self.sim.drone.vel.copy(),
-            "ang_vel": self.sim.drone.ang_vel.copy(),
+            "pos": self.sim.drone.pos.astype(np.float32),
+            "rpy": self.sim.drone.rpy.astype(np.float32),
+            "vel": self.sim.drone.vel.astype(np.float32),
+            "ang_vel": self.sim.drone.ang_vel.astype(np.float32),
         }
-        obs["ang_vel"] = R.from_euler("XYZ", obs["rpy"]).as_matrix().T @ obs["ang_vel"]
+        obs["ang_vel"][:] = R.from_euler("XYZ", obs["rpy"]).as_matrix().T @ obs["ang_vel"]
         if "observation" in self.sim.disturbances:
             obs = self.sim.disturbances["observation"].apply(obs)
         return obs

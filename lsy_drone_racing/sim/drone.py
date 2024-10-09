@@ -88,9 +88,9 @@ class Drone:
         self._reset_controller()
         # Initilaize high level commander
         self.firmware.crtpCommanderHighLevelInit()
-        pos = self.init_pos if pos is None else pos
-        rpy = self.init_rpy if rpy is None else rpy
-        vel = self.init_vel if vel is None else vel
+        pos = self.init_pos if pos is None else pos.copy()
+        rpy = self.init_rpy if rpy is None else rpy.copy()
+        vel = self.init_vel if vel is None else vel.copy()
         self._update_state(0, pos, np.rad2deg(rpy), vel, np.array([0, 0, 1.0]))
         self._last_vel[...], self._last_rpy[...] = vel, rpy
         self.firmware.crtpCommanderHighLevelTellState(self._state)
@@ -105,6 +105,7 @@ class Drone:
             rpy: Current roll, pitch, yaw of the drone.
             vel: Current velocity of the drone.
         """
+        pos, rpy, vel = pos.copy(), rpy.copy(), vel.copy()
         body_rot = R.from_euler("XYZ", rpy).inv()
         # Estimate rates
         rotation_rates = (rpy - self._last_rpy) * self.params.firmware_freq  # body coord, rad/s
