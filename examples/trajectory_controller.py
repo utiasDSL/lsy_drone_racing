@@ -88,21 +88,20 @@ class Controller(BaseController):
     ) -> npt.NDarray[np.floating]:
         """Compute the next desired position and orientation of the drone.
 
-        INSTRUCTIONS:
-            Re-implement this method to return the target pose to be sent from Crazyswarm to the
-            Crazyflie using the `cmdFullState` call.
-
         Args:
             obs: The current observation of the environment. See the environment's observation space
                 for details.
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone pose [x_des, y_des, z_des, yaw_des] as a numpy array.
+            The drone pose [x_des, y_des, z_des, vx_dese, vy_des, vz_des, yaw_des] as a numpy array.
         """
         target_pos = self.trajectory(self._tick / 30)
+        return np.concatenate((target_pos, np.zeros(4)))
+
+    def step_learn(self, *args, **kwargs):
         self._tick += 1
-        return np.concatenate((target_pos, [0]))
+        return super().step_learn(*args, **kwargs)
 
     def episode_reset(self):
         self._tick = 0

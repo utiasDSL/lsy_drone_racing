@@ -34,7 +34,6 @@ class BaseController(ABC):
             initial_obs: The initial observation of the environment's state. See the environment's
                 observation space for details.
             initial_info: Additional environment information from the reset.
-            buffer_size: Size of the data buffers used in method `learn()`.
         """
 
     @abstractmethod
@@ -53,7 +52,8 @@ class BaseController(ABC):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone pose [x_des, y_des, z_des, yaw_des] in absolute coordinates as a numpy array.
+            The drone pose [x_des, y_des, z_des, vx_des, vy_des, vz_des, yaw_des] in absolute
+            coordinates as a numpy array.
         """
         #########################
         # REPLACE THIS (START) ##

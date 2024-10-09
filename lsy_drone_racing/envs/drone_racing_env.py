@@ -41,7 +41,7 @@ class DroneRacingEnv(gymnasium.Env):
             physics=config.sim.physics,
         )
         self.sim.seed(config.env.seed)
-        self.action_space = spaces.Box(low=-1, high=1, shape=(4,))
+        self.action_space = spaces.Box(low=-1, high=1, shape=(7,))
         self.observation_space = spaces.Dict(
             {
                 "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
@@ -80,10 +80,9 @@ class DroneRacingEnv(gymnasium.Env):
         Args:
             action: Full-state command [x_des, y_des, z_des, yaw_des] to follow.
         """
-        zeros = np.zeros(3, dtype=np.float64)
         action = action.astype(np.float64)  # Drone firmware expects float64
-        pos, yaw = action[:3], action[3]
-        self.drone.full_state_cmd(pos, zeros, zeros, yaw, zeros)
+        pos, vel, yaw = action[:3], action[3:6], action[6]
+        self.drone.full_state_cmd(pos, vel, np.zeros(3), yaw, np.zeros(3))
 
         thrust = self.drone.desired_thrust
         collision = False

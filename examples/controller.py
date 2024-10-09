@@ -59,11 +59,7 @@ class Controller(BaseController):
     def compute_control(
         self, obs: npt.NDArray[np.floating], info: dict | None = None
     ) -> npt.NDarray[np.floating]:
-        """Compute the next desired position and orientation of the drone.
-
-        INSTRUCTIONS:
-            Re-implement this method to return the target pose to be sent from Crazyswarm to the
-            Crazyflie using the `cmdFullState` call.
+        """Compute the next desired position, velocity and orientation of the drone.
 
         Args:
             obs: The current observation of the environment. See the environment's observation space
@@ -71,12 +67,12 @@ class Controller(BaseController):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone pose [x_des, y_des, z_des, yaw_des] as a numpy array.
+            The drone pose [x_des, y_des, z_des, vx_des, vy_des, vz_des, yaw_des] as a numpy array.
         """
         obs_tf = self.obs_transform(obs, info, self._last_action)
         action, _ = self.policy.predict(obs_tf, deterministic=True)
         self._last_action[:] = action
-        return np.concatenate([obs["pos"] + action, [0]]).astype(np.float64)
+        return np.concatenate([obs["pos"] + action, np.zeros(4)]).astype(np.float64)
 
     def obs_transform(
         self, obs: npt.NDArray[np.floating], info: dict, action: npt.NDArray[np.floating] | None
