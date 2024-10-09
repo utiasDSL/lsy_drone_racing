@@ -1,9 +1,22 @@
+# Level 2
+
+# | Evaluation Scenario | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes | Notes                 |
+# | :-----------------: | :-----------------------: | :-------------------------: | :--------------------: | :-------------------: |
+# | `level2.toml`       | **Yes**                   | **Yes**                     | *No*                   | Learning, re-planning |
+
 [sim]
-physics = "pyb"                                   # pyb: PyBullet, dyn: Mathematical dynamics model, TODO: Complete the list
+# Physics options:
+# "pyb": PyBullet
+# "dyn": Mathematical dynamics model 
+# "pyb_gnd" PyBullet with ground effect
+# "pyb_drag": PyBullet with drag
+# "pyb_dw": PyBullet with downwash
+# "pyb_gnd_drag_dw": PyBullet with ground effect, drag, and downwash.
+physics = "pyb"
 camera_view = [5.0, -40.0, -40.0, 0.5, -1.0, 0.5]
 sim_freq = 500                                    # Simulation frequency, in Hz
 ctrl_freq = 500                                   # Controller frequency, in Hz. This frequency is used to simulate the onboard controller, NOT for the environment's step function
-gui = true                                        # Enable/disable PyBullet's GUI
+gui = false                                       # Enable/disable PyBullet's GUI
 
 [sim.disturbances.action]
 type = "GaussianNoise"
@@ -76,15 +89,15 @@ high = [0.000001, 0.000001, 0.000001]
 
 [env.randomization.gate_pos]
 type = "uniform"
-low = [-0.1, -0.1, 0.0]
-high = [0.1, 0.1, 0.0]
+low = [-0.15, -0.15, 0.0]
+high = [0.15, 0.15, 0.0]
 
 [env.randomization.gate_rpy]
 type = "uniform"
 low = [0.0, 0.0, -0.1]
 high = [0.0, 0.0, 0.1]
 
-[env.randomization.obstacle_pos]
+[env.randomization.obstacles_pos]
 type = "uniform"
-low = [-0.1, -0.1, 0.0]
-high = [0.1, 0.1, 0.0]
+low = -0.15
+high = 0.15
