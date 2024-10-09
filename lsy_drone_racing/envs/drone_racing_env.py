@@ -44,11 +44,7 @@ class DroneRacingEnv(gymnasium.Env):
         self.action_space = spaces.Box(low=-1, high=1, shape=(4,))
         self.observation_space = spaces.Dict(
             {
-                "pos": spaces.Box(
-                    low=-np.array([5, 5, 0], np.float32),
-                    high=np.array([5, 5, 3], np.float32),
-                    shape=(3,),
-                ),
+                "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
