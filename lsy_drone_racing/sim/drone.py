@@ -9,11 +9,12 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from xml.etree import ElementTree
 
 import numpy as np
-import numpy.typing as npt
 from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from types import ModuleType
+
+    from numpy.typing import NDArray
 
 control_t = TypeVar("control_t")
 
@@ -69,9 +70,9 @@ class Drone:
 
     def reset(
         self,
-        pos: npt.NDArray[np.float64] | None = None,
-        rpy: npt.NDArray[np.float64] | None = None,
-        vel: npt.NDArray[np.float64] | None = None,
+        pos: NDArray[np.floating] | None = None,
+        rpy: NDArray[np.floating] | None = None,
+        vel: NDArray[np.floating] | None = None,
     ):
         """Reset the drone state and controllers.
 
@@ -95,11 +96,8 @@ class Drone:
         self.firmware.crtpCommanderHighLevelTellState(self._state)
 
     def step_controller(
-        self,
-        pos: npt.NDArray[np.float64],
-        rpy: npt.NDArray[np.float64],
-        vel: npt.NDArray[np.float64],
-    ) -> npt.NDArray[np.float64]:
+        self, pos: NDArray[np.floating], rpy: NDArray[np.floating], vel: NDArray[np.floating]
+    ) -> NDArray[np.floating]:
         """Take a drone controller step.
 
         Args:
@@ -140,10 +138,10 @@ class Drone:
     def _update_state(
         self,
         timestamp: float,
-        pos: npt.NDArray[np.float64],
-        rpy: npt.NDArray[np.float64],
-        vel: npt.NDArray[np.float64],
-        acc: npt.NDArray[np.float64],
+        pos: NDArray[np.floating],
+        rpy: NDArray[np.floating],
+        vel: NDArray[np.floating],
+        acc: NDArray[np.floating],
     ):
         self._state.timestamp = timestamp
         # Legacy cf coordinate system uses inverted pitch
@@ -156,16 +154,16 @@ class Drone:
         self._state.velocity.x, self._state.velocity.y, self._state.velocity.z = vel
         self._state.acc.x, self._state.acc.y, self._state.acc.z = acc
 
-    def _pwms_to_thrust(self, pwms: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    def _pwms_to_thrust(self, pwms: NDArray[np.floating]) -> NDArray[np.floating]:
         return self.params.kf * (self.params.pwm2rpm_scale * pwms + self.params.pwm2rpm_const) ** 2
 
     def full_state_cmd(
         self,
-        pos: npt.NDArray[np.float64],
-        vel: npt.NDArray[np.float64],
-        acc: npt.NDArray[np.float64],
+        pos: NDArray[np.floating],
+        vel: NDArray[np.floating],
+        acc: NDArray[np.floating],
         yaw: float,
-        rpy_rate: npt.NDArray[np.float64],
+        rpy_rate: NDArray[np.floating],
     ):
         """Send a full state command to the controller.
 
@@ -257,7 +255,7 @@ class Drone:
         self.firmware.crtpCommanderHighLevelStop()
         self._fullstate_cmd = False
 
-    def go_to_cmd(self, pos: npt.NDArray[np.float64], yaw: float, duration: float, relative: bool):
+    def go_to_cmd(self, pos: NDArray[np.floating], yaw: float, duration: float, relative: bool):
         """Send a go to command to the controller.
 
         Args:
@@ -362,7 +360,7 @@ class Drone:
         np.clip(pwms, self.params.min_pwm, self.params.max_pwm, out=pwms)
         self._pwms = pwms
 
-    def _thrust_to_pwm(self, thrust: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    def _thrust_to_pwm(self, thrust: NDArray[np.floating]) -> NDArray[np.floating]:
         """Convert thrust to PWM signal.
 
         Assumes brushed motors.
@@ -379,7 +377,7 @@ class Drone:
         return percentage * self.params.max_pwm
 
     def _update_sensor_data(
-        self, timestamp: float, acc: npt.NDArray[np.float64], gyro: npt.NDArray[np.float64]
+        self, timestamp: float, acc: NDArray[np.floating], gyro: NDArray[np.floating]
     ):
         """Update the onboard sensors with low-pass filtered values.
 
@@ -426,7 +424,7 @@ class DroneParams:
     mass: float
     arm_len: float
     thrust2weight_ratio: float
-    J: npt.NDArray[np.float64]
+    J: NDArray[np.floating]
     kf: float
     km: float
     collision_h: float
@@ -435,7 +433,7 @@ class DroneParams:
     max_speed_kmh: float
     gnd_eff_coeff: float
     prop_radius: float
-    drag_coeff: npt.NDArray[np.float64]
+    drag_coeff: NDArray[np.floating]
     dw_coeff_1: float
     dw_coeff_2: float
     dw_coeff_3: float
@@ -449,7 +447,7 @@ class DroneParams:
     min_rpm: float = 0.0
     max_rpm: float = 0.0
     gnd_eff_min_height_clip: float = 0.0
-    J_inv: npt.NDArray[np.float64] = field(default_factory=lambda: np.zeros((3, 3)))
+    J_inv: NDArray[np.floating] = field(default_factory=lambda: np.zeros((3, 3)))
     firmware_freq: int = 500  # Firmware frequency in Hz
     supply_voltage: float = 3.0  # Power supply voltage
     thrust_curve_a: float = -0.0006239  # Thrust curve parameters for brushed motors

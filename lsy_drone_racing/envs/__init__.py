@@ -10,4 +10,10 @@ register(
     max_episode_steps=900,  # 30 seconds * 30 Hz
 )
 
+register(
+    id="DroneRacingDeploy-v0",
+    entry_point="lsy_drone_racing.envs.drone_racing_deploy_env:DroneRacingDeployEnv",
+)
+
+
 __all__ = ["DroneRacingEnv"]

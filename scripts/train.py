@@ -91,7 +91,7 @@ def model_kwargs(kwargs: dict) -> dict:
     return new_kwargs
 
 
-def main(config: str = "config/learning.toml", wandb: bool = True, algo: str = "ppo"):
+def main(config: str = "config/level3.toml", wandb: bool = True, algo: str = "ppo"):
     """Train a drone racing agent."""
     algo = algo.lower()
     assert algo in algos, f"Algorithm {algo} not supported. Choose from {algos.keys()}."
