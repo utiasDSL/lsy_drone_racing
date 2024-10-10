@@ -22,15 +22,15 @@ class Noise:
         self.np_random = np.random.default_rng()
         self.mask = np.asarray(mask) if mask is not None else np.ones(dim, dtype=bool)
         assert self.dim == len(self.mask), "Mask shape should be the same as dim."
-        self.step = 0
+        self._step = 0
 
     def reset(self):
         """Reset the noise to its initial state."""
-        self.step = 0
+        self._step = 0
 
     def step(self):
         """Increment the noise step for time dependent noise classes."""
-        self.step += 1
+        self._step += 1
 
     def apply(self, target: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
         """Apply the noise to the target.
