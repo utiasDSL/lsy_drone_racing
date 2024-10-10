@@ -463,7 +463,6 @@ class DroneParams:
         self.J_inv = np.linalg.inv(self.J)
         self.min_rpm = self.pwm2rpm_scale * self.min_pwm + self.pwm2rpm_const
         self.max_rpm = self.pwm2rpm_scale * self.max_pwm + self.pwm2rpm_const
-        # TODO: Check if this computation is correct. Some use kf, others 4*kf
         self.min_thrust = self.kf * self.min_rpm**2
         self.max_thrust = self.kf * self.max_rpm**2
         self.gnd_eff_min_height_clip = (

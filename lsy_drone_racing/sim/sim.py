@@ -124,7 +124,6 @@ class Sim:
                 self.obstacles[i].update({"nominal." + k: v for k, v in obstacle.items()})
         self.n_obstacles = len(self.obstacles)
 
-        # Helper variables
         self.reset()  # TODO: Avoid double reset.
 
     def step(self, desired_thrust: npt.NDArray[np.floating]):

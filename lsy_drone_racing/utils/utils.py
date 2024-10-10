@@ -35,18 +35,6 @@ def map2pi(angle: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
     return ((angle + np.pi) % (2 * np.pi)) - np.pi
 
 
-def map2pi(angle: np.ndarray) -> np.ndarray:
-    """Map an angle or array of angles to the interval of [-pi, pi].
-
-    Args:
-        angle: Number or array of numbers.
-
-    Returns:
-        The remapped angles.
-    """
-    return ((angle + np.pi) % (2 * np.pi)) - np.pi
-
-
 def load_controller(path: Path) -> Type[BaseController]:
     """Load the controller module from the given path and return the Controller class.
 
@@ -112,8 +100,8 @@ def check_gate_pass(
     """
     # Transform last and current drone position into current gate frame.
     assert isinstance(gate_rot, R), "gate_rot has to be a Rotation object."
-    last_pos_local = gate_rot.apply(last_drone_pos - gate_pos)
-    pos_local = gate_rot.apply(drone_pos - gate_pos)
+    last_pos_local = gate_rot.apply(last_drone_pos - gate_pos, inverse=True)
+    pos_local = gate_rot.apply(drone_pos - gate_pos, inverse=True)
     # Check the plane intersection. If passed, calculate the point of the intersection and check if
     # it is within the gate box.
     if last_pos_local[1] < 0 and pos_local[1] > 0:  # Drone has passed the goal plane

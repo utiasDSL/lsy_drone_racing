@@ -53,7 +53,6 @@ class DroneRacingEnv(gymnasium.Env):
         self.target_gate = 0
         self.symbolic = self.sim.symbolic() if config.env.symbolic else None
         self._steps = 0
-        self._debug_time = 0  # TODO: Remove this
         self._last_drone_pos = np.zeros(3)
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
@@ -63,7 +62,6 @@ class DroneRacingEnv(gymnasium.Env):
             self.sim.seed(seed)
         self.sim.reset()
         self.target_gate = 0
-        self._debug_time = 0  # TODO: Remove this
         self._steps = 0
         self.drone.reset(self.sim.drone.pos, self.sim.drone.rpy, self.sim.drone.vel)
         self._last_drone_pos[:] = self.sim.drone.pos
@@ -88,24 +86,16 @@ class DroneRacingEnv(gymnasium.Env):
         collision = False
         while self.drone.tick / self.drone.firmware_freq < (self._steps + 1) / self.step_freq:
             self.sim.step(thrust)
-            t1 = time.perf_counter()
-            if self.gate_passed():
-                self.target_gate += 1
-                if self.target_gate == self.sim.n_gates:
-                    self.target_gate = -1
-            t2 = time.perf_counter()
-            self._debug_time += t2 - t1
-            if self.sim.collisions:
-                collision = True
+            self.target_gate += self.gate_passed()
+            if self.target_gate == self.sim.n_gates:
+                self.target_gate = -1
+            collision |= bool(self.sim.collisions)
             pos, rpy, vel = self.sim.drone.pos, self.sim.drone.rpy, self.sim.drone.vel
             thrust = self.drone.step_controller(pos, rpy, vel)[::-1]
         self.sim.drone.desired_thrust[:] = thrust
         self._last_drone_pos[:] = self.sim.drone.pos
         self._steps += 1
         terminated = self.terminated or collision
-        if terminated:
-            ...
-            # print(f"Time spent in check_gate_progress: {self._debug_time:.5f} s")
         return self.obs, self.reward, terminated, False, self.info
 
     @property
@@ -140,14 +130,13 @@ class DroneRacingEnv(gymnasium.Env):
     @property
     def info(self):
         info = {}
-        VISIBILITY_RANGE = 0.45  # TODO: Make this a parameter
         info["collisions"] = self.sim.collisions
         gates = self.sim.gates
         info["target_gate"] = self.target_gate if self.target_gate < len(gates) else -1
         info["drone.pos"] = self.sim.drone.pos.copy()
         # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
         # use the actual pose, otherwise use the nominal pose.
-        in_range = self.sim.in_range(gates, self.sim.drone, VISIBILITY_RANGE)
+        in_range = self.sim.in_range(gates, self.sim.drone, self.config.env.sensor_range)
         gates_pos = np.stack([g["nominal.pos"] for g in gates.values()])
         gates_pos[in_range] = np.stack([g["pos"] for g in gates.values()])[in_range]
         gates_rpy = np.stack([g["nominal.rpy"] for g in gates.values()])
@@ -157,7 +146,7 @@ class DroneRacingEnv(gymnasium.Env):
         info["gates.in_range"] = in_range
 
         obstacles = self.sim.obstacles
-        in_range = self.sim.in_range(obstacles, self.sim.drone, VISIBILITY_RANGE)
+        in_range = self.sim.in_range(obstacles, self.sim.drone, self.config.env.sensor_range)
         obstacles_pos = np.stack([o["nominal.pos"] for o in obstacles.values()])
         obstacles_pos[in_range] = np.stack([o["pos"] for o in obstacles.values()])[in_range]
         info["obstacles.pos"] = obstacles_pos
@@ -166,28 +155,6 @@ class DroneRacingEnv(gymnasium.Env):
         return info
 
     def gate_passed(self) -> bool:
-        # TODO: Check with an analytical solution instead of ray
-        if self.sim.n_gates > 0 and self.target_gate < self.sim.n_gates and self.target_gate != -1:
-            x, y, z = self.sim.gates[self.target_gate]["pos"]
-            _, _, ry = self.sim.gates[self.target_gate]["rpy"]
-            half_length = 0.1875  # Obstacle URDF dependent. TODO: Make this a parameter
-            delta_x = 0.05 * np.cos(ry)
-            delta_y = 0.05 * np.sin(ry)
-            fr = [[x, y, z - half_length]]
-            to = [[x, y, z + half_length]]
-            for i in [1, 2, 3]:
-                fr.append([x + i * delta_x, y + i * delta_y, z - half_length])
-                fr.append([x - i * delta_x, y - i * delta_y, z - half_length])
-                to.append([x + i * delta_x, y + i * delta_y, z + half_length])
-                to.append([x - i * delta_x, y - i * delta_y, z + half_length])
-            rays = p.rayTestBatch(
-                rayFromPositions=fr, rayToPositions=to, physicsClientId=self.sim.pyb_client
-            )
-            if any(r[2] < 0.9999 and r[0] == self.sim.drone.id for r in rays):
-                return True
-        return False
-
-    def gate_passed_v2(self) -> bool:
         if self.sim.n_gates > 0 and self.target_gate < self.sim.n_gates and self.target_gate != -1:
             gate_pos = self.sim.gates[self.target_gate]["pos"]
             gate_rot = R.from_euler("xyz", self.sim.gates[self.target_gate]["rpy"])
