@@ -248,6 +248,11 @@ conda deactivate
 #### libNatNet
 If libNatNet is missing either during compiling crazyswarm or launching hover_swarm.launch, one option is to manually install it. Download the library from its [github repo](https://github.com/whoenig/NatNetSDKCrossplatform), follow the build instructions, and then add the library to your `LIBRARY_PATH` and `LD_LIBRARY_PATH` variables.
 
+#### LIBUSB_ERROR_ACCESS
+Change the USB access permissions with
+
+```sudo chmod -R 777 /dev/bus/usb/```
+
 ### Fly with the drones 
 
 #### Settings

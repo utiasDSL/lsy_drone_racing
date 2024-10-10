@@ -46,7 +46,7 @@ def main(config: str = "config/level0.toml", controller: str = "examples/traject
         start_time = time.perf_counter()
         while True:
             t_loop = time.perf_counter()
-            action = controller.compute_control(env.obs, env.info)
+            action = controller.compute_control(env.obs, env.info)  # Get the most recent obs/info
             next_obs, reward, terminated, truncated, info = env.step(action)
             controller.step_learn(action, next_obs, reward, terminated, truncated, info)
             if terminated or truncated:
@@ -55,8 +55,9 @@ def main(config: str = "config/level0.toml", controller: str = "examples/traject
                 time.sleep(config.env.freq - dt)  # Maintain the control loop frequency
         ep_time = time.perf_counter() - start_time
         controller.episode_learn()
-        logger.info(f"Track time: {ep_time:.3f}s" if obs["gate"] == -1 else "Task not completed")
-        return ep_time
+        logger.info(
+            f"Track time: {ep_time:.3f}s" if next_obs["gate"] == -1 else "Task not completed"
+        )
     finally:
         env.close()
 
