@@ -15,7 +15,7 @@ import toml
 from munch import munchify
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.controller import BaseController
+from lsy_drone_racing.control.controller import BaseController
 
 if TYPE_CHECKING:
     from munch import Munch

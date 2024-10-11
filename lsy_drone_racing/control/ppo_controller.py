@@ -33,7 +33,7 @@ import numpy as np
 import numpy.typing as npt
 from stable_baselines3 import PPO
 
-from lsy_drone_racing.controller import BaseController
+from lsy_drone_racing.control import BaseController
 
 
 class Controller(BaseController):
@@ -53,7 +53,7 @@ class Controller(BaseController):
             initial_info: Additional environment information from the reset.
         """
         super().__init__(initial_obs, initial_info)
-        self.policy = PPO.load(Path(__file__).resolve().parents[1] / "models/ppo/model.zip")
+        self.policy = PPO.load(Path(__file__).resolve().parents[2] / "models/ppo/model.zip")
         self._last_action = np.zeros(3)
 
     def compute_control(
@@ -67,12 +67,13 @@ class Controller(BaseController):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone pose [x_des, y_des, z_des, vx_des, vy_des, vz_des, yaw_des] as a numpy array.
+            The drone pose [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
+                array.
         """
         obs_tf = self.obs_transform(obs, info, self._last_action)
         action, _ = self.policy.predict(obs_tf, deterministic=True)
         self._last_action[:] = action
-        return np.concatenate([obs["pos"] + action, np.zeros(4)]).astype(np.float64)
+        return np.concatenate([obs["pos"] + action, np.zeros(10)]).astype(np.float64)
 
     def obs_transform(
         self, obs: npt.NDArray[np.floating], info: dict, action: npt.NDArray[np.floating] | None

@@ -28,18 +28,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger("rosout." + __name__)
 
 
-def main(config: str = "config/level0.toml", controller: str = "examples/trajectory_controller.py"):
+def main(config: str = "level0.toml", controller: str = "trajectory_controller.py"):
     """Deployment script to run the controller on the real drone.
 
     Args:
-        config: Path to the competition configuration.
-        controller: Path to the controller implementation.
+        config: Path to the competition configuration. Assumes the file is in `config/`.
+        controller: The name of the controller file in `lsy_drone_racing/control/`.
     """
-    config = load_config(Path(config))
+    config = load_config(Path(__file__).parents[1] / "config" / config)
     env: DroneRacingDeployEnv = gymnasium.make("DroneRacingDeploy-v0", config=config)
     obs, info = env.reset()
 
-    controller_cls = load_controller(Path(controller))
+    controller_path = Path(__file__).parents[1] / "lsy_drone_racing/control" / controller
+    controller_cls = load_controller(controller_path)
     controller = controller_cls(obs, info)
 
     try:

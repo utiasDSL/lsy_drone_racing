@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.controller import BaseController
+from lsy_drone_racing.control.controller import BaseController
 from lsy_drone_racing.utils import check_gate_pass, load_config, load_controller, map2pi
 
 
@@ -16,7 +16,9 @@ def test_load_config():
 
 @pytest.mark.unit
 def test_load_controller():
-    c = load_controller(Path(__file__).parents[3] / "examples/controller.py")
+    c = load_controller(
+        Path(__file__).parents[3] / "lsy_drone_racing/control/trajectory_controller.py"
+    )
     assert issubclass(c, BaseController), f"Controller {c} is not a subclass of BaseController"
 
 

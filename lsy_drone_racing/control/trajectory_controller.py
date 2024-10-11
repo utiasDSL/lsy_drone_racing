@@ -32,7 +32,7 @@ import numpy.typing as npt
 import pybullet as p
 from scipy.interpolate import CubicSpline
 
-from lsy_drone_racing.controller import BaseController
+from lsy_drone_racing.control import BaseController
 
 
 class Controller(BaseController):
@@ -94,10 +94,11 @@ class Controller(BaseController):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone pose [x_des, y_des, z_des, vx_dese, vy_des, vz_des, yaw_des] as a numpy array.
+            The drone pose [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
+                array.
         """
         target_pos = self.trajectory(self._tick / 30)
-        return np.concatenate((target_pos, np.zeros(4)))
+        return np.concatenate((target_pos, np.zeros(10)))
 
     def step_learn(self, *args, **kwargs):
         self._tick += 1

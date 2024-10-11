@@ -2,7 +2,7 @@
 
 Run as:
 
-    $ python scripts/sim.py --config config/level0.toml
+    $ python scripts/sim.py --config level0.toml
 
 Look for instructions in `README.md` and `edit_this.py`.
 """
@@ -30,16 +30,16 @@ logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "config/level0.toml",
-    controller: str = "examples/trajectory_controller.py",
+    config: str = "level0.toml",
+    controller: str = "trajectory_controller.py",
     n_runs: int = 1,
     gui: bool = True,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
     Args:
-        config: The path to the configuration file.
-        controller: The path to the controller module.
+        config: The path to the configuration file. Assumes the file is in `config/`.
+        controller: The name of the controller file in `lsy_drone_racing/control/`.
         n_runs: The number of episodes.
         gui: Enable/disable the simulation GUI.
 
@@ -47,10 +47,10 @@ def simulate(
         A list of episode times.
     """
     # Load configuration and check if firmare should be used.
-    config = load_config(Path(config))
+    config = load_config(Path(__file__).parents[1] / "config" / config)
     config.sim.gui = gui
     # Load the controller module
-    path = Path(__file__).parents[1] / controller
+    path = Path(__file__).parents[1] / "lsy_drone_racing/control" / controller
     controller_cls = load_controller(path)  # This returns a class, not an instance
     # Create the racing environment
     env: DroneRacingEnv = gymnasium.make("DroneRacing-v0", config=config)

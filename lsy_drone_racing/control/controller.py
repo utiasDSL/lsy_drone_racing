@@ -52,7 +52,7 @@ class BaseController(ABC):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone pose [x_des, y_des, z_des, vx_des, vy_des, vz_des, yaw_des] in absolute
+            The drone pose [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] in absolute
             coordinates as a numpy array.
         """
         #########################

@@ -32,11 +32,11 @@ def test_gaussian_noise():
     noise = GaussianNoise(dim=3, std=1.0)
     target = np.zeros(3)
 
-    samples = [noise.apply(target) for _ in range(1000)]
+    samples = [noise.apply(target) for _ in range(10_000)]
     mean = np.mean(samples, axis=0)
     std = np.std(samples, axis=0)
 
-    assert np.allclose(mean, np.zeros(3), atol=0.1)
+    assert np.allclose(mean, np.zeros(3), atol=0.1), f"Mean: {mean}"
     assert np.allclose(std, np.ones(3), atol=0.1)
 
 

@@ -41,7 +41,7 @@ class DroneRacingEnv(gymnasium.Env):
             physics=config.sim.physics,
         )
         self.sim.seed(config.env.seed)
-        self.action_space = spaces.Box(low=-1, high=1, shape=(7,))
+        self.action_space = spaces.Box(low=-1, high=1, shape=(13,))
         self.observation_space = spaces.Dict(
             {
                 "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
@@ -76,11 +76,13 @@ class DroneRacingEnv(gymnasium.Env):
         commands, and runs the firmware loop and simulator according to the frequencies set.
 
         Args:
-            action: Full-state command [x_des, y_des, z_des, yaw_des] to follow.
+            action: Full-state command [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate]
+                to follow.
         """
         action = action.astype(np.float64)  # Drone firmware expects float64
-        pos, vel, yaw = action[:3], action[3:6], action[6]
-        self.drone.full_state_cmd(pos, vel, np.zeros(3), yaw, np.zeros(3))
+        assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
+        pos, vel, acc, yaw, rpy_rate = action[:3], action[3:6], action[6:9], action[9], action[10:]
+        self.drone.full_state_cmd(pos, vel, acc, yaw, rpy_rate)
 
         thrust = self.drone.desired_thrust
         collision = False
