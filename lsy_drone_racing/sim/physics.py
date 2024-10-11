@@ -1,3 +1,17 @@
+"""Physics module for the LSY Drone Racing simulation.
+
+This module provides various physics implementations for simulating drone dynamics in a racing
+environment. It includes different physics modes, force and torque calculations, and effects such as
+motor thrust, drag, ground effect, and downwash.
+
+The module is designed to work with the PyBullet physics engine and supports both PyBullet-based and
+custom dynamics implementations. It is used by the main simulation module (sim.py) to update the
+drone state in the racing environment.
+
+By exchanging the physics backend, we can easily support more complex physics models including
+data-driven models.
+"""
+
 from __future__ import annotations
 
 from enum import Enum

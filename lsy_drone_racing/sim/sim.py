@@ -1,7 +1,20 @@
-"""Quadrotor environment using PyBullet physics.
+"""Quadrotor simulation environment using PyBullet physics engine.
 
-Based on UTIAS Dynamic Systems Lab's gym-pybullet-drones:
-    * https://github.com/utiasDSL/gym-pybullet-drones
+This module implements a simulation environment for quadrotor drones using PyBullet. It provides
+functionality for simulating drone dynamics, control, and environmental interactions.
+
+Features:
+- PyBullet-based physics simulation
+- Configurable drone parameters and initial conditions
+- Support for a single drone (multi-drone support not yet implemented)
+- Disturbance and randomization options
+- Integration with symbolic models
+
+The simulation is derived from the gym-pybullet-drones project:
+https://github.com/utiasDSL/gym-pybullet-drones
+
+This environment can be used for developing and testing drone control algorithms, path planning
+strategies, and other robotics applications in a simulated 3D space.
 """
 
 from __future__ import annotations
