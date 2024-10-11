@@ -3,3 +3,4 @@
 
     sim
     drone
+    noise

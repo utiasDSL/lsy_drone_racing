@@ -1,3 +1,22 @@
+"""This module provides the Drone class, which represents a Crazyflie 2.1 quadrotor drone.
+
+The Drone class serves as an abstraction layer for the pycffirmware module, implementing
+controller logic for both Mellinger and PID controllers. It offers a convenient interface
+for managing drone parameters and constants, which are read from a URDF file. The class
+also maintains the state of the drone during simulation.
+
+The Drone class is a core component of the simulation environment and is heavily utilized
+in the sim.py module. It handles various aspects of drone behavior, including:
+- Initialization of drone parameters and firmware
+- Management of drone state and control inputs
+- Implementation of controller logic
+- Conversion between different units (e.g., thrust to RPM)
+- Handling of sensor data and low-pass filtering
+
+This module also includes the DroneParams dataclass, which encapsulates the physical
+and inferred parameters of the Crazyflie 2.1 drone.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -77,9 +96,12 @@ class Drone:
         """Reset the drone state and controllers.
 
         Args:
-            pos: Initial position of the drone. If None, uses the values from `init_state`.
+            pos: Initial position of the drone. If None, uses the values from `init_state`. Shape:
+                (3,).
             rpy: Initial roll, pitch, yaw of the drone. If None, uses the values from `init_state`.
-            vel: Initial velocity of the drone. If None, uses the values from `init_state`.
+                Shape: (3,).
+            vel: Initial velocity of the drone. If None, uses the values from `init_state`. Shape:
+                (3,).
         """
         self.params = copy.deepcopy(self.nominal_params)
         self._reset_firmware_states()
@@ -100,10 +122,13 @@ class Drone:
     ) -> NDArray[np.floating]:
         """Take a drone controller step.
 
+        Each step, we 1.) update the drone state, 2.) update the sensor data, 3.) update the
+        setpoint, and then 4.) step the controller.
+
         Args:
-            pos: Current position of the drone.
-            rpy: Current roll, pitch, yaw of the drone.
-            vel: Current velocity of the drone.
+            pos: Current position of the drone. Shape: (3,).
+            rpy: Current roll, pitch, yaw of the drone. Shape: (3,).
+            vel: Current velocity of the drone. Shape: (3,).
         """
         pos, rpy, vel = pos.copy(), rpy.copy(), vel.copy()
         body_rot = R.from_euler("XYZ", rpy).inv()
