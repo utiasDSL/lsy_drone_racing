@@ -7,6 +7,7 @@ also maintains the state of the drone during simulation.
 
 The Drone class is a core component of the simulation environment and is heavily utilized
 in the sim.py module. It handles various aspects of drone behavior, including:
+
 - Initialization of drone parameters and firmware
 - Management of drone state and control inputs
 - Implementation of controller logic

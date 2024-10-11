@@ -4,6 +4,7 @@ This module implements a simulation environment for quadrotor drones using PyBul
 functionality for simulating drone dynamics, control, and environmental interactions.
 
 Features:
+
 - PyBullet-based physics simulation
 - Configurable drone parameters and initial conditions
 - Support for a single drone (multi-drone support not yet implemented)
@@ -58,8 +59,8 @@ class Sim:
         track: dict,
         sim_freq: int = 500,
         ctrl_freq: int = 500,
-        disturbances: dict = {},
-        randomization: dict = {},
+        disturbances: dict | None = None,
+        randomization: dict | None = None,
         gui: bool = False,
         camera_view: tuple[float, ...] = (5.0, -40.0, -40.0, 0.5, -1.0, 0.5),
         n_drones: int = 1,
@@ -106,9 +107,8 @@ class Sim:
                 "ang_vel": spaces.Box(low=-max_flt, high=max_flt, dtype=np.float64),
             }
         )
-        self.disturbance_config = disturbances
         self.disturbances = self._setup_disturbances(disturbances)
-        self.randomization = randomization
+        self.randomization = {} if randomization is None else randomization
         if self.settings.gui:
             p.resetDebugVisualizerCamera(
                 cameraDistance=camera_view[0],
@@ -151,7 +151,7 @@ class Sim:
         self.drone.desired_thrust[:] = desired_thrust
         rpm = self._thrust_to_rpm(desired_thrust)  # Pre-process/clip the action
         disturb_force = np.zeros(3)
-        if "dynamics" in self.disturbances:  # Add dynamics disturbance force.
+        if "dynamics" in self.disturbances:
             disturb_force = self.disturbances["dynamics"].apply(disturb_force)
         for _ in range(self.settings.sim_freq // self.settings.ctrl_freq):
             self.drone.rpm[:] = rpm  # Save the last applied action (e.g. to compute drag)
