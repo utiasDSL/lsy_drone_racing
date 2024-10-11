@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import logging
-import time
+from typing import TYPE_CHECKING
 
 import gymnasium
 import numpy as np
-import numpy.typing as npt
-import pybullet as p
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.drone import Drone
 from lsy_drone_racing.sim.sim import Sim
 from lsy_drone_racing.utils import check_gate_pass
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ class DroneRacingEnv(gymnasium.Env):
             raise NotImplementedError("Firmware wrapper does not support multiple drones.")
         return self.obs, self.info
 
-    def step(self, action: np.ndarray):
+    def step(self, action: NDArray[np.floating]):
         """Step the firmware_wrapper class and its environment.
 
         This function should be called once at the rate of ctrl_freq. Step processes and high level
@@ -101,7 +102,7 @@ class DroneRacingEnv(gymnasium.Env):
         return self.obs, self.reward, terminated, False, self.info
 
     @property
-    def obs(self) -> dict[str, npt.ndarray[np.floating]]:
+    def obs(self) -> dict[str, NDArray[np.floating]]:
         obs = {
             "pos": self.sim.drone.pos.astype(np.float32),
             "rpy": self.sim.drone.rpy.astype(np.float32),

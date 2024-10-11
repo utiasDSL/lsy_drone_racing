@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import numpy as np
-    import numpy.typing as npt
+    from numpy.typing import NDArray
 
 
 class BaseController(ABC):
     """Base class for controller implementations."""
 
-    def __init__(self, initial_obs: npt.NDArray[np.floating], initial_info: dict):
+    def __init__(self, initial_obs: NDArray[np.floating], initial_info: dict):
         """Initialization of the controller.
 
         INSTRUCTIONS:
@@ -38,8 +38,8 @@ class BaseController(ABC):
 
     @abstractmethod
     def compute_control(
-        self, obs: npt.NDArray[np.floating], info: dict | None = None
-    ) -> npt.NDarray[np.floating]:
+        self, obs: NDArray[np.floating], info: dict | None = None
+    ) -> NDArray[np.floating]:
         """Compute the next desired position and orientation of the drone.
 
         INSTRUCTIONS:
@@ -67,8 +67,8 @@ class BaseController(ABC):
 
     def step_learn(
         self,
-        action: npt.NDArray[np.floating],
-        obs: npt.NDArray[np.floating],
+        action: NDArray[np.floating],
+        obs: NDArray[np.floating],
         reward: float,
         terminated: bool,
         truncated: bool,

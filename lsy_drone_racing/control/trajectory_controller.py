@@ -27,18 +27,22 @@ Tips:
 
 from __future__ import annotations  # Python 3.10 type hints
 
+from typing import TYPE_CHECKING
+
 import numpy as np
-import numpy.typing as npt
 import pybullet as p
 from scipy.interpolate import CubicSpline
 
 from lsy_drone_racing.control import BaseController
 
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
 
 class Controller(BaseController):
     """Template controller class."""
 
-    def __init__(self, initial_obs: npt.NDArray[np.floating], initial_info: dict):
+    def __init__(self, initial_obs: NDArray[np.floating], initial_info: dict):
         """Initialization of the controller.
 
         INSTRUCTIONS:
@@ -84,8 +88,8 @@ class Controller(BaseController):
             )
 
     def compute_control(
-        self, obs: npt.NDArray[np.floating], info: dict | None = None
-    ) -> npt.NDarray[np.floating]:
+        self, obs: NDArray[np.floating], info: dict | None = None
+    ) -> NDArray[np.floating]:
         """Compute the next desired position and orientation of the drone.
 
         Args:

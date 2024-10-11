@@ -4,8 +4,8 @@ from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
-import numpy.typing as npt
 import pybullet as p
+from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 GRAVITY: float = 9.81
 
 
-ForceTorque = NamedTuple("ForceTorque", f=npt.NDArray[np.floating], t=npt.NDArray[np.floating])
+ForceTorque = NamedTuple("ForceTorque", f=NDArray[np.floating], t=NDArray[np.floating])
 
 
 class PhysicsMode(str, Enum):
@@ -31,8 +31,8 @@ class PhysicsMode(str, Enum):
 
 
 def force_torques(
-    drone: Drone, rpms: npt.NDArray[np.floating], mode: PhysicsMode, dt: float, pyb_client: int
-) -> dict[int, list[str, npt.NDArray[np.floating]]]:
+    drone: Drone, rpms: NDArray[np.floating], mode: PhysicsMode, dt: float, pyb_client: int
+) -> dict[int, list[str, NDArray[np.floating]]]:
     """Physics update function.
 
     Args:
@@ -57,7 +57,7 @@ def force_torques(
     raise NotImplementedError(f"Physics mode {mode} not implemented.")
 
 
-def motors(drone: Drone, rpms: npt.NDArray[np.floating]) -> list[tuple[int, ForceTorque]]:
+def motors(drone: Drone, rpms: NDArray[np.floating]) -> list[tuple[int, ForceTorque]]:
     """Base physics implementation.
 
     Args:
@@ -77,9 +77,7 @@ def motors(drone: Drone, rpms: npt.NDArray[np.floating]) -> list[tuple[int, Forc
     return ft
 
 
-def dynamics(
-    drone: Drone, rpms: npt.NDArray[np.floating], dt: float
-) -> list[tuple[int, ForceTorque]]:
+def dynamics(drone: Drone, rpms: NDArray[np.floating], dt: float) -> list[tuple[int, ForceTorque]]:
     """Explicit dynamics implementation.
 
     Based on code written at the Dynamic Systems Lab by James Xu.
@@ -145,7 +143,7 @@ def downwash(drone: Drone, other_drones: list[Drone]) -> list[tuple[int, ForceTo
     return ft
 
 
-def drag(drone: Drone, rpms: npt.NDArray[np.floating]) -> list[tuple[int, ForceTorque]]:
+def drag(drone: Drone, rpms: NDArray[np.floating]) -> list[tuple[int, ForceTorque]]:
     """Implementation of a drag model.
 
     Based on the the system identification in (Forster, 2015).
@@ -165,7 +163,7 @@ def drag(drone: Drone, rpms: npt.NDArray[np.floating]) -> list[tuple[int, ForceT
 
 
 def ground_effect(
-    drone: Drone, rpms: npt.NDArray[np.floating], pyb_client: int
+    drone: Drone, rpms: NDArray[np.floating], pyb_client: int
 ) -> list[tuple[int, ForceTorque]]:
     """PyBullet implementation of a ground effect model.
 
@@ -205,7 +203,7 @@ def apply_force_torques(
     pyb_client: int,
     drone: Drone,
     force_torques: list[tuple[int, ForceTorque]],
-    external_force: npt.NDArray[np.floating] | None = None,
+    external_force: NDArray[np.floating] | None = None,
 ):
     """Apply the calculated forces and torques in simulation.
 

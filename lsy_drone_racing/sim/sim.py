@@ -9,9 +9,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
-import numpy.typing as npt
 import pybullet as p
 import pybullet_data
 from gymnasium import spaces
@@ -28,6 +28,9 @@ from lsy_drone_racing.sim.physics import (
 )
 from lsy_drone_racing.sim.symbolic import SymbolicModel, symbolic
 from lsy_drone_racing.utils import map2pi
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +129,7 @@ class Sim:
 
         self.reset()  # TODO: Avoid double reset.
 
-    def step(self, desired_thrust: npt.NDArray[np.floating]):
+    def step(self, desired_thrust: NDArray[np.floating]):
         """Advance the environment by one control step.
 
         Args:
@@ -163,7 +166,7 @@ class Sim:
                 collisions.append(o_id)
         return collisions
 
-    def in_range(self, bodies: dict, target_body: Drone, distance: float) -> npt.NDArray[np.bool_]:
+    def in_range(self, bodies: dict, target_body: Drone, distance: float) -> NDArray[np.bool_]:
         """Return a mask array of objects within a certain distance of the drone."""
         in_range = np.zeros(len(bodies), dtype=bool)
         for i, body in enumerate(bodies.values()):
@@ -185,7 +188,7 @@ class Sim:
             noise.seed(seed)
         return seed
 
-    def render(self) -> npt.NDArray[np.uint8]:
+    def render(self) -> NDArray[np.uint8]:
         """Retrieve a frame from PyBullet rendering.
 
         Returns:
@@ -290,8 +293,8 @@ class Sim:
     def _load_urdf_into_sim(
         self,
         urdf_path: Path,
-        pos: npt.NDArray[np.floating],
-        rpy: npt.NDArray[np.floating] | None = None,
+        pos: NDArray[np.floating],
+        rpy: NDArray[np.floating] | None = None,
         marker: str | None = None,
     ) -> int:
         """Load a URDF file into the simulation.
@@ -380,7 +383,7 @@ class Sim:
         """
         return symbolic(self.drone, 1 / self.settings.sim_freq)
 
-    def _thrust_to_rpm(self, thrust: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+    def _thrust_to_rpm(self, thrust: NDArray[np.floating]) -> NDArray[np.floating]:
         """Convert the desired_thrust into motor RPMs.
 
         Args:

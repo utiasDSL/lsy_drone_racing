@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Type
 
 import numpy as np
-import numpy.typing as npt
 import pybullet as p
 import toml
 from munch import munchify
@@ -19,11 +18,12 @@ from lsy_drone_racing.control.controller import BaseController
 
 if TYPE_CHECKING:
     from munch import Munch
+    from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
 
-def map2pi(angle: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+def map2pi(angle: NDArray[np.floating]) -> NDArray[np.floating]:
     """Map an angle or array of angles to the interval of [-pi, pi].
 
     Args:
