@@ -1,13 +1,26 @@
 FROM ros:noetic-ros-base-focal
+
+SHELL ["/bin/bash", "-c"]
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CSW_PYTHON=python3
+
+WORKDIR /home
 RUN apt update && apt install python-is-python3 -y
-RUN apt-get -y install python3-pip
+RUN apt-get -y install swig build-essential git python-is-python3 python3-pip libusb-1.0-0-dev
+RUN apt-get -y install libpcl-dev
 RUN pip install --upgrade pip
 # Ignore system version of PyYaml to prevent distutils error "Cannot uninstall 'PyYAML'. It is a distutils installed project"
 RUN pip install --ignore-installed "pyyaml>=6.0"
-WORKDIR /home
+RUN apt-get install -y ros-noetic-tf ros-noetic-tf-conversions
+
+# Install crazyswarm
+RUN python -m pip install --no-cache-dir pytest numpy PyYAML scipy
+RUN git clone --depth 1 https://github.com/USC-ACTLab/crazyswarm.git
+WORKDIR /home/crazyswarm
+RUN source /opt/ros/noetic/setup.bash && ./build.sh
 
 # Install the drone firmare emulator
-RUN apt install swig build-essential git -y
+WORKDIR /home
 RUN git clone --depth 1 https://github.com/utiasDSL/pycffirmware.git
 WORKDIR /home/pycffirmware
 RUN git submodule update --init --recursive

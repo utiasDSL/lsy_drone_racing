@@ -16,10 +16,3 @@ services:
     volumes:
       - ./:/home/lsy_drone_racing
       - /home/adr/repos/crazyswarm:/home/crazyswarm
-
-  crazyswarm:
-    profiles:
-      - deploy
-    build:
-      dockerfile: ./docker/Crazyswarm.Dockerfile
-      context: .
