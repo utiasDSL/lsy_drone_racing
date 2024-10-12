@@ -1,29 +1,4 @@
-"""Write your control strategy.
-
-Then run:
-
-    $ python scripts/sim --config config/getting_started.yaml
-
-Tips:
-    Search for strings `INSTRUCTIONS:` and `REPLACE THIS (START)` in this file.
-
-    Change the code between the 5 blocks starting with
-        #########################
-        # REPLACE THIS (START) ##
-        #########################
-    and ending with
-        #########################
-        # REPLACE THIS (END) ####
-        #########################
-    with your own code.
-
-    They are in methods:
-        1) __init__
-        2) compute_control
-        3) step_learn (optional)
-        4) episode_learn (optional)
-
-"""
+"""Example implementation of a controller using a pre-trained PPO model."""
 
 from __future__ import annotations  # Python 3.10 type hints
 
@@ -40,15 +15,10 @@ if TYPE_CHECKING:
 
 
 class Controller(BaseController):
-    """Template controller class."""
+    """Controller using a pre-trained PPO model."""
 
     def __init__(self, initial_obs: NDArray[np.floating], initial_info: dict):
         """Initialization of the controller.
-
-        INSTRUCTIONS:
-            The controller's constructor has access the initial state `initial_obs` and the a priori
-            infromation contained in dictionary `initial_info`. Use this method to initialize
-            constants, counters, pre-plan trajectories, etc.
 
         Args:
             initial_obs: The initial observation of the environment's state. See the environment's
@@ -81,6 +51,16 @@ class Controller(BaseController):
     def obs_transform(
         self, obs: NDArray[np.floating], info: dict, action: NDArray[np.floating] | None
     ) -> NDArray[np.floating]:
+        """Transform raw observations into the format expected by the PPO model.
+
+        Args:
+            obs: Raw observation from the environment.
+            info: Additional information dictionary.
+            action: Previous action taken, or None.
+
+        Returns:
+            Transformed observation as a numpy array.
+        """
         gate_vec = info["gates.pos"][info["target_gate"]].copy()
         gate_vec /= np.linalg.norm(gate_vec)
         gate_angle = info["gates.rpy"][info["target_gate"], 2]
@@ -118,4 +98,5 @@ class Controller(BaseController):
         return obs.astype(np.float32)
 
     def episode_reset(self):
+        """Reset internal variables at the start of a new episode."""
         self._last_action = np.zeros(3)

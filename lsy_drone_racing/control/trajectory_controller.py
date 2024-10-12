@@ -1,29 +1,4 @@
-"""Write your control strategy.
-
-Then run:
-
-    $ python scripts/sim --config config/getting_started.yaml
-
-Tips:
-    Search for strings `INSTRUCTIONS:` and `REPLACE THIS (START)` in this file.
-
-    Change the code between the 5 blocks starting with
-        #########################
-        # REPLACE THIS (START) ##
-        #########################
-    and ending with
-        #########################
-        # REPLACE THIS (END) ####
-        #########################
-    with your own code.
-
-    They are in methods:
-        1) __init__
-        2) compute_control
-        3) step_learn (optional)
-        4) episode_learn (optional)
-
-"""
+"""Controller that follows a pre-defined trajectory."""
 
 from __future__ import annotations  # Python 3.10 type hints
 
@@ -39,16 +14,11 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-class Controller(BaseController):
-    """Template controller class."""
+class TrajectoryController(BaseController):
+    """Controller that follows a pre-defined trajectory."""
 
     def __init__(self, initial_obs: NDArray[np.floating], initial_info: dict):
         """Initialization of the controller.
-
-        INSTRUCTIONS:
-            The controller's constructor has access the initial state `initial_obs` and the a priori
-            infromation contained in dictionary `initial_info`. Use this method to initialize
-            constants, counters, pre-plan trajectories, etc.
 
         Args:
             initial_obs: The initial observation of the environment's state. See the environment's
@@ -90,7 +60,7 @@ class Controller(BaseController):
     def compute_control(
         self, obs: NDArray[np.floating], info: dict | None = None
     ) -> NDArray[np.floating]:
-        """Compute the next desired position and orientation of the drone.
+        """Compute the next desired state of the drone.
 
         Args:
             obs: The current observation of the environment. See the environment's observation space
@@ -98,15 +68,25 @@ class Controller(BaseController):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone pose [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
+            The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
         target_pos = self.trajectory(self._tick / 30)
         return np.concatenate((target_pos, np.zeros(10)))
 
-    def step_learn(self, *args, **kwargs):
+    def step_learn(
+        self,
+        action: NDArray[np.floating],
+        obs: NDArray[np.floating],
+        reward: float,
+        terminated: bool,
+        truncated: bool,
+        info: dict,
+    ) -> None:
+        """Increment the time step counter."""
         self._tick += 1
-        return super().step_learn(*args, **kwargs)
+        return super().step_learn(action, obs, reward, terminated, truncated, info)
 
     def episode_reset(self):
+        """Reset the time step counter."""
         self._tick = 0

@@ -25,7 +25,7 @@ class BaseController(ABC):
     def __init__(self, initial_obs: NDArray[np.floating], initial_info: dict):
         """Initialization of the controller.
 
-        INSTRUCTIONS:
+        Instructions:
             The controller's constructor has access the initial state `initial_obs` and the a priori
             infromation contained in dictionary `initial_info`. Use this method to initialize
             constants, counters, pre-plan trajectories, etc.
@@ -40,10 +40,10 @@ class BaseController(ABC):
     def compute_control(
         self, obs: NDArray[np.floating], info: dict | None = None
     ) -> NDArray[np.floating]:
-        """Compute the next desired position and orientation of the drone.
+        """Compute the next desired state of the drone.
 
-        INSTRUCTIONS:
-            Re-implement this method to return the target pose to be sent from Crazyswarm to the
+        Instructions:
+            Implement this method to return the target state to be sent from Crazyswarm to the
             Crazyflie using the `cmdFullState` call.
 
         Args:
@@ -52,18 +52,9 @@ class BaseController(ABC):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone pose [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] in absolute
+            The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] in absolute
             coordinates as a numpy array.
         """
-        #########################
-        # REPLACE THIS (START) ##
-        #########################
-
-        pass
-
-        #########################
-        # REPLACE THIS (END) ####
-        #########################
 
     def step_learn(
         self,
@@ -76,10 +67,8 @@ class BaseController(ABC):
     ):
         """Learning and controller updates called between control steps.
 
-        INSTRUCTIONS:
-            Use the historically collected information in the data buffers of actions, observations,
-            rewards, terminated, truncated flags, and information dictionaries to learn, adapt,
-            and/or re-plan.
+        Instructions:
+            Use any collected information to learn, adapt, and/or re-plan.
 
         Args:
             action: Latest applied action.
@@ -89,35 +78,16 @@ class BaseController(ABC):
             truncated: Latest truncated flag.
             info: Latest information dictionary.
         """
-        #########################
-        # REPLACE THIS (START) ##
-        #########################
-
-        pass
-
-        #########################
-        # REPLACE THIS (END) ####
-        #########################
 
     def episode_learn(self):
         """Learning and controller updates called between episodes.
 
-        INSTRUCTIONS:
-            Use the historically collected information in the data buffers to learn, adapt, and/or
-            re-plan.
+        Instructions:
+            Use any collected information to learn, adapt, and/or re-plan.
         """
-        #########################
-        # REPLACE THIS (START) ##
-        #########################
-
-        pass
-
-        #########################
-        # REPLACE THIS (END) ####
-        #########################
 
     def reset(self):
-        """Reset data buffers and counters if necessary."""
+        """Reset internal variables if necessary."""
 
     def episode_reset(self):
         """Reset the controller's internal state and models if necessary."""

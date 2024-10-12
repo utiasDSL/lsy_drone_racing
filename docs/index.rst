@@ -26,7 +26,7 @@ Docs are work in progress. Please check back later.
    :maxdepth: 1
    :caption: Python API
 
-   controller
+   control/index
 
    envs/index
 
