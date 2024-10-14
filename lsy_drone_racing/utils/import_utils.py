@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from pathlib import Path
 
-import crazyswarm  # noqa: F401
 import rospkg
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,12 @@ def get_ros_package_path(pkg: str, heuristic_search: bool = False) -> Path:
         if not pkg_path.is_dir():
             continue
         return pkg_path
+    # Check if we are looking for crazyswarm in Docker
+    docker = os.environ.get("ROS_MASTER_URI") == "http://host.docker.internal:11311"
+    if pkg == "crazyswarm" and docker:
+        path = Path("/home/crazyswarm/ros_ws/src/crazyswarm")
+        assert path.is_dir(), f"ROS package {pkg} not found in Docker."
+        return path
     raise ModuleNotFoundError(f"ROS package {pkg} not found.")
 
 

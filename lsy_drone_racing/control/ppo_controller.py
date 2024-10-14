@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-class Controller(BaseController):
+class PPOController(BaseController):
     """Controller using a pre-trained PPO model."""
 
     def __init__(self, initial_obs: NDArray[np.floating], initial_info: dict):

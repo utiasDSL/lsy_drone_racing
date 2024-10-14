@@ -3,6 +3,7 @@ FROM ros:noetic-ros-base-focal
 SHELL ["/bin/bash", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CSW_PYTHON=python3
+ENV ROS_MASTER_URI=http://host.docker.internal:11311
 
 WORKDIR /home
 RUN apt update && apt install python-is-python3 -y
@@ -33,10 +34,11 @@ RUN rm -rf /home/pycffirmware/.git
 # This allows us to avoid reinstalling dependencies if only the source code changes
 WORKDIR /home/lsy_drone_racing
 COPY pyproject.toml ./
-# Install dependencies 
+# Install dependencies and cache the build step (only rebuilds when pyproject.toml changes) 
 RUN pip install build
-RUN pip install --no-cache-dir -e .[test,rl]
+RUN pip install --no-cache-dir .[test,rl]
 # Copy the rest of the application
 COPY . .
+RUN pip install --no-cache-dir -e .[test,rl]
 
 CMD bash -c "source /home/crazyswarm/ros_ws/devel/setup.bash && python /home/lsy_drone_racing/scripts/deploy.py"

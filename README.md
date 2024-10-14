@@ -243,6 +243,9 @@ pip install cfclient
 conda deactivate
 ```
 
+### Vicon bridge
+TODO: Expand
+
 ### Common errors
 
 #### libNatNet

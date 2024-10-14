@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("rosout." + __name__)
 
 
-def main(config: str = "level0.toml", controller: str = "trajectory_controller.py"):
+def main(config: str = "level3.toml", controller: str = "trajectory_controller.py"):
     """Deployment script to run the controller on the real drone.
 
     Args:

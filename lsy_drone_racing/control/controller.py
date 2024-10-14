@@ -7,6 +7,10 @@ from that, you are free to add any additional methods, attributes, or classes to
 As an example, you could load the weights of a neural network in the constructor and use it to
 compute the control commands in the `compute_control` method. You could also use the `step_learn`
 method to update the controller at runtime.
+
+Note:
+    You can only define one controller class in a single file. Otherwise we will not be able to
+    determine which class to use.
 """
 
 from __future__ import annotations

@@ -97,7 +97,7 @@ type = "uniform"
 low = [0.0, 0.0, -0.1]
 high = [0.0, 0.0, 0.1]
 
-[env.randomization.obstacles_pos]
+[env.randomization.obstacle_pos]
 type = "uniform"
 low = -0.15
 high = 0.15

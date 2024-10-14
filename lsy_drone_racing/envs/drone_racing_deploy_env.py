@@ -27,7 +27,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
     def __init__(self, config: dict | Munch):
         super().__init__()
         self.config = config
-        self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(7,))
+        self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(13,))
         self.observation_space = spaces.Dict(
             {
                 "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
@@ -37,7 +37,9 @@ class DroneRacingDeployEnv(gymnasium.Env):
             }
         )
         self.target_gate = 0
-        crazyswarm_config_path = get_ros_package_path("crazyswarm") / "launch/crazyflies.yaml"
+        crazyswarm_config_path = (
+            get_ros_package_path("crazyswarm", heuristic_search=True) / "launch/crazyflies.yaml"
+        )
         # pycrazyswarm expects strings, not Path objects, so we need to convert it first
         swarm = pycrazyswarm.Crazyswarm(str(crazyswarm_config_path))
         self.cf = swarm.allcfs.crazyflies[0]

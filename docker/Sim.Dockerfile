@@ -17,7 +17,7 @@ RUN rm -rf /home/pycffirmware/.git
 # This allows us to avoid reinstalling dependencies if only the source code changes
 WORKDIR /home/lsy_drone_racing
 COPY pyproject.toml ./
-# Install dependencies 
+# Install dependencies and cache the build step (only rebuilds when pyproject.toml changes) 
 RUN pip install build
 RUN pip install --no-cache-dir .[test,rl]
 # Copy the rest of the application

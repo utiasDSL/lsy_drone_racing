@@ -41,24 +41,24 @@ sensor_range = 0.45 # Range at which the exact location of gates and obstacles b
 pos = [0.45, -1.0, 0.525]
 rpy = [0.0, 0.0, 2.35]
 [[env.track.gates]]
-pos = [1.0, -1.55, 1.0]
+pos = [1.0, -1.55, 1.1]
 rpy = [0.0, 0.0, -0.78]
 [[env.track.gates]]
 pos = [0.0, 0.5, 0.525]
 rpy = [0.0, 0.0, 0.0]
 [[env.track.gates]]
-pos = [-0.5, -0.5, 1.0]
+pos = [-0.5, -0.5, 1.1]
 rpy = [0.0, 0.0, 3.14]
 
-# Obstacle height: 1.05m. Height is measured from the ground to the top of the obstacle.
+# Obstacle height: 0.85m. Height is measured from the ground to the top of the obstacle.
 [[env.track.obstacles]]
-pos = [1.0, -0.5, 1.05]
+pos = [1.0, -0.5, 0.85]
 [[env.track.obstacles]]
-pos = [0.5, -1.5, 1.05]
+pos = [0.5, -1.5, 0.85]
 [[env.track.obstacles]]
-pos = [-0.5, 0.0, 1.05]
+pos = [0.0, 1.0, 0.85]
 [[env.track.obstacles]]
-pos = [0.0, 1.0, 1.05]
+pos = [-0.5, 0.0, 0.85]
 
 [env.track.drone]
 pos = [1.0, 1.0, 0.05]
@@ -89,15 +89,15 @@ high = [0.000001, 0.000001, 0.000001]
 
 [env.randomization.gate_pos]
 type = "uniform"
-low = [-0.15, -0.15, 0.0]
-high = [0.15, 0.15, 0.0]
+low = [-0.15, -0.15, -0.1]
+high = [0.15, 0.15, 0.1]
 
 [env.randomization.gate_rpy]
 type = "uniform"
 low = [0.0, 0.0, -0.1]
 high = [0.0, 0.0, 0.1]
 
-[env.randomization.obstacles_pos]
+[env.randomization.obstacle_pos]
 type = "uniform"
-low = -0.15
-high = 0.15
+low = [-0.15, -0.15, -0.05]
+high = [0.15, 0.15, 0.05]

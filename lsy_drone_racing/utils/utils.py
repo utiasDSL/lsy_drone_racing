@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import logging
 import sys
 from pathlib import Path
@@ -47,7 +48,18 @@ def load_controller(path: Path) -> Type[BaseController]:
     controller_module = importlib.util.module_from_spec(spec)
     sys.modules["controller"] = controller_module
     spec.loader.exec_module(controller_module)
-    assert hasattr(controller_module, "Controller"), f"Controller class not found in {path}"
+
+    def filter(mod):
+        subcls = inspect.isclass(mod) and issubclass(mod, BaseController)
+        return subcls and mod.__module__ == controller_module.__name__
+
+    controllers = inspect.getmembers(controller_module, filter)
+    controllers = [c for _, c in controllers if issubclass(c, BaseController)]
+    assert (
+        len(controllers) > 0
+    ), f"No controller found in {path}. Have you subclassed BaseController?"
+    assert len(controllers) == 1, f"Multiple controllers found in {path}. Only one is allowed."
+    controller_module.Controller = controllers[0]
     assert issubclass(controller_module.Controller, BaseController)
 
     try:
