@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import fire
 import gymnasium
+import rospy
 
 from lsy_drone_racing.utils import load_config, load_controller
 
@@ -42,22 +43,24 @@ def main(config: str = "level3.toml", controller: str = "trajectory_controller.p
     controller_path = Path(__file__).parents[1] / "lsy_drone_racing/control" / controller
     controller_cls = load_controller(controller_path)
     controller = controller_cls(obs, info)
-
     try:
         start_time = time.perf_counter()
-        while True:
+        while not rospy.is_shutdown():
             t_loop = time.perf_counter()
-            action = controller.compute_control(env.obs, env.info)  # Get the most recent obs/info
+            action = controller.compute_control(obs, info)
             next_obs, reward, terminated, truncated, info = env.step(action)
             controller.step_callback(action, next_obs, reward, terminated, truncated, info)
+            obs = next_obs
             if terminated or truncated:
                 break
-            if dt := (time.perf_counter() - t_loop) < config.env.freq:
+            if dt := (time.perf_counter() - t_loop) < (1 / config.env.freq):
                 time.sleep(config.env.freq - dt)  # Maintain the control loop frequency
+            if time.perf_counter() - start_time > 9:
+                break
         ep_time = time.perf_counter() - start_time
         controller.episode_callback()
         logger.info(
-            f"Track time: {ep_time:.3f}s" if next_obs["gate"] == -1 else "Task not completed"
+            f"Track time: {ep_time:.3f}s" if info["target_gate"] == -1 else "Task not completed"
         )
     finally:
         env.close()

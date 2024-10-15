@@ -29,6 +29,7 @@ class TrajectoryController(BaseController):
         waypoints = np.array(
             [
                 [1.0, 1.0, 0.0],
+                [0.8, 0.5, 0.2],
                 [0.55, -0.8, 0.4],
                 [0.2, -1.8, 0.65],
                 [1.1, -1.35, 1.0],
@@ -47,16 +48,19 @@ class TrajectoryController(BaseController):
         # Generate points along the spline for visualization
         t_vis = np.linspace(0, len(waypoints) - 1, 100)
         spline_points = self.trajectory(t_vis)
-        # Plot the spline as a line in PyBullet
-        for i in range(len(spline_points) - 1):
-            p.addUserDebugLine(
-                spline_points[i],
-                spline_points[i + 1],
-                lineColorRGB=[1, 0, 0],  # Red color
-                lineWidth=2,
-                lifeTime=0,  # 0 means the line persists indefinitely
-                physicsClientId=0,
-            )
+        try:
+            # Plot the spline as a line in PyBullet
+            for i in range(len(spline_points) - 1):
+                p.addUserDebugLine(
+                    spline_points[i],
+                    spline_points[i + 1],
+                    lineColorRGB=[1, 0, 0],  # Red color
+                    lineWidth=2,
+                    lifeTime=0,  # 0 means the line persists indefinitely
+                    physicsClientId=0,
+                )
+        except p.error:
+            ...  # Ignore errors if PyBullet is not available
 
     def compute_control(
         self, obs: NDArray[np.floating], info: dict | None = None
@@ -72,7 +76,7 @@ class TrajectoryController(BaseController):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
-        target_pos = self.trajectory(self._tick / self._freq)
+        target_pos = self.trajectory(min(self._tick / self._freq, 9))
         return np.concatenate((target_pos, np.zeros(10)))
 
     def step_callback(

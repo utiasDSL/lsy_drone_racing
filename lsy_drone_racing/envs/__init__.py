@@ -19,6 +19,7 @@ register(
 register(
     id="DroneRacingDeploy-v0",
     entry_point="lsy_drone_racing.envs.drone_racing_deploy_env:DroneRacingDeployEnv",
+    max_episode_steps=900,
 )
 
 __all__ = ["DroneRacingEnv"]

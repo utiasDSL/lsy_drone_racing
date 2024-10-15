@@ -67,17 +67,20 @@ class ThrustController(BaseController):
         self.y_des = cs_y(ts)
         self.z_des = cs_z(ts)
 
-        # Draw interpolated Trajectory
-        trajectory = np.vstack([self.x_des, self.y_des, self.z_des]).T
-        for i in range(len(trajectory) - 1):
-            p.addUserDebugLine(
-                trajectory[i],
-                trajectory[i + 1],
-                lineColorRGB=[1, 0, 0],
-                lineWidth=2,
-                lifeTime=0,
-                physicsClientId=0,
-            )
+        try:
+            # Draw interpolated Trajectory
+            trajectory = np.vstack([self.x_des, self.y_des, self.z_des]).T
+            for i in range(len(trajectory) - 1):
+                p.addUserDebugLine(
+                    trajectory[i],
+                    trajectory[i + 1],
+                    lineColorRGB=[1, 0, 0],
+                    lineWidth=2,
+                    lifeTime=0,
+                    physicsClientId=0,
+                )
+        except p.error:
+            ...  # Ignore pybullet errors if not running in the pybullet GUI
 
     def compute_control(
         self, obs: npt.NDArray[np.floating], info: dict | None = None
