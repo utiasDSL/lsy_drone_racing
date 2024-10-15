@@ -49,9 +49,11 @@ def force_torques(
 ) -> dict[int, list[str, NDArray[np.floating]]]:
     """Physics update function.
 
+    We dynamically dispatch to the appropriate physics implementation based on the mode.
+
     Args:
         drone: The target drone to calculate the physics for.
-        rpms: The rpms to apply to the drone rotors.
+        rpms: The rpms to apply to the drone rotors. Shape: (4,).
         mode: Physics mode that determines the physics implementation used for the dynamics.
         dt: The time step for the dynamics update in PhysicsMode.DYN.
         pyb_client: The PyBullet client id.

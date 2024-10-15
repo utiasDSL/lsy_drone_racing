@@ -5,7 +5,7 @@ WORKDIR /home
 
 # Install the drone firmare emulator
 RUN apt install swig build-essential git -y
-RUN git clone --depth 1 https://github.com/utiasDSL/pycffirmware.git
+RUN git clone --depth 1 -b drone_racing https://github.com/utiasDSL/pycffirmware.git
 WORKDIR /home/pycffirmware
 RUN git submodule update --init --recursive
 # Numpy 2.0 is not compatible with pycffirmware, but would be installed by default

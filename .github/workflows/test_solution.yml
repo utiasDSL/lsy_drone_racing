@@ -28,17 +28,11 @@ jobs:
           post-cleanup: 'all'
       - name: Install cffirmware
         run: |
-          git clone https://github.com/utiasDSL/pycffirmware.git
+          git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
           cd pycffirmware
           git submodule update --init --recursive
           ./wrapper/build_linux.sh
-      - name: Install stable baselines
-        run: pip install stable-baselines3
-        shell: bash -el {0}
-      - name: Install stable baselines
-        run: pip install stable-baselines3
-        shell: bash -el {0}
-      - run: pip install .
+      - run: pip install .[rl, test]
         shell: bash -el {0}
       - name: Run simulation tests
         run: python scripts/kaggle.py

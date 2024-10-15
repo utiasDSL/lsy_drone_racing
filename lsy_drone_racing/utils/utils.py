@@ -6,11 +6,9 @@ import importlib.util
 import inspect
 import logging
 import sys
-from pathlib import Path
 from typing import TYPE_CHECKING, Type
 
 import numpy as np
-import pybullet as p
 import toml
 from munch import munchify
 from scipy.spatial.transform import Rotation as R
@@ -18,6 +16,9 @@ from scipy.spatial.transform import Rotation as R
 from lsy_drone_racing.control.controller import BaseController
 
 if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Any
+
     from munch import Munch
     from numpy.typing import NDArray
 
@@ -49,7 +50,12 @@ def load_controller(path: Path) -> Type[BaseController]:
     sys.modules["controller"] = controller_module
     spec.loader.exec_module(controller_module)
 
-    def filter(mod):
+    def filter(mod: Any) -> bool:
+        """Filter function to identify valid controller classes.
+
+        Args:
+            mod: Any attribute of the controller module to be checked.
+        """
         subcls = inspect.isclass(mod) and issubclass(mod, BaseController)
         return subcls and mod.__module__ == controller_module.__name__
 
@@ -123,35 +129,3 @@ def check_gate_pass(
         if abs(x_intersect) < gate_size[0] and abs(z_intersect) < gate_size[1]:
             return True
     return False
-
-
-def draw_trajectory(
-    initial_info: dict,
-    waypoints: np.ndarray,
-    ref_x: np.ndarray,
-    ref_y: np.ndarray,
-    ref_z: np.ndarray,
-):
-    """Draw a trajectory in PyBullet's GUI."""
-    for point in waypoints:
-        urdf_path = Path(initial_info["urdf_dir"]) / "sphere.urdf"
-        p.loadURDF(
-            str(urdf_path),
-            [point[0], point[1], point[2]],
-            p.getQuaternionFromEuler([0, 0, 0]),
-            physicsClientId=initial_info["pyb_client"],
-        )
-    step = int(ref_x.shape[0] / 50)
-    for i in range(step, ref_x.shape[0], step):
-        p.addUserDebugLine(
-            lineFromXYZ=[ref_x[i - step], ref_y[i - step], ref_z[i - step]],
-            lineToXYZ=[ref_x[i], ref_y[i], ref_z[i]],
-            lineColorRGB=[1, 0, 0],
-            physicsClientId=initial_info["pyb_client"],
-        )
-    p.addUserDebugLine(
-        lineFromXYZ=[ref_x[i], ref_y[i], ref_z[i]],
-        lineToXYZ=[ref_x[-1], ref_y[-1], ref_z[-1]],
-        lineColorRGB=[1, 0, 0],
-        physicsClientId=initial_info["pyb_client"],
-    )

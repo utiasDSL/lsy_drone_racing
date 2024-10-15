@@ -34,6 +34,7 @@ def simulate(
     controller: str = "trajectory_controller.py",
     n_runs: int = 1,
     gui: bool = True,
+    env_id: str | None = None,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
@@ -53,7 +54,7 @@ def simulate(
     path = Path(__file__).parents[1] / "lsy_drone_racing/control" / controller
     controller_cls = load_controller(path)  # This returns a class, not an instance
     # Create the racing environment
-    env: DroneRacingEnv = gymnasium.make("DroneRacing-v0", config=config)
+    env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
 
     ep_times = []
     for _ in range(n_runs):  # Run n_runs episodes with the controller
@@ -74,7 +75,7 @@ def simulate(
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             # Update the controller internal state and models.
-            controller.step_learn(action, obs, reward, terminated, truncated, info)
+            controller.step_callback(action, obs, reward, terminated, truncated, info)
             # Add up reward, collisions
 
             # Synchronize the GUI.
@@ -83,8 +84,7 @@ def simulate(
                     time.sleep(1 / config.env.freq - elapsed)
             i += 1
 
-        # Learn after the episode if the controller supports it
-        controller.episode_learn()  # Update the controller internal state and models.
+        controller.episode_callback()  # Update the controller internal state and models.
         log_episode_stats(info, config, curr_time)
         controller.episode_reset()
         ep_times.append(curr_time if info["target_gate"] == -1 else None)

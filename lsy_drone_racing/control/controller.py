@@ -5,8 +5,8 @@ implementation. You have to use the same function signatures as defined by the b
 from that, you are free to add any additional methods, attributes, or classes to your controller.
 
 As an example, you could load the weights of a neural network in the constructor and use it to
-compute the control commands in the `compute_control` method. You could also use the `step_learn`
-method to update the controller at runtime.
+compute the control commands in the `compute_control` method. You could also use the `step_callback`
+method to update the controller state at runtime.
 
 Note:
     You can only define one controller class in a single file. Otherwise we will not be able to
@@ -60,7 +60,7 @@ class BaseController(ABC):
             coordinates as a numpy array.
         """
 
-    def step_learn(
+    def step_callback(
         self,
         action: NDArray[np.floating],
         obs: NDArray[np.floating],
@@ -69,7 +69,10 @@ class BaseController(ABC):
         truncated: bool,
         info: dict,
     ):
-        """Learning and controller updates called between control steps.
+        """Callback function called once after the control step.
+
+        You can use this function to update your controller's internal state, save training data,
+        update your models, etc.
 
         Instructions:
             Use any collected information to learn, adapt, and/or re-plan.
@@ -83,8 +86,11 @@ class BaseController(ABC):
             info: Latest information dictionary.
         """
 
-    def episode_learn(self):
-        """Learning and controller updates called between episodes.
+    def episode_callback(self):
+        """Callback function called once after each episode.
+
+        You can use this function to reset your controller's internal state, save training data,
+        train your models, compute additional statistics, etc.
 
         Instructions:
             Use any collected information to learn, adapt, and/or re-plan.

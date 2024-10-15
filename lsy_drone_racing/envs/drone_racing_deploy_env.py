@@ -65,7 +65,11 @@ class DroneRacingDeployEnv(gymnasium.Env):
         check_race_track(self.config)
         check_drone_start_pos(self.config)
         self.target_gate = 0
-        return self.obs, 0, False, False, self.info
+        info = self.info
+        info["sim.sim_freq"] = self.config.sim.sim_freq
+        info["sim.ctrl_freq"] = self.config.sim.ctrl_freq
+        info["env.freq"] = self.config.env.freq
+        return self.obs, self.info
 
     def step(
         self, action: NDArray[np.floating]
@@ -138,4 +142,5 @@ class DroneRacingDeployEnv(gymnasium.Env):
         )
         return info
 
-    def check_gate_progress(self): ...
+    def check_gate_progress(self):
+        ...

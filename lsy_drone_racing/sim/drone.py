@@ -21,7 +21,6 @@ and inferred parameters of the Crazyflie 2.1 drone.
 from __future__ import annotations
 
 import copy
-import importlib.util
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,11 +28,10 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 from xml.etree import ElementTree
 
 import numpy as np
+import pycffirmware
 from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
-    from types import ModuleType
-
     from numpy.typing import NDArray
 
 control_t = TypeVar("control_t")
@@ -57,16 +55,15 @@ class Drone:
             controller: The controller to use. Either "pid" or "mellinger".
         """
         self.params = DroneParams.from_urdf(Path(__file__).resolve().parent / "assets/cf2x.urdf")
-        self.firmware = self._load_firmware()
         self.firmware_freq = self.params.firmware_freq
         self.nominal_params = copy.deepcopy(self.params)  # Store parameters without disturbances
         # Initialize firmware states
-        self._state = self.firmware.state_t()
-        self._control = self.firmware.control_t()
-        self._setpoint = self.firmware.setpoint_t()
-        self._sensor_data = self.firmware.sensorData_t()
-        self._acc_lpf = [self.firmware.lpf2pData() for _ in range(3)]
-        self._gyro_lpf = [self.firmware.lpf2pData() for _ in range(3)]
+        self._state = pycffirmware.state_t()
+        self._control = pycffirmware.control_t()
+        self._setpoint = pycffirmware.setpoint_t()
+        self._sensor_data = pycffirmware.sensorData_t()
+        self._acc_lpf = [pycffirmware.lpf2pData() for _ in range(3)]
+        self._gyro_lpf = [pycffirmware.lpf2pData() for _ in range(3)]
 
         assert controller in ["pid", "mellinger"], f"Invalid controller {controller}."
         self._controller = controller
@@ -110,13 +107,13 @@ class Drone:
         self._reset_helper_variables()
         self._reset_controller()
         # Initilaize high level commander
-        self.firmware.crtpCommanderHighLevelInit()
+        pycffirmware.crtpCommanderHighLevelInit()
         pos = self.init_pos if pos is None else pos.copy()
         rpy = self.init_rpy if rpy is None else rpy.copy()
         vel = self.init_vel if vel is None else vel.copy()
         self._update_state(0, pos, np.rad2deg(rpy), vel, np.array([0, 0, 1.0]))
         self._last_vel[...], self._last_rpy[...] = vel, rpy
-        self.firmware.crtpCommanderHighLevelTellState(self._state)
+        pycffirmware.crtpCommanderHighLevelTellState(self._state)
 
     def step_controller(
         self, pos: NDArray[np.floating], rpy: NDArray[np.floating], vel: NDArray[np.floating]
@@ -181,9 +178,6 @@ class Drone:
         self._state.velocity.x, self._state.velocity.y, self._state.velocity.z = vel
         self._state.acc.x, self._state.acc.y, self._state.acc.z = acc
 
-    def _pwms_to_thrust(self, pwms: NDArray[np.floating]) -> NDArray[np.floating]:
-        return self.params.kf * (self.params.pwm2rpm_scale * pwms + self.params.pwm2rpm_const) ** 2
-
     def full_state_cmd(
         self,
         pos: NDArray[np.floating],
@@ -205,8 +199,8 @@ class Drone:
             rpy_rate: roll, pitch, yaw rates (rad/s)
         """
         timestep = self._tick / self.params.firmware_freq
-        self.firmware.crtpCommanderHighLevelStop()  # Resets planner object
-        self.firmware.crtpCommanderHighLevelUpdateTime(timestep)
+        pycffirmware.crtpCommanderHighLevelStop()  # Resets planner object
+        pycffirmware.crtpCommanderHighLevelUpdateTime(timestep)
 
         for name, x in zip(("pos", "vel", "acc", "rpy_rate"), (pos, vel, acc, rpy_rate)):
             assert isinstance(x, np.ndarray), f"{name} must be a numpy array."
@@ -221,10 +215,64 @@ class Drone:
         s_quat.x, s_quat.y, s_quat.z, s_quat.w = R.from_euler("XYZ", [0, 0, yaw]).as_quat()
         # initilize setpoint modes to match cmdFullState
         mode = self._setpoint.mode
-        mode_abs, mode_disable = self.firmware.modeAbs, self.firmware.modeDisable
+        mode_abs, mode_disable = pycffirmware.modeAbs, pycffirmware.modeDisable
         mode.x, mode.y, mode.z = mode_abs, mode_abs, mode_abs
         mode.quat = mode_abs
         mode.roll, mode.pitch, mode.yaw = mode_disable, mode_disable, mode_disable
+        # This may end up skipping control loops
+        self._setpoint.timestamp = int(timestep * 1000)
+        self._fullstate_cmd = True
+
+    def collective_thrust_cmd(self, thrust: float, rpy: NDArray[np.floating]):
+        """Send a collective thrust command to the controller.
+
+        Notes:
+            Overrides any high level commands being processed.
+
+        Args:
+            thrust: Thrust of rotors in Newtons.
+            rpy: [roll, pitch, yaw] orientation of the Crazyflie in radians.
+        """
+        # All choices were made with respect to src/mod/src/crtp_commander_rpyt.c in the firmware.
+        pwms = self._thrust_to_pwms(thrust)
+        timestep = self._tick / self.params.firmware_freq
+        pycffirmware.crtpCommanderHighLevelStop()  # Resets planner object
+        pycffirmware.crtpCommanderHighLevelUpdateTime(timestep)
+
+        # Set Setpoints to be passed to the firmware.
+        self._setpoint.position.x, self._setpoint.position.y, self._setpoint.position.z = np.zeros(
+            3, dtype=np.float64
+        )
+        s_vel = self._setpoint.velocity
+        s_vel.x, s_vel.y, s_vel.z = np.array(
+            [0.0, 0.0, (pwms - 32767.0) / 32767.0], dtype=np.float64
+        )
+
+        self._setpoint.thrust = pwms
+
+        s_acc = self._setpoint.acceleration
+        s_acc.x, s_acc.y, s_acc.z = np.zeros(3, dtype=np.float64)
+
+        s_a_rate = self._setpoint.attitudeRate
+        s_a_rate.roll, s_a_rate.pitch, s_a_rate.yaw = np.zeros(3, dtype=np.float64)
+
+        s_a = self._setpoint.attitude
+        s_a.roll, s_a.pitch, s_a.yaw = np.rad2deg(rpy)
+
+        s_quat = self._setpoint.attitudeQuaternion
+        s_quat.x, s_quat.y, s_quat.z, s_quat.w = R.from_euler("XYZ", rpy).as_quat()
+
+        # initilize setpoint modes to match thrust interface.
+        mode = self._setpoint.mode
+        mode_abs, mode_disable, mode_velocity = (
+            pycffirmware.modeAbs,
+            pycffirmware.modeDisable,
+            pycffirmware.modeVelocity,
+        )
+        mode.x, mode.y, mode.z = mode_disable, mode_disable, mode_velocity
+        mode.quat = mode_disable
+        mode.roll, mode.pitch, mode.yaw = mode_abs, mode_abs, mode_abs
+
         # This may end up skipping control loops
         self._setpoint.timestamp = int(timestep * 1000)
         self._fullstate_cmd = True
@@ -239,8 +287,8 @@ class Drone:
         """
         self._fullstate_cmd = False
         if yaw is None:
-            return self.firmware.crtpCommanderHighLevelTakeoff(height, duration)
-        self.firmware.crtpCommanderHighLevelTakeoffYaw(height, duration, yaw)
+            return pycffirmware.crtpCommanderHighLevelTakeoff(height, duration)
+        pycffirmware.crtpCommanderHighLevelTakeoffYaw(height, duration, yaw)
 
     def takeoff_vel_cmd(self, height: float, vel: float, relative: bool):
         """Send a takeoff vel command to the controller.
@@ -250,7 +298,7 @@ class Drone:
             vel: Target takeoff velocity (m/s)
             relative: Flag if takeoff height is relative to CF's current position
         """
-        self.firmware.crtpCommanderHighLevelTakeoffWithVelocity(height, vel, relative)
+        pycffirmware.crtpCommanderHighLevelTakeoffWithVelocity(height, vel, relative)
         self._fullstate_cmd = False
 
     def land_cmd(self, height: float, duration: float, yaw: float | None = None) -> None:
@@ -263,8 +311,8 @@ class Drone:
         """
         self._fullstate_cmd = False
         if yaw is None:
-            return self.firmware.crtpCommanderHighLevelLand(height, duration)
-        self.firmware.crtpCommanderHighLevelLandYaw(height, duration, yaw)
+            return pycffirmware.crtpCommanderHighLevelLand(height, duration)
+        pycffirmware.crtpCommanderHighLevelLandYaw(height, duration, yaw)
 
     def land_vel_cmd(self, height: float, vel: float, relative: bool):
         """Send a land vel command to the controller.
@@ -274,12 +322,12 @@ class Drone:
             vel: Target landing velocity (m/s)
             relative: Flag if landing height is relative to CF's current position
         """
-        self.firmware.crtpCommanderHighLevelLandWithVelocity(height, vel, relative)
+        pycffirmware.crtpCommanderHighLevelLandWithVelocity(height, vel, relative)
         self._fullstate_cmd = False
 
     def stop_cmd(self):
         """Send a stop command to the controller."""
-        self.firmware.crtpCommanderHighLevelStop()
+        pycffirmware.crtpCommanderHighLevelStop()
         self._fullstate_cmd = False
 
     def go_to_cmd(self, pos: NDArray[np.floating], yaw: float, duration: float, relative: bool):
@@ -291,29 +339,29 @@ class Drone:
             duration: Length of manuever
             relative: Flag if setpoint is relative to CF's current position
         """
-        self.firmware.crtpCommanderHighLevelGoTo(*pos, yaw, duration, relative)
+        pycffirmware.crtpCommanderHighLevelGoTo(*pos, yaw, duration, relative)
         self._fullstate_cmd = False
 
     def notify_setpoint_stop(self):
         """Send a notify setpoint stop cmd to the controller."""
-        self.firmware.crtpCommanderHighLevelTellState(self._state)
+        pycffirmware.crtpCommanderHighLevelTellState(self._state)
         self._fullstate_cmd = False
 
     def _reset_firmware_states(self):
-        self._state = self.firmware.state_t()
-        self._control = self.firmware.control_t()
-        self._setpoint = self.firmware.setpoint_t()
-        self._sensor_data = self.firmware.sensorData_t()
+        self._state = pycffirmware.state_t()
+        self._control = pycffirmware.control_t()
+        self._setpoint = pycffirmware.setpoint_t()
+        self._sensor_data = pycffirmware.sensorData_t()
         self._tick = 0
         self._pwms[...] = 0
 
     def _reset_low_pass_filters(self):
         freq = self.params.firmware_freq
-        self._acc_lpf = [self.firmware.lpf2pData() for _ in range(3)]
-        self._gyro_lpf = [self.firmware.lpf2pData() for _ in range(3)]
+        self._acc_lpf = [pycffirmware.lpf2pData() for _ in range(3)]
+        self._gyro_lpf = [pycffirmware.lpf2pData() for _ in range(3)]
         for i in range(3):
-            self.firmware.lpf2pInit(self._acc_lpf[i], freq, self.params.acc_lpf_cutoff)
-            self.firmware.lpf2pInit(self._gyro_lpf[i], freq, self.params.gyro_lpf_cutoff)
+            pycffirmware.lpf2pInit(self._acc_lpf[i], freq, self.params.acc_lpf_cutoff)
+            pycffirmware.lpf2pInit(self._gyro_lpf[i], freq, self.params.gyro_lpf_cutoff)
 
     def _reset_helper_variables(self):
         self._n_tumble = 0
@@ -326,9 +374,9 @@ class Drone:
 
     def _reset_controller(self):
         if self._controller == "pid":
-            self.firmware.controllerPidInit()
+            pycffirmware.controllerPidInit()
         else:
-            self.firmware.controllerMellingerInit()
+            pycffirmware.controllerMellingerInit()
 
     def _step_controller(self) -> bool:
         # Check if the drone is tumblig. If yes, set the control signal to zero.
@@ -344,9 +392,9 @@ class Drone:
         # designed for
         tick = self._determine_controller_tick()
         if self._controller == "pid":
-            ctrl = self.firmware.controllerPid
+            ctrl = pycffirmware.controllerPid
         else:
-            ctrl = self.firmware.controllerMellinger
+            ctrl = pycffirmware.controllerMellinger
         ctrl(self._control, self._setpoint, self._sensor_data, self._state, tick)
         self._update_pwms(self._control)
         return True
@@ -380,28 +428,44 @@ class Drone:
         r = control.roll / 2
         p = control.pitch / 2
         y = control.yaw
-        trst = control.thrust
-        thrust = np.array([trst - r + p + y, trst - r - p - y, trst + r - p + y, trst + r + p - y])
-        np.clip(thrust, 0, self.params.max_pwm, out=thrust)  # Limit thrust to motor range
-        pwms = self._thrust_to_pwm(thrust)
+        pwm = control.thrust
+        pwms = np.array([pwm - r + p + y, pwm - r - p - y, pwm + r - p + y, pwm + r + p - y])
+        np.clip(pwms, 0, self.params.max_pwm, out=pwms)  # Limit pwms to motor range
+        pwms = self._scale_pwms(pwms)
         np.clip(pwms, self.params.min_pwm, self.params.max_pwm, out=pwms)
         self._pwms = pwms
 
-    def _thrust_to_pwm(self, thrust: NDArray[np.floating]) -> NDArray[np.floating]:
-        """Convert thrust to PWM signal.
+    def _scale_pwms(self, pwms: NDArray[np.floating]) -> NDArray[np.floating]:
+        """Scale the control PWM signal to the actual PWM signal.
 
         Assumes brushed motors.
 
         Args:
-            thrust: Thrust in Newtons.
+            pwms: An array of PWM values.
 
         Returns:
-            PWM signal.
+            The properly scaled PWM signal.
         """
-        thrust = thrust / self.params.max_pwm * 60
-        volts = self.params.thrust_curve_a * thrust**2 + self.params.thrust_curve_b * thrust
+        pwms = pwms / self.params.max_pwm * 60
+        volts = self.params.pwm_curve_a * pwms**2 + self.params.pwm_curve_b * pwms
         percentage = np.minimum(1, volts / self.params.supply_voltage)
         return percentage * self.params.max_pwm
+
+    def _pwms_to_thrust(self, pwms: NDArray[np.floating]) -> NDArray[np.floating]:
+        return self.params.kf * (self.params.pwm2rpm_scale * pwms + self.params.pwm2rpm_const) ** 2
+
+    def _thrust_to_pwms(self, thrust: float) -> NDArray[np.floating]:
+        """Convert thrust to pwm using a quadratic thrust curve.
+
+        Returns:
+            The desired pwms in the range of [0.0, pwm_max].
+        """
+        pwm = (
+            self.params.thrust_curve_a * thrust * thrust
+            + self.params.thrust_curve_b * thrust
+            + self.params.thrust_curve_c
+        )
+        return np.clip(pwm, 0, 1) * self.params.max_pwm
 
     def _update_sensor_data(
         self, timestamp: float, acc: NDArray[np.floating], gyro: NDArray[np.floating]
@@ -414,30 +478,16 @@ class Drone:
             gyro: Gyro values in deg/s.
         """
         for name, i, val in zip(("x", "y", "z"), range(3), acc):
-            setattr(self._sensor_data.acc, name, self.firmware.lpf2pApply(self._acc_lpf[i], val))
+            setattr(self._sensor_data.acc, name, pycffirmware.lpf2pApply(self._acc_lpf[i], val))
         for name, i, val in zip(("x", "y", "z"), range(3), gyro):
-            setattr(self._sensor_data.gyro, name, self.firmware.lpf2pApply(self._gyro_lpf[i], val))
+            setattr(self._sensor_data.gyro, name, pycffirmware.lpf2pApply(self._gyro_lpf[i], val))
         self._sensor_data.interruptTimestamp = timestamp
 
     def _update_setpoint(self, timestep: float):
         if not self._fullstate_cmd:
-            self.firmware.crtpCommanderHighLevelTellState(self._state)
-            self.firmware.crtpCommanderHighLevelUpdateTime(timestep)
-            self.firmware.crtpCommanderHighLevelGetSetpoint(self._setpoint, self._state)
-
-    def _load_firmware(self) -> ModuleType:
-        """Load the firmware module.
-
-        pycffirmware imitates the firmware of the Crazyflie 2.1. Since the module is stateful, we
-        load a new instance of the module for each drone object. This allows us to simulate multiple
-        drones with different states without interference.
-        """
-        spec = importlib.util.find_spec("pycffirmware")
-        if spec is None:
-            raise ImportError("Could not find the pycffirmware module.")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return mod
+            pycffirmware.crtpCommanderHighLevelTellState(self._state)
+            pycffirmware.crtpCommanderHighLevelUpdateTime(timestep)
+            pycffirmware.crtpCommanderHighLevelGetSetpoint(self._setpoint, self._state)
 
 
 @dataclass
@@ -450,37 +500,51 @@ class DroneParams:
 
     mass: float
     arm_len: float
-    thrust2weight_ratio: float
-    J: NDArray[np.floating]
-    kf: float
-    km: float
-    collision_h: float
-    collision_r: float
-    collision_z_offset: float
-    max_speed_kmh: float
-    gnd_eff_coeff: float
     prop_radius: float
+    collision_r: float
+    collision_h: float
+    collision_z_offset: float
+
+    J: NDArray[np.floating]
+
+    max_speed_kmh: float
+    thrust2weight_ratio: float
+
+    gnd_eff_coeff: float
     drag_coeff: NDArray[np.floating]
     dw_coeff_1: float
     dw_coeff_2: float
     dw_coeff_3: float
+
+    kf: float
+    km: float
+
     pwm2rpm_scale: float
     pwm2rpm_const: float
     min_pwm: float
     max_pwm: float
+
     # Defaults are calculated in __post_init__ according to the other parameters
-    min_thrust: float = 0.0
-    max_thrust: float = 0.0
-    min_rpm: float = 0.0
-    max_rpm: float = 0.0
-    gnd_eff_min_height_clip: float = 0.0
     J_inv: NDArray[np.floating] = field(default_factory=lambda: np.zeros((3, 3)))
+
+    gnd_eff_min_height_clip: float = 0.0
     firmware_freq: int = 500  # Firmware frequency in Hz
     supply_voltage: float = 3.0  # Power supply voltage
-    thrust_curve_a: float = -0.0006239  # Thrust curve parameters for brushed motors
-    thrust_curve_b: float = 0.088  # Thrust curve parameters for brushed motors
+
+    min_rpm: float = 0.0
+    max_rpm: float = 0.0
+    pwm_curve_a: float = -0.0006239  # PWM curve parameters for brushed motors
+    pwm_curve_b: float = 0.088  # PWM curve parameters for brushed motors
+
+    min_thrust: float = 0.0
+    max_thrust: float = 0.0
+    thrust_curve_a: float = -1.1264
+    thrust_curve_b: float = 2.2541
+    thrust_curve_c: float = 0.0209  # Thrust curve parameters for brushed motors
+
     tumble_threshold: float = -0.5  # Vertical acceleration threshold for tumbling detection
     tumble_duration: int = 30  # Number of consecutive steps before tumbling is detected
+
     acc_lpf_cutoff: int = 80  # Low-pass filter cutoff freq
     gyro_lpf_cutoff: int = 30  # Low-pass filter cutoff freq
 

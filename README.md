@@ -28,7 +28,7 @@
 ## Installation
 
 To run the LSY Autonomous Drone Racing project, you will need 2 repositories:
-- [pycffirmware](https://github.com/utiasDSL/pycffirmware) - `main` branch: A simulator for the on-board controller response of the drones we are using to accurately model their behavior
+- [pycffirmware](https://github.com/utiasDSL/pycffirmware/tree/drone_racing) - `drone_racing` branch: A simulator for the on-board controller response of the drones we are using to accurately model their behavior.
 - [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the drone simulation, environments, and scripts to simulate and deploy the drones in the racing challenge
 
 ### Fork lsy_drone_racing
@@ -62,7 +62,7 @@ In addition, you also need to install the pycffirmware package from source with
 
 ```bash
 cd ~/repos
-git clone https://github.com/utiasDSL/pycffirmware.git
+git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
 cd pycffirmware
 git submodule update --init --recursive
 sudo apt update
@@ -84,7 +84,7 @@ If everything is installed correctly, this opens the simulator and simulates a d
 TODO: Add docker instructions
 
 ## Difficulty levels
-The complete problem is specified by a TOML file, e.g. [`getting_started.toml`](config/getting_started.toml)
+The complete problem is specified by a TOML file, e.g. [`level0.toml`](config/level0.toml)
 
 The config folder contains settings for progressively harder scenarios:
 

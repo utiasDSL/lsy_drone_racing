@@ -42,6 +42,7 @@ class TrajectoryController(BaseController):
         t = np.arange(len(waypoints))
         self.trajectory = CubicSpline(t, waypoints)
         self._tick = 0
+        self._freq = initial_info["env.freq"]
 
         # Generate points along the spline for visualization
         t_vis = np.linspace(0, len(waypoints) - 1, 100)
@@ -71,10 +72,10 @@ class TrajectoryController(BaseController):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
-        target_pos = self.trajectory(self._tick / 30)
+        target_pos = self.trajectory(self._tick / self._freq)
         return np.concatenate((target_pos, np.zeros(10)))
 
-    def step_learn(
+    def step_callback(
         self,
         action: NDArray[np.floating],
         obs: NDArray[np.floating],
@@ -82,10 +83,9 @@ class TrajectoryController(BaseController):
         terminated: bool,
         truncated: bool,
         info: dict,
-    ) -> None:
+    ):
         """Increment the time step counter."""
         self._tick += 1
-        return super().step_learn(action, obs, reward, terminated, truncated, info)
 
     def episode_reset(self):
         """Reset the time step counter."""
