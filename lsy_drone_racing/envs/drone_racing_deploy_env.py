@@ -150,4 +150,5 @@ class DroneRacingDeployEnv(gymnasium.Env):
         )
         return info
 
-    def check_gate_progress(self): ...
+    def check_gate_progress(self):
+        ...

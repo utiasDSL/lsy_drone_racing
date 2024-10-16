@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 def simulate(
     config: str = "level0.toml",
-    controller: str = "trajectory_controller.py",
+    controller: str | None = None,
     n_runs: int = 1,
     gui: bool = True,
     env_id: str | None = None,
@@ -40,7 +40,8 @@ def simulate(
 
     Args:
         config: The path to the configuration file. Assumes the file is in `config/`.
-        controller: The name of the controller file in `lsy_drone_racing/control/`.
+        controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
+            the controller specified in the config file is used.
         n_runs: The number of episodes.
         gui: Enable/disable the simulation GUI.
 
@@ -51,8 +52,9 @@ def simulate(
     config = load_config(Path(__file__).parents[1] / "config" / config)
     config.sim.gui = gui
     # Load the controller module
-    path = Path(__file__).parents[1] / "lsy_drone_racing/control" / controller
-    controller_cls = load_controller(path)  # This returns a class, not an instance
+    control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
+    controller_path = control_path / (controller or config.controller.file)
+    controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
     env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
 

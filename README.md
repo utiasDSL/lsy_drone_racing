@@ -8,6 +8,7 @@
   - [Installation](#installation)
     - [Fork lsy\_drone\_racing](#fork-lsy_drone_racing)
     - [Using conda/mamba](#using-condamamba)
+    - [Using Docker](#using-docker)
   - [Difficulty levels](#difficulty-levels)
     - [Switching between configurations](#switching-between-configurations)
   - [The online competition](#the-online-competition)
@@ -16,13 +17,16 @@
     - [Submitting your latest iteration](#submitting-your-latest-iteration)
   - [Creating your own controller](#creating-your-own-controller)
   - [Common errors](#common-errors)
-  - [Deployment (**NOT IMPORTANT FOR STUDENTS FOR NOW**)](#deployment-not-important-for-students-for-now)
+    - [GLIBCXX](#glibcxx)
+  - [Deployment](#deployment)
     - [Hardware setup](#hardware-setup)
-    - [Common errors](#common-errors)
+    - [Common errors](#common-errors-1)
       - [libNatNet](#libnatnet)
+      - [LIBUSB\_ERROR\_ACCESS](#libusb_error_access)
     - [Fly with the drones](#fly-with-the-drones)
       - [Settings](#settings)
       - [Launch](#launch)
+
 
 
 ## Installation
@@ -46,11 +50,12 @@ First, clone the new fork from your own account and create a new environment wit
 ```bash
 mkdir -p ~/repos && cd repos
 git clone https://github.com/<YOUR-USERNAME>/lsy_drone_racing.git
-conda create -n drone python=3.8
-conda activate drone
+conda create -n race python=3.8
+conda activate race
 ```
 
 > **Note:** It is important you stick with **Python 3.8**. Yes, it is outdated. Yes, we'd also like to upgrade. However, there are serious issues beyond our control when deploying the code on the real drones with any other version.
+
 Now you can install the lsy_drone_racing package in editable mode from the repository root
 
 ```bash
@@ -67,7 +72,6 @@ cd pycffirmware
 git submodule update --init --recursive
 sudo apt update
 sudo apt install build-essential
-conda install swig
 ./wrapper/build_linux.sh
 ```
 
@@ -80,22 +84,47 @@ python scripts/sim.py
 
 If everything is installed correctly, this opens the simulator and simulates a drone flying through four gates.
 
+You can also install the extended dependencies with 
+```bash
+conda activate race
+cd ~/repos/lsy_drone_racing
+pip install -e .[rl, test]
+```
+and check if all tests complete with 
+```bash
+cd ~/repos/lsy_drone_racing
+pytest tests
+```
+
 ### Using Docker
-TODO: Add docker instructions
+You can also run the simulation with Docker, albeit without the GUI at the moment. To test this, install docker with docker compose on your system, and then run
+```bash
+docker compose build
+docker compose up
+```
+After building, running the container should produce the following output:
+
+```bash
+sim-1  | INFO:__main__:Flight time (s): 8.466666666666667
+sim-1  | Reason for termination: Task completed
+sim-1  | Gates passed: 4
+sim-1  | 
+sim-1  | 8.466666666666667
+```
 
 ## Difficulty levels
 The complete problem is specified by a TOML file, e.g. [`level0.toml`](config/level0.toml)
 
 The config folder contains settings for progressively harder scenarios:
 
-|         Evaluation Scenario         | Constraints | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes |         Notes         |
-| :---------------------------------: | :---------: | :-----------------------: | :-------------------------: | :--------------------: | :-------------------: |
-| [`level0.toml`](config/level0.toml) |   **Yes**   |           *No*            |            *No*             |          *No*          |   Perfect knowledge   |
-| [`level1.toml`](config/level1.toml) |   **Yes**   |          **Yes**          |            *No*             |          *No*          |       Adaptive        |
-| [`level2.toml`](config/level2.toml) |   **Yes**   |          **Yes**          |           **Yes**           |          *No*          | Learning, re-planning |
-| [`level3.toml`](config/level3.toml) |   **Yes**   |          **Yes**          |           **Yes**           |        **Yes**         |      Robustness       |
-|                                     |             |                           |                             |                        |                       |
-|              sim2real               |   **Yes**   |    Real-life hardware     |           **Yes**           |          *No*          |   Sim2real transfer   |
+|      Evaluation Scenario      | Constraints | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes |         Notes         |
+| :---------------------------: | :---------: | :-----------------------: | :-------------------------: | :--------------------: | :-------------------: |
+| [Level 0](config/level0.toml) |   **Yes**   |           *No*            |            *No*             |          *No*          |   Perfect knowledge   |
+| [Level 1](config/level1.toml) |   **Yes**   |          **Yes**          |            *No*             |          *No*          |       Adaptive        |
+| [Level 2](config/level2.toml) |   **Yes**   |          **Yes**          |           **Yes**           |          *No*          | Learning, re-planning |
+| [Level 3](config/level3.toml) |   **Yes**   |          **Yes**          |           **Yes**           |        **Yes**         |      Robustness       |
+|                               |             |                           |                             |                        |                       |
+|           sim2real            |   **Yes**   |    Real-life hardware     |           **Yes**           |          *No*          |   Sim2real transfer   |
 
 > **Note:** "Rand. Between Episodes" (governed by argument `reseed_on_reset`) states whether randomized properties and positions vary or are kept constant (by re-seeding the random number generator on each `env.reset()`) across episodes
 
@@ -112,7 +141,7 @@ During the semester, you will compete with the other teams on who's the fastest 
 
 ### Signing up for the online competition
 
-To take part in the competition, you first have to create an account on [Kaggle](https://www.kaggle.com/). Next, use this [invite link](https://www.kaggle.com/t/1a37a7de76c745e29a7d7c61e538d581) to join the competition, go to the [drone racing competition](https://www.kaggle.com/competitions/lsy-drone-racing-ss24/overview), click on "Rules", and accept the competition conditions. This step is necessary to allow submissions from your account.
+To take part in the competition, you first have to create an account on [Kaggle](https://www.kaggle.com/). Next, use this [invite link](https://www.kaggle.com/t/487e7e8777364612ba3f9ea3a6a1ea15) to join the competition, go to the [drone racing competition](https://www.kaggle.com/competitions/lsy-drone-racing-ws24/overview), click on "Rules", and accept the competition conditions. This step is necessary to allow submissions from your account.
 
 ### Setting up your GitHub repo for the competition
 
@@ -170,23 +199,18 @@ conda install -c conda-forge gcc=12.1.0
 
 If the program still crashes and complains about not finding `GLIBCXX_3.4.30`, please update your `LD_LIBRARY_PATH` variable to point to your conda environment's lib folder.
 
-## Deployment (**NOT IMPORTANT FOR STUDENTS FOR NOW**)
+## Deployment
 
 ### Hardware setup
 
 To deploy the controllers on real drones you must install ROS Noetic and the crazyswarm package.
 
-Create a catkin_ws/src folder if it does not exist already, clone the crazywarm package and build the workspace
+Clone the [crazyswarm repository](https://github.com/USC-ACTLab/crazyswarm) and follow its [build steps](https://crazyswarm.readthedocs.io/en/latest/installation.html).
 
-**TODO: CREATE WORKING CRAZYSWARM PACKAGE**
 ```bash
-mkdir -p ~/catkin_ws/src
-cd ~/catkin_ws/src
-git clone https://github.com/utiasDSL/crazyswarm.git
-mv crazyswarm/* .
-cd ..
-catkin_make
-source devel/setup.bash
+cd ~/repos
+git clone https://github.com/USC-ACTLab/crazyswarm
+...
 ```
 
 Next, paste the following block into your terminal
@@ -199,41 +223,30 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="1915", ATTRS{idProduct}=="0101", MODE="0664"
 # Crazyflie (over USB)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", MODE="0664", GROUP="plugdev"
 EOF
-```
-
-
-```bash
-# Install Vicon bridge nodelet
-cd <path/to/catkin_ws>/src/
-git clone -b vicon-bridge-nodelet git@github.com:utiasDSL/extras.git
-cd ..
-catkin_make
-source <path/to/catkin_ws>/devel/setup.bash
-
-# Install and make crazyflie-firmware-import
-cd ~/GitHub
-git clone -b dsl-iros-comp-flight git@github.com:utiasDSL/crazyflie-firmware-import.git # other options are `dsl-sim2real-logging-v1`, etc.
-cd crazyflie-firmware-import
-git submodule update --init --recursive
-sudo apt-get install make gcc-arm-none-eabi
-make cf2_defconfig # Make the default config file.
-make -j 12
 
 # USB preparation for crazyradio
 sudo groupadd plugdev
 sudo usermod -a -G plugdev $USER
-```
 
-```bash
 # Apply changes
 sudo udevadm control --reload-rules
 sudo udevadm trigger
+```
 
-# Flash crazyflie C10 (cf9 in the Vicon objects list)
-# Turn the Crazyflie off, then start the Crazyflie in bootloader mode by pressing the power button for 3 seconds. Both the blue LEDs will blink.
-cd ~/GitHub/crazyflie-firmware-import/
-make cload
+We also need to install the Vicon bridge package to get access to the Vicon positions etc in ROS.
+```bash
+# Install Vicon bridge nodelet
+cd <path/to/catkin_ws>/src/
+git clone https://github.com/ethz-asl/vicon_bridge
+cd ..
+catkin_make
+source <path/to/catkin_ws>/devel/setup.bash
+```
 
+To start the Vicon bridge by default, you may want to include it in the crazyswarm launchfile.
+
+Optionally, you can also install cfclient to debug issues with the drones and configure IDs etc.
+```bash
 # (optional) Install cfclient
 sudo apt install libxcb-xinerama0
 conda create -n cfclient python=3.7
@@ -242,9 +255,6 @@ pip install --upgrade pip # note: we are using a conda python3.7 env
 pip install cfclient
 conda deactivate
 ```
-
-### Vicon bridge
-TODO: Expand
 
 ### Common errors
 
@@ -263,15 +273,10 @@ Make sure you are familiar with the configuration files. Not all options are rel
 
 The important config files are located in the crazyswarm ROS package:
 
-**TODO:** Insert correct link to files
-- Crazyflies types — includes controller properties and marker configurations, etc.
-- In-use Crazyflies — includes ID, radio channel, types, etc.
-- All Crazyflies
+- [Crazyflies types](https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/launch/crazyflieTypes.yaml) — includes controller properties and marker configurations, etc.
+- [In-use Crazyflies](https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/launch/crazyflies.yaml) — includes ID, radio channel, types, etc.
 
-As well as the launch file and Python script:
-
-- cf_sim2real.launch
-- cmdFullStateCFFirmware.py
+As well as the main launch file [hover_swarm.launch](https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/launch/hover_swarm.launch).
 
 #### Launch
 
@@ -279,15 +284,15 @@ As well as the launch file and Python script:
 
 In a terminal, launch the ROS node for the crazyflies. Change the settings in _<path/to/crazyswarm/package>/launch/crazyflies.yaml_ as necessary.
 ```bash
-roslaunch crazyswarm cf_sim2real.launch
+roslaunch crazyswarm hover_swarm.launch
 ```
 
 In a second terminal:
 
 ```bash
-python scripts/deploy.py --controller <path/to/your/controller.py> --config config/level3.toml
+python scripts/deploy.py --controller <your_controller.py> --config level3.toml
 ```
 
-where `<path/to/your/controller.py>` implements a controller that inherits from `lsy_drone_racing.controller.BaseController`
+where `<your_controller.py>` implements a controller that inherits from `lsy_drone_racing.control.BaseController`
 
 
