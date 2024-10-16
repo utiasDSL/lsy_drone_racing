@@ -3,6 +3,7 @@
 # This file only contains a selection of the most common options. For a full
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
+import os
 
 # -- Project information -----------------------------------------------------
 
@@ -12,6 +13,7 @@ author = "Martin Schuck"
 
 # The full version, including alpha/beta/rc tags
 release = "0.1.0"
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
 # -- General configuration ---------------------------------------------------
 
@@ -22,6 +24,11 @@ extensions = ["sphinx.ext.autodoc", "sphinx.ext.napoleon", "sphinx.ext.todo"]
 
 # Autodoc config
 autodoc_member_order = "bysource"
+
+# Mock imports on ReadTheDocs that are not available with pip
+if on_rtd:
+    autodoc_mock_imports = ["pycffirmware"]
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
