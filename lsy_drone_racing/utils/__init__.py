@@ -4,12 +4,6 @@ We separate utility functions that require ROS into a separate module to avoid R
 dependency for sim-only scripts.
 """
 
-from lsy_drone_racing.utils.utils import (
-    check_gate_pass,
-    draw_trajectory,
-    load_config,
-    load_controller,
-    map2pi,
-)
+from lsy_drone_racing.utils.utils import check_gate_pass, load_config, load_controller, map2pi
 
-__all__ = ["load_config", "load_controller", "check_gate_pass", "draw_trajectory", "map2pi"]
+__all__ = ["load_config", "load_controller", "check_gate_pass", "map2pi"]

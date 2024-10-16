@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import logging
-import time
+from typing import TYPE_CHECKING
 
 import gymnasium
 import numpy as np
-import numpy.typing as npt
-import pybullet as p
+from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.sim.drone import Drone
 from lsy_drone_racing.sim.sim import Sim
+from lsy_drone_racing.utils import check_gate_pass
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -26,27 +28,30 @@ class DroneRacingEnv(gymnasium.Env):
         """
         super().__init__()
         self.config = config
-        self.drone = Drone(self.CONTROLLER)
-        self.step_freq = config.env.freq
         self.sim = Sim(
             track=config.env.track,
             sim_freq=config.sim.sim_freq,
             ctrl_freq=config.sim.ctrl_freq,
-            disturbances=config.sim.disturbances,
+            disturbances=getattr(config.sim, "disturbances", {}),
+            randomization=getattr(config.env, "randomization", {}),
             gui=config.sim.gui,
             n_drones=1,
             physics=config.sim.physics,
         )
         self.sim.seed(config.env.seed)
-        self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(4,))
-        fm = np.finfo(np.float32).max
-        low = np.array([-5, -fm, -5, -fm, -0.25, -fm, -np.pi, -np.pi, -np.pi, -fm, -fm, -fm])
-        high = np.array([5, fm, 5, fm, 2.5, fm, np.pi, np.pi, np.pi, fm, fm, fm])
-        self.observation_space = gymnasium.spaces.Box(low=low, high=high, dtype=np.float32)
+        self.action_space = spaces.Box(low=-1, high=1, shape=(13,))
+        self.observation_space = spaces.Dict(
+            {
+                "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+            }
+        )
         self.target_gate = 0
-        self.symbolic = config.env.symbolic
+        self.symbolic = self.sim.symbolic() if config.env.symbolic else None
         self._steps = 0
-        self._debug_time = 0  # TODO: Remove this
+        self._last_drone_pos = np.zeros(3)
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         if self.config.env.reseed:
@@ -55,74 +60,80 @@ class DroneRacingEnv(gymnasium.Env):
             self.sim.seed(seed)
         self.sim.reset()
         self.target_gate = 0
-        self._debug_time = 0  # TODO: Remove this
         self._steps = 0
-        obs = self.obs
-        pos = obs["pos"]
-        rpy = obs["rpy"]
-        vel = obs["vel"]
-        ang_vel = obs["ang_vel"]
-        self.drone.reset(pos, rpy, vel)
-        obs = np.concatenate(
-            [np.array([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2]]), rpy, ang_vel]
-        )
+        self.sim.drone.reset(self.sim.drone.pos, self.sim.drone.rpy, self.sim.drone.vel)
+        self._last_drone_pos[:] = self.sim.drone.pos
         if self.sim.n_drones > 1:
             raise NotImplementedError("Firmware wrapper does not support multiple drones.")
-        return obs.astype(np.float32), self.info
+        info = self.info
+        info["sim.sim_freq"] = self.config.sim.sim_freq
+        info["sim.ctrl_freq"] = self.config.sim.ctrl_freq
+        info["sim.drone.mass"] = self.sim.drone.params.mass
+        info["env.freq"] = self.config.env.freq
+        return self.obs, info
 
-    def step(self, action: np.ndarray):
+    def step(self, action: NDArray[np.floating]):
         """Step the firmware_wrapper class and its environment.
 
         This function should be called once at the rate of ctrl_freq. Step processes and high level
         commands, and runs the firmware loop and simulator according to the frequencies set.
 
         Args:
-            action: Full-state command [x_des, y_des, z_des, yaw_des] to follow.
+            action: Full-state command [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate]
+                to follow.
         """
-        zeros = np.zeros(3, dtype=np.float64)
         action = action.astype(np.float64)  # Drone firmware expects float64
-        pos, yaw = action[:3], action[3]
-        self.drone.full_state_cmd(pos, zeros, zeros, yaw, zeros)
-
-        thrust = self.drone.desired_thrust
-        collision = False
-        while self.drone.tick / self.drone.firmware_freq < (self._steps + 1) / self.step_freq:
-            self.sim.step(thrust)
-            t1 = time.perf_counter()
-            self.check_gate_progress()
-            t2 = time.perf_counter()
-            self._debug_time += t2 - t1
-            obs = self.obs
-            pos, vel, rpy, ang_vel = obs["pos"], obs["vel"], obs["rpy"], obs["ang_vel"]
-            obs = np.concatenate(
-                [np.array([pos[0], vel[0], pos[1], vel[1], pos[2], vel[2]]), rpy, ang_vel]
-            )
-            if self.sim.collisions:
-                collision = True
-            thrust = self.drone.step_controller(pos, rpy, vel)[::-1]
-        self.sim.drone.desired_thrust[:] = thrust
-        self._steps += 1
+        assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
+        pos, vel, acc, yaw, rpy_rate = action[:3], action[3:6], action[6:9], action[9], action[10:]
+        self.sim.drone.full_state_cmd(pos, vel, acc, yaw, rpy_rate)
+        collision = self._inner_step_loop()
         terminated = self.terminated or collision
-        # if terminated: TODO: Revise the gate checking logic
-        # print(f"Time spent in check_gate_progress: {self._debug_time:.5f} s")
-        return obs.astype(np.float32), self.reward, terminated, False, self.info
+        return self.obs, self.reward, terminated, False, self.info
+
+    def _inner_step_loop(self) -> bool:
+        """Run the desired action for multiple simulation sub-steps.
+
+        The outer controller is called at a lower frequency than the firmware loop. Each environment
+        step therefore consists of multiple simulation steps. At each simulation step, the
+        lower-level controller is called to compute the thrust and attitude commands.
+
+        Returns:
+            True if a collision occured at any point during the simulation steps, else False.
+        """
+        thrust = self.sim.drone.desired_thrust
+        collision = False
+        while (
+            self.sim.drone.tick / self.sim.drone.firmware_freq
+            < (self._steps + 1) / self.config.env.freq
+        ):
+            self.sim.step(thrust)
+            self.target_gate += self.gate_passed()
+            if self.target_gate == self.sim.n_gates:
+                self.target_gate = -1
+            collision |= bool(self.sim.collisions)
+            pos, rpy, vel = self.sim.drone.pos, self.sim.drone.rpy, self.sim.drone.vel
+            thrust = self.sim.drone.step_controller(pos, rpy, vel)[::-1]
+        self.sim.drone.desired_thrust[:] = thrust
+        self._last_drone_pos[:] = self.sim.drone.pos
+        self._steps += 1
+        return collision
 
     @property
-    def obs(self) -> dict[str, npt.ndarray[np.floating]]:
+    def obs(self) -> dict[str, NDArray[np.floating]]:
         obs = {
-            "pos": self.sim.drone.pos.copy(),
-            "rpy": self.sim.drone.rpy.copy(),
-            "vel": self.sim.drone.vel.copy(),
-            "ang_vel": self.sim.drone.ang_vel.copy(),
+            "pos": self.sim.drone.pos.astype(np.float32),
+            "rpy": self.sim.drone.rpy.astype(np.float32),
+            "vel": self.sim.drone.vel.astype(np.float32),
+            "ang_vel": self.sim.drone.ang_vel.astype(np.float32),
         }
-        obs["ang_vel"] = R.from_euler("XYZ", obs["rpy"]).as_matrix().T @ obs["ang_vel"]
+        obs["ang_vel"][:] = R.from_euler("XYZ", obs["rpy"]).inv().apply(obs["ang_vel"])
         if "observation" in self.sim.disturbances:
             obs = self.sim.disturbances["observation"].apply(obs)
         return obs
 
     @property
     def reward(self) -> float:
-        return -1
+        return -1.0
 
     @property
     def terminated(self) -> bool:
@@ -139,14 +150,13 @@ class DroneRacingEnv(gymnasium.Env):
     @property
     def info(self):
         info = {}
-        VISIBILITY_RANGE = 0.45  # TODO: Make this a parameter
         info["collisions"] = self.sim.collisions
         gates = self.sim.gates
         info["target_gate"] = self.target_gate if self.target_gate < len(gates) else -1
         info["drone.pos"] = self.sim.drone.pos.copy()
         # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
         # use the actual pose, otherwise use the nominal pose.
-        in_range = self.sim.in_range(gates, self.sim.drone, VISIBILITY_RANGE)
+        in_range = self.sim.in_range(gates, self.sim.drone, self.config.env.sensor_range)
         gates_pos = np.stack([g["nominal.pos"] for g in gates.values()])
         gates_pos[in_range] = np.stack([g["pos"] for g in gates.values()])[in_range]
         gates_rpy = np.stack([g["nominal.rpy"] for g in gates.values()])
@@ -156,41 +166,50 @@ class DroneRacingEnv(gymnasium.Env):
         info["gates.in_range"] = in_range
 
         obstacles = self.sim.obstacles
-        in_range = self.sim.in_range(obstacles, self.sim.drone, VISIBILITY_RANGE)
+        in_range = self.sim.in_range(obstacles, self.sim.drone, self.config.env.sensor_range)
         obstacles_pos = np.stack([o["nominal.pos"] for o in obstacles.values()])
         obstacles_pos[in_range] = np.stack([o["pos"] for o in obstacles.values()])[in_range]
         info["obstacles.pos"] = obstacles_pos
         info["obstacles.in_range"] = in_range
-
-        if self.symbolic:
-            info["symbolic.model"] = self.sim.symbolic()
+        info["symbolic.model"] = self.symbolic
         return info
 
-    def check_gate_progress(self):
-        # TODO: Check with an analytical solution instead of ray
+    def gate_passed(self) -> bool:
         if self.sim.n_gates > 0 and self.target_gate < self.sim.n_gates and self.target_gate != -1:
-            x, y, z = self.sim.gates[self.target_gate]["pos"]
-            _, _, ry = self.sim.gates[self.target_gate]["rpy"]
-            half_length = 0.1875  # Obstacle URDF dependent. TODO: Make this a parameter
-            delta_x = 0.05 * np.cos(ry)
-            delta_y = 0.05 * np.sin(ry)
-            fr = [[x, y, z - half_length]]
-            to = [[x, y, z + half_length]]
-            for i in [1, 2, 3]:
-                fr.append([x + i * delta_x, y + i * delta_y, z - half_length])
-                fr.append([x - i * delta_x, y - i * delta_y, z - half_length])
-                to.append([x + i * delta_x, y + i * delta_y, z + half_length])
-                to.append([x - i * delta_x, y - i * delta_y, z + half_length])
-            rays = p.rayTestBatch(
-                rayFromPositions=fr, rayToPositions=to, physicsClientId=self.sim.pyb_client
-            )
-            if any(r[2] < 0.9999 and r[0] == self.sim.drone.id for r in rays):
-                self.target_gate += 1
-            if self.target_gate == self.sim.n_gates:
-                self.target_gate = -1
+            gate_pos = self.sim.gates[self.target_gate]["pos"]
+            gate_rot = R.from_euler("xyz", self.sim.gates[self.target_gate]["rpy"])
+            drone_pos = self.sim.drone.pos
+            last_drone_pos = self._last_drone_pos
+            gate_size = (0.45, 0.45)
+            return check_gate_pass(gate_pos, gate_rot, gate_size, drone_pos, last_drone_pos)
+        return False
 
     def render(self):
         self.sim.render()
 
     def close(self):
         self.sim.close()
+
+
+class DroneRacingThrustEnv(DroneRacingEnv):
+    def __init__(self, config: dict):
+        super().__init__(config)
+        bounds = np.array([1, np.pi, np.pi, np.pi], dtype=np.float32)
+        self.action_space = spaces.Box(low=-bounds, high=bounds)
+
+    def step(self, action: NDArray[np.floating]):
+        """Step the drone racing environment with a thrust command.
+
+        TODO: Clarify units of rpy and thrust.
+
+        Args:
+            action: Thrust command [roll, pitch, yaw, thrust].
+        """
+        assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
+        action = action.astype(np.float64)
+        cmd_thrust = action[0]
+        cmd_rpy = action[1:]
+        self.sim.drone.collective_thrust_cmd(cmd_thrust, cmd_rpy)
+        collision = self._inner_step_loop()
+        terminated = self.terminated or collision
+        return self.obs, self.reward, terminated, False, self.info

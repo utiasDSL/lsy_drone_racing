@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
 
 import numpy as np
-import numpy.typing as npt
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
 class Noise:
     """Base class for noise applied to inputs or dyanmics."""
 
-    def __init__(self, dim: int, mask: npt.NDArray[np.bool] | None = None):
+    def __init__(self, dim: int, mask: NDArray[np.bool] | None = None):
         """Initialize basic parameters.
 
         Args:
@@ -22,17 +25,17 @@ class Noise:
         self.np_random = np.random.default_rng()
         self.mask = np.asarray(mask) if mask is not None else np.ones(dim, dtype=bool)
         assert self.dim == len(self.mask), "Mask shape should be the same as dim."
-        self.step = 0
+        self._step = 0
 
     def reset(self):
         """Reset the noise to its initial state."""
-        self.step = 0
+        self._step = 0
 
     def step(self):
         """Increment the noise step for time dependent noise classes."""
-        self.step += 1
+        self._step += 1
 
-    def apply(self, target: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+    def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
         """Apply the noise to the target.
 
         Args:
@@ -56,11 +59,7 @@ class UniformNoise(Noise):
     """I.i.d uniform noise ~ U(low, high) per time step."""
 
     def __init__(
-        self,
-        dim: int,
-        mask: npt.NDArray[np.bool] | None = None,
-        low: float = 0.0,
-        high: float = 1.0,
+        self, dim: int, mask: NDArray[np.bool] | None = None, low: float = 0.0, high: float = 1.0
     ):
         """Initialize the uniform noise.
 
@@ -76,7 +75,7 @@ class UniformNoise(Noise):
         self.low = np.array([low] * self.dim) if isinstance(low, float) else np.asarray(low)
         self.high = np.array([high] * self.dim) if isinstance(high, float) else np.asarray(high)
 
-    def apply(self, target: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+    def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
         """Apply the noise to the target.
 
         Args:
@@ -97,8 +96,8 @@ class GaussianNoise(Noise):
     def __init__(
         self,
         dim: int,
-        mask: npt.NDArray[np.bool] | None = None,
-        std: float | npt.NDArray[np.floating] = 1.0,
+        mask: NDArray[np.bool] | None = None,
+        std: float | NDArray[np.floating] = 1.0,
     ):
         """Initialize the uniform noise.
 
@@ -112,7 +111,7 @@ class GaussianNoise(Noise):
         self.std = np.array([std] * self.dim) if isinstance(std, float) else np.asarray(std)
         assert self.dim == len(self.std), "std shape should be the same as dim."
 
-    def apply(self, target: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+    def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
         """Apply the noise to the target.
 
         Args:
@@ -139,7 +138,7 @@ class NoiseList:
         for n in self.noises:
             n.reset()
 
-    def apply(self, target: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+    def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
         """Sequentially apply noises to the target.
 
         Args:

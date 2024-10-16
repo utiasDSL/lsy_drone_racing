@@ -2,7 +2,7 @@
 
 Run as:
 
-    $ python scripts/sim.py --config config/getting_started.yaml
+    $ python scripts/sim.py --config level0.toml
 
 Look for instructions in `README.md` and `edit_this.py`.
 """
@@ -16,30 +16,31 @@ from typing import TYPE_CHECKING
 
 import fire
 import gymnasium
-import numpy as np
 import pybullet as p
 
 from lsy_drone_racing.utils import load_config, load_controller
-from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
 
 if TYPE_CHECKING:
     from munch import Munch
+
+    from lsy_drone_racing.envs.drone_racing_env import DroneRacingEnv
 
 
 logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "config/getting_started.toml",
-    controller: str = "examples/controller.py",
+    config: str = "level0.toml",
+    controller: str = "trajectory_controller.py",
     n_runs: int = 1,
     gui: bool = True,
+    env_id: str | None = None,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
     Args:
-        config: The path to the configuration file.
-        controller: The path to the controller module.
+        config: The path to the configuration file. Assumes the file is in `config/`.
+        controller: The name of the controller file in `lsy_drone_racing/control/`.
         n_runs: The number of episodes.
         gui: Enable/disable the simulation GUI.
 
@@ -47,73 +48,45 @@ def simulate(
         A list of episode times.
     """
     # Load configuration and check if firmare should be used.
-    config = load_config(Path(config))
+    config = load_config(Path(__file__).parents[1] / "config" / config)
     config.sim.gui = gui
-
-    env = DroneRacingObservationWrapper(gymnasium.make("DroneRacing-v0", config=config))
-
     # Load the controller module
-    path = Path(__file__).parents[1] / controller
-    ctrl_class = load_controller(path)  # This returns a class, not an instance
+    path = Path(__file__).parents[1] / "lsy_drone_racing/control" / controller
+    controller_cls = load_controller(path)  # This returns a class, not an instance
+    # Create the racing environment
+    env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
 
-    # Create a statistics collection
-    stats = {"ep_reward": 0, "collisions": 0, "violations": 0, "gates_passed": 0}
     ep_times = []
-
-    # Run the episodes.
-    for _ in range(n_runs):
-        ep_start = time.time()
+    for _ in range(n_runs):  # Run n_runs episodes with the controller
         done = False
-        action = np.zeros(4)
-        reward = 0
         obs, info = env.reset()
-        info["ctrl_timestep"] = config.env.freq
-        info["ctrl_freq"] = 1 / config.env.freq
-        # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
-        ctrl = ctrl_class(obs, info)
-        gui_timer = p.addUserDebugText("", textPosition=[0, 0, 1], physicsClientId=env.pyb_client)
+        controller = controller_cls(obs, info)
+        if gui:
+            gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client)
         i = 0
-        while not done:
-            curr_time = i / config.env.freq
-            gui_timer = p.addUserDebugText(
-                "Ep. time: {:.2f}s".format(curr_time),
-                textPosition=[0, 0, 1.5],
-                textColorRGB=[1, 0, 0],
-                lifeTime=0,  # 3 / config.env.freq,
-                textSize=1.5,
-                parentObjectUniqueId=0,
-                parentLinkIndex=-1,
-                replaceItemUniqueId=gui_timer,
-                physicsClientId=env.pyb_client,
-            )
 
-            # Get the observation from the motion capture system
-            # Compute control input.
-            action = ctrl.compute_control(obs, info)
+        while not done:
+            t_start = time.time()
+            curr_time = i / config.env.freq
+            if gui:
+                gui_timer = update_gui_timer(curr_time, env.unwrapped.sim.pyb_client, gui_timer)
+
+            action = controller.compute_control(obs, info)
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             # Update the controller internal state and models.
-            ctrl.step_learn(action, obs, reward, terminated, truncated, info)
-            # Add up reward, collisions, violations.
-            stats["ep_reward"] += reward
-            if info["collisions"]:
-                stats["collisions"] += 1
-            stats["violations"] += "constraint_violation" in info and info["constraint_violation"]
+            controller.step_callback(action, obs, reward, terminated, truncated, info)
+            # Add up reward, collisions
 
             # Synchronize the GUI.
             if config.sim.gui:
-                if (elapsed := time.time() - ep_start) < i / config.env.freq:
-                    time.sleep(i / config.env.freq - elapsed)
+                if (elapsed := time.time() - t_start) < 1 / config.env.freq:
+                    time.sleep(1 / config.env.freq - elapsed)
             i += 1
 
-        # Learn after the episode if the controller supports it
-        ctrl.episode_learn()  # Update the controller internal state and models.
-        log_episode_stats(stats, info, config, curr_time)
-        ctrl.episode_reset()
-        # Reset the statistics
-        stats["ep_reward"] = 0
-        stats["collisions"] = 0
-        stats["violations"] = 0
+        controller.episode_callback()  # Update the controller internal state and models.
+        log_episode_stats(info, config, curr_time)
+        controller.episode_reset()
         ep_times.append(curr_time if info["target_gate"] == -1 else None)
 
     # Close the environment
@@ -121,25 +94,40 @@ def simulate(
     return ep_times
 
 
-def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float):
+def update_gui_timer(t: float, client_id: int, g_id: int | None = None) -> int:
+    """Update the timer in the GUI."""
+    text = f"Ep. time: {t:.2f}s"
+    if g_id is None:
+        return p.addUserDebugText(text, textPosition=[0, 0, 1.5], physicsClientId=client_id)
+    return p.addUserDebugText(
+        text,
+        textPosition=[0, 0, 1.5],
+        textColorRGB=[1, 0, 0],
+        lifeTime=0,
+        textSize=1.5,
+        parentObjectUniqueId=0,
+        parentLinkIndex=-1,
+        replaceItemUniqueId=g_id,
+        physicsClientId=client_id,
+    )
+
+
+def log_episode_stats(info: dict, config: Munch, curr_time: float):
     """Log the statistics of a single episode."""
-    stats["gates_passed"] = info["target_gate"]
-    if stats["gates_passed"] == -1:  # The drone has passed the final gate
-        stats["gates_passed"] = len(config.env.track.gates)
+    gates_passed = info["target_gate"]
+    if gates_passed == -1:  # The drone has passed the final gate
+        gates_passed = len(config.env.track.gates)
     if info["collisions"]:
-        termination = "COLLISION"
+        termination = "Collision"
     elif info["target_gate"] == -1:
-        termination = "TASK COMPLETED"
+        termination = "Task completed"
     else:
-        termination = "MAX EPISODE DURATION"
+        termination = "Unknown"
     logger.info(
         (
             f"Flight time (s): {curr_time}\n"
             f"Reason for termination: {termination}\n"
-            f"Gates passed: {stats['gates_passed']}\n"
-            f"Total reward: {stats['ep_reward']}\n"
-            f"Number of collisions: {stats['collisions']}\n"
-            f"Number of constraint violations: {stats['violations']}\n"
+            f"Gates passed: {gates_passed}\n"
         )
     )
 

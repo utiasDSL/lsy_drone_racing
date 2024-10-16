@@ -1,0 +1,17 @@
+services:
+  sim:
+    build:
+      dockerfile: ./docker/Sim.Dockerfile
+      context: .
+    volumes:
+      - ./:/home/lsy_drone_racing
+
+  deploy:
+    # Launching the deploy profile will also run the sim service. To avoid this, use docker compose up deploy
+    profiles:
+      - deploy
+    build:
+      dockerfile: ./docker/Deploy.Dockerfile
+      context: .
+    volumes:
+      - ./:/home/lsy_drone_racing

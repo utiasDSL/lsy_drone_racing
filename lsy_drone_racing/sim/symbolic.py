@@ -1,3 +1,20 @@
+"""Symbolic model and utilities for drone dynamics and control.
+
+This module provides functionality to create symbolic representations of the drone dynamics,
+observations, and cost functions using CasADi. It includes:
+
+- SymbolicModel: A class that encapsulates the symbolic representation of the drone model,
+  including dynamics, observations, and cost functions.
+- symbolic: A function that creates a SymbolicModel instance for a given drone configuration.
+- Helper functions for creating rotation matrices and other mathematical operations.
+
+The symbolic models created by this module can be used for various control and estimation tasks,
+such as model predictive control (MPC) or state estimation. They provide a convenient way to work
+with the nonlinear dynamics of the drone in a symbolic framework, allowing for automatic
+differentiation and optimization.
+"""
+
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -12,15 +29,15 @@ if TYPE_CHECKING:
 
 
 class SymbolicModel:
-    """Implements the dynamics model with symbolic variables.
+    """Implement the drone dynamics model with symbolic variables.
 
     x_dot = f(x,u), y = g(x,u), with other pre-defined, symbolic functions (e.g. cost, constraints),
     serve as priors for the controllers.
 
     Notes:
         * naming convention on symbolic variable and functions.
-            * for single-letter symbol, use {}_sym, otherwise use underscore for delimiter.
-            * for symbolic functions to be exposed, use {}_func.
+        * for single-letter symbol, use {}_sym, otherwise use underscore for delimiter.
+        * for symbolic functions to be exposed, use {}_func.
     """
 
     def __init__(
@@ -54,7 +71,7 @@ class SymbolicModel:
         self.setup_linearization()  # Setup Jacobian and Hessian of the dynamics and cost functions
 
     def setup_model(self):
-        """Exposes functions to evaluate the model."""
+        """Expose functions to evaluate the model."""
         # Continuous time dynamics.
         self.fc_func = cs.Function("fc", [self.x_sym, self.u_sym], [self.x_dot], ["x", "u"], ["f"])
         # Discrete time dynamics.
@@ -65,7 +82,7 @@ class SymbolicModel:
         self.g_func = cs.Function("g", [self.x_sym, self.u_sym], [self.y_sym], ["x", "u"], ["g"])
 
     def setup_linearization(self):
-        """Exposes functions for the linearized model."""
+        """Expose functions for the linearized model."""
         # Jacobians w.r.t state & input.
         self.dfdx = cs.jacobian(self.x_dot, self.x_sym)
         self.dfdu = cs.jacobian(self.x_dot, self.u_sym)
@@ -210,7 +227,7 @@ def symbolic(drone: Drone, dt: float) -> SymbolicModel:
 
 
 def csRotXYZ(phi: float, theta: float, psi: float) -> cs.MX:
-    """Rotation matrix from euler angles.
+    """Create a rotation matrix from euler angles.
 
     This represents the extrinsic X-Y-Z (or quivalently the intrinsic Z-Y-X (3-2-1)) euler angle
     rotation.
