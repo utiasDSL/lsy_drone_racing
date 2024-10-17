@@ -1,3 +1,26 @@
+"""Collection of environments for drone racing simulations.
+
+This module is a core component of the lsy_drone_racing package, providing the primary interface
+between the drone racing simulation and the user's control algorithms.
+
+It serves as a bridge between the high-level race control and the low-level drone physics
+simulation. The environments defined here (DroneRacingEnv and DroneRacingThrustEnv) expose a common 
+interface for all controller types, allowing for easy integration and testing of different control 
+algorithms, comparison of control strategies, and deployment on our hardware.
+
+Key roles in the project:
+1. Abstraction Layer: Provides a standardized Gymnasium interface for interacting with the drone
+   racing simulation, abstracting away the underlying physics engine.
+2. State Management: Handles the tracking of race progress, gate passages, and termination
+   conditions.
+3. Observation Processing: Manages the transformation of raw simulation data into structured 
+   observations suitable for control algorithms.
+4. Action Interpretation: Translates high-level control commands into appropriate inputs for the
+   underlying simulation.
+5. Configuration Interface: Allows for easy customization of race scenarios, environmental
+   conditions, and simulation parameters.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -18,6 +41,40 @@ logger = logging.getLogger(__name__)
 
 
 class DroneRacingEnv(gymnasium.Env):
+    """A Gymnasium environment for drone racing simulations.
+
+    This environment simulates a drone racing scenario where a single drone navigates through a
+    series of gates in a predefined track. It uses the Sim class for physics simulation and supports
+    various configuration options for randomization, disturbances, and physics models.
+
+    The environment provides:
+    - A customizable track with gates and obstacles
+    - Configurable simulation and control frequencies
+    - Support for different physics models (e.g., PyBullet, mathematical dynamics)
+    - Randomization of drone properties and initial conditions
+    - Disturbance modeling for realistic flight conditions
+    - Symbolic expressions for advanced control techniques (optional)
+
+    The environment tracks the drone's progress through the gates and provides termination
+    conditions based on gate passages and collisions.
+
+    The observation space is a dictionary with the following keys:
+    - "pos": Drone position
+    - "rpy": Drone orientation (roll, pitch, yaw)
+    - "vel": Drone linear velocity
+    - "ang_vel": Drone angular velocity
+    - "gates.pos": Positions of the gates
+    - "gates.rpy": Orientations of the gates
+    - "gates.in_range": Flags indicating if the drone is in the sensor range of the gates
+    - "obstacles.pos": Positions of the obstacles
+    - "obstacles.in_range": Flags indicating if the drone is in the sensor range of the obstacles
+    - "target_gate": The current target gate index
+
+    The action space consists of a desired full-state command
+    [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] that is tracked by the drone's
+    low-level controller.
+    """
+
     CONTROLLER = "mellinger"  # specifies controller type
 
     def __init__(self, config: dict):
@@ -40,12 +97,21 @@ class DroneRacingEnv(gymnasium.Env):
         )
         self.sim.seed(config.env.seed)
         self.action_space = spaces.Box(low=-1, high=1, shape=(13,))
+        n_gates, n_obstacles = len(self.sim.gates), len(self.sim.obstacles)
         self.observation_space = spaces.Dict(
             {
                 "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "target_gate": spaces.Discrete(n_gates, start=-1),
+                "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_gates, 3)),
+                "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(n_gates, 3)),
+                "gates_in_range": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=np.bool_),
+                "obstacles_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_obstacles, 3)),
+                "obstacles_in_range": spaces.Box(
+                    low=0, high=1, shape=(n_obstacles,), dtype=np.bool_
+                ),
             }
         )
         self.target_gate = 0
@@ -53,7 +119,18 @@ class DroneRacingEnv(gymnasium.Env):
         self._steps = 0
         self._last_drone_pos = np.zeros(3)
 
-    def reset(self, *, seed: int | None = None, options: dict | None = None):
+    def reset(
+        self, *, seed: int | None = None, options: dict | None = None
+    ) -> tuple[dict[str, NDArray[np.floating]], dict]:
+        """Reset the environment.
+
+        Args:
+            seed: Random seed.
+            options: Additional options.
+
+        Returns:
+            Observation and info.
+        """
         if self.config.env.reseed:
             self.sim.seed(self.config.env.seed)
         if seed is not None:
@@ -66,13 +143,15 @@ class DroneRacingEnv(gymnasium.Env):
         if self.sim.n_drones > 1:
             raise NotImplementedError("Firmware wrapper does not support multiple drones.")
         info = self.info
-        info["sim.sim_freq"] = self.config.sim.sim_freq
-        info["sim.ctrl_freq"] = self.config.sim.ctrl_freq
-        info["sim.drone.mass"] = self.sim.drone.params.mass
-        info["env.freq"] = self.config.env.freq
+        info["sim_freq"] = self.config.sim.sim_freq
+        info["low_level_ctrl_freq"] = self.config.sim.ctrl_freq
+        info["drone_mass"] = self.sim.drone.params.mass
+        info["env_freq"] = self.config.env.freq
         return self.obs, info
 
-    def step(self, action: NDArray[np.floating]):
+    def step(
+        self, action: NDArray[np.floating]
+    ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
         """Step the firmware_wrapper class and its environment.
 
         This function should be called once at the rate of ctrl_freq. Step processes and high level
@@ -120,6 +199,7 @@ class DroneRacingEnv(gymnasium.Env):
 
     @property
     def obs(self) -> dict[str, NDArray[np.floating]]:
+        """Return the observation of the environment."""
         obs = {
             "pos": self.sim.drone.pos.astype(np.float32),
             "rpy": self.sim.drone.rpy.astype(np.float32),
@@ -127,18 +207,55 @@ class DroneRacingEnv(gymnasium.Env):
             "ang_vel": self.sim.drone.ang_vel.astype(np.float32),
         }
         obs["ang_vel"][:] = R.from_euler("XYZ", obs["rpy"]).inv().apply(obs["ang_vel"])
+
+        gates = self.sim.gates
+        obs["target_gate"] = self.target_gate if self.target_gate < len(gates) else -1
+        # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
+        # use the actual pose, otherwise use the nominal pose.
+        in_range = self.sim.in_range(gates, self.sim.drone, self.config.env.sensor_range)
+        gates_pos = np.stack([g["nominal.pos"] for g in gates.values()])
+        gates_pos[in_range] = np.stack([g["pos"] for g in gates.values()])[in_range]
+        gates_rpy = np.stack([g["nominal.rpy"] for g in gates.values()])
+        gates_rpy[in_range] = np.stack([g["rpy"] for g in gates.values()])[in_range]
+        obs["gates_pos"] = gates_pos.astype(np.float32)
+        obs["gates_rpy"] = gates_rpy.astype(np.float32)
+        obs["gates_in_range"] = in_range
+
+        obstacles = self.sim.obstacles
+        in_range = self.sim.in_range(obstacles, self.sim.drone, self.config.env.sensor_range)
+        obstacles_pos = np.stack([o["nominal.pos"] for o in obstacles.values()])
+        obstacles_pos[in_range] = np.stack([o["pos"] for o in obstacles.values()])[in_range]
+        obs["obstacles_pos"] = obstacles_pos.astype(np.float32)
+        obs["obstacles_in_range"] = in_range
+
         if "observation" in self.sim.disturbances:
             obs = self.sim.disturbances["observation"].apply(obs)
         return obs
 
     @property
     def reward(self) -> float:
-        return -1.0
+        """Compute the reward for the current state.
+
+        Note:
+            The current sparse reward function will most likely not work directly for training an
+            agent. If you want to use reinforcement learning, you will need to define your own
+            reward function.
+
+        Returns:
+            Reward for the current state.
+        """
+        return -1.0 if self.target_gate != -1 else 0.0
 
     @property
     def terminated(self) -> bool:
+        """Check if the episode is terminated.
+
+        Returns:
+            True if the drone is out of bounds, colliding with an obstacle, or has passed all gates,
+            else False.
+        """
         state = {k: getattr(self.sim.drone, k).copy() for k in ("pos", "rpy", "vel", "ang_vel")}
-        state["ang_vel"] = R.from_euler("XYZ", state["rpy"]).as_matrix().T @ state["ang_vel"]
+        state["ang_vel"] = R.from_euler("XYZ", state["rpy"]).apply(state["ang_vel"])
         if state not in self.sim.state_space:
             return True  # Drone is out of bounds
         if self.sim.collisions:
@@ -148,33 +265,16 @@ class DroneRacingEnv(gymnasium.Env):
         return False
 
     @property
-    def info(self):
-        info = {}
-        info["collisions"] = self.sim.collisions
-        gates = self.sim.gates
-        info["target_gate"] = self.target_gate if self.target_gate < len(gates) else -1
-        info["drone.pos"] = self.sim.drone.pos.copy()
-        # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
-        # use the actual pose, otherwise use the nominal pose.
-        in_range = self.sim.in_range(gates, self.sim.drone, self.config.env.sensor_range)
-        gates_pos = np.stack([g["nominal.pos"] for g in gates.values()])
-        gates_pos[in_range] = np.stack([g["pos"] for g in gates.values()])[in_range]
-        gates_rpy = np.stack([g["nominal.rpy"] for g in gates.values()])
-        gates_rpy[in_range] = np.stack([g["rpy"] for g in gates.values()])[in_range]
-        info["gates.pos"] = gates_pos
-        info["gates.rpy"] = gates_rpy
-        info["gates.in_range"] = in_range
-
-        obstacles = self.sim.obstacles
-        in_range = self.sim.in_range(obstacles, self.sim.drone, self.config.env.sensor_range)
-        obstacles_pos = np.stack([o["nominal.pos"] for o in obstacles.values()])
-        obstacles_pos[in_range] = np.stack([o["pos"] for o in obstacles.values()])[in_range]
-        info["obstacles.pos"] = obstacles_pos
-        info["obstacles.in_range"] = in_range
-        info["symbolic.model"] = self.symbolic
-        return info
+    def info(self) -> dict:
+        """Return an info dictionary containing additional information about the environment."""
+        return {"collisions": self.sim.collisions, "symbolic_model": self.symbolic}
 
     def gate_passed(self) -> bool:
+        """Check if the drone has passed a gate.
+
+        Returns:
+            True if the drone has passed a gate, else False.
+        """
         if self.sim.n_gates > 0 and self.target_gate < self.sim.n_gates and self.target_gate != -1:
             gate_pos = self.sim.gates[self.target_gate]["pos"]
             gate_rot = R.from_euler("xyz", self.sim.gates[self.target_gate]["rpy"])
@@ -185,22 +285,35 @@ class DroneRacingEnv(gymnasium.Env):
         return False
 
     def render(self):
+        """Render the simulation."""
         self.sim.render()
 
     def close(self):
+        """Close the simulation."""
         self.sim.close()
 
 
 class DroneRacingThrustEnv(DroneRacingEnv):
+    """Drone racing environment with a collective thrust attitude command interface.
+
+    The action space consists of the collective thrust and body-fixed attitude commands
+    [collective_thrust, roll, pitch, yaw].
+    """
+
     def __init__(self, config: dict):
+        """Initialize the DroneRacingThrustEnv.
+
+        Args:
+            config: Configuration dictionary for the environment.
+        """
         super().__init__(config)
         bounds = np.array([1, np.pi, np.pi, np.pi], dtype=np.float32)
         self.action_space = spaces.Box(low=-bounds, high=bounds)
 
-    def step(self, action: NDArray[np.floating]):
+    def step(
+        self, action: NDArray[np.floating]
+    ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
         """Step the drone racing environment with a thrust command.
-
-        TODO: Clarify units of rpy and thrust.
 
         Args:
             action: Thrust command [roll, pitch, yaw, thrust].

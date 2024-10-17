@@ -1,3 +1,16 @@
+"""The Vicon module provides an interface to the Vicon motion capture system for position tracking.
+
+It defines the Vicon class, which handles communication with the Vicon system through ROS messages.
+The Vicon class is responsible for:
+
+- Tracking the drone and other objects (gates, obstacles) in the racing environment.
+- Providing real-time pose (position and orientation) data for tracked objects.
+- Calculating velocities and angular velocities based on pose changes.
+
+This module is necessary to provide the real-world positioning data for the drone and race track
+elements.
+"""
+
 from __future__ import annotations
 
 import time

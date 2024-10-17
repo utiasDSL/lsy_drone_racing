@@ -43,7 +43,7 @@ class TrajectoryController(BaseController):
         t = np.arange(len(waypoints))
         self.trajectory = CubicSpline(t, waypoints)
         self._tick = 0
-        self._freq = initial_info["env.freq"]
+        self._freq = initial_info["env_freq"]
 
         # Generate points along the spline for visualization
         t_vis = np.linspace(0, len(waypoints) - 1, 100)

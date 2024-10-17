@@ -1,3 +1,13 @@
+"""This module implements a ThrustController for quadrotor control.
+
+It utilizes the collective thrust interface for drone control to compute control commands based on
+current state observations and desired waypoints. The attitude control is handled by computing a
+PID control law for position tracking, incorporating gravity compensation in thrust calculations.
+
+The waypoints are generated using cubic spline interpolation from a set of predefined waypoints.
+Note that the trajectory uses pre-defined waypoints instead of dynamically generating a good path.
+"""
+
 from __future__ import annotations  # Python 3.10 type hints
 
 import math
@@ -16,7 +26,7 @@ if TYPE_CHECKING:
 
 
 class ThrustController(BaseController):
-    """Example of a controller using the collective thrust interface.
+    """Example of a controller using the collective thrust and attitude interface.
 
     Modified from https://github.com/utiasDSL/crazyswarm-import/blob/ad2f7ea987f458a504248a1754b124ba39fc2f21/ros_ws/src/crazyswarm/scripts/position_ctl_m.py
     """
@@ -30,8 +40,8 @@ class ThrustController(BaseController):
             initial_info: Additional environment information from the reset.
         """
         super().__init__(initial_obs, initial_info)
-        self.low_level_ctrl_freq = initial_info["sim.ctrl_freq"]
-        self.drone_mass = initial_info["sim.drone.mass"]
+        self.low_level_ctrl_freq = initial_info["low_level_ctrl_freq"]
+        self.drone_mass = initial_info["drone_mass"]
         self.kp = np.array([0.4, 0.4, 1.25])
         self.ki = np.array([0.05, 0.05, 0.05])
         self.kd = np.array([0.2, 0.2, 0.4])
@@ -61,7 +71,7 @@ class ThrustController(BaseController):
         cs_z = CubicSpline(ts, waypoints[:, 2])
 
         des_completion_time = 10
-        ts = np.linspace(0, 1, int(initial_info["env.freq"] * des_completion_time))
+        ts = np.linspace(0, 1, int(initial_info["env_freq"] * des_completion_time))
 
         self.x_des = cs_x(ts)
         self.y_des = cs_y(ts)

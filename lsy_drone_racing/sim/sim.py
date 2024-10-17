@@ -50,7 +50,11 @@ logger = logging.getLogger(__name__)
 
 
 class Sim:
-    """Drone simulation based on gym-pybullet-drones."""
+    """Drone simulation based on pybullet and models from the Learning Systems and Robotics Lab.
+
+    We implement a simplified version of the gym-pybullet-drones environment specifically designed
+    for drone racing.
+    """
 
     URDF_DIR = Path(__file__).resolve().parent / "assets"
 

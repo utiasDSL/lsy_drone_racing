@@ -44,6 +44,8 @@ def simulate(
             the controller specified in the config file is used.
         n_runs: The number of episodes.
         gui: Enable/disable the simulation GUI.
+        env_id: The id of the environment to use. If None, the environment specified in the config
+            file is used.
 
     Returns:
         A list of episode times.
@@ -87,9 +89,9 @@ def simulate(
             i += 1
 
         controller.episode_callback()  # Update the controller internal state and models.
-        log_episode_stats(info, config, curr_time)
+        log_episode_stats(obs, info, config, curr_time)
         controller.episode_reset()
-        ep_times.append(curr_time if info["target_gate"] == -1 else None)
+        ep_times.append(curr_time if obs["target_gate"] == -1 else None)
 
     # Close the environment
     env.close()
@@ -114,14 +116,14 @@ def update_gui_timer(t: float, client_id: int, g_id: int | None = None) -> int:
     )
 
 
-def log_episode_stats(info: dict, config: Munch, curr_time: float):
+def log_episode_stats(obs: dict, info: dict, config: Munch, curr_time: float):
     """Log the statistics of a single episode."""
-    gates_passed = info["target_gate"]
+    gates_passed = obs["target_gate"]
     if gates_passed == -1:  # The drone has passed the final gate
         gates_passed = len(config.env.track.gates)
     if info["collisions"]:
         termination = "Collision"
-    elif info["target_gate"] == -1:
+    elif obs["target_gate"] == -1:
         termination = "Task completed"
     else:
         termination = "Unknown"

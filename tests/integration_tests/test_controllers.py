@@ -43,7 +43,7 @@ def test_thrust_controller():
         ctrl.step_callback(action, obs, reward, terminated, truncated, info)
         if terminated or truncated:
             break
-    assert info["target_gate"] == -1, "Thrust controller failed to complete the track"
+    assert obs["target_gate"] == -1, "Thrust controller failed to complete the track"
 
 
 @pytest.mark.integration
@@ -62,4 +62,4 @@ def test_trajectory_controller_finish():
         ctrl.step_callback(action, obs, reward, terminated, truncated, info)
         if terminated or truncated:
             break
-    assert info["target_gate"] == -1, "Trajectory controller failed to complete the track"
+    assert obs["target_gate"] == -1, "Trajectory controller failed to complete the track"

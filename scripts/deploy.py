@@ -62,7 +62,7 @@ def main(config: str = "level3.toml", controller: str | None = None):
         ep_time = time.perf_counter() - start_time
         controller.episode_callback()
         logger.info(
-            f"Track time: {ep_time:.3f}s" if info["target_gate"] == -1 else "Task not completed"
+            f"Track time: {ep_time:.3f}s" if obs["target_gate"] == -1 else "Task not completed"
         )
     finally:
         env.close()

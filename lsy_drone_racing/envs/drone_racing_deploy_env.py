@@ -1,3 +1,26 @@
+"""Deployment environments for real-world drone racing.
+
+This module provides environments for deploying drone racing algorithms on physical hardware,
+mirroring the functionality of the simulation environments in the
+:mod:~lsy_drone_racing.envs.drone_racing module.
+
+Key components:
+1. DroneRacingDeployEnv: A Gymnasium environment for controlling a real Crazyflie drone in a
+   physical race track, using Vicon motion capture for positioning.
+2. DroneRacingThrustDeployEnv: A variant of DroneRacingDeployEnv that uses collective thrust
+   and attitude commands for control.
+
+These environments maintain consistent interfaces with their simulation counterparts
+(:class:~lsy_drone_racing.envs.drone_racing_env.DroneRacingEnv and
+:class:~lsy_drone_racing.envs.drone_racing_thrust_env.DroneRacingThrustEnv), allowing for seamless
+transition from simulation to real-world deployment. They handle the complexities of interfacing
+with physical hardware while providing the same observation and action spaces as the simulation
+environments.
+
+The module integrates with ROS, Crazyswarm, and Vicon systems to enable real-world drone control and
+tracking in a racing scenario.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -23,9 +46,35 @@ logger = logging.getLogger(__name__)
 
 
 class DroneRacingDeployEnv(gymnasium.Env):
+    """A Gymnasium environment for deploying drone racing algorithms on real hardware.
+
+    This environment mirrors the functionality of the
+    class:~lsy_drone_racing.envs.drone_racing_env.DroneRacingEnv, but interfaces with real-world
+    hardware (Crazyflie drone and Vicon motion capture system) instead of a simulation.
+
+    Key features:
+    - Interfaces with a Crazyflie drone for physical control
+    - Uses Vicon motion capture for precise position tracking
+    - Maintains the same observation and action spaces as the simulation environment
+    - Tracks progress through gates in a real-world racing scenario
+    - Provides safety checks for drone positioning and track setup
+
+    The observation space and action space are the same as the
+    class:~lsy_drone_racing.envs.drone_racing_env.DroneRacingEnv.
+
+    This environment allows for a transition from simulation to real-world deployment, maintaining
+    consistent interfaces and functionalities to avoid any code changes when moving from simulation
+    to physical hardware.
+    """
+
     CONTROLLER = "mellinger"
 
     def __init__(self, config: dict | Munch):
+        """Initialize the crazyflie drone and the motion capture system.
+
+        Args:
+            config: The configuration of the environment.
+        """
         super().__init__()
         self.config = config
         self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(13,))
@@ -59,7 +108,9 @@ class DroneRacingDeployEnv(gymnasium.Env):
             )
             self.symbolic = sim.symbolic()
 
-    def reset(self, *, seed: int | None = None, options: dict | None = None):
+    def reset(
+        self, *, seed: int | None = None, options: dict | None = None
+    ) -> tuple[dict[str, NDArray[np.floating]], dict]:
         """Reset the environment.
 
         We cannot reset the track in the real world. Instead, we check if the gates, obstacles and
@@ -69,15 +120,21 @@ class DroneRacingDeployEnv(gymnasium.Env):
         check_drone_start_pos(self.config)
         self.target_gate = 0
         info = self.info
-        info["sim.sim_freq"] = self.config.sim.sim_freq
-        info["sim.ctrl_freq"] = self.config.sim.ctrl_freq
-        info["env.freq"] = self.config.env.freq
-        info["sim.drone.mass"] = 0.033  # Crazyflie 2.1 mass in kg
+        info["sim_freq"] = self.config.sim.sim_freq
+        info["low_level_ctrl_freq"] = self.config.sim.ctrl_freq
+        info["env_freq"] = self.config.env.freq
+        info["drone_mass"] = 0.033  # Crazyflie 2.1 mass in kg
         return self.obs, info
 
     def step(
         self, action: NDArray[np.floating]
-    ) -> tuple[NDArray[np.floating], float, bool, bool, dict]:
+    ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
+        """Take a step in the environment.
+
+        Note:
+            Sleeps for the remaining time if the step took less than the control period. This
+            ensures that the environment is running at the correct frequency during deployment.
+        """
         tstart = time.perf_counter()
         pos, vel, acc, yaw, rpy_rate = action[:3], action[3:6], action[6:9], action[9], action[10:]
         self.cf.cmdFullState(pos, vel, acc, yaw, rpy_rate)
@@ -86,11 +143,13 @@ class DroneRacingDeployEnv(gymnasium.Env):
         return self.obs, -1.0, False, False, self.info
 
     def close(self):
+        """Close the environment by stopping the drone and landing."""
         self.cf.notifySetpointsStop()
         self.cf.land(0.02, 3.0)
 
     @property
     def obs(self) -> dict:
+        """Return the observation of the environment."""
         drone = self.vicon.drone_name
         rpy = self.vicon.rpy[drone]
         ang_vel = R.from_euler("xyz", rpy).inv().apply(self.vicon.ang_vel[drone])
@@ -100,16 +159,11 @@ class DroneRacingDeployEnv(gymnasium.Env):
             "vel": self.vicon.vel[drone].astype(np.float32),
             "ang_vel": ang_vel.astype(np.float32),
         }
-        return obs
 
-    @property
-    def info(self) -> dict:
-        info = {}
         sensor_range = self.config.env.sensor_range
         n_gates = len(self.config.env.track.gates)
-        info["collisions"] = []
-        info["target_gate"] = self.target_gate if self.target_gate < n_gates else -1
-        info["drone.pos"] = self.vicon.pos[self.vicon.drone_name]
+
+        obs["target_gate"] = self.target_gate if self.target_gate < n_gates else -1
         # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
         # use the actual pose, otherwise use the nominal pose.
         drone_pos = self.vicon.pos[self.vicon.drone_name]
@@ -121,34 +175,65 @@ class DroneRacingDeployEnv(gymnasium.Env):
         gates_rpy = np.array([g.rpy for g in self.config.env.track.gates])
         real_gates_rpy = np.array([self.vicon.rpy[g] for g in gate_names])
         gates_rpy[in_range] = real_gates_rpy[in_range]
-        info["gates.pos"] = gates_pos
-        info["gates.rpy"] = gates_rpy
-        info["gates.in_range"] = in_range
+        obs["gates_pos"] = gates_pos.astype(np.float32)
+        obs["gates_rpy"] = gates_rpy.astype(np.float32)
+        obs["gates_in_range"] = in_range
 
         obstacles_pos = np.array([o.pos for o in self.config.env.track.obstacles])
         obstacle_names = [f"obstacle{g}" for g in range(1, len(obstacles_pos) + 1)]
         real_obstacles_pos = np.array([self.vicon.pos[o] for o in obstacle_names])
         in_range = np.linalg.norm(real_obstacles_pos - drone_pos, axis=1) < sensor_range
         obstacles_pos[in_range] = real_obstacles_pos[in_range]
-        info["obstacles.pos"] = obstacles_pos
-        info["obstacles.in_range"] = in_range
-        info["symbolic.model"] = self.symbolic
-        # TODO: Remove check to make sure all keys from the sim env are present
-        assert all(
-            k in info
-            for k in (
-                "collisions",
-                "target_gate",
-                "drone.pos",
-                "gates.pos",
-                "gates.rpy",
-                "gates.in_range",
-                "obstacles.pos",
-                "obstacles.in_range",
-                "symbolic.model",
-            )
-        )
-        return info
+        obs["obstacles_pos"] = obstacles_pos.astype(np.float32)
+        obs["obstacles_in_range"] = in_range
+        return obs
 
-    def check_gate_progress(self):
-        ...
+    @property
+    def info(self) -> dict:
+        """Return an info dictionary containing additional information about the environment."""
+        return {"collisions": [], "symbolic_model": self.symbolic}
+
+    def gate_passed(self) -> bool:
+        """Check if the drone has passed the current gate.
+
+        TODO: Implement this method.
+        """
+        raise NotImplementedError
+
+
+class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
+    """A Gymnasium environment for deploying drone racing algorithms on real hardware.
+
+    This environment mirrors the functionality of the
+    class:~lsy_drone_racing.envs.drone_racing_thrust_env.DroneRacingThrustEnv, but interfaces with
+    real-world hardware (Crazyflie drone and Vicon motion capture system) instead of a simulation.
+    """
+
+    def __init__(self, config: dict | Munch):
+        """Initialize the crazyflie drone and the motion capture system.
+
+        Args:
+            config: The configuration of the environment.
+        """
+        super().__init__(config)
+        self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(4,))
+
+    def step(
+        self, action: NDArray[np.floating]
+    ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
+        """Take a step in the environment.
+
+        Todo:
+            Implement the hardware interface for collective thrust and attitude control.
+
+        Note:
+            Sleeps for the remaining time if the step took less than the control period. This
+            ensures that the environment is running at the correct frequency during deployment.
+        """
+        raise NotImplementedError("Hardware interface for thrust control not yet implemented.")
+        tstart = time.perf_counter()
+        collective_thrust, attitude = action
+        self.cf.cmdAttitudeThrust(collective_thrust, attitude)
+        if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
+            rospy.sleep(1 / self.config.env.freq - dt)
+        return self.obs, -1.0, False, False, self.info

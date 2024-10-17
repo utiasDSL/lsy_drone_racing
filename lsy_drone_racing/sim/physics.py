@@ -133,7 +133,7 @@ def dynamics(drone: Drone, rpms: NDArray[np.floating], dt: float) -> list[tuple[
 
 
 def downwash(drone: Drone, other_drones: list[Drone]) -> list[tuple[int, ForceTorque]]:
-    """Implementation of a ground effect model.
+    """Implementation of a downwash model.
 
     Based on experiments conducted at the Dynamic Systems Lab by SiQi Zhou.
 
@@ -165,7 +165,7 @@ def drag(drone: Drone, rpms: NDArray[np.floating]) -> list[tuple[int, ForceTorqu
     Based on the the system identification in (Forster, 2015).
 
     Args:
-        drone: The target drone to calculate the ground effect for.
+        drone: The target drone to calculate the drag effect for.
         rpms: The rpms to apply to the drone rotors.
 
     Returns:
