@@ -27,7 +27,7 @@ autodoc_member_order = "bysource"
 
 # Mock imports on ReadTheDocs that are not available with pip
 if on_rtd:
-    autodoc_mock_imports = ["pycffirmware"]
+    autodoc_mock_imports = ["pycffirmware", "rospy", "rosgraph", "pycrazyswarm", "stable_baselines3", "tf2_msgs"]
 
 
 # Add any paths that contain templates here, relative to this directory.

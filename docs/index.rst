@@ -34,6 +34,8 @@ Docs are work in progress. Please check back later.
 
    utils/index
 
+   vicon
+
 
 Indices and tables
 ==================

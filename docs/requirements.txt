@@ -1,2 +1,1 @@
 sphinx-book-theme==1.1.2
-stable-baselines3==2.3.0  # Required for PPO example controller

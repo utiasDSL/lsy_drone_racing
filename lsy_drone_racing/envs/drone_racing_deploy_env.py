@@ -5,9 +5,10 @@ mirroring the functionality of the simulation environments in the
 :mod:~lsy_drone_racing.envs.drone_racing module.
 
 Key components:
-1. DroneRacingDeployEnv: A Gymnasium environment for controlling a real Crazyflie drone in a
+
+- :class:~.DroneRacingDeployEnv: A Gymnasium environment for controlling a real Crazyflie drone in a
    physical race track, using Vicon motion capture for positioning.
-2. DroneRacingThrustDeployEnv: A variant of DroneRacingDeployEnv that uses collective thrust
+- :class:~.DroneRacingThrustDeployEnv: A variant of DroneRacingDeployEnv that uses collective thrust
    and attitude commands for control.
 
 These environments maintain consistent interfaces with their simulation counterparts
