@@ -3,10 +3,11 @@
 This module provides functionality to create symbolic representations of the drone dynamics,
 observations, and cost functions using CasADi. It includes:
 
-- SymbolicModel: A class that encapsulates the symbolic representation of the drone model,
-  including dynamics, observations, and cost functions.
-- symbolic: A function that creates a SymbolicModel instance for a given drone configuration.
-- Helper functions for creating rotation matrices and other mathematical operations.
+* :class:`~.SymbolicModel`: A class that encapsulates the symbolic representation of the drone
+  model, including dynamics, observations, and cost functions.
+* :func:`symbolic <lsy_drone_racing.sim.symbolic.symbolic>`: A function that creates a
+  :class:`~.SymbolicModel` instance for a given drone configuration.
+* Helper functions for creating rotation matrices and other mathematical operations.
 
 The symbolic models created by this module can be used for various control and estimation tasks,
 such as model predictive control (MPC) or state estimation. They provide a convenient way to work

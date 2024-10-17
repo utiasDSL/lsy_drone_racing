@@ -8,11 +8,11 @@ also maintains the state of the drone during simulation.
 The Drone class is a core component of the simulation environment and is heavily utilized
 in the sim.py module. It handles various aspects of drone behavior, including:
 
-- Initialization of drone parameters and firmware
-- Management of drone state and control inputs
-- Implementation of controller logic
-- Conversion between different units (e.g., thrust to RPM)
-- Handling of sensor data and low-pass filtering
+* Initialization of drone parameters and firmware
+* Management of drone state and control inputs
+* Implementation of controller logic
+* Conversion between different units (e.g., thrust to RPM)
+* Handling of sensor data and low-pass filtering
 
 This module also includes the DroneParams dataclass, which encapsulates the physical
 and inferred parameters of the Crazyflie 2.1 drone.

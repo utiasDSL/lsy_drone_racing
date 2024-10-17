@@ -1,4 +1,13 @@
-"""Example implementation of a controller using a pre-trained PPO model."""
+"""Example implementation of a controller using a pre-trained PPO model.
+
+The controller loads the pre-trained weights of the policy and uses it to compute the next action
+based on the current observation.
+
+.. note::
+    You need to install the 
+    `stable-baselines3 <https://stable-baselines3.readthedocs.io/en/master/>`_ library to use this
+    controller.
+"""
 
 from __future__ import annotations  # Python 3.10 type hints
 

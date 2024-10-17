@@ -6,11 +6,11 @@ function signatures.
 
 To give you an idea of what you need to do, we also include some example implementations:
 
-- BaseController: The abstract base class defining the interface for all controllers.
-- PPO Controller: An example implementation using a pre-trained Proximal Policy Optimization (PPO)
-  model.
-- Trajectory Controller: A controller that follows a pre-defined trajectory using cubic spline
-  interpolation.
+* :class:`~.BaseController`: The abstract base class defining the interface for all controllers.
+* :class:`PPOController <lsy_drone_racing.control.ppo_controller.PPOController>`: An example
+  implementation using a pre-trained Proximal Policy Optimization (PPO) model.
+* :class:`PPOController <lsy_drone_racing.control.trajectory_controller.TrajectoryController>`: A
+  controller that follows a pre-defined trajectory using cubic spline interpolation.
 """
 
 from lsy_drone_racing.control.controller import BaseController

@@ -2,21 +2,19 @@
 
 This module provides environments for deploying drone racing algorithms on physical hardware,
 mirroring the functionality of the simulation environments in the
-:mod:~lsy_drone_racing.envs.drone_racing module.
+:mod:`~lsy_drone_racing.envs.drone_racing_env` module.
 
 Key components:
 
-- :class:~.DroneRacingDeployEnv: A Gymnasium environment for controlling a real Crazyflie drone in a
-   physical race track, using Vicon motion capture for positioning.
-- :class:~.DroneRacingThrustDeployEnv: A variant of DroneRacingDeployEnv that uses collective thrust
-   and attitude commands for control.
+* :class:`~.DroneRacingDeployEnv`: A Gymnasium environment for controlling a real Crazyflie drone in
+  a physical race track, using Vicon motion capture for positioning.
+* :class:`~.DroneRacingThrustDeployEnv`: A variant of :class:`~.DroneRacingDeployEnv` that uses
+  collective thrust and attitude commands for control.
 
 These environments maintain consistent interfaces with their simulation counterparts
-(:class:~lsy_drone_racing.envs.drone_racing_env.DroneRacingEnv and
-:class:~lsy_drone_racing.envs.drone_racing_thrust_env.DroneRacingThrustEnv), allowing for seamless
-transition from simulation to real-world deployment. They handle the complexities of interfacing
-with physical hardware while providing the same observation and action spaces as the simulation
-environments.
+(:class:`~.DroneRacingEnv` and :class:`~.DroneRacingThrustEnv`), allowing for seamless transition
+from simulation to real-world deployment. They handle the complexities of interfacing with physical
+hardware while providing the same observation and action spaces as the simulation environments.
 
 The module integrates with ROS, Crazyswarm, and Vicon systems to enable real-world drone control and
 tracking in a racing scenario.

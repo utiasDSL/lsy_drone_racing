@@ -4,21 +4,23 @@ This module is a core component of the lsy_drone_racing package, providing the p
 between the drone racing simulation and the user's control algorithms.
 
 It serves as a bridge between the high-level race control and the low-level drone physics
-simulation. The environments defined here (DroneRacingEnv and DroneRacingThrustEnv) expose a common 
-interface for all controller types, allowing for easy integration and testing of different control 
-algorithms, comparison of control strategies, and deployment on our hardware.
+simulation. The environments defined here 
+(:class:`~.DroneRacingEnv` and :class:`~.DroneRacingThrustEnv`) expose a common interface for all
+controller types, allowing for easy integration and testing of different control algorithms,
+comparison of control strategies, and deployment on our hardware.
 
 Key roles in the project:
-1. Abstraction Layer: Provides a standardized Gymnasium interface for interacting with the drone
-   racing simulation, abstracting away the underlying physics engine.
-2. State Management: Handles the tracking of race progress, gate passages, and termination
-   conditions.
-3. Observation Processing: Manages the transformation of raw simulation data into structured 
-   observations suitable for control algorithms.
-4. Action Interpretation: Translates high-level control commands into appropriate inputs for the
-   underlying simulation.
-5. Configuration Interface: Allows for easy customization of race scenarios, environmental
-   conditions, and simulation parameters.
+
+* Abstraction Layer: Provides a standardized Gymnasium interface for interacting with the
+  drone racing simulation, abstracting away the underlying physics engine.
+* State Management: Handles the tracking of race progress, gate passages, and termination
+  conditions.
+* Observation Processing: Manages the transformation of raw simulation data into structured
+  observations suitable for control algorithms.
+* Action Interpretation: Translates high-level control commands into appropriate inputs for the
+  underlying simulation.
+* Configuration Interface: Allows for easy customization of race scenarios, environmental
+  conditions, and simulation parameters.
 """
 
 from __future__ import annotations
