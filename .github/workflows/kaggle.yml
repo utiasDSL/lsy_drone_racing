@@ -25,7 +25,7 @@ jobs:
           init-shell: bash
           create-args: python=3.8
           cache-environment: true
-      - run: pip install .[rl, test]
+      - run: pip install .[rl,test]
         shell: micromamba-shell {0}
       - run: pip install kaggle
         shell: micromamba-shell {0}
