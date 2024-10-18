@@ -126,6 +126,7 @@ def check_gate_pass(
         alpha = -last_pos_local[1] / (pos_local[1] - last_pos_local[1])
         x_intersect = alpha * (pos_local[0]) + (1 - alpha) * last_pos_local[0]
         z_intersect = alpha * (pos_local[2]) + (1 - alpha) * last_pos_local[2]
-        if abs(x_intersect) < gate_size[0] and abs(z_intersect) < gate_size[1]:
+        # Divide gate size by 2 to get the distance from the center to the edges
+        if abs(x_intersect) < gate_size[0] / 2 and abs(z_intersect) < gate_size[1] / 2:
             return True
     return False

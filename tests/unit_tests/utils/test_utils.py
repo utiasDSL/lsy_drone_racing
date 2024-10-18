@@ -45,6 +45,10 @@ def test_check_gate_pass():
     assert not check_gate_pass(
         gate_pos, gate_rot, gate_size, np.array([2, 1, 0]), np.array([2, -1, 0])
     )
+    # Test passing close to the gate
+    assert not check_gate_pass(
+        gate_pos, gate_rot, gate_size, np.array([0.51, 1, 0]), np.array([0.51, -1, 0])
+    )
     # Test passing opposite direction
     assert not check_gate_pass(
         gate_pos, gate_rot, gate_size, np.array([0, -1, 0]), np.array([0, 1, 0])
