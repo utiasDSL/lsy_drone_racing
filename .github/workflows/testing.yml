@@ -14,6 +14,12 @@ jobs:
           architecture: 'x64'
       - name: Install dependencies
         run: pip install .
+      - name: Install cffirmware
+        run: |
+          git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
+          cd pycffirmware
+          git submodule update --init --recursive
+          ./wrapper/build_linux.sh
       - name: Test with pytest
         run: |
           pip install pytest pytest-cov

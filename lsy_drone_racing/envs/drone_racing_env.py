@@ -315,10 +315,10 @@ class DroneRacingThrustEnv(DroneRacingEnv):
     def step(
         self, action: NDArray[np.floating]
     ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
-        """Step the drone racing environment with a thrust command.
+        """Step the drone racing environment with a thrust and attitude command.
 
         Args:
-            action: Thrust command [roll, pitch, yaw, thrust].
+            action: Thrust command [thrust, roll, pitch, yaw].
         """
         assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
         action = action.astype(np.float64)

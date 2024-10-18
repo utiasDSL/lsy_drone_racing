@@ -227,7 +227,8 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
             ensures that the environment is running at the correct frequency during deployment.
         """
         tstart = time.perf_counter()
-        collective_thrust, rpy = action
+        assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
+        collective_thrust, rpy = action[0], action[1:]
         rpy_deg = np.rad2deg(rpy)
         self.cf.cmdVel(*rpy_deg, collective_thrust)
         if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
