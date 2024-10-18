@@ -20,25 +20,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mamba-org/setup-micromamba@v1
         with:
-          micromamba-version: '1.5.6-0' # any version from https://github.com/mamba-org/micromamba-releases
-          environment-file: environment.yaml
-          init-shell: >-
-            bash
+          micromamba-version: '2.0.2-1' # any version from https://github.com/mamba-org/micromamba-releases
+          environment-name: test-env
+          init-shell: bash
+          create-args: python=3.8
           cache-environment: true
-          post-cleanup: 'all'
+      - run: pip install .[rl, test]
+        shell: micromamba-shell {0}
+      - run: pip install kaggle
+        shell: micromamba-shell {0}
       - name: Install cffirmware
         run: |
           git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
           cd pycffirmware
           git submodule update --init --recursive
           ./wrapper/build_linux.sh
-      - run: pip install .[rl, test]
-        shell: bash -el {0}
       - name: Run simulation tests
         run: python scripts/kaggle.py
-        shell: bash -el {0}
+        shell: micromamba-shell {0}
       - name: Export with kaggle
-        run: kaggle competitions submit lsy-drone-racing-ss24 -f submission.csv -m "Automated submission"
-        shell: bash -el {0}
+        run: kaggle competitions submit lsy-drone-racing-ws24 -f submission.csv -m "Automated submission"
+        shell: micromamba-shell {0}
 
       

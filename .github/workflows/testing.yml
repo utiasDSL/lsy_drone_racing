@@ -13,6 +13,7 @@ jobs:
           environment-name: test-env
           init-shell: bash
           create-args: python=3.8
+          cache-environment: true
       - name: Install dependencies and package
         run: pip install .
         shell: micromamba-shell {0}
@@ -21,12 +22,11 @@ jobs:
           git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
           cd pycffirmware
           git submodule update --init --recursive
-          pip install "numpy<2"
           ./wrapper/build_linux.sh
         shell: micromamba-shell {0}
       - name: Test with pytest
         run: |
           pip install pytest pytest-cov
-          pytest tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
+          pytest tests --cov=lsy_drone_racing 
         shell: micromamba-shell {0}
       
