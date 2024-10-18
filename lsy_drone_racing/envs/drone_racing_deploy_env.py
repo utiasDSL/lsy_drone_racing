@@ -222,17 +222,14 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
     ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
         """Take a step in the environment.
 
-        Todo:
-            Implement the hardware interface for collective thrust and attitude control.
-
         Note:
             Sleeps for the remaining time if the step took less than the control period. This
             ensures that the environment is running at the correct frequency during deployment.
         """
-        raise NotImplementedError("Hardware interface for thrust control not yet implemented.")
         tstart = time.perf_counter()
-        collective_thrust, attitude = action
-        self.cf.cmdAttitudeThrust(collective_thrust, attitude)
+        collective_thrust, rpy = action
+        rpy_deg = np.rad2deg(rpy)
+        self.cf.cmdVel(*rpy_deg, collective_thrust)
         if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
             rospy.sleep(1 / self.config.env.freq - dt)
         return self.obs, -1.0, False, False, self.info

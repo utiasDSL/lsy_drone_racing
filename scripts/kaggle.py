@@ -4,10 +4,14 @@ Note:
     Please do not alter this script or ask the course supervisors first!
 """
 
+
 import logging
+from pathlib import Path
 
 import pandas as pd
 from sim import simulate
+
+from lsy_drone_racing.utils import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +19,10 @@ logger = logging.getLogger(__name__)
 def main():
     """Run the simulation N times and save the results as 'submission.csv'."""
     n_runs = 10
-    ctrl_path = "lsy_drone_racing/control/" + "trajectory_controller.py"  # TODO: Load dynamically
-    ep_times = simulate(config="config/level3.toml", controller=ctrl_path, n_runs=n_runs, gui=False)
+    config = load_config(Path(__file__).parents[1] / "config/level3.toml")
+    ep_times = simulate(
+        config="level3.toml", controller=config.controller.file, n_runs=n_runs, gui=False
+    )
 
     # Log the number of failed runs if any
     if failed := [x for x in ep_times if x is None]:
