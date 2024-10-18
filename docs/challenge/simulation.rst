@@ -61,13 +61,13 @@ You can choose which configuration to use by changing the `--config` command lin
 
 .. code-block:: bash
 
-   python scripts/sim.py --config config/level3.toml
+   python scripts/sim.py --config level3.toml
 
 To use your own controller, you can pass the path to your controller script as the `--controller` argument. For example:
 
 .. code-block:: bash
 
-   python scripts/sim.py --config config/level3.toml --controller my_controller.py
+   python scripts/sim.py --config level3.toml --controller my_controller.py
 
 .. note::
     You can also write your controller file directly into the config files located in the `config` folder. That way, you don't need to specify the controller script when running the simulation, and the controller will be used in the automated challenge evaluation.
