@@ -40,16 +40,13 @@ To submit your controller to the competition, you need to push your changes to t
     * Name: KaggleUsername, Secret: Your Kaggle username
     * Name: KaggleKey, Secret: Your Kaggle API key
 
-7. When you're ready to submit, push your changes to the main branch of your forked repository.
+Once you've made your changes and are ready to submit, push your updates to the main branch of your forked repository. This action will automatically trigger a GitHub workflow that tests your implementation and submits the results to Kaggle.
 
-8. A GitHub action will automatically run, testing your implementation and submitting the results to Kaggle.
+You can monitor the progress of your submission in the Actions tab of your repository. The competition will use your fastest average lap time across all submissions for ranking. Each submission is run on 10 episodes, out of which at least 5 have to be successful for the submission to be considered valid. The average lap time is then calculated over all successful episodes.
 
-9. You can check the progress of your submission in the Actions tab of your repository.
+.. note::
+    Kaggle imposes a limit of 100 submissions per day. While it is unlikely that you will reach this limit during the competition, we advise against excessive pushing to the main branch.
 
-10. The competition will use your fastest average lap time across all submissions.
+If your implementation requires additional packages, you can update the dependencies in the pyproject.toml file in your repository.
 
-Note: Kaggle limits submissions to 100 per day. The GitHub action caches dependencies after the first run, so subsequent runs will be faster.
-
-If you need to add additional packages, update the environment.yaml file in your repository.
-
-For more detailed information on your performance, check the test output in the GitHub action logs.
+For a more detailed analysis of your performance, you can review the test output in the GitHub action logs. This information can be valuable for fine-tuning your controller and improving your results.
