@@ -1,7 +1,49 @@
 LSY Drone Racing
 ================
 
-Docs are work in progress. Please check back later.
+Welcome to the LSY Drone Racing documentation! This project provides a simulator and code for deployment on real robot hardware for autonomous drone racing.
+
+.. image:: img/banner.jpeg
+   :alt: LSY Drone Racing Banner
+   :align: center
+   :width: 600px
+
+
+Project Overview
+----------------
+
+LSY Drone Racing is designed to help you develop and test autonomous drone racing algorithms. Whether you're a beginner or an experienced drone enthusiast, this documentation will guide you through the process of setting up your environment, understanding the challenge, and utilizing the provided Python API to create high-performance racing drones.
+
+Key Features:
+^^^^^^^^^^^^^
+
+1. **Simulation Environment**: Test your algorithms in a realistic virtual environment before deploying to real drones.
+2. **Deployment Tools**: Seamlessly transition from simulation to real-world racing.
+3. **Online Competition**: Participate in virtual drone racing competitions to benchmark your algorithms against others.
+4. **Comprehensive Python API**: Access a comprehensive documentation of the Python API to get a deeper understanding of how the simulation and deployment environments work under the hood.
+
+Getting Started
+^^^^^^^^^^^^^^^
+
+If you're new to the project, start with the :doc:`Getting Started <getting_started/general>` section. This will help you set up your environment and understand the basics of the LSY Drone Racing framework.
+
+The Challenge
+^^^^^^^^^^^^^
+
+Learn about the :doc:`drone racing challenge <challenge/overview>`, including details on the :doc:`simulation environment <challenge/simulation>`, :doc:`real-world deployment <challenge/deployment>`, and the :doc:`online competition <challenge/online_competition>`.
+
+Python API
+^^^^^^^^^^
+
+Explore the extensive Python API, which includes modules for:
+
+- :doc:`Drone Control <control/index>`
+- :doc:`Racing Environments <envs/index>`
+- :doc:`Simulation Tools <sim/index>`
+- :doc:`Utility Functions <utils/index>`
+- :doc:`Vicon Motion Capture Integration <vicon>`
+
+We hope this documentation helps you dive into the exciting world of autonomous drone racing. Good luck, and may the best algorithm win!
 
 .. toctree::
    :hidden:
