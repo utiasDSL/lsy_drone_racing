@@ -1,10 +1,15 @@
 # Autonomous Drone Racing Project Course
-![ADR Banner](docs/img/banner.jpeg)
+<p align="center">
+  <img width="460" height="300" src="docs/img/banner.jpeg">
+</p>
 <sub><sup>AI generated image</sup></sub>
+
+[![Ruff Check](https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml/badge.svg?style=flat-square)](https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml)   [![Documentation Status](https://readthedocs.org/projects/lsy-drone-racing/badge/?version=latest)](https://lsy-drone-racing.readthedocs.io/en/latest/?badge=latest)   [![Tests](https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/testing.yml/badge.svg)](https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/testing.yml)
 
 ## Table of Contents
 - [Autonomous Drone Racing Project Course](#autonomous-drone-racing-project-course)
   - [Table of Contents](#table-of-contents)
+  - [Documentation](#documentation)
   - [Installation](#installation)
     - [Fork lsy\_drone\_racing](#fork-lsy_drone_racing)
     - [Using conda/mamba](#using-condamamba)
@@ -28,6 +33,8 @@
       - [Launch](#launch)
 
 
+## Documentation
+To get you started with the drone racing project, you can head over to our [documentation page](https://lsy-drone-racing.readthedocs.io/en/latest/getting_started/general.html).
 
 ## Installation
 
