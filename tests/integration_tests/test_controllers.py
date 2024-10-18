@@ -1,3 +1,4 @@
+import importlib
 from pathlib import Path
 
 import gymnasium
@@ -9,6 +10,9 @@ from lsy_drone_racing.utils import load_config, load_controller
 @pytest.mark.integration
 @pytest.mark.parametrize("controller_file", ["trajectory_controller.py", "ppo_controller.py"])
 def test_controllers(controller_file: str):
+    if controller_file == "ppo_controller.py" and not importlib.util.find_spec("stable_baselines3"):
+        pytest.skip("Requires the stable baselines3 library")
+
     config = load_config(Path(__file__).parents[2] / "config/level0.toml")
     config.sim.gui = False
     ctrl_cls = load_controller(
