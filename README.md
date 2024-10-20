@@ -4,7 +4,19 @@
 </p>
 <sub><sup>AI generated image</sup></sub>
 
-[![Ruff Check](https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml/badge.svg?style=flat-square)](https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml)   [![Documentation Status](https://readthedocs.org/projects/lsy-drone-racing/badge/?version=latest)](https://lsy-drone-racing.readthedocs.io/en/latest/?badge=latest)   [![Tests](https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/testing.yml/badge.svg)](https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/testing.yml)
+[![Python Version]][Python Version URL] [![Ruff Check]][Ruff Check URL] [![Documentation Status]][Documentation Status URL] [![Tests]][Tests URL]
+
+[Python Version]: https://img.shields.io/badge/python-3.8-blue.svg
+[Python Version URL]: https://www.python.org
+
+[Ruff Check]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml/badge.svg?style=flat-square
+[Ruff Check URL]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml
+
+[Documentation Status]: https://readthedocs.org/projects/lsy-drone-racing/badge/?version=latest
+[Documentation Status URL]: https://lsy-drone-racing.readthedocs.io/en/latest/?badge=latest
+
+[Tests]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/testing.yml/badge.svg
+[Tests URL]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/testing.yml
 
 ## Table of Contents
 - [Autonomous Drone Racing Project Course](#autonomous-drone-racing-project-course)

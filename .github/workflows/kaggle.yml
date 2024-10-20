@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - main
+      - dev
   workflow_dispatch:
 
 
@@ -35,6 +36,7 @@ jobs:
           cd pycffirmware
           git submodule update --init --recursive
           ./wrapper/build_linux.sh
+        shell: micromamba-shell {0}
       - name: Run simulation tests
         run: python scripts/kaggle.py
         shell: micromamba-shell {0}
