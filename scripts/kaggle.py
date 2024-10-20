@@ -4,7 +4,6 @@ Note:
     Please do not alter this script or ask the course supervisors first!
 """
 
-
 import logging
 from pathlib import Path
 
