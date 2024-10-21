@@ -72,7 +72,7 @@ class Vicon:
                 time.sleep(0.01)
             if not self.active:
                 raise TimeoutError(
-                    "Timeout while fetching initial position updates for all tracked objects."
+                    "Timeout while fetching initial position updates for all tracked objects. "
                     f"Missing objects: {[k for k in self.track_names if k not in self.ang_vel]}"
                 )
 

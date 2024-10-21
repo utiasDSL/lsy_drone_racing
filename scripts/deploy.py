@@ -57,8 +57,6 @@ def main(config: str = "level3.toml", controller: str | None = None):
                 break
             if dt := (time.perf_counter() - t_loop) < (1 / config.env.freq):
                 time.sleep(config.env.freq - dt)  # Maintain the control loop frequency
-            if time.perf_counter() - start_time > 9:
-                break
         ep_time = time.perf_counter() - start_time
         controller.episode_callback()
         logger.info(

@@ -33,6 +33,7 @@ from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.sim import Sim
+from lsy_drone_racing.utils import check_gate_pass
 from lsy_drone_racing.utils.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
 from lsy_drone_racing.vicon import Vicon
@@ -135,16 +136,62 @@ class DroneRacingDeployEnv(gymnasium.Env):
             ensures that the environment is running at the correct frequency during deployment.
         """
         tstart = time.perf_counter()
+        prev_pos = self.vicon.pos[self.vicon.drone_name]
         pos, vel, acc, yaw, rpy_rate = action[:3], action[3:6], action[6:9], action[9], action[10:]
         self.cf.cmdFullState(pos, vel, acc, yaw, rpy_rate)
         if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
             rospy.sleep(1 / self.config.env.freq - dt)
-        return self.obs, -1.0, False, False, self.info
+        current_pos = self.vicon.pos[self.vicon.drone_name]
+        self.target_gate += self.gate_passed(current_pos, prev_pos)
+        if self.target_gate >= len(self.config.env.track.gates):
+            self.target_gate = -1
+        terminated = self.target_gate == -1
+        return self.obs, -1.0, terminated, False, self.info
 
     def close(self):
         """Close the environment by stopping the drone and landing."""
+        start_pos = self.vicon.pos[self.vicon.drone_name]
+        gate_rot = R.from_euler("xyz", self.config.env.track.gates[-1].rpy)
+        final_pos = start_pos + gate_rot.as_matrix()[:, 1]
+        print(
+            f"Breaking after last gate: Start pos: {start_pos}, final_pos: {final_pos}, Vel: {self.vicon.vel[self.vicon.drone_name]}"
+        )
+        # slow down after last gate
+        t_max = 2.0
+        t_start = time.perf_counter()
+        while (dt := time.perf_counter() - t_start) < t_max:
+            alpha = dt / t_max
+            target_pos = alpha * final_pos + (1 - alpha) * start_pos
+            self.cf.cmdFullState(target_pos, np.zeros(3), np.zeros(3), 0, np.zeros(3))
+            rospy.sleep(0.033)
+
+        # move back to intial state
+        t_max = 4.0
+        t_start = time.perf_counter()
+        start_pos = self.vicon.pos[self.vicon.drone_name]
+        final_pos = np.array(
+            [self.config.env.track.drone.pos[0], self.config.env.track.drone.pos[1], 0.5]
+        )  # inital state and z position of 0.5
+        print(
+            f"Moving back to inital pos: Start pos: {start_pos}, final_pos: {final_pos}, Vel: {self.vicon.vel[self.vicon.drone_name]}"
+        )
+        offset = 1.0  ## additional time at the end to really reach the des. position
+        while (dt := time.perf_counter() - t_start) < t_max + offset:
+            alpha = min(dt / t_max, 1.0)
+            target_pos = alpha * final_pos + (1 - alpha) * start_pos
+            # additionally pass position difference as vel to get more agressive behav.
+            # in order to have a more accurate landing
+            self.cf.cmdFullState(
+                target_pos,
+                target_pos - self.vicon.pos[self.vicon.drone_name],
+                np.zeros(3),
+                0,
+                np.zeros(3),
+            )
+            rospy.sleep(0.01)
+
         self.cf.notifySetpointsStop()
-        self.cf.land(0.02, 3.0)
+        self.cf.land(0.1, 2)
 
     @property
     def obs(self) -> dict:
@@ -192,12 +239,19 @@ class DroneRacingDeployEnv(gymnasium.Env):
         """Return an info dictionary containing additional information about the environment."""
         return {"collisions": [], "symbolic_model": self.symbolic}
 
-    def gate_passed(self) -> bool:
+    def gate_passed(self, pos: NDArray[np.floating], prev_pos: NDArray[np.floating]) -> bool:
         """Check if the drone has passed the current gate.
 
         TODO: Implement this method.
         """
-        raise NotImplementedError
+        n_gates = len(self.config.env.track.gates)
+        if self.target_gate < n_gates and self.target_gate != -1:
+            # Gate IDs go from 0 to N-1, but names go from 1 to N
+            gate_id, gate_size = "gate" + str(self.target_gate + 1), (0.45, 0.45)
+            gate_pos = self.vicon.pos[gate_id]
+            gate_rot = R.from_euler("xyz", self.vicon.rpy[gate_id])
+            return check_gate_pass(gate_pos, gate_rot, gate_size, pos, prev_pos)
+        return False
 
 
 class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):

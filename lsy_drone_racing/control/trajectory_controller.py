@@ -49,13 +49,14 @@ class TrajectoryController(BaseController):
                 [-0.5, -1.0, 0.8],
             ]
         )
-        t = np.arange(len(waypoints))
+        self.t_total = 11
+        t = np.linspace(0, self.t_total, len(waypoints))
         self.trajectory = CubicSpline(t, waypoints)
         self._tick = 0
         self._freq = initial_info["env_freq"]
 
         # Generate points along the spline for visualization
-        t_vis = np.linspace(0, len(waypoints) - 1, 100)
+        t_vis = np.linspace(0, self.t_total - 1, 100)
         spline_points = self.trajectory(t_vis)
         try:
             # Plot the spline as a line in PyBullet
@@ -85,7 +86,7 @@ class TrajectoryController(BaseController):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
-        target_pos = self.trajectory(min(self._tick / self._freq, 9))
+        target_pos = self.trajectory(min(self._tick / self._freq, self.t_total))
         return np.concatenate((target_pos, np.zeros(10)))
 
     def step_callback(
