@@ -78,12 +78,24 @@ class DroneRacingDeployEnv(gymnasium.Env):
         super().__init__()
         self.config = config
         self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(13,))
+        n_gates, n_obstacles = (
+            len(config.env.track.get("gates")),
+            len(config.env.track.get("obstacles")),
+        )
         self.observation_space = spaces.Dict(
             {
                 "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "target_gate": spaces.Discrete(n_gates, start=-1),
+                "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_gates, 3)),
+                "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(n_gates, 3)),
+                "gates_in_range": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=np.bool_),
+                "obstacles_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_obstacles, 3)),
+                "obstacles_in_range": spaces.Box(
+                    low=0, high=1, shape=(n_obstacles,), dtype=np.bool_
+                ),
             }
         )
         self.target_gate = 0
@@ -107,6 +119,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
                 physics=config.sim.physics,
             )
             self.symbolic = sim.symbolic()
+        self._last_pos = np.zeros(3)
 
     def reset(
         self, *, seed: int | None = None, options: dict | None = None
@@ -118,6 +131,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
         """
         check_race_track(self.config)
         check_drone_start_pos(self.config)
+        self._last_pos[:] = self.vicon.pos[self.vicon.drone_name]
         self.target_gate = 0
         info = self.info
         info["sim_freq"] = self.config.sim.sim_freq
@@ -136,13 +150,13 @@ class DroneRacingDeployEnv(gymnasium.Env):
             ensures that the environment is running at the correct frequency during deployment.
         """
         tstart = time.perf_counter()
-        prev_pos = self.vicon.pos[self.vicon.drone_name]
         pos, vel, acc, yaw, rpy_rate = action[:3], action[3:6], action[6:9], action[9], action[10:]
         self.cf.cmdFullState(pos, vel, acc, yaw, rpy_rate)
         if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
             rospy.sleep(1 / self.config.env.freq - dt)
         current_pos = self.vicon.pos[self.vicon.drone_name]
-        self.target_gate += self.gate_passed(current_pos, prev_pos)
+        self.target_gate += self.gate_passed(current_pos, self._last_pos)
+        self._last_pos[:] = current_pos
         if self.target_gate >= len(self.config.env.track.gates):
             self.target_gate = -1
         terminated = self.target_gate == -1
