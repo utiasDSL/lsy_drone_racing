@@ -21,7 +21,10 @@ import rospy
 from lsy_drone_racing.utils import load_config, load_controller
 
 if TYPE_CHECKING:
-    from lsy_drone_racing.envs.drone_racing_deploy_env import DroneRacingDeployEnv
+    from lsy_drone_racing.envs.drone_racing_deploy_env import (
+        DroneRacingDeployEnv,
+        DroneRacingThrustDeployEnv,
+    )
 
 # rospy.init_node changes the default logging configuration of Python, which is bad practice at
 # best. As a workaround, we can create loggers under the ROS root logger `rosout`.
@@ -38,7 +41,8 @@ def main(config: str = "level3.toml", controller: str | None = None):
             the controller specified in the config file is used.
     """
     config = load_config(Path(__file__).parents[1] / "config" / config)
-    env: DroneRacingDeployEnv = gymnasium.make("DroneRacingDeploy-v0", config=config)
+    env_id = "DroneRacingThrustDeploy-v0" if "Thrust" in config.env.id else "DroneRacingDeploy-v0"
+    env: DroneRacingDeployEnv | DroneRacingThrustDeployEnv = gymnasium.make(env_id, config=config)
     obs, info = env.reset()
 
     control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"

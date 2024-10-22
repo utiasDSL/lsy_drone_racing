@@ -167,45 +167,40 @@ class DroneRacingDeployEnv(gymnasium.Env):
         start_pos = self.vicon.pos[self.vicon.drone_name]
         gate_rot = R.from_euler("xyz", self.config.env.track.gates[-1].rpy)
         final_pos = start_pos + gate_rot.as_matrix()[:, 1]
-        print(
-            f"Breaking after last gate: Start pos: {start_pos}, final_pos: {final_pos}, Vel: {self.vicon.vel[self.vicon.drone_name]}"
-        )
-        # slow down after last gate
+        # Slow down after last gate and rise over the gates
         t_max = 2.0
         t_start = time.perf_counter()
         while (dt := time.perf_counter() - t_start) < t_max:
-            alpha = dt / t_max
+            rospy.sleep(0.033)
+            alpha = np.sqrt(np.minimum(dt / t_max, 1.0))  # Non-linear breaking
             target_pos = alpha * final_pos + (1 - alpha) * start_pos
             self.cf.cmdFullState(target_pos, np.zeros(3), np.zeros(3), 0, np.zeros(3))
+        # Fly up to avoid collisions
+        t_max = 2.0
+        t_start = time.perf_counter()
+        start_pos = self.vicon.pos[self.vicon.drone_name]
+        final_pos[2] = 2.0
+        while (dt := time.perf_counter() - t_start) < t_max:
             rospy.sleep(0.033)
-
-        # move back to intial state
+            alpha = np.minimum(dt / t_max, 1.0)
+            target_pos = alpha * final_pos + (1 - alpha) * start_pos
+            self.cf.cmdFullState(target_pos, np.zeros(3), np.zeros(3), 0, np.zeros(3))
+        # Move back to intial state
         t_max = 4.0
         t_start = time.perf_counter()
         start_pos = self.vicon.pos[self.vicon.drone_name]
-        final_pos = np.array(
-            [self.config.env.track.drone.pos[0], self.config.env.track.drone.pos[1], 0.5]
-        )  # inital state and z position of 0.5
-        print(
-            f"Moving back to inital pos: Start pos: {start_pos}, final_pos: {final_pos}, Vel: {self.vicon.vel[self.vicon.drone_name]}"
-        )
-        offset = 1.0  ## additional time at the end to really reach the des. position
+        final_pos = np.array([*self.config.env.track.drone.pos[:2], 2.0])
+        offset = 1.0  # Additional time at the end to really reach the des. position
         while (dt := time.perf_counter() - t_start) < t_max + offset:
             alpha = min(dt / t_max, 1.0)
             target_pos = alpha * final_pos + (1 - alpha) * start_pos
-            # additionally pass position difference as vel to get more agressive behav.
-            # in order to have a more accurate landing
-            self.cf.cmdFullState(
-                target_pos,
-                target_pos - self.vicon.pos[self.vicon.drone_name],
-                np.zeros(3),
-                0,
-                np.zeros(3),
-            )
-            rospy.sleep(0.01)
+            # Additionally pass position difference as vel for more landing accuracy
+            vel = target_pos - self.vicon.pos[self.vicon.drone_name]
+            self.cf.cmdFullState(target_pos, vel, np.zeros(3), 0, np.zeros(3))
+            rospy.sleep(0.033)
 
         self.cf.notifySetpointsStop()
-        self.cf.land(0.1, 2)
+        self.cf.land(0.05, 3.0)
 
     @property
     def obs(self) -> dict:
@@ -256,7 +251,9 @@ class DroneRacingDeployEnv(gymnasium.Env):
     def gate_passed(self, pos: NDArray[np.floating], prev_pos: NDArray[np.floating]) -> bool:
         """Check if the drone has passed the current gate.
 
-        TODO: Implement this method.
+        Args:
+            pos: Current drone position.
+            prev_pos: Previous drone position.
         """
         n_gates = len(self.config.env.track.gates)
         if self.target_gate < n_gates and self.target_gate != -1:
@@ -301,4 +298,10 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
         self.cf.cmdVel(*rpy_deg, collective_thrust)
         if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
             rospy.sleep(1 / self.config.env.freq - dt)
-        return self.obs, -1.0, False, False, self.info
+        current_pos = self.vicon.pos[self.vicon.drone_name]
+        self.target_gate += self.gate_passed(current_pos, self._last_pos)
+        self._last_pos[:] = current_pos
+        if self.target_gate >= len(self.config.env.track.gates):
+            self.target_gate = -1
+        terminated = self.target_gate == -1
+        return self.obs, -1.0, terminated, False, self.info

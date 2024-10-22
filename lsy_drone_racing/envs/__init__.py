@@ -39,3 +39,10 @@ register(
     max_episode_steps=900,
     disable_env_checker=True,
 )
+
+register(
+    id="DroneRacingThrustDeploy-v0",
+    entry_point="lsy_drone_racing.envs.drone_racing_deploy_env:DroneRacingThrustDeployEnv",
+    max_episode_steps=900,
+    disable_env_checker=True,
+)
