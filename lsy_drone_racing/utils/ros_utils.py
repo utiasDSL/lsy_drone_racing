@@ -43,6 +43,8 @@ def check_race_track(config: Munch):
         low, high = rng_info.obstacle_pos.low, rng_info.obstacle_pos.high
         check_bounds(name, vicon.pos[name], obstacle.pos, low, high)
 
+    vicon.close()
+
 
 def check_bounds(
     name: str, actual: np.ndarray, desired: np.ndarray, low: np.ndarray, high: np.ndarray
@@ -80,3 +82,4 @@ def check_drone_start_pos(config: Munch):
                 f"Position is {vicon.pos[vicon.drone_name]}, should be {drone_pos}"
             )
         )
+    vicon.close()

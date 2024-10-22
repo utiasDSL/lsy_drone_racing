@@ -17,6 +17,8 @@ from gymnasium import register
 
 from lsy_drone_racing.envs.drone_racing_env import DroneRacingEnv
 
+__all__ = ["DroneRacingEnv"]
+
 register(
     id="DroneRacing-v0",
     entry_point="lsy_drone_racing.envs.drone_racing_env:DroneRacingEnv",
@@ -38,4 +40,9 @@ register(
     disable_env_checker=True,
 )
 
-__all__ = ["DroneRacingEnv"]
+register(
+    id="DroneRacingThrustDeploy-v0",
+    entry_point="lsy_drone_racing.envs.drone_racing_deploy_env:DroneRacingThrustDeployEnv",
+    max_episode_steps=900,
+    disable_env_checker=True,
+)

@@ -53,15 +53,16 @@ class ThrustController(BaseController):
         # Same waypoints as in the trajectory controller. Determined by trial and error.
         waypoints = np.array(
             [
-                [1.0, 1.0, 0.05],
+                [1.0, 1.0, 0.0],
+                [0.8, 0.5, 0.2],
                 [0.55, -0.8, 0.4],
                 [0.2, -1.8, 0.65],
                 [1.1, -1.35, 1.0],
                 [0.2, 0.0, 0.65],
                 [0.0, 0.75, 0.525],
-                [-0.2, 0.75, 1.2],
-                [-0.5, -0.5, 1.0],
-                [-0.5, -1.0, 0.8],
+                [0.0, 0.75, 1.1],
+                [-0.5, -0.5, 1.1],
+                [-0.5, -1.0, 1.1],
             ]
         )
         # Scale trajectory between 0 and 1
@@ -105,7 +106,8 @@ class ThrustController(BaseController):
         Returns:
             The collective thrust and orientation [t_des, r_des, p_des, y_des] as a numpy array.
         """
-        des_pos = np.array([self.x_des[self._tick], self.y_des[self._tick], self.z_des[self._tick]])
+        i = min(self._tick, len(self.x_des) - 1)
+        des_pos = np.array([self.x_des[i], self.y_des[i], self.z_des[i]])
         des_vel = np.zeros(3)
         des_yaw = 0.0
 
@@ -164,3 +166,4 @@ class ThrustController(BaseController):
     def episode_callback(self):
         """Reset the integral error."""
         self.i_error[:] = 0
+        self._tick = 0
