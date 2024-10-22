@@ -164,6 +164,8 @@ class DroneRacingDeployEnv(gymnasium.Env):
 
     def close(self):
         """Close the environment by stopping the drone and landing."""
+        if self.target_gate != -1:
+            return  # Don't try to land if the drone hasn't finished the race -> crashed most likely
         start_pos = self.vicon.pos[self.vicon.drone_name]
         gate_rot = R.from_euler("xyz", self.config.env.track.gates[-1].rpy)
         final_pos = start_pos + gate_rot.as_matrix()[:, 1]
