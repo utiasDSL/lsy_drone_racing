@@ -324,7 +324,9 @@ class DroneRacingThrustEnv(DroneRacingEnv):
         assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
         action = action.astype(np.float64)
         cmd_thrust = action[0]
-        cmd_rpy = action[1:]
+        # Crazyflie expects negated pitch command. TODO: Check why this is the case and fix this on
+        # the firmware side if possible.
+        cmd_rpy = action[1:] * np.array([1, -1, 1])
         self.sim.drone.collective_thrust_cmd(cmd_thrust, cmd_rpy)
         collision = self._inner_step_loop()
         terminated = self.terminated or collision
