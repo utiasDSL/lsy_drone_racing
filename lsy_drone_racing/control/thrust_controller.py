@@ -146,9 +146,6 @@ class ThrustController(BaseController):
         R_desired = np.vstack([x_axis_desired, y_axis_desired, z_axis_desired]).T
         euler_desired = R.from_matrix(R_desired).as_euler("xyz", degrees=False)
         thrust_desired, euler_desired
-
-        # Invert the pitch because of the legacy Crazyflie firmware coordinate system
-        euler_desired[1] = -euler_desired[1]
         return np.concatenate([[thrust_desired], euler_desired])
 
     def step_callback(
