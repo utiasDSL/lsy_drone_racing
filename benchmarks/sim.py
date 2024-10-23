@@ -14,7 +14,7 @@ from pathlib import Path
 
 from lsy_drone_racing.utils import load_config
 
-config = load_config(Path('{Path(__file__).parent / "config/test.toml"}'))
+config = load_config(Path('{Path(__file__).parents[1] / "config/level0.toml"}'))
 
 """
 env_setup_code = """

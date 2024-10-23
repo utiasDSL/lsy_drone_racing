@@ -10,7 +10,7 @@ from lsy_drone_racing.utils import check_gate_pass, load_config, load_controller
 
 @pytest.mark.unit
 def test_load_config():
-    config = load_config(Path(__file__).parents[2] / "config/test.toml")
+    config = load_config(Path(__file__).parents[3] / "config/level0.toml")
     assert isinstance(config, dict), f"Config file is not a dictionary: {config}"
 
 

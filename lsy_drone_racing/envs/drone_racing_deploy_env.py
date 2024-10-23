@@ -34,7 +34,6 @@ from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.sim import Sim
 from lsy_drone_racing.utils import check_gate_pass
-from lsy_drone_racing.utils.data_logging import DataLogger
 from lsy_drone_racing.utils.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
 from lsy_drone_racing.vicon import Vicon
@@ -78,7 +77,6 @@ class DroneRacingDeployEnv(gymnasium.Env):
             config: The configuration of the environment.
         """
         super().__init__()
-        self.data_logger = DataLogger("data/latest_run_deploy.csv")  # TODO: Take filename argument
         self.config = config
         self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(13,))
         n_gates, n_obstacles = (
@@ -163,7 +161,6 @@ class DroneRacingDeployEnv(gymnasium.Env):
         if self.target_gate >= len(self.config.env.track.gates):
             self.target_gate = -1
         terminated = self.target_gate == -1
-        self.data_logger.log_data(self.obs, action)
         return self.obs, -1.0, terminated, False, self.info
 
     def close(self):
@@ -317,9 +314,9 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
         collective_thrust, rpy = action[0], action[1:]
         rpy_deg = np.rad2deg(rpy)
         collective_thrust = self.drone._thrust_to_pwms(collective_thrust)
-        # collective_thrust = self.thrust2pwm(collective_thrust)
-
-        self.cf.cmdVel(*rpy_deg, collective_thrust)
+        # Crazyflie expects negated pitch command. TODO: Check why this is the case and fix this on
+        # the firmware side if possible.
+        self.cf.cmdVel(rpy_deg[0], -rpy_deg[1], rpy_deg[2], collective_thrust)
         if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
             rospy.sleep(1 / self.config.env.freq - dt)
         current_pos = self.vicon.pos[self.vicon.drone_name]
