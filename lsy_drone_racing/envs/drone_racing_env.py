@@ -4,7 +4,7 @@ This module is a core component of the lsy_drone_racing package, providing the p
 between the drone racing simulation and the user's control algorithms.
 
 It serves as a bridge between the high-level race control and the low-level drone physics
-simulation. The environments defined here 
+simulation. The environments defined here
 (:class:`~.DroneRacingEnv` and :class:`~.DroneRacingThrustEnv`) expose a common interface for all
 controller types, allowing for easy integration and testing of different control algorithms,
 comparison of control strategies, and deployment on our hardware.
@@ -35,6 +35,7 @@ from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.sim import Sim
 from lsy_drone_racing.utils import check_gate_pass
+
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray

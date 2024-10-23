@@ -71,7 +71,7 @@ class ThrustController(BaseController):
         cs_y = CubicSpline(ts, waypoints[:, 1])
         cs_z = CubicSpline(ts, waypoints[:, 2])
 
-        des_completion_time = 10
+        des_completion_time = 15
         ts = np.linspace(0, 1, int(initial_info["env_freq"] * des_completion_time))
 
         self.x_des = cs_x(ts)
@@ -149,7 +149,8 @@ class ThrustController(BaseController):
 
         # Invert the pitch because of the legacy Crazyflie firmware coordinate system
         euler_desired[1] = -euler_desired[1]
-        return np.concatenate([[thrust_desired], euler_desired])
+        action = np.concatenate([[thrust_desired], euler_desired])
+        return action
 
     def step_callback(
         self,
