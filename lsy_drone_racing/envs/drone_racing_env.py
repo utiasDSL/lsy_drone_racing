@@ -36,7 +36,6 @@ from scipy.spatial.transform import Rotation as R
 from lsy_drone_racing.sim.sim import Sim
 from lsy_drone_racing.utils import check_gate_pass
 
-
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
