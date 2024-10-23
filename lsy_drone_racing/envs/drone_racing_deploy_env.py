@@ -34,9 +34,11 @@ from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.sim import Sim
 from lsy_drone_racing.utils import check_gate_pass
+from lsy_drone_racing.utils.data_logging import DataLogger
 from lsy_drone_racing.utils.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
 from lsy_drone_racing.vicon import Vicon
+from lsy_drone_racing.sim.drone import Drone
 
 if TYPE_CHECKING:
     from munch import Munch
@@ -76,6 +78,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
             config: The configuration of the environment.
         """
         super().__init__()
+        self.data_logger = DataLogger("data/latest_run_deploy.csv")  # TODO: Take filename argument
         self.config = config
         self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(13,))
         n_gates, n_obstacles = (
@@ -160,6 +163,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
         if self.target_gate >= len(self.config.env.track.gates):
             self.target_gate = -1
         terminated = self.target_gate == -1
+        self.data_logger.log_data(self.obs, action)
         return self.obs, -1.0, terminated, False, self.info
 
     def close(self):
@@ -281,6 +285,22 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
         """
         super().__init__(config)
         self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(4,))
+        self.drone = Drone("mellinger")
+
+    def thrust2pwm(self, thrust):
+        a_coeff = -1.1264
+        b_coeff = 2.2541
+        c_coeff = 0.0209
+        pwm_max = 65535.0
+        """Convert thrust to pwm using a quadratic function."""
+        pwm = a_coeff * thrust * thrust + b_coeff * thrust + c_coeff
+        pwm = np.maximum(pwm, 0.0)
+        pwm = np.minimum(pwm, 1.0)
+        thrust_pwm = pwm * pwm_max
+        # thrust = 0.145
+        # print(f"maximium thrust with eq: {a_coeff * thrust * thrust + b_coeff * thrust + c_coeff}")
+        thrust_pwm = thrust / 0.145 * pwm_max
+        return thrust_pwm
 
     def step(
         self, action: NDArray[np.floating]
@@ -291,10 +311,14 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
             Sleeps for the remaining time if the step took less than the control period. This
             ensures that the environment is running at the correct frequency during deployment.
         """
+        print(f"action received: {action}")
         tstart = time.perf_counter()
         assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
         collective_thrust, rpy = action[0], action[1:]
         rpy_deg = np.rad2deg(rpy)
+        collective_thrust = self.drone._thrust_to_pwms(collective_thrust)
+        # collective_thrust = self.thrust2pwm(collective_thrust)
+
         self.cf.cmdVel(*rpy_deg, collective_thrust)
         if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
             rospy.sleep(1 / self.config.env.freq - dt)
