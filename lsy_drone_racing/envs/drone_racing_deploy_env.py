@@ -259,7 +259,9 @@ class DroneRacingDeployEnv(gymnasium.Env):
         n_gates = len(self.config.env.track.gates)
         if self.target_gate < n_gates and self.target_gate != -1:
             # Gate IDs go from 0 to N-1, but names go from 1 to N
-            gate_id, gate_size = "gate" + str(self.target_gate + 1), (0.45, 0.45)
+            gate_id = "gate" + str(self.target_gate + 1)
+            # Real gates measure 0.4m x 0.4m, we account for meas. error
+            gate_size = (0.56, 0.56)
             gate_pos = self.vicon.pos[gate_id]
             gate_rot = R.from_euler("xyz", self.vicon.rpy[gate_id])
             return check_gate_pass(gate_pos, gate_rot, gate_size, pos, prev_pos)
