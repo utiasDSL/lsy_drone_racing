@@ -17,7 +17,7 @@ high = [0.1, 0.1, 0.1]
 [env]
 reseed = false   # Whether to re-seed the random number generator between episodes
 seed = 1337      # Random seed
-freq = 30        # Frequency of the environment's step function, in Hz
+freq = 60        # Frequency of the environment's step function, in Hz
 symbolic = false # Whether to include symbolic expressions in the info dict. Note: This can interfere with multiprocessing! If you want to parallelize your training, set this to false.
 
 [env.track]

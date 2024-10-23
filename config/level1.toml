@@ -33,7 +33,7 @@ high = [0.1, 0.1, 0.1]
 id = "DroneRacing-v0" # Either "DroneRacing-v0" or "DroneRacingThrust-v0". If using "DroneRacingThrust-v0", the drone will use the thrust controller instead of the position controller.
 reseed = true         # Whether to re-seed the random number generator between episodes
 seed = 1337           # Random seed
-freq = 30             # Frequency of the environment's step function, in Hz
+freq = 60             # Frequency of the environment's step function, in Hz
 symbolic = false      # Whether to include symbolic expressions in the info dict. Note: This can interfere with multiprocessing! If you want to parallelize your training, set this to false.
 sensor_range = 0.45   # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
 
