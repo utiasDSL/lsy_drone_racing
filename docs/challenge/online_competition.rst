@@ -36,9 +36,13 @@ After you have joined the competition, you can start implementing your controlle
 To submit your controller to the competition, you need to push your changes to the main branch of your forked repository. This will trigger a GitHub action to run your controller and submit the results to Kaggle. This automation requires you to set up your Kaggle credentials as GitHub repository secrets. You can do that by following these steps:
 
 #. Go to your forked repository's Settings > Secrets and variables > Actions
+
 #. Add two new repository secrets:
-  * Name: KaggleUsername, Secret: Your Kaggle username
-  * Name: KaggleKey, Secret: Your Kaggle API key
+
+   * Name: KaggleUsername, Secret: Your Kaggle username
+
+   * Name: KaggleKey, Secret: Your Kaggle API key
+
 #. Go to your forked repository and click on the "Actions" tab. Enable workflows copied from the forked repository.
 
 Once you've made your changes and are ready to submit, push your updates to the main branch of your forked repository. This action will automatically trigger a GitHub workflow that tests your implementation and submits the results to Kaggle.
