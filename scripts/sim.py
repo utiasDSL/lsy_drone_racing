@@ -61,12 +61,13 @@ def simulate(
     env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
 
     ep_times = []
+    gui_timer = None
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         done = False
         obs, info = env.reset()
         controller = controller_cls(obs, info)
         if gui:
-            gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client)
+            gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client, gui_timer)
         i = 0
 
         while not done:
