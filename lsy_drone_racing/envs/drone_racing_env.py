@@ -208,7 +208,7 @@ class DroneRacingEnv(gymnasium.Env):
             "vel": self.sim.drone.vel.astype(np.float32),
             "ang_vel": self.sim.drone.ang_vel.astype(np.float32),
         }
-        obs["ang_vel"][:] = R.from_euler("XYZ", obs["rpy"]).inv().apply(obs["ang_vel"])
+        obs["ang_vel"][:] = R.from_euler("xyz", obs["rpy"]).inv().apply(obs["ang_vel"])
 
         gates = self.sim.gates
         obs["target_gate"] = self.target_gate if self.target_gate < len(gates) else -1
