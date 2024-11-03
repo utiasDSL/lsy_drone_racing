@@ -81,8 +81,14 @@ class Drone:
 
         self.init_pos, self.init_rpy = np.zeros(3), np.zeros(3)
         self.init_vel, self.init_ang_vel = np.zeros(3), np.zeros(3)
-        self.pos, self.rpy = np.zeros(3), np.zeros(3)
-        self.vel, self.ang_vel = np.zeros(3), np.zeros(3)
+        self.pos = np.zeros(3)
+        """Current position of the drone in the world frame."""
+        self.rpy = np.zeros(3)
+        """Current roll, pitch, yaw of the drone."""
+        self.vel = np.zeros(3)
+        """Current velocity of the drone in the world frame."""
+        self.ang_vel = np.zeros(3)
+        """Current angular velocity of the drone in the world frame."""
         self.id = -1
 
     def reset(
@@ -129,18 +135,16 @@ class Drone:
             vel: Current velocity of the drone. Shape: (3,).
         """
         pos, rpy, vel = pos.copy(), rpy.copy(), vel.copy()
-        body_rot = R.from_euler("XYZ", rpy).inv()
-        # Estimate rates
-        rotation_rates = (rpy - self._last_rpy) * self.params.firmware_freq  # body coord, rad/s
-        self._last_rpy = rpy
-        acc = (vel - self._last_vel) * self.params.firmware_freq / 9.81 + np.array([0, 0, 1])
+        acc = (vel - self._last_vel) * self.params.firmware_freq / 9.81 + np.array([0.0, 0.0, 1.0])
         self._last_vel = vel
         # Update state
         timestamp = int(self._tick / self.params.firmware_freq * 1e3)
         self._update_state(timestamp, pos, np.rad2deg(rpy), vel, acc)
         # Update sensor data
         sensor_timestamp = int(self._tick / self.params.firmware_freq * 1e6)
-        self._update_sensor_data(sensor_timestamp, body_rot.apply(acc), np.rad2deg(rotation_rates))
+        body_acc = R.from_euler("xyz", rpy).apply(acc, inverse=True)
+        body_ang_vel = R.from_euler("xyz", rpy).apply(self.ang_vel, inverse=True)
+        self._update_sensor_data(sensor_timestamp, body_acc, np.rad2deg(body_ang_vel))
         # Update setpoint
         self._update_setpoint(self._tick / self.params.firmware_freq)
         # Step controller
@@ -171,7 +175,7 @@ class Drone:
         # Legacy cf coordinate system uses inverted pitch
         self._state.roll, self._state.pitch, self._state.yaw = rpy * np.array([1, -1, 1])
         if self._controller == "mellinger":  # Requires quaternion
-            quat = R.from_euler("XYZ", rpy, degrees=True).as_quat()
+            quat = R.from_euler("xyz", rpy, degrees=True).as_quat()
             quat_state = self._state.attitudeQuaternion
             quat_state.x, quat_state.y, quat_state.z, quat_state.w = quat
         self._state.position.x, self._state.position.y, self._state.position.z = pos
@@ -212,7 +216,7 @@ class Drone:
         s_a_rate = self._setpoint.attitudeRate
         s_a_rate.roll, s_a_rate.pitch, s_a_rate.yaw = np.rad2deg(rpy_rate)
         s_quat = self._setpoint.attitudeQuaternion
-        s_quat.x, s_quat.y, s_quat.z, s_quat.w = R.from_euler("XYZ", [0, 0, yaw]).as_quat()
+        s_quat.x, s_quat.y, s_quat.z, s_quat.w = R.from_euler("xyz", [0, 0, yaw]).as_quat()
         # initilize setpoint modes to match cmdFullState
         mode = self._setpoint.mode
         mode_abs, mode_disable = pycffirmware.modeAbs, pycffirmware.modeDisable
@@ -260,7 +264,7 @@ class Drone:
         s_a.roll, s_a.pitch, s_a.yaw = np.rad2deg(rpy)
 
         s_quat = self._setpoint.attitudeQuaternion
-        s_quat.x, s_quat.y, s_quat.z, s_quat.w = R.from_euler("XYZ", rpy).as_quat()
+        s_quat.x, s_quat.y, s_quat.z, s_quat.w = R.from_euler("xyz", rpy).as_quat()
 
         # initilize setpoint modes to match thrust interface.
         mode = self._setpoint.mode

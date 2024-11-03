@@ -208,7 +208,7 @@ class DroneRacingEnv(gymnasium.Env):
             "vel": self.sim.drone.vel.astype(np.float32),
             "ang_vel": self.sim.drone.ang_vel.astype(np.float32),
         }
-        obs["ang_vel"][:] = R.from_euler("XYZ", obs["rpy"]).inv().apply(obs["ang_vel"])
+        obs["ang_vel"][:] = R.from_euler("xyz", obs["rpy"]).apply(obs["ang_vel"], inverse=True)
 
         gates = self.sim.gates
         obs["target_gate"] = self.target_gate if self.target_gate < len(gates) else -1
@@ -256,8 +256,8 @@ class DroneRacingEnv(gymnasium.Env):
             True if the drone is out of bounds, colliding with an obstacle, or has passed all gates,
             else False.
         """
-        state = {k: getattr(self.sim.drone, k).copy() for k in ("pos", "rpy", "vel", "ang_vel")}
-        state["ang_vel"] = R.from_euler("XYZ", state["rpy"]).apply(state["ang_vel"])
+        state = {k: getattr(self.sim.drone, k).copy() for k in self.sim.state_space}
+        state["ang_vel"] = R.from_euler("xyz", state["rpy"]).apply(state["ang_vel"], inverse=True)
         if state not in self.sim.state_space:
             return True  # Drone is out of bounds
         if self.sim.collisions:

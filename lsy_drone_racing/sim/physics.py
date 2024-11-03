@@ -106,13 +106,12 @@ def dynamics(drone: Drone, rpms: NDArray[np.floating], dt: float) -> list[tuple[
     pos = drone.pos
     rpy = drone.rpy
     vel = drone.vel
-    rpy_rates = drone.ang_vel
-    rotation = R.from_euler("XYZ", rpy).as_matrix()
+    rpy_rates = R.from_euler("xyz", rpy).apply(drone.ang_vel, inverse=True)  # Now in body frame
     # Compute forces and torques.
     forces = np.array(rpms**2) * drone.params.kf
     thrust = np.array([0, 0, np.sum(forces)])
-    thrust_world_frame = np.dot(rotation, thrust)
-    force_world_frame = thrust_world_frame - np.array([0, 0, GRAVITY])
+    thrust_world_frame = R.from_euler("xyz", rpy).apply(thrust)
+    force_world_frame = thrust_world_frame - np.array([0, 0, GRAVITY * drone.params.mass])
     z_torques = np.array(rpms**2) * drone.params.km
     z_torque = z_torques[0] - z_torques[1] + z_torques[2] - z_torques[3]
     L = drone.params.arm_len
@@ -121,14 +120,14 @@ def dynamics(drone: Drone, rpms: NDArray[np.floating], dt: float) -> list[tuple[
     torques = np.array([x_torque, y_torque, z_torque])
     torques = torques - np.cross(rpy_rates, np.dot(drone.params.J, rpy_rates))
     rpy_rates_deriv = np.dot(drone.params.J_inv, torques)
-    no_pybullet_dyn_accs = force_world_frame / drone.params.mass
+    acc = force_world_frame / drone.params.mass
     # Update state.
-    vel = vel + no_pybullet_dyn_accs * dt
+    vel = vel + acc * dt
     rpy_rates = rpy_rates + rpy_rates_deriv * dt
     drone.pos[:] = pos + vel * dt
     drone.rpy[:] = rpy + rpy_rates * dt
     drone.vel[:] = vel
-    drone.ang_vel[:] = rpy_rates
+    drone.ang_vel[:] = R.from_euler("xyz", rpy).apply(rpy_rates)
     return []  # No forces/torques to apply. We set the drone state directly.
 
 
@@ -171,10 +170,9 @@ def drag(drone: Drone, rpms: NDArray[np.floating]) -> list[tuple[int, ForceTorqu
     Returns:
         A list of tuples containing the link id and a force/torque tuple.
     """
-    rot = R.from_euler("XYZ", drone.rpy).as_matrix()
     # Simple draft model applied to the base/center of mass
     drag_factors = -1 * drone.params.drag_coeff * np.sum(np.array(2 * np.pi * rpms / 60))
-    drag = np.dot(rot, drag_factors * np.array(drone.vel))
+    drag = R.from_euler("xyz", drone.rpy).apply(drag_factors * np.array(drone.vel))
     return [(4, ForceTorque(drag, [0, 0, 0]))]
 
 

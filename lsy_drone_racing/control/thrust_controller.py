@@ -79,8 +79,9 @@ class ThrustController(BaseController):
         self.z_des = cs_z(ts)
 
         try:
-            # Draw interpolated Trajectory
-            trajectory = np.vstack([self.x_des, self.y_des, self.z_des]).T
+            # Draw interpolated Trajectory. Limit segments to avoid excessive drawings
+            stride = max(1, len(self.x_des) // 100)
+            trajectory = np.vstack([self.x_des, self.y_des, self.z_des])[..., ::stride].T
             for i in range(len(trajectory) - 1):
                 p.addUserDebugLine(
                     trajectory[i],
@@ -128,8 +129,7 @@ class ThrustController(BaseController):
         target_thrust[2] += self.drone_mass * self.g
 
         # Update z_axis to the current orientation of the drone
-        rpy = obs["rpy"]
-        z_axis = R.from_euler("xyz", [rpy[0], rpy[1], rpy[2]]).as_matrix()[:, 2]
+        z_axis = R.from_euler("xyz", obs["rpy"]).as_matrix()[:, 2]
 
         # update current thrust
         thrust_desired = target_thrust.dot(z_axis)

@@ -23,6 +23,7 @@ from lsy_drone_racing.utils import load_config, load_controller
 if TYPE_CHECKING:
     from munch import Munch
 
+    from lsy_drone_racing.control.controller import BaseController
     from lsy_drone_racing.envs.drone_racing_env import DroneRacingEnv
 
 
@@ -65,7 +66,7 @@ def simulate(
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         done = False
         obs, info = env.reset()
-        controller = controller_cls(obs, info)
+        controller: BaseController = controller_cls(obs, info)
         if gui:
             gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client, gui_timer)
         i = 0

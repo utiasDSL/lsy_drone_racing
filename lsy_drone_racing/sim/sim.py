@@ -100,15 +100,14 @@ class Sim:
         self.action_space = spaces.Box(low=min_thrust, high=max_thrust, shape=(4,))
         # pos in meters, rpy in radians, vel in m/s ang_vel in rad/s
         rpy_max = np.array([85 / 180 * np.pi, 85 / 180 * np.pi, np.pi], np.float32)  # Yaw unbounded
-        max_flt = np.full(3, np.finfo(np.float32).max, np.float32)
         pos_low, pos_high = np.array([-3, -3, 0]), np.array([3, 3, 2.5])
         # State space uses 64-bit floats for better compatibility with pycffirmware.
         self.state_space = spaces.Dict(
             {
                 "pos": spaces.Box(low=pos_low, high=pos_high, dtype=np.float64),
                 "rpy": spaces.Box(low=-rpy_max, high=rpy_max, dtype=np.float64),
-                "vel": spaces.Box(low=-max_flt, high=max_flt, dtype=np.float64),
-                "ang_vel": spaces.Box(low=-max_flt, high=max_flt, dtype=np.float64),
+                "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float64),
+                "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float64),
             }
         )
         self.disturbances = self._setup_disturbances(disturbances)
