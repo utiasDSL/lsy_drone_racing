@@ -5,6 +5,7 @@ import gymnasium
 import numpy as np
 import pytest
 
+from lsy_drone_racing.sim.physics import PhysicsMode
 from lsy_drone_racing.utils import load_config, load_controller
 
 
@@ -16,6 +17,7 @@ def test_controllers(controller_file: str):
 
     config = load_config(Path(__file__).parents[2] / "config/level0.toml")
     config.sim.gui = False
+    config.sim.physics = PhysicsMode.DEFAULT
     ctrl_cls = load_controller(
         Path(__file__).parents[2] / f"lsy_drone_racing/control/{controller_file}"
     )
@@ -32,9 +34,11 @@ def test_controllers(controller_file: str):
 
 
 @pytest.mark.integration
-def test_thrust_controller():
+@pytest.mark.parametrize("physics", PhysicsMode)
+def test_thrust_controller(physics: PhysicsMode):
     config = load_config(Path(__file__).parents[2] / "config/level0.toml")
     config.sim.gui = False
+    config.sim.physics = physics
     ctrl_cls = load_controller(
         Path(__file__).parents[2] / "lsy_drone_racing/control/thrust_controller.py"
     )
@@ -48,7 +52,7 @@ def test_thrust_controller():
         ctrl.step_callback(action, obs, reward, terminated, truncated, info)
         if terminated or truncated:
             break
-    # assert obs["target_gate"] == -1, "Thrust controller failed to complete the track"
+    assert obs["target_gate"] == -1, "Thrust controller failed to complete the track"
 
 
 @pytest.mark.integration

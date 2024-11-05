@@ -39,6 +39,7 @@ from lsy_drone_racing.sim.physics import (
     apply_force_torques,
     force_torques,
     pybullet_step,
+    sys_id_dynamics,
 )
 from lsy_drone_racing.sim.symbolic import SymbolicModel, symbolic
 from lsy_drone_racing.utils import map2pi
@@ -163,6 +164,27 @@ class Sim:
             apply_force_torques(self.pyb_client, self.drone, ft, disturb_force)
             pybullet_step(self.pyb_client, self.drone, self.physics_mode)
             self._sync_pyb_to_sim()
+
+    def step_sys_id(self, collective_thrust: float, rpy: NDArray[np.floating], dt: float):
+        """Step the simulation with a system identification dynamics model.
+
+        The signature of this function is different from step(), since we do not pass desired
+        thrusts for each rotor, but instead a single collective thrust and attitude command.
+
+        Note:
+            This function does not simulate the onboard controller and instead directly sets the new
+            drone state based on the control inputs.
+
+        Warning:
+            This is an experimental feature and is likely subject to change.
+
+        Todo:
+            The deviation of step_sys_id() from step() is not ideal. We should aim for a unified
+            step function for all physics modes in the future.
+        """
+        sys_id_dynamics(self.drone, collective_thrust, rpy, dt)
+        pybullet_step(self.pyb_client, self.drone, self.physics_mode)
+        self._sync_pyb_to_sim()
 
     def reset(self):
         """Reset the simulation to its original state."""

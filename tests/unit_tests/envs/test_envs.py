@@ -5,6 +5,7 @@ import gymnasium
 import pytest
 from gymnasium.utils.passive_env_checker import env_reset_passive_checker, env_step_passive_checker
 
+from lsy_drone_racing.sim.physics import PhysicsMode
 from lsy_drone_racing.utils import load_config
 
 
@@ -17,6 +18,7 @@ def test_passive_checker_wrapper_warnings(env: str):
     still seen, and even raises them to an exception.
     """
     config = load_config(Path(__file__).parents[3] / "config/level0.toml")
+    config.sim.physics = PhysicsMode.DEFAULT
     with warnings.catch_warnings(record=True) as w:
         env = gymnasium.make(env, config=config, disable_env_checker=False)
         env_reset_passive_checker(env)

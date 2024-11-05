@@ -24,6 +24,9 @@ def test_sim(physics: PhysicsMode, config_file: str, env_id: str):
     assert hasattr(config.env, "id"), "Environment ID is not set"
     config.env.id = env_id  # override environment ID
 
+    if physics == PhysicsMode.SYS_ID and env_id == "DroneRacing-v0":
+        pytest.skip("System identification model not supported for full state control interface")
+
     env = gymnasium.make(env_id, config=config)
     env.reset()
 
