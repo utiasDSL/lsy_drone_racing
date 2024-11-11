@@ -146,15 +146,15 @@ class DroneRacingDeployEnv(gymnasium.Env):
     ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
         """Take a step in the environment.
 
-        Note:
-            Sleeps for the remaining time if the step took less than the control period. This
-            ensures that the environment is running at the correct frequency during deployment.
+        Warning:
+            Step does *not* wait for the remaining time if the step took less than the control
+            period. This ensures that controllers with longer action compute times can still hit
+            their target frequency. Furthermore, it implies that loops using step have to manage the
+            frequency on their own, and need to update the current observation and info before
+            computing the next action.
         """
-        tstart = time.perf_counter()
         pos, vel, acc, yaw, rpy_rate = action[:3], action[3:6], action[6:9], action[9], action[10:]
         self.cf.cmdFullState(pos, vel, acc, yaw, rpy_rate)
-        if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
-            rospy.sleep(1 / self.config.env.freq - dt)
         current_pos = self.vicon.pos[self.vicon.drone_name]
         self.target_gate += self.gate_passed(current_pos, self._last_pos)
         self._last_pos[:] = current_pos
@@ -291,18 +291,18 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
     ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
         """Take a step in the environment.
 
-        Note:
-            Sleeps for the remaining time if the step took less than the control period. This
-            ensures that the environment is running at the correct frequency during deployment.
+        Warning:
+            Step does *not* wait for the remaining time if the step took less than the control
+            period. This ensures that controllers with longer action compute times can still hit
+            their target frequency. Furthermore, it implies that loops using step have to manage the
+            frequency on their own, and need to update the current observation and info before
+            computing the next action.
         """
-        tstart = time.perf_counter()
         assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
         collective_thrust, rpy = action[0], action[1:]
         rpy_deg = np.rad2deg(rpy)
         collective_thrust = self.drone._thrust_to_pwms(collective_thrust)
         self.cf.cmdVel(*rpy_deg, collective_thrust)
-        if (dt := time.perf_counter() - tstart) < 1 / self.config.env.freq:
-            rospy.sleep(1 / self.config.env.freq - dt)
         current_pos = self.vicon.pos[self.vicon.drone_name]
         self.target_gate += self.gate_passed(current_pos, self._last_pos)
         self._last_pos[:] = current_pos

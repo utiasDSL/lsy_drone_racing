@@ -172,8 +172,10 @@ def sys_id_dynamics(
         attitude: The desired drone orientation.
         dt: The dynamics time step.
     """
-    thrust = R.from_euler("xyz", drone.rpy).apply(np.array([0, 0, collective_thrust]))
-    acc = thrust / drone.params.mass - np.array([0, 0, GRAVITY])
+    rot = R.from_euler("xyz", drone.rpy)
+    thrust = rot.apply(np.array([0, 0, collective_thrust]))
+    drift = rot.apply(np.array([0, 0, 1]))
+    acc = thrust * SYS_ID_PARAMS.acc_k1 + drift * SYS_ID_PARAMS.acc_k2 - np.array([0, 0, GRAVITY])
     roll_cmd, pitch_cmd, yaw_cmd = attitude
     roll_rate = SYS_ID_PARAMS.roll_alpha * drone.rpy[0] + SYS_ID_PARAMS.roll_beta * roll_cmd
     pitch_rate = SYS_ID_PARAMS.pitch_alpha * drone.rpy[1] + SYS_ID_PARAMS.pitch_beta * pitch_cmd
