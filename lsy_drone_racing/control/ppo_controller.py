@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 class PPOController(BaseController):
     """Controller using a pre-trained PPO model."""
 
-    def __init__(self, initial_obs: NDArray[np.floating], initial_info: dict):
+    def __init__(self, initial_obs: dict[str, NDArray[np.floating]], initial_info: dict):
         """Initialization of the controller.
 
         Args:
@@ -39,7 +39,7 @@ class PPOController(BaseController):
         self._last_action = np.zeros(3)
 
     def compute_control(
-        self, obs: NDArray[np.floating], info: dict | None = None
+        self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
     ) -> NDArray[np.floating]:
         """Compute the next desired position, velocity and orientation of the drone.
 
@@ -58,7 +58,7 @@ class PPOController(BaseController):
         return np.concatenate([obs["pos"] + action, np.zeros(10)]).astype(np.float64)
 
     def obs_transform(
-        self, obs: NDArray[np.floating], info: dict, action: NDArray[np.floating] | None
+        self, obs: dict[str, NDArray[np.floating]], info: dict, action: NDArray[np.floating] | None
     ) -> NDArray[np.floating]:
         """Transform raw observations into the format expected by the PPO model.
 

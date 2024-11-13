@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 class TrajectoryController(BaseController):
     """Controller that follows a pre-defined trajectory."""
 
-    def __init__(self, initial_obs: NDArray[np.floating], initial_info: dict):
+    def __init__(self, initial_obs: dict[str, NDArray[np.floating]], initial_info: dict):
         """Initialization of the controller.
 
         Args:
@@ -73,7 +73,7 @@ class TrajectoryController(BaseController):
             ...  # Ignore errors if PyBullet is not available
 
     def compute_control(
-        self, obs: NDArray[np.floating], info: dict | None = None
+        self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
     ) -> NDArray[np.floating]:
         """Compute the next desired state of the drone.
 
@@ -92,7 +92,7 @@ class TrajectoryController(BaseController):
     def step_callback(
         self,
         action: NDArray[np.floating],
-        obs: NDArray[np.floating],
+        obs: dict[str, NDArray[np.floating]],
         reward: float,
         terminated: bool,
         truncated: bool,

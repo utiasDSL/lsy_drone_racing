@@ -14,7 +14,6 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-import numpy.typing as npt
 import pybullet as p
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
@@ -31,7 +30,7 @@ class ThrustController(BaseController):
     Modified from https://github.com/utiasDSL/crazyswarm-import/blob/ad2f7ea987f458a504248a1754b124ba39fc2f21/ros_ws/src/crazyswarm/scripts/position_ctl_m.py
     """
 
-    def __init__(self, initial_obs: npt.NDArray[np.floating], initial_info: dict):
+    def __init__(self, initial_obs: dict[str, NDArray[np.floating]], initial_info: dict):
         """Initialization of the controller.
 
         Args:
@@ -95,8 +94,8 @@ class ThrustController(BaseController):
             ...  # Ignore pybullet errors if not running in the pybullet GUI
 
     def compute_control(
-        self, obs: npt.NDArray[np.floating], info: dict | None = None
-    ) -> npt.NDarray[np.floating]:
+        self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
+    ) -> NDArray[np.floating]:
         """Compute the next desired collective thrust and roll/pitch/yaw of the drone.
 
         Args:
@@ -151,7 +150,7 @@ class ThrustController(BaseController):
     def step_callback(
         self,
         action: NDArray[np.floating],
-        obs: NDArray[np.floating],
+        obs: dict[str, NDArray[np.floating]],
         reward: float,
         terminated: bool,
         truncated: bool,
