@@ -140,7 +140,7 @@
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <cylinder length=".8" radius="0.05" />
+        <cylinder length="1.0" radius="0.05" />
       </geometry> 
       <material name="kindablue">
         <color rgba=".1 .5 .7 1"/>
@@ -150,13 +150,13 @@
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
-        <cylinder length=".8" radius="0.05" />
+        <cylinder length="1.0" radius="0.05" />
       </geometry>
     </collision>  
 
   </link>
     <joint name="support_joint" type="fixed">
-    <origin rpy="0 0 0" xyz="0 0 -0.6"/>
+    <origin rpy="0 0 0" xyz="0 0 -0.79"/>
     <parent link="base_link"/>
     <child link="support"/>
   </joint>

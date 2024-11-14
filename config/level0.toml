@@ -43,27 +43,27 @@ sensor_range = 0.45   # Range at which the exact location of gates and obstacles
 # Tall gates: 1.0m height. Short gates: 0.525m height. Height is measured from the ground to the
 # center of the gate.
 [[env.track.gates]]
-pos = [0.45, -1.0, 0.525]
+pos = [0.45, -1.0, 0.56]
 rpy = [0.0, 0.0, 2.35]
 [[env.track.gates]]
-pos = [1.0, -1.55, 1.0]
+pos = [1.0, -1.55, 1.11]
 rpy = [0.0, 0.0, -0.78]
 [[env.track.gates]]
-pos = [0.0, 0.5, 0.525]
+pos = [0.0, 0.5, 0.56]
 rpy = [0.0, 0.0, 0.0]
 [[env.track.gates]]
-pos = [-0.5, -0.5, 1.0]
+pos = [-0.5, -0.5, 1.11]
 rpy = [0.0, 0.0, 3.14]
 
-# Obstacle height: 1.05m. Height is measured from the ground to the top of the obstacle.
+# Obstacle height: 1.4m. Height is measured from the ground to the top of the obstacle.
 [[env.track.obstacles]]
-pos = [1.0, -0.5, 0.95]
+pos = [1.0, -0.5, 1.4]
 [[env.track.obstacles]]
-pos = [0.5, -1.5, 0.95]
+pos = [0.5, -1.5, 1.4]
 [[env.track.obstacles]]
-pos = [-0.5, 0.0, 0.95]
+pos = [-0.5, 0.0, 1.4]
 [[env.track.obstacles]]
-pos = [0.0, 1.0, 0.95]
+pos = [0.0, 1.0, 1.4]
 
 [env.track.drone]
 pos = [1.0, 1.0, 0.05]
