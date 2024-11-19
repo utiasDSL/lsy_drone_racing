@@ -41,7 +41,7 @@ def check_race_track(config: Munch):
     for i, obstacle in enumerate(config.env.track.obstacles):
         name = f"obstacle{i+1}"
         low, high = rng_info.obstacle_pos.low, rng_info.obstacle_pos.high
-        check_bounds(name, vicon.pos[name], obstacle.pos, low, high)
+        check_bounds(name, vicon.pos[name][:2], obstacle.pos[:2], low[:2], high[:2])
 
     vicon.close()
 
