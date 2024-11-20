@@ -285,6 +285,67 @@ Change the USB access permissions with
 
 ```sudo chmod -R 777 /dev/bus/usb/```
 
+### Deployment on our lab PC
+In order to simplify deployment each team should create their own Robostack environment. 
+Please choose descriptive environment names such as ```Team1```.
+
+#### Setting Up Your Python Environment with RoboStack
+
+Follow these steps to set up a Python environment for drone racing projects using RoboStack.
+
+#### Prerequisites
+- Ensure ROS is NOT sourced, e.g. in your .bashrc file. Remove any ROS-related sourcing commands temporarily during setup.
+
+- Required Repositories:
+  Ensure the following repositories are installed in ```~/repos```: 
+    - lsy_drone_racing
+    - pycffirmware
+    - crazyswarm-import-py11
+
+#### Step-by-Step Setup
+##### Create and Activate Python Environment
+
+Run the following commands to create a new environment using mamba (part of the Conda ecosystem):
+
+```bash
+mamba create -n <your-env-name> -c conda-forge -c robostack-staging ros-noetic-desktop python=3.11
+mamba activate <your-env-name>
+```
+
+##### Install Dependencies
+
+Navigate to the respective project directory and install dependencies:
+
+```bash
+cd ~/repos/lsy_drone_racing
+pip install -e .
+```
+
+```bash
+cd ~/repos/pycffirmware/wrapper
+./build_linux.sh
+```
+
+##### Configure Environment 
+
+Set up environment scripts:
+
+```bash
+cd ~/.mamba/envs/<your-env-name>/etc/conda/activate.d
+echo "source ~/repos/crazyswarm-import-py11/ros_ws/devel/setup.bash" > source-crazyswarm.sh
+echo "source ~/repos/catkin_ws/devel/setup.bash --extend" > source-extras.sh
+```
+
+##### Finalizing Setup
+
+Close all open terminals to ensure that no prior ROS setups interfere with your environment.
+
+Reopen terminals and activate your environment in each terminal:
+
+```bash
+mamba activate <your-env-name>
+```
+
 ### Fly with the drones 
 
 #### Settings
@@ -298,10 +359,9 @@ The important config files are located in the crazyswarm ROS package:
 As well as the main launch file [hover_swarm.launch](https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/launch/hover_swarm.launch).
 
 #### Launch
+>**Note:** The following should be run within your teams' conda environment.
 
->**Note:** The following is **NOT** within a conda environment, but has to run directly on the system's Python 3.8 installation. ROS has never heard of these best practices you speak of.
-
-In a terminal, launch the ROS node for the crazyflies. Change the settings in _<path/to/crazyswarm/package>/launch/crazyflies.yaml_ as necessary.
+In a terminal, launch the ROS node for the crazyflies. Change the settings in _<path/to/crazyswarm-import/package>/ros_ws/src/crazyswarm/launch/crazyflies.yaml_ as necessary.
 ```bash
 roslaunch crazyswarm hover_swarm.launch
 ```

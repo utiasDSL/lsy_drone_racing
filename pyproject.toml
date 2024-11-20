@@ -26,7 +26,7 @@ dependencies = [
     "PyYAML >= 6.0.1",
     "rospkg >= 1.5.1",
     "scipy >= 1.10.1",
-    "gymnasium >= 0.29.1",
+    "gymnasium == 0.29.1",
     "toml >= 0.10.2",
     "casadi >= 3.6.5",
     "swig >= 4.2.1",            # Required for pycffirmware
@@ -41,10 +41,7 @@ rl = ["stable-baselines3"]
 find = {}
 
 [tool.setuptools.package-data]
-lsy_drone_racing = [
-    "sim/assets/*.dae",
-    "sim/assets/*.urdf",
-]
+lsy_drone_racing = ["sim/assets/*.dae", "sim/assets/*.urdf"]
 
 [tool.pytest.ini_options]
 markers = ["unit", "integration"]
