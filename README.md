@@ -40,6 +40,7 @@
     - [Common errors](#common-errors-1)
       - [libNatNet](#libnatnet)
       - [LIBUSB\_ERROR\_ACCESS](#libusb_error_access)
+    - [Deployment on our lab PC](#deployment-on-our-lab-pc)
     - [Fly with the drones](#fly-with-the-drones)
       - [Settings](#settings)
       - [Launch](#launch)
