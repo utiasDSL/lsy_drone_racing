@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING
 import fire
 import gymnasium
 import rospy
-import warnings
 
 from lsy_drone_racing.utils import load_config, load_controller
 
@@ -61,12 +60,11 @@ def main(config: str = "level3.toml", controller: str | None = None):
             obs = next_obs
             if terminated or truncated:
                 break
-            if (time.perf_counter() - t_loop) < (1 / config.env.freq):
-                time.sleep(
-                    (1 / config.env.freq) - (time.perf_counter() - t_loop)
-                )  # Maintain the control loop frequency
+            if (dt := (time.perf_counter() - t_loop)) > (1 / config.env.freq):
+                time.sleep(1 / config.env.freq - dt)
             else:
-                warnings.warn("Controller execution time exceeded control loop frequency.")
+                exc = dt - 1 / config.env.freq
+                logger.warning(f"Controller execution time exceeded loop frequency by {exc:.3f}s.")
         ep_time = time.perf_counter() - start_time
         controller.episode_callback()
         logger.info(
