@@ -309,22 +309,68 @@ Follow these steps to set up a Python environment for drone racing projects usin
 Run the following commands to create a new environment using mamba (part of the Conda ecosystem):
 
 ```bash
-mamba create -n <your-env-name> -c conda-forge -c robostack-staging ros-noetic-desktop python=3.11
-mamba activate <your-env-name>
+export ENV_NAME="<your-group-name>"
+mamba create -n $ENV_NAME -c conda-forge -c robostack-staging ros-noetic-desktop python=3.11
+mamba activate $ENV_NAME
+```
+
+Make sure your environments libraries can be found:
+
+```bash
+cd ~/.mamba/envs/$ENV_NAME/etc/conda/activate.d
+echo "export LIBRARY_PATH=$LIBRARY_PATH:/home/adr/.mamba/envs/$ENV_NAME/lib" > xlibrary_path.sh
+echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/adr/.mamba/envs/$ENV_NAME/lib" > xldlibrary_path.sh 
+mamba activate $ENV_NAME
+```
+
+
+##### Create your own project folder
+```bash
+mkdir ~/repos/student_forks/$ENV_NAME
+cd ~/repos/student_forks/$ENV_NAME
 ```
 
 ##### Install Dependencies
 
-Navigate to the respective project directory and install dependencies:
+Navigate to your project directory and install dependencies:
+
+- Clone your fork of the lsy_drone_racing repository and install it:
 
 ```bash
-cd ~/repos/lsy_drone_racing
+cd ~/repos/student_forks/$ENV_NAME
+git clone https://github.com/<your-github-username>/lsy_drone_racing.git
+cd lsy_drone_racing
 pip install -e .
 ```
+- Clone and install the pycffirmare package:
 
 ```bash
-cd ~/repos/pycffirmware/wrapper
-./build_linux.sh
+cd ~/repos/student_forks/$ENV_NAME
+git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
+cd pycffirmware
+git submodule update --init --recursive
+./wrapper/build_linux.sh
+```
+
+- Copy & Install the crazyswarm-import package:
+
+```bash
+cp -r ~/repos/crazyswarm-import ~/repos/student_forks/$ENV_NAME
+cd ~/repos/student_forks/$ENV_NAME/crazyswarm-import
+export CSW_PYTHON=python3
+cd ros_ws
+rm -rf build devel
+cd ..
+./build.sh
+```
+
+- Copy & build the extras workspace:
+
+```bash
+cp -r ~/repos/catkin_ws ~/repos/student_forks/$ENV_NAME
+cd ~/repos/student_forks/$ENV_NAME/catkin_ws
+rm -rf build devel
+catkin_make
 ```
 
 ##### Configure Environment 
@@ -332,13 +378,12 @@ cd ~/repos/pycffirmware/wrapper
 Set up environment scripts:
 
 ```bash
-cd ~/.mamba/envs/<your-env-name>/etc/conda/activate.d
-echo "source ~/repos/crazyswarm-import-py11/ros_ws/devel/setup.bash" > source-crazyswarm.sh
-echo "source ~/repos/catkin_ws/devel/setup.bash --extend" > source-extras.sh
+cd ~/.mamba/envs/$ENV_NAME/etc/conda/activate.d
+echo "source $HOME/repos/student_forks/$ENV_NAME/crazyswarm-import/ros_ws/devel/setup.bash" > xsource-crazyswarm.sh
+echo "source $HOME/repos/student_forks/$ENV_NAME/catkin_ws/devel/setup.bash --extend" > xsource-extras.sh
 ```
 
 ##### Finalizing Setup
-
 Close all open terminals to ensure that no prior ROS setups interfere with your environment.
 
 Reopen terminals and activate your environment in each terminal:
@@ -360,7 +405,7 @@ The important config files are located in the crazyswarm ROS package:
 As well as the main launch file [hover_swarm.launch](https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/launch/hover_swarm.launch).
 
 #### Launch
->**Note:** The following should be run within your teams' conda environment.
+>**Note:** The following should be run within your teams conda environment.
 
 In a terminal, launch the ROS node for the crazyflies. Change the settings in _<path/to/crazyswarm-import/package>/ros_ws/src/crazyswarm/launch/crazyflies.yaml_ as necessary.
 ```bash
