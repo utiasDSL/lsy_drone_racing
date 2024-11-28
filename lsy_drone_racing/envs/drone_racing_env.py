@@ -109,7 +109,6 @@ class DroneRacingEnv(gymnasium.Env):
                 "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-                "acc": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "target_gate": spaces.Discrete(n_gates, start=-1),
                 "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_gates, 3)),
@@ -299,7 +298,7 @@ class DroneRacingEnv(gymnasium.Env):
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
-        return_home = True # makes the drone simulate the return to home after stopping
+        return_home = False # makes the drone simulate the return to home after stopping
 
         # This is done to run the closing controller at a different frequency than the controller before
         # Does not influence other code, since this part is already in closing!
@@ -321,7 +320,8 @@ class DroneRacingEnv(gymnasium.Env):
                 obs, _, _, _, _ = self.step(np.array(action))
                 obs, reward, terminated, truncated, info = self.step(action)
                 controller.step_callback(action, obs, reward, terminated, truncated, info)
-                time.sleep(t_step_ctrl) 
+                if self.config.gui:  # Only sync if gui is active
+                    time.sleep(t_step_ctrl) 
 
         self.sim.close()
 
