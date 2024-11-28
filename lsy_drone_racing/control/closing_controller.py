@@ -45,7 +45,8 @@ class ClosingController(BaseController):
         self._cmd_v = []
         self._cmd_a = []
 
-        self._x_end = 2.0 # distance the drone is supposed to stop behind the last gate
+        self._x_end = np.linalg.norm(initial_obs["vel"])
+        self._x_end = np.clip(self._x_end, 0.5, 2.0) # distance the drone is supposed to stop behind the last gate
         self._z_homing = 2.0 # height of the return path
 
         self._mode = 0 # 0=stopping, 1=hover, 2=RTH => order will be 0-1-2-1
@@ -133,7 +134,7 @@ class ClosingController(BaseController):
     def _generate_stop_trajectory(self, obs: dict[str, NDArray[np.floating]])->Union[QuinticSpline,np.floating]:
         start_pos = obs["pos"]
         start_vel = obs["vel"]
-        start_acc = obs["acc"] # TODO
+        start_acc = obs["acc"]
 
         direction = start_vel/np.linalg.norm(start_vel) # unit vector in the direction of travel
         direction_angle = np.arccos( (np.dot(direction, [0,0,1])) / (1*1) ) 
