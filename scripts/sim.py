@@ -34,7 +34,7 @@ def simulate(
     config: str = "level0.toml",
     controller: str | None = None,
     n_runs: int = 1,
-    gui: bool = True,
+    gui: bool | None = None,
     env_id: str | None = None,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
@@ -53,7 +53,10 @@ def simulate(
     """
     # Load configuration and check if firmare should be used.
     config = load_config(Path(__file__).parents[1] / "config" / config)
-    config.sim.gui = gui
+    if gui is None:
+        gui = config.sim.gui
+    else:
+        config.sim.gui = gui
     # Load the controller module
     control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
     controller_path = control_path / (controller or config.controller.file)
