@@ -1,4 +1,10 @@
 # Autonomous Drone Racing Project Course
+
+## Important Note: 
+This branch is for Marcels Thesis where a disturbance observer (dob) or estimator is utilized twofold to increase robustness: 
+- Directly in the prediction model of the MPC(C)
+- To adapt the conservatism by changing the weights of the MPC(C)
+
 <p align="center">
   <img width="460" height="300" src="docs/img/banner.jpeg">
 </p>
