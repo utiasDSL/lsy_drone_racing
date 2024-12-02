@@ -171,9 +171,9 @@ class DroneRacingDeployEnv(gymnasium.Env):
             # This is done to run the closing controller at a different frequency than the controller before
             # Does not influence other code, since this part is already in closing!
             # WARNING: When changing the frequency, you must also change the current _step!!!
-            freq_new = 100
+            freq_new = 100 # Hz
             self._steps = int( self._steps / self.config.env.freq * freq_new )
-            self.config.env.freq = 100 # Hz
+            self.config.env.freq = freq_new
             t_step_ctrl = 1/self.config.env.freq
             
             obs = self.obs
