@@ -298,11 +298,14 @@ class DroneRacingEnv(gymnasium.Env):
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
-        return_home = False # makes the drone simulate the return to home after stopping
+        return_home = True # makes the drone simulate the return to home after stopping
 
-        # This is done to run the closing controller at a different frequency than the controller before
-        # Does not influence other code, since this part is already in closing!
         if return_home:
+            # This is done to run the closing controller at a different frequency than the controller before
+            # Does not influence other code, since this part is already in closing!
+            # WARNING: When changing the frequency, you must also change the current _step!!!
+            freq_new = 100
+            self._steps = int( self._steps / self.config.env.freq * freq_new )
             self.config.env.freq = 100 # Hz
             t_step_ctrl = 1/self.config.env.freq
             
@@ -317,13 +320,26 @@ class DroneRacingEnv(gymnasium.Env):
 
             for i in np.arange(int(t_total/t_step_ctrl)): # hover for some more time
                 action = controller.compute_control(obs)
-                obs, _, _, _, _ = self.step(np.array(action))
-                obs, reward, terminated, truncated, info = self.step(action)
-                controller.step_callback(action, obs, reward, terminated, truncated, info)
-                if self.config.gui:  # Only sync if gui is active
+                action = action.astype(np.float64)  # Drone firmware expects float64
+                if self.config.sim.physics == PhysicsMode.SYS_ID:
+                    print("[Warning] sys_id model not supported by return home script")
+                    break
+                pos, vel, acc, yaw, rpy_rate = action[:3], action[3:6], action[6:9], action[9], action[10:]
+                self.sim.drone.full_state_cmd(pos, vel, acc, yaw, rpy_rate)
+                collision = self._inner_step_loop()
+                terminated = self.terminated or collision
+                obs = self.obs
+                obs["acc"] = np.array([0,0,0])
+                controller.step_callback(action, obs, self.reward, terminated, False, info)
+                if self.config.sim.gui:  # Only sync if gui is active
                     time.sleep(t_step_ctrl) 
 
         self.sim.close()
+
+    def external_wrench(self, external_force: NDArray[np.floating] = np.zeros(3), external_torque: NDArray[np.floating] = np.zeros(3)):
+        """Apply external force or torque to the environment. This wrench stays constant until next update."""
+        self._external_force = external_force
+        self._external_torque = external_torque
 
 
 class DroneRacingThrustEnv(DroneRacingEnv):

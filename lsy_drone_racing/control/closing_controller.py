@@ -84,8 +84,8 @@ class ClosingController(BaseController):
         elif t > self._t_brake+self._t_hover and t <= self._t_brake+self._t_hover+self._t_RTH and self._mode != 2:
             self._trajectory = self._generate_RTH_trajectory(obs, t)
             self._mode = 2
-        elif t > self._t_brake+self._t_hover+self._t_RTH and self._mode != 1:
-            self._mode = 1
+        elif t > self._t_brake+self._t_hover+self._t_RTH and self._mode != 3:
+            self._mode = 3
 
         # Sample the correct trajectory
         if self._mode == 0: # stopping
@@ -93,15 +93,18 @@ class ClosingController(BaseController):
             target_vel = self._trajectory(t, order=1)
             target_acc = self._trajectory(t, order=2)
             self._target_pos = obs["pos"] # store for a switch to mode 1
+        elif self._mode == 1: # hover
+            target_pos = self._target_pos
+            target_vel = [0,0,0]
+            target_acc = [0,0,0]
         elif self._mode == 2: # RTH
             target_pos = self._trajectory(t)
             trajectory_v = self._trajectory.derivative()
             trajectory_a = trajectory_v.derivative()
             target_vel = trajectory_v(t)*0
             target_acc = trajectory_a(t)*0
-            self._target_pos = obs["pos"] # store for a switch to mode 1
-        else: # hover
-            target_pos = self._target_pos
+        elif self._mode == 3: # hover over landing pos
+            target_pos = np.array(self.info["drone_start_pos"]) + np.array([0, 0, 0.25])
             target_vel = [0,0,0]
             target_acc = [0,0,0]
 
@@ -159,6 +162,7 @@ class ClosingController(BaseController):
 
         const_acc = np.linalg.norm(start_vel)**2/(self._x_end) # this is just an estimate of what constant deceleration is necessary
         t_brake_max = np.sqrt(4*self._x_end/const_acc) # the time it takes to brake completely
+        t_brake_max = max(1, t_brake_max) # minimum time in case the drone reaches the gate super slowly
         t_brake = np.arange(0, t_brake_max, self._t_step_ctrl)
 
         if self.debug:

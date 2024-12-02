@@ -167,9 +167,12 @@ class DroneRacingDeployEnv(gymnasium.Env):
         """Close the environment by stopping the drone and landing back at the starting position."""
         return_home = True # makes the drone simulate the return to home after stopping
 
-        # This is done to run the closing controller at a different frequency than the controller before
-        # Does not influence other code, since this part is already in closing!
         if return_home:
+            # This is done to run the closing controller at a different frequency than the controller before
+            # Does not influence other code, since this part is already in closing!
+            # WARNING: When changing the frequency, you must also change the current _step!!!
+            freq_new = 100
+            self._steps = int( self._steps / self.config.env.freq * freq_new )
             self.config.env.freq = 100 # Hz
             t_step_ctrl = 1/self.config.env.freq
             
@@ -184,9 +187,12 @@ class DroneRacingDeployEnv(gymnasium.Env):
 
             for i in np.arange(int(t_total/t_step_ctrl)): # hover for some more time
                 action = controller.compute_control(obs)
-                obs, _, _, _, _ = self.step(np.array(action))
-                obs, reward, terminated, truncated, info = self.step(action)
-                controller.step_callback(action, obs, reward, terminated, truncated, info)
+                action = action.astype(np.float64)  # Drone firmware expects float64
+                pos, vel, acc, yaw, rpy_rate = action[:3], action[3:6], action[6:9], action[9], action[10:]
+                self.cf.cmdFullState(pos, vel, acc, yaw, rpy_rate)
+                obs = self.obs
+                obs["acc"] = np.array([0,0,0])
+                controller.step_callback(action, obs, 0, True, False, info)
                 time.sleep(t_step_ctrl) 
 
         self.cf.notifySetpointsStop()
