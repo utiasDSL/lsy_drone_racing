@@ -76,9 +76,9 @@ def test_noise_list_from_specs():
     ]
     noise_list = NoiseList.from_specs(specs)
 
-    assert len(noise_list.noises) == 2
-    assert isinstance(noise_list.noises[0], UniformNoise)
-    assert isinstance(noise_list.noises[1], GaussianNoise)
+    assert len(noise_list) == 2
+    assert isinstance(noise_list[0], UniformNoise)
+    assert isinstance(noise_list[1], GaussianNoise)
 
 
 @pytest.mark.unit
