@@ -35,6 +35,7 @@ from lsy_drone_racing.sim.drone import Drone
 from lsy_drone_racing.sim.noise import NoiseList
 from lsy_drone_racing.sim.physics import (
     GRAVITY,
+    ForceTorque,
     PhysicsMode,
     apply_force_torques,
     force_torques,
@@ -154,14 +155,19 @@ class Sim:
         """
         self.drone.desired_thrust[:] = desired_thrust
         rpm = self._thrust_to_rpm(desired_thrust)  # Pre-process/clip the action
+        
         disturb_force = np.zeros(3)
+        disturb_torque = np.zeros(3)
         if "dynamics" in self.disturbances:
             disturb_force = self.disturbances["dynamics"].apply(disturb_force)
+
+        externalFT = [(4, ForceTorque(disturb_force, disturb_torque))]
+
         for _ in range(self.settings.sim_freq // self.settings.ctrl_freq):
             self.drone.rpm[:] = rpm  # Save the last applied action (e.g. to compute drag)
             dt = 1 / self.settings.sim_freq
             ft = force_torques(self.drone, rpm, self.physics_mode, dt, self.pyb_client)
-            apply_force_torques(self.pyb_client, self.drone, ft, disturb_force)
+            apply_force_torques(self.pyb_client, self.drone, ft, externalFT)
             pybullet_step(self.pyb_client, self.drone, self.physics_mode)
             self._sync_pyb_to_sim()
 

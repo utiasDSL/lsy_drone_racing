@@ -129,7 +129,80 @@ class GaussianNoise(Noise):
             noise *= self.mask
         return target + noise
     
+
+class ExternalForce(Noise):
+    """I.i.d Gaussian noise per time step."""
+
+    def __init__(
+        self,
+        dim: int,
+        mask: NDArray[np.bool] | None = None,
+        force: NDArray[np.floating] | None = None,
+    ):
+        """Initialize the uniform noise.
+
+        Args:
+            dim: The dimensionality of the noise.
+            mask: A boolean mask to apply the noise to only certain dimensions.
+            force: An optional of a (initially) constant external force
+        """
+        super().__init__(dim, mask)
+        if force is None:
+            self.force = np.zeros(dim)
+        else:
+            self.force = force
+        self.pos = np.zeros(3)
+
+    def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
+        """Apply the noise to the target.
+
+        Args:
+            target: The target to apply the noise to.
+
+        Returns:
+            The noisy target.
+        """
+        # if self.pos[0]%0.5 < 0.5:
+        #     self.force = -self.pos*0.02
+        return target + self.force
     
+class ExternalTorque(Noise):
+    """I.i.d Gaussian noise per time step."""
+
+    def __init__(
+        self,
+        dim: int,
+        mask: NDArray[np.bool] | None = None,
+        force: NDArray[np.floating] | None = None,
+    ):
+        """Initialize the uniform noise.
+
+        Args:
+            dim: The dimensionality of the noise.
+            mask: A boolean mask to apply the noise to only certain dimensions.
+            force: An optional of a (initially) constant external force
+        """
+        super().__init__(dim, mask)
+        if force is None:
+            self.force = np.zeros(dim)
+        else:
+            self.force = force
+        self.pos = np.zeros(3)
+
+    def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
+        """Apply the noise to the target.
+
+        Args:
+            target: The target to apply the noise to.
+
+        Returns:
+            The noisy target.
+        """
+        # if self.pos[0]%0.5 < 0.5:
+        #     self.force = -self.pos*0.02
+        return target + self.force
+
+
 class NoiseList(list):
     """Combine list of noises as one."""
 

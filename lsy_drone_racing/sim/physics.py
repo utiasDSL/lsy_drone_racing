@@ -274,7 +274,7 @@ def apply_force_torques(
     pyb_client: int,
     drone: Drone,
     force_torques: list[tuple[int, ForceTorque]],
-    external_force: NDArray[np.floating] | None = None,
+    external_force_torques: list[tuple[int, ForceTorque]] | None = None,
 ):
     """Apply the calculated forces and torques in simulation.
 
@@ -282,7 +282,7 @@ def apply_force_torques(
         pyb_client: The PyBullet client id.
         drone: The target drone to apply the forces and torques to.
         force_torques: A dictionary of forces and torques for each link of the drone body.
-        external_force: An optional, external force to apply to the drone body.
+        external_force_torques: An optional of a dictionary of external forces and torques to apply to the drone body.
     """
     for link_id, ft in force_torques:
         p.applyExternalForce(
@@ -294,16 +294,27 @@ def apply_force_torques(
             physicsClientId=pyb_client,
         )
         p.applyExternalTorque(
-            drone.id, link_id, torqueObj=ft.t, flags=p.LINK_FRAME, physicsClientId=pyb_client
+            drone.id, 
+            link_id, 
+            torqueObj=ft.t, 
+            flags=p.LINK_FRAME, 
+            physicsClientId=pyb_client
         )
-    if external_force is not None:
+    for _, ext_ft in external_force_torques:
         p.applyExternalForce(
             drone.id,
             linkIndex=4,  # Link attached to the quadrotor's center of mass.
-            forceObj=external_force,
+            forceObj=ext_ft.f,
             posObj=drone.pos,
             flags=p.WORLD_FRAME,
             physicsClientId=pyb_client,
+        )
+        p.applyExternalTorque(
+            drone.id, 
+            linkIndex=4,  # Link attached to the quadrotor's center of mass.
+            torqueObj=ext_ft.t,
+            flags=p.WORLD_FRAME, 
+            physicsClientId=pyb_client
         )
 
 
