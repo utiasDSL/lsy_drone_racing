@@ -131,26 +131,23 @@ class GaussianNoise(Noise):
     
 
 class ExternalForce(Noise):
-    """I.i.d Gaussian noise per time step."""
+    """External force per time step."""
 
     def __init__(
         self,
         dim: int,
         mask: NDArray[np.bool] | None = None,
-        force: NDArray[np.floating] | None = None,
+        max_force: np.floating | None = None,
     ):
         """Initialize the uniform noise.
 
         Args:
             dim: The dimensionality of the noise.
             mask: A boolean mask to apply the noise to only certain dimensions.
-            force: An optional of a (initially) constant external force
+            max_force: An optional of a (initially) constant external force
         """
         super().__init__(dim, mask)
-        if force is None:
-            self.force = np.zeros(dim)
-        else:
-            self.force = force
+        self.max_force = max_force if max_force is not None else 1.0
         self.pos = np.zeros(3)
 
     def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
@@ -162,45 +159,88 @@ class ExternalForce(Noise):
         Returns:
             The noisy target.
         """
-        # if self.pos[0]%0.5 < 0.5:
-        #     self.force = -self.pos*0.02
+        return target + self.max_force*self.mask
+    
+
+class ExternalForceGrid(ExternalForce):
+    """External force per time step that is changed from max to min in a grid manner."""
+    def __init__(
+        self,
+        dim: int,
+        mask: NDArray[np.bool] | None = None,
+        max_force: np.floating | None = None,
+        grid_size: int | None = None,
+    ):
+        """Initialize the uniform noise.
+
+        Args:
+            dim: The dimensionality of the noise.
+            mask: A boolean mask to apply the noise to only certain dimensions.
+            max_force: The external force applied
+            grid_size: The distance between changes from max to -max force
+        """
+        super().__init__(dim, mask, max_force)
+        self.grid_size = grid_size if grid_size is not None else 0.5 # 0.5 equals change every 0.5m
+        self.force = np.zeros(dim)
+        self.pos = np.zeros(3)
+
+    def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
+        """Apply the noise to the target.
+
+        Args:
+            target: The target to apply the noise to.
+
+        Returns:
+            The noisy target.
+        """
         return target + self.force
     
-class ExternalTorque(Noise):
-    """I.i.d Gaussian noise per time step."""
+    def update_pos(self, pos: NDArray[np.floating]):
+        """Updating the position and calculating the force at that pos."""
+        assert pos.shape == (3,)
+        self.pos = pos
+        # Creating mask where to apply pos or neg force
+        m = pos % (2 * self.grid_size) < self.grid_size
+        # Invert m to created force perpendicular to travel direction (only x and y!)
+        m[:2] = m[1::-1]
+        self.force = (-self.max_force + 2*m*self.max_force)*self.mask
+    
 
-    def __init__(
-        self,
-        dim: int,
-        mask: NDArray[np.bool] | None = None,
-        force: NDArray[np.floating] | None = None,
-    ):
-        """Initialize the uniform noise.
+# class ExternalTorque(Noise):
+#     """I.i.d Gaussian noise per time step."""
 
-        Args:
-            dim: The dimensionality of the noise.
-            mask: A boolean mask to apply the noise to only certain dimensions.
-            force: An optional of a (initially) constant external force
-        """
-        super().__init__(dim, mask)
-        if force is None:
-            self.force = np.zeros(dim)
-        else:
-            self.force = force
-        self.pos = np.zeros(3)
+#     def __init__(
+#         self,
+#         dim: int,
+#         mask: NDArray[np.bool] | None = None,
+#         force: NDArray[np.floating] | None = None,
+#     ):
+#         """Initialize the uniform noise.
 
-    def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
-        """Apply the noise to the target.
+#         Args:
+#             dim: The dimensionality of the noise.
+#             mask: A boolean mask to apply the noise to only certain dimensions.
+#             force: An optional of a (initially) constant external force
+#         """
+#         super().__init__(dim, mask)
+#         if force is None:
+#             self.force = np.zeros(dim)
+#         else:
+#             self.force = force
+#         self.pos = np.zeros(3)
 
-        Args:
-            target: The target to apply the noise to.
+#     def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
+#         """Apply the noise to the target.
 
-        Returns:
-            The noisy target.
-        """
-        # if self.pos[0]%0.5 < 0.5:
-        #     self.force = -self.pos*0.02
-        return target + self.force
+#         Args:
+#             target: The target to apply the noise to.
+
+#         Returns:
+#             The noisy target.
+#         """
+#         # if self.pos[0]%0.5 < 0.5:
+#         #     self.force = -self.pos*0.02
+#         return target + self.force
 
 
 class NoiseList(list):
