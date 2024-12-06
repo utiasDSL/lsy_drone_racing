@@ -182,7 +182,10 @@ class ExternalForceGrid(ExternalForce):
         super().__init__(dim, mask, max_force)
         self.grid_size = grid_size if grid_size is not None else 0.5 # 0.5 equals change every 0.5m
         self.force = np.zeros(dim)
-        self.pos = np.zeros(3)
+        self._setpoint = np.zeros(dim) # 
+        self._maxincrease = 0.0008 # how much the force can increase between time steps
+
+        self.pos = np.zeros(dim)
 
     def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
         """Apply the noise to the target.
@@ -200,10 +203,18 @@ class ExternalForceGrid(ExternalForce):
         assert pos.shape == (3,)
         self.pos = pos
         # Creating mask where to apply pos or neg force
-        m = pos % (2 * self.grid_size) < self.grid_size
+        self._setpoint = pos % (2 * self.grid_size) < self.grid_size
         # Invert m to created force perpendicular to travel direction (only x and y!)
-        m[:2] = m[1::-1]
-        self.force = (-self.max_force + 2*m*self.max_force)*self.mask
+        self._setpoint[:2] = self._setpoint[1::-1]
+        self._setpoint = (-self.max_force + 2*self._setpoint*self.max_force)*self.mask
+        
+        m = (self.force < self._setpoint)*2-1
+
+        for i in range(len(m)):
+            if np.abs(self.force[i]-self._setpoint[i]) < self._maxincrease:
+                self.force[i] = self._setpoint[i]
+            else:
+                self.force[i] = self.force[i] + m[i]*self._maxincrease
     
 
 # class ExternalTorque(Noise):
