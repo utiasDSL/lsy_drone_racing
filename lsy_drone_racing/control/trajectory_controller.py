@@ -37,26 +37,26 @@ class TrajectoryController(BaseController):
         super().__init__(initial_obs, initial_info)
         waypoints = np.array(
             [
-                [1.0, 1.0, 0.0],
+                [1.0, 1.0, 0.05],
                 [0.8, 0.5, 0.2],
-                [0.55, -0.8, 0.4],
+                [0.65, -0.8, 0.5],
                 [0.2, -1.8, 0.65],
                 [1.1, -1.35, 1.0],
                 [0.2, 0.0, 0.65],
-                [0.0, 0.75, 0.525],
-                [0.0, 0.75, 1.1],
-                [-0.5, -0.5, 1.1],
-                [-0.5, -1.0, 1.1],
+                [0.1, 0.75, 0.525],
+                [0.1, 0.75, 1.1],
+                [-0.4, -0.5, 1.1],
+                [-0.5, -1.5, 1.1],
             ]
         )
-        self.t_total = 11
+        self.t_total = 12
         t = np.linspace(0, self.t_total, len(waypoints))
         self.trajectory = CubicSpline(t, waypoints)
         self._tick = 0
         self._freq = initial_info["env_freq"]
 
         # Generate points along the spline for visualization
-        t_vis = np.linspace(0, self.t_total - 1, 100)
+        t_vis = np.linspace(0, self.t_total, 100)
         spline_points = self.trajectory(t_vis)
         try:
             # Plot the spline as a line in PyBullet

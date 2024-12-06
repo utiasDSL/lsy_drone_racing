@@ -54,14 +54,14 @@ class ThrustController(BaseController):
             [
                 [1.0, 1.0, 0.0],
                 [0.8, 0.5, 0.2],
-                [0.55, -0.8, 0.4],
+                [0.65, -0.8, 0.5],
                 [0.2, -1.8, 0.65],
                 [1.1, -1.35, 1.0],
                 [0.2, 0.0, 0.65],
-                [0.0, 0.75, 0.525],
-                [0.0, 0.75, 1.1],
-                [-0.5, -0.5, 1.1],
-                [-0.5, -1.0, 1.1],
+                [0.1, 0.75, 0.525],
+                [0.1, 0.75, 1.1],
+                [-0.4, -0.5, 1.1],
+                [-0.5, -1.5, 1.1],
             ]
         )
         # Scale trajectory between 0 and 1
@@ -70,7 +70,7 @@ class ThrustController(BaseController):
         cs_y = CubicSpline(ts, waypoints[:, 1])
         cs_z = CubicSpline(ts, waypoints[:, 2])
 
-        des_completion_time = 15
+        des_completion_time = 8
         ts = np.linspace(0, 1, int(initial_info["env_freq"] * des_completion_time))
 
         self.x_des = cs_x(ts)
