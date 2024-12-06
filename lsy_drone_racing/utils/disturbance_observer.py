@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+from filterpy.common import Q_discrete_white_noise
+from filterpy.kalman import MerweScaledSigmaPoints, UnscentedKalmanFilter
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.sim import GRAVITY
@@ -13,36 +15,55 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 g: NDArray[np.floating] = np.array([0,0,-GRAVITY])
-MASS: float = 0.03454 # we can get that from Drone class (or the urdf file in sim/assets)
+# The following constants can be taken from the drone object or directly from the .urdf file in sim/assets
+# For now, we simply hard code them, assuming the same drone is always used. Should be done properly in the future
+MASS: float = 0.03454 
+J = np.diag([1.4e-5, 1.4e-5, 2.17e-5])
+J_inv = np.linalg.inv(J)
+kf = 3.16e-10
+km = 7.94e-12
+L = 0.046
 
 class DisturbanceObserver:
     """Base class for noise applied to inputs or dyanmics."""
 
-    def __init__(self, dim: int, dt: np.floating):
+    def __init__(self, state_dim: int, input_dim: int, obs_dim: int, dt: np.floating):
         """Initialize basic parameters.
 
         Args:
-            dim: The dimensionality of the noise.
+            state_dim: Dimensionality of the systems states, e.g., x of f(x,u)
+            input_dim: Dimensionality of the input to the dynamics, e.g., u of f(x,u)
+            obs_dim: Dimensionality of the observations, e.g., y
             dt: Time step between callings.
         """
-        self._dim = dim
+        self._state_dim = state_dim
+        self._obs_dim = obs_dim
+        self._input_dim = input_dim
         self._dt = dt
-        self._state = np.zeros(self._dim)
+        self._state = np.zeros(self._state_dim)
+        self._input = np.zeros(self._input_dim)
 
     def reset(self):
         """Reset the noise to its initial state."""
-        self._state = np.zeros(self._dim)
+        self._state = np.zeros(self._state_dim)
+        self._input = np.zeros(self._input_dim)
 
     def step(self):
         """Increment the noise step for time dependent noise classes."""
-        return
+        raise NotImplementedError
+    
+    def set_input(self, u: NDArray[np.floating]):
+        """Sets the input of the dynamical system. Assuming this class gets called multiple times between controller calls. We therefore store the input as a constant in the class.
+
+        Args:
+            u: Input to the dynamical system.
+        """
+        assert np.shape(u) == (self._input_dim,)
+        self._input = u
 
 
 class FxTDO(DisturbanceObserver):
-    """Fixed time Disturbance Observer (FxTDO) as implemented by this publication.
-    
-    TODO.
-    """
+    """Fixed time Disturbance Observer (FxTDO) as implemented by one of the two publications mentioned below."""
     def __init__(self, dt: np.floating):
         """Initialize basic parameters.
 
@@ -50,7 +71,7 @@ class FxTDO(DisturbanceObserver):
             dim: The dimensionality of the observer.
             dt: Time step between callings.
         """
-        super().__init__(6, dt)
+        super().__init__(6, 1, 12, dt)
 
         self._f_d_max = 0.1 # N
         self._f_d_dot_max = 1 # N/s
@@ -113,9 +134,9 @@ class FxTDO(DisturbanceObserver):
         #     return False
         return True
         
-    def step(self, obs: NDArray[np.floating], thrust: np.floating) -> NDArray[np.floating]:
+    def step(self, obs: dict) -> NDArray[np.floating]:
         """Steps the observer to calculate the next state and force estimate."""
-        f_t = R.from_euler("xyz", obs["rpy"]).apply(np.array([0,0,thrust]))
+        f_t = R.from_euler("xyz", obs["rpy"]).apply(np.array([0,0,self._input[0]]))
         v = obs["vel"]
         v_hat = self._state[:3]
         f_hat = self._state[3:]
@@ -152,3 +173,86 @@ class FxTDO(DisturbanceObserver):
 
     def _ud(self, x: NDArray[np.floating], alpha: np.floating) -> NDArray[np.floating]:
         return np.sign(x) * (np.abs(x)**alpha)
+
+class UKF(DisturbanceObserver):
+    """TODO."""
+    def __init__(self, dt: np.floating):
+        """Initialize basic parameters.
+
+        Args:
+            dt: Time step between callings.
+        """
+        dim_x = 18
+        super().__init__(dim_x, 4, 12, dt) # State = Observations = [pos, vel, rpy, ang_vel] + f + t 
+        self._sigma_points = MerweScaledSigmaPoints(n=self._state_dim, alpha=1e-3, beta=2.0, kappa=0.0)
+        self._UKF = UnscentedKalmanFilter(dim_x=self._state_dim, dim_z=self._obs_dim, 
+                                          fx=self.f, hx=self.h, 
+                                          dt=dt, points=self._sigma_points)
+        
+        self._state = self._UKF.x
+        
+        # Set process noise covariance (tunable)
+        dim_euclidean = 3 #(x,y,z)
+        self._UKF.Q = Q_discrete_white_noise(dim=dim_euclidean, dt=dt, var=0.001, block_size=dim_x//dim_euclidean, order_by_dim=False)
+        self._UKF.Q[12:15, 12:15] = self._UKF.Q[12:15, 12:15]*0.1
+        
+        # Set measurement noise covariance (tunable)
+        self._UKF.R = np.eye(self._obs_dim) * 0.001
+        
+        # # Initialize state and covariance
+        # self._UKF.x = np.zeros(self._state_dim)
+        # self._UKF.P = np.eye(self._state_dim) * 1.0
+
+    def f(self, x: NDArray[np.floating], dt: np.floating) -> NDArray[np.floating]:
+        """State transition function that maps states and inputs to next states.
+        
+        Args:
+            x: State vector
+            dt: Time step size
+
+        Return:
+            New state after one time step with dt
+        """
+        pos = x[0:3]
+        rpy = x[3:6]
+        vel = x[6:9]
+        rpy_rates = R.from_euler("xyz", rpy).apply(x[9:12], inverse=True)  # Now in body frame
+        f = x[12:15]
+        t = x[15:18]
+        # Compute forces and torques.
+        forces = np.array(self._input**2) * kf
+        thrust = np.array([0, 0, np.sum(forces)])
+        thrust_world_frame = R.from_euler("xyz", rpy).apply(thrust)
+        force_world_frame = thrust_world_frame - np.array([0, 0, GRAVITY * MASS]) + f
+        z_torques = np.array(self._input**2) * km
+        z_torque = z_torques[0] - z_torques[1] + z_torques[2] - z_torques[3]
+        x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * (L / np.sqrt(2))
+        y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * (L / np.sqrt(2))
+        torques = np.array([x_torque, y_torque, z_torque]) + t
+        torques = torques - np.cross(rpy_rates, np.dot(J, rpy_rates))
+        rpy_rates_deriv = np.dot(J_inv, torques)
+        acc = force_world_frame / MASS
+        # Update state.
+        vel = vel + acc * dt
+        rpy_rates = rpy_rates + rpy_rates_deriv * dt
+        x[0:3] = pos + vel * dt
+        x[3:6] = rpy + rpy_rates * dt
+        x[6:9] = vel
+        x[9:12] = R.from_euler("xyz", rpy).apply(rpy_rates)
+        return x
+    
+    def h(self, x: NDArray[np.floating]) -> NDArray[np.floating]:
+        """Observation function that maps states to measurements."""
+        return x[:self._obs_dim]
+    
+    def step(self, obs: dict) -> NDArray[np.floating]:
+        """TODO."""
+        # First, do prediction step
+        self._UKF.predict()
+        # Second, do correction step (=update)
+        obs = np.array( [*obs["pos"], *obs["rpy"], *obs["vel"], *obs["ang_vel"]] )
+        # obs = np.array( [*obs["pos"], *obs["rpy"]] )
+        self._UKF.update(obs)
+        
+        return self._UKF.x #self._state
+    

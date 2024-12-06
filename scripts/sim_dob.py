@@ -16,12 +16,13 @@ from typing import TYPE_CHECKING
 
 import fire
 import gymnasium
+import matplotlib.pyplot as plt
 import numpy as np
 import pybullet as p
 
 from lsy_drone_racing.sim.noise import ExternalForceGrid
 from lsy_drone_racing.utils import load_config, load_controller
-from lsy_drone_racing.utils.disturbance_observer import FxTDO
+from lsy_drone_racing.utils.disturbance_observer import UKF, FxTDO
 
 if TYPE_CHECKING:
     from munch import Munch
@@ -72,14 +73,16 @@ def simulate(
 
     ep_times = []
     gui_timer = None
-    predictions = [] # x, v, v_hat, f_dis, f_hat
+    fxtdo_predictions = [] # x, v, v_hat, f_dis, f_hat
+    ukf_predictions = []
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         done = False
         obs, info = env.reset()
         f_mass_z = (p.getDynamicsInfo(1, -1)[0] - 0.03454) * np.array([0, 0, -9.81])
         # print(f"f_mass_z={f_mass_z}")
         controller: BaseController = controller_cls(obs, info)
-        observer = FxTDO(1 / config.env.freq)
+        fxtdo = FxTDO(1 / config.env.freq)
+        ukf = UKF(1 / config.env.freq)
         if gui:
             gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client, gui_timer)
         i = 0
@@ -87,8 +90,8 @@ def simulate(
         while not done:
             t_start = time.time()
             curr_time = i / config.env.freq
-            if gui:
-                gui_timer = update_gui_timer(curr_time, env.unwrapped.sim.pyb_client, gui_timer) # this is slow!
+            # if gui:
+            #     gui_timer = update_gui_timer(curr_time, env.unwrapped.sim.pyb_client, gui_timer) # this is slow!
 
             action = controller.compute_control(obs, info)
             obs, reward, terminated, truncated, info = env.step(action)
@@ -97,13 +100,25 @@ def simulate(
             # Update the controller and observer internal state and models.
             controller.step_callback(action, obs, reward, terminated, truncated, info)
 
+
+            rpms = env.sim.drone.rpm
+            ukf.set_input(rpms)
+            ukf_pred = ukf.step(obs)
+
             # calculated like in physics DYN
-            forces = np.array(env.sim.drone.rpm**2) * env.sim.drone.params.kf
+            forces = np.array(rpms**2) * env.sim.drone.params.kf
             des_thrust = np.sum(forces)
 
-            estimate = observer.step(obs, des_thrust)
-            # Store observer predictions and real value                                       dist.force  
-            predictions.append([np.array(obs["pos"]), np.array(obs["vel"]), estimate[:3]*1.0, env.sim.disturb_force + f_mass_z, estimate[3:]*1.0]) # the factor is to make a copy
+            fxtdo.set_input([des_thrust])
+            fxtdo_pred = fxtdo.step(obs)
+
+            # Store observer predictions and real value
+            fxtdo_predictions.append([np.array(obs["pos"]), np.array([0,0,0]), 
+                                      np.array(obs["vel"]), fxtdo_pred[:3]*1.0, 
+                                      env.sim.disturb_force + f_mass_z, fxtdo_pred[3:]*1.0]) # the factor is to make a copy
+            ukf_predictions.append([np.array(obs["pos"]), ukf_pred[0:3]*1.0, 
+                                    np.array(obs["vel"]), ukf_pred[6:9]*1.0, 
+                                    env.sim.disturb_force + f_mass_z, ukf_pred[12:15]*1.0]) # the factor is to make a copy
             # Add up reward, collisions
 
 
@@ -118,7 +133,9 @@ def simulate(
         controller.episode_reset()
         ep_times.append(curr_time if obs["target_gate"] == -1 else None)
 
-        plot_predictions(predictions, 1 / config.env.freq)
+        plot_predictions(fxtdo_predictions, 1 / config.env.freq)
+        plot_predictions(ukf_predictions, 1 / config.env.freq)
+        plt.show()
 
     # Close the environment
     env.close()
@@ -167,37 +184,37 @@ def plot_predictions(predictions: list, dt:np.floating):
     predictions = np.array(predictions) # x, v, v_hat, f_dis, f_hat; shape (..., 5, 3)
     steps = predictions.shape[0]
     times = np.arange(steps)*dt
-    
-    import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(3, 1, figsize=(10, 8))
-    ax[0].plot(times, predictions[:,0,0], label="pos_x", color="tab:blue")
-    ax[0].plot(times, predictions[:,0,1], label="pos_y", color="tab:orange")
-    ax[0].plot(times, predictions[:,0,2], label="pos_z", color="tab:green")
+    ax[0].plot(times, predictions[:,0,0], label="$p_x$", color="tab:blue")
+    ax[0].plot(times, predictions[:,0,1], label="$p_y$", color="tab:orange")
+    ax[0].plot(times, predictions[:,0,2], label="$p_z$", color="tab:green")
+    ax[0].plot(times, predictions[:,1,0], "--", label=r"$\hat{p}_x$", color="tab:blue")
+    ax[0].plot(times, predictions[:,1,1], "--", label=r"$\hat{p}_y$", color="tab:orange")
+    ax[0].plot(times, predictions[:,1,2], "--", label=r"$\hat{p}_z$", color="tab:green")
     ax[0].set_ylabel("Position in [m]")
     ax[0].legend()
 
-    ax[1].plot(times, predictions[:,1,0], label="v_x", color="tab:blue")
-    ax[1].plot(times, predictions[:,2,0], "--", label="v_x_hat", color="tab:blue")
-    ax[1].plot(times, predictions[:,1,1], label="v_y", color="tab:orange")
-    ax[1].plot(times, predictions[:,2,1], "--", label="v_y_hat", color="tab:orange")
-    ax[1].plot(times, predictions[:,1,2], label="v_z", color="tab:green")
-    ax[1].plot(times, predictions[:,2,2], "--", label="v_z_hat", color="tab:green")
+    ax[1].plot(times, predictions[:,2,0], label="$v_x$", color="tab:blue")
+    ax[1].plot(times, predictions[:,2,1], label="$v_y$", color="tab:orange")
+    ax[1].plot(times, predictions[:,2,2], label="$v_z$", color="tab:green")
+    ax[1].plot(times, predictions[:,3,0], "--", label=r"$\hat{v}_x$", color="tab:blue")
+    ax[1].plot(times, predictions[:,3,1], "--", label=r"$\hat{v}_y$", color="tab:orange")
+    ax[1].plot(times, predictions[:,3,2], "--", label=r"$\hat{v}_z$", color="tab:green")
     ax[1].set_ylabel("Velocity in [m/s]")
     ax[1].legend()
 
-    ax[2].plot(times, predictions[:,3,0], label="f_d,x", color="tab:blue")
-    ax[2].plot(times, predictions[:,4,0], "--", label="f_d,x_hat", color="tab:blue")
-    ax[2].plot(times, predictions[:,3,1], label="f_d,y", color="tab:orange")
-    ax[2].plot(times, predictions[:,4,1], "--", label="f_d,y_hat", color="tab:orange")
-    ax[2].plot(times, predictions[:,3,2], label="f_d,z", color="tab:green")
-    ax[2].plot(times, predictions[:,4,2], "--", label="f_d,z_hat", color="tab:green")
+    ax[2].plot(times, predictions[:,4,0], label="$f_{d,x}$", color="tab:blue")
+    ax[2].plot(times, predictions[:,4,1], label="$f_{d,y}$", color="tab:orange")
+    ax[2].plot(times, predictions[:,4,2], label="$f_{d,z}$", color="tab:green")
+    ax[2].plot(times, predictions[:,5,0], "--", label=r"$\hat{f}_{d,x}$", color="tab:blue")
+    ax[2].plot(times, predictions[:,5,1], "--", label=r"$\hat{f}_{d,y}$", color="tab:orange")
+    ax[2].plot(times, predictions[:,5,2], "--", label=r"$\hat{f}_{d,z}$", color="tab:green")
     ax[2].set_ylabel("External Force in [N]")
     ax[2].set_xlabel("Time in [s]")
-    ax[2].legend()
+    ax[2].legend(prop={'size': 10})
 
     plt.tight_layout()
-    plt.show()
     
 
 if __name__ == "__main__":
