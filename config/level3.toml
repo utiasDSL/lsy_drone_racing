@@ -4,7 +4,7 @@
 # | :-----------------: | :-----------------------: | :-------------------------: | :--------------------: | :---------------: |
 # | `level3.toml`       | **Yes**                   | **Yes**                     | **Yes**                | Robustness        |
 [controller]
-file = "thrust_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+file = "thrust_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/` trajectory_controller or thrust_controller.py
 
 [sim]
 # Physics options:
@@ -15,6 +15,7 @@ file = "thrust_controller.py" # Put your controller file name here. Specifying a
 # "pyb_dw": PyBullet with downwash
 # "pyb_gnd_drag_dw": PyBullet with ground effect, drag, and downwash.
 physics = "pyb"
+
 camera_view = [5.0, -40.0, -40.0, 0.5, -1.0, 0.5]
 sim_freq = 500                                    # Simulation frequency, in Hz
 ctrl_freq = 500                                   # Controller frequency, in Hz. This frequency is used to simulate the onboard controller, NOT for the environment's step function
@@ -26,8 +27,15 @@ std = 0.001
 
 [sim.disturbances.dynamics]
 type = "UniformNoise"
-low = [-0.1, -0.1, -0.1]
-high = [0.1, 0.1, 0.1]
+low = [-0.001, -0.001, -0.001]
+high = [0.001, 0.001, 0.001]
+
+[sim.disturbances.observation]
+type = "GaussianNoise"
+std = 0.01
+# type = "UniformNoise"
+# low = [-0.001, -0.001, -0.001, -0.001, -0.001, -0.001, -0.001, -0.001, -0.001, -0.001, -0.001, -0.001]
+# high = [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001]
 
 [env]
 id = "DroneRacingThrust-v0" # Either "DroneRacing-v0" or "DroneRacingThrust-v0". If using "DroneRacingThrust-v0", the drone will use the thrust controller instead of the position controller.
@@ -81,7 +89,9 @@ low = [-0.1, -0.1, -0.1]
 high = [0.1, 0.1, 0.1]
 
 [env.randomization.drone_mass]
-type = "uniform"
+type = "uniform" # drone mass = 0.03454 => 5% error is ~0.002 => 0.002*9.81 = 0.02
+# low = -0.002
+# high = 0.002
 low = -0.01
 high = 0.01
 

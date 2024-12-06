@@ -160,6 +160,7 @@ class Sim:
         disturb_torque = np.zeros(3)
         if "dynamics" in self.disturbances:
             disturb_force = self.disturbances["dynamics"].apply(disturb_force)
+        self.disturb_force = disturb_force
 
         externalFT = [(4, ForceTorque(disturb_force, disturb_torque))]
 
@@ -311,7 +312,7 @@ class Sim:
         dist = {}
         if disturbances is None:  # Default: no passive disturbances.
             return dist
-        modes = {"action": {"dim": spaces.flatdim(self.action_space)}, "dynamics": {"dim": 3}}
+        modes = {"action": {"dim": spaces.flatdim(self.action_space)}, "dynamics": {"dim": 3}, "observation": {"dim": 12}}
         for mode, spec in disturbances.items():
             assert mode in modes, "Disturbance mode not available."
             spec["dim"] = modes[mode]["dim"]

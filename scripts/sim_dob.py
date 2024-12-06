@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "level_test.toml",
+    config: str = "level3.toml",
     controller: str | None = None,
     n_runs: int = 1,
     gui: bool | None = False,
@@ -67,12 +67,12 @@ def simulate(
     controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
     env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
-    dist = ExternalForceGrid(3, [True, True, False], max_force=0.01, grid_size=0.5)
+    dist = ExternalForceGrid(3, [True, True, False], max_force=0.05, grid_size=1.0)
     env.sim.disturbances["dynamics"].append(dist) #WARN: env.sim to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.sim` for environment variables or `env.get_wrapper_attr('sim')` that will search the reminding wrappers.
 
     ep_times = []
     gui_timer = None
-    predictions = [] # v, v_hat, f_dis, f_hat
+    predictions = [] # x, v, v_hat, f_dis, f_hat
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         done = False
         obs, info = env.reset()
@@ -80,17 +80,15 @@ def simulate(
         # print(f"f_mass_z={f_mass_z}")
         controller: BaseController = controller_cls(obs, info)
         observer = FxTDO(1 / config.env.freq)
-        # if gui:
-        #     gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client, gui_timer)
+        if gui:
+            gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client, gui_timer)
         i = 0
 
         while not done:
             t_start = time.time()
             curr_time = i / config.env.freq
-            # if gui:
-            #     gui_timer = update_gui_timer(curr_time, env.unwrapped.sim.pyb_client, gui_timer) # this is slow!
-            # p_info = p.getDynamicsInfo(1, -1)[0] #, _, _, _, _ 
-            # print(f"mass={p_info}")
+            if gui:
+                gui_timer = update_gui_timer(curr_time, env.unwrapped.sim.pyb_client, gui_timer) # this is slow!
 
             action = controller.compute_control(obs, info)
             obs, reward, terminated, truncated, info = env.step(action)
@@ -98,25 +96,14 @@ def simulate(
             done = terminated or truncated
             # Update the controller and observer internal state and models.
             controller.step_callback(action, obs, reward, terminated, truncated, info)
-            # des_thrust = np.sum(env.sim.drone.desired_thrust)
-
-            # rpm = env.sim.drone.rpm
-            # dt = 1 / env.sim.settings.sim_freq
-            # ft = force_torques(env.sim.drone, rpm, env.sim.physics_mode, dt, env.sim.pyb_client)
-
-            # directly from what is applied to pybullet => ONLY WORKS IF MODEL!=DYN
-            # ft = env.sim.ft
-            # des_thrust = 0
-            # for link_id, foto in ft:
-            #     des_thrust += foto.f[-1]
 
             # calculated like in physics DYN
             forces = np.array(env.sim.drone.rpm**2) * env.sim.drone.params.kf
             des_thrust = np.sum(forces)
 
-            estimate, f_t = observer.step(obs, des_thrust)
-            # Store observer predictions and real value                                         
-            predictions.append([np.array(obs["pos"]), np.array(obs["vel"]), estimate[:3]*1.0, dist.force + f_mass_z, estimate[3:]*1.0, np.array(f_t)]) # the factor is to make a copy
+            estimate = observer.step(obs, des_thrust)
+            # Store observer predictions and real value                                       dist.force  
+            predictions.append([np.array(obs["pos"]), np.array(obs["vel"]), estimate[:3]*1.0, env.sim.disturb_force + f_mass_z, estimate[3:]*1.0]) # the factor is to make a copy
             # Add up reward, collisions
 
 
@@ -176,9 +163,8 @@ def log_episode_stats(obs: dict, info: dict, config: Munch, curr_time: float):
     )
 
 def plot_predictions(predictions: list, dt:np.floating):
-    predictions = np.array(predictions) # v, v_hat, f_dis, f_hat; shape (346, 4, 3)
-    # print(predictions.shape)
-    # print(predictions[:,1,:])
+    """Plots the observations."""
+    predictions = np.array(predictions) # x, v, v_hat, f_dis, f_hat; shape (..., 5, 3)
     steps = predictions.shape[0]
     times = np.arange(steps)*dt
     
@@ -200,19 +186,12 @@ def plot_predictions(predictions: list, dt:np.floating):
     ax[1].set_ylabel("Velocity in [m/s]")
     ax[1].legend()
 
-    a_z = predictions[:,1,2]*0
-    a_z[1:] = (predictions[1:,1,2]-predictions[:-1,1,2])/dt
     ax[2].plot(times, predictions[:,3,0], label="f_d,x", color="tab:blue")
     ax[2].plot(times, predictions[:,4,0], "--", label="f_d,x_hat", color="tab:blue")
     ax[2].plot(times, predictions[:,3,1], label="f_d,y", color="tab:orange")
     ax[2].plot(times, predictions[:,4,1], "--", label="f_d,y_hat", color="tab:orange")
     ax[2].plot(times, predictions[:,3,2], label="f_d,z", color="tab:green")
     ax[2].plot(times, predictions[:,4,2], "--", label="f_d,z_hat", color="tab:green")
-    # ax[2].plot(times, predictions[:,5,0], ".", label="f_t,x", color="tab:blue")
-    # ax[2].plot(times, predictions[:,5,1], ".", label="f_t,y", color="tab:orange")
-    # ax[2].plot(times, predictions[:,5,2], ".", label="f_t,z-g*m", color="tab:green")
-    # ax[2].plot(times, a_z, ".", label="a_z", color="tab:pink")
-    # ax[2].plot(times, a_z*0.033454, ".", label="f_z", color="tab:red")
     ax[2].set_ylabel("External Force in [N]")
     ax[2].set_xlabel("Time in [s]")
     ax[2].legend()

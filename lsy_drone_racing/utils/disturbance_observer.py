@@ -12,10 +12,8 @@ from lsy_drone_racing.sim.sim import GRAVITY
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-# GRAVITY: float = 9.81#*1.23
 g: NDArray[np.floating] = np.array([0,0,-GRAVITY])
 MASS: float = 0.03454 # we can get that from Drone class (or the urdf file in sim/assets)
-# MASS: float = 0.06 # we can get that from Drone class (or the urdf file in sim/assets)
 
 class DisturbanceObserver:
     """Base class for noise applied to inputs or dyanmics."""
@@ -53,18 +51,34 @@ class FxTDO(DisturbanceObserver):
             dt: Time step between callings.
         """
         super().__init__(6, dt)
+
         self._f_d_max = 0.1 # N
         self._f_d_dot_max = 1 # N/s
-
-        self._L1 = 0.2
-        self._L2 = 0.5
-        self._k1 = np.array([1,2,0.55])
-        self._k2 = np.array([2,2,0.5])
-        self._d_inf = 0.15
-
-
-
         self._v_max = 10 # m/s
+
+        # Implementation as in 
+        # "Fixed-time Disturbance Observer-Based MPC Robust Trajectory Tracking Control of Quadrotor" (2024)
+        self._L1 = 0.2
+        self._L2 = 2.0 # how fast the force converges (linear), but also how noisy it is
+        self._k1 = np.array([1.0, 2.0, 2.55])
+        self._k2 = np.array([0.01, 2.0, 3.0])
+        self._d_inf = 0.9
+        self._alpha1 = np.array([0.5, 1.0, 1/(1-self._d_inf)]) # from FxTDO MPC paper
+        self._alpha2 = np.array([0.0, 1.0, (1+self._d_inf)/(1-self._d_inf)]) # from FxTDO MPC paper
+
+        # Implementation as in 
+        # "A fixed-time output feedback control scheme for double integrator systems" (2017)
+        # self._L1 = 0.2
+        # self._L2 = 5.0 # how fast the force converges (linear), but also how noisy it is
+        # self._k1 = np.array([2.0, 0.0, 0.0])
+        # self._k1[2] = self._k1[0]
+        # self._k2 = np.array([0.06, 0.0, 0.0])
+        # self._k2[1] = self._k2[0]*4
+        # self._k2[2] = self._k2[0]*3 
+        # self._alpha = 0.6 # in (0.5, 1)
+        # self._alpha1 = np.array([self._alpha, 1.0, 2-self._alpha]) # from FTDO double integrator paper
+        # self._alpha2 = np.array([2*self._alpha-1, 1.0, 3-2*self._alpha]) # from FTDO double integrator paper
+
         
     def set_parameters(self, 
                        f_d_max: np.floating, f_d_dot_max: np.floating, 
@@ -85,7 +99,7 @@ class FxTDO(DisturbanceObserver):
                        L1: np.floating, L2: np.floating, 
                        k1: NDArray[np.floating], k2: NDArray[np.floating], 
                        d_inf: np.floating) -> bool:
-        """Checks ther parameters for validity.
+        """Checks ther parameters for validity. This is only needed to guarantee an upper bound on the estimation time.
          
         Returns:
             If the parameters are valid. 
@@ -100,8 +114,7 @@ class FxTDO(DisturbanceObserver):
         return True
         
     def step(self, obs: NDArray[np.floating], thrust: np.floating) -> NDArray[np.floating]:
-        """TODO."""
-        # TODO maybe solver step or some RK ??
+        """Steps the observer to calculate the next state and force estimate."""
         f_t = R.from_euler("xyz", obs["rpy"]).apply(np.array([0,0,thrust]))
         v = obs["vel"]
         v_hat = self._state[:3]
@@ -110,12 +123,10 @@ class FxTDO(DisturbanceObserver):
 
         # Calculate derivatives
         v_hat_dot = g + 1/MASS*f_t + 1/MASS*self._L1*self._phi1(e1) + 1/MASS*f_hat 
-        # print(f"f_t={f_t}")
-        # print(f"v_hat_dot={v_hat_dot}")
         f_hat_dot = self._L2*self._phi2(e1)
 
-        # Integration step
-        v_hat = v_hat + v_hat_dot * self._dt
+        # Integration step (forward Euler)
+        v_hat = v_hat + np.clip(v_hat_dot, -5, 5) * self._dt
         v_hat = np.clip(v_hat, -self._v_max, self._v_max)
         f_hat = f_hat + np.clip(f_hat_dot, -self._f_d_dot_max, self._f_d_dot_max) * self._dt # Clipping if exceeding expectations
         f_hat = np.clip(f_hat, -self._f_d_max, self._f_d_max) # Clipping if exceeding expectations
@@ -123,26 +134,21 @@ class FxTDO(DisturbanceObserver):
         # Storing in the state
         self._state[:3] = v_hat
         self._state[3:] = f_hat
-        # print(f"v_hat={self._state[:3]}")
 
-        return self._state, f_t# + g*MASS
+        return self._state
     
-    # def _phi1(self, e: np.floating) -> np.floating:
-    #     return self._k1[0]*self._ud(e, 0.5) + self._k1[1]*self._ud(e, 1.0) + self._k1[2]*self._ud(e, 1/(1-self._d_inf))
-    # ChatGPT:
-    def _phi1(self, e: NDArray[np.floating]) -> NDArray[np.floating]:
-        alpha_values = np.array([0.5, 1.0, 1/(1-self._d_inf)])
-        return np.sum(self._k1[:, None] * self._ud(e, alpha_values), axis=0)
+    def _phi1(self, e: np.floating) -> np.floating:
+        s = 0
+        for i in range(3):
+            s = s + self._k1[i]*self._ud(e, self._alpha1[i])
+        return s
+
     
-    # def _phi2(self, e: np.floating) -> np.floating:
-    #     return self._k2[0]*self._ud(e, 0.0) + self._k2[1]*self._ud(e, 1.0) + self._k2[2]*self._ud(e, (1+self._d_inf)/(1-self._d_inf))
-    # ChatGPT:
-    def _phi2(self, e: NDArray[np.floating]) -> NDArray[np.floating]:
-        alpha_values = np.array([0.0, 1.0, (1+self._d_inf)/(1-self._d_inf)])
-        return np.sum(self._k2[:, None] * self._ud(e, alpha_values), axis=0)
-    
-    # def _ud(self, x: np.floating, alpha: np.floating) -> np.floating:
-    #     return np.abs(x)**alpha * np.sign(x)
-    # ChatGPT:
-    def _ud(self, x: NDArray[np.floating], alpha: NDArray[np.floating]) -> NDArray[np.floating]:
+    def _phi2(self, e: np.floating) -> np.floating:
+        s = 0
+        for i in range(3):
+            s = s + self._k2[i]*self._ud(e, self._alpha2[i])
+        return s
+
+    def _ud(self, x: NDArray[np.floating], alpha: np.floating) -> NDArray[np.floating]:
         return np.sign(x) * (np.abs(x)**alpha)
