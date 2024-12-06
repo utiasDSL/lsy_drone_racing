@@ -211,13 +211,20 @@ class DroneRacingEnv(gymnasium.Env):
     @property
     def obs(self) -> dict[str, NDArray[np.floating]]:
         """Return the observation of the environment."""
+        obs_drone = np.array([*self.sim.drone.pos.astype(np.float32), *self.sim.drone.rpy.astype(np.float32), 
+               *self.sim.drone.vel.astype(np.float32), *self.sim.drone.ang_vel.astype(np.float32)])
+
+        # Add noise to the drone observations
+        if "observation" in self.sim.disturbances:
+            obs_drone = self.sim.disturbances["observation"].apply(obs_drone)
+
         obs = {
-            "pos": self.sim.drone.pos.astype(np.float32),
-            "rpy": self.sim.drone.rpy.astype(np.float32),
-            "vel": self.sim.drone.vel.astype(np.float32),
-            "ang_vel": self.sim.drone.ang_vel.astype(np.float32),
+            "pos": obs_drone[:3],
+            "rpy": obs_drone[3:6],
+            "vel": obs_drone[6:9],
+            "ang_vel": obs_drone[9:],
         }
-        self.last_vel = copy.deepcopy(obs["vel"])
+
         obs["ang_vel"][:] = R.from_euler("xyz", obs["rpy"]).apply(obs["ang_vel"], inverse=True)
 
         gates = self.sim.gates
@@ -240,8 +247,8 @@ class DroneRacingEnv(gymnasium.Env):
         obs["obstacles_pos"] = obstacles_pos.astype(np.float32)
         obs["obstacles_in_range"] = in_range
 
-        if "observation" in self.sim.disturbances:
-            obs = self.sim.disturbances["observation"].apply(obs)
+        # if "observation" in self.sim.disturbances:
+        #     obs = self.sim.disturbances["observation"].apply(obs)
         return obs
 
     @property
@@ -298,7 +305,7 @@ class DroneRacingEnv(gymnasium.Env):
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
-        return_home = True # makes the drone simulate the return to home after stopping
+        return_home = False # makes the drone simulate the return to home after stopping
 
         if return_home:
             # This is done to run the closing controller at a different frequency than the controller before
@@ -335,11 +342,6 @@ class DroneRacingEnv(gymnasium.Env):
                     time.sleep(t_step_ctrl) 
 
         self.sim.close()
-
-    def external_wrench(self, external_force: NDArray[np.floating] = np.zeros(3), external_torque: NDArray[np.floating] = np.zeros(3)):
-        """Apply external force or torque to the environment. This wrench stays constant until next update."""
-        self._external_force = external_force
-        self._external_torque = external_torque
 
 
 class DroneRacingThrustEnv(DroneRacingEnv):
