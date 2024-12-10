@@ -68,10 +68,11 @@ def simulate(
     controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
     env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
-    dist = ExternalForceGrid(3, [True, True, False], max_force=0.05, grid_size=1.0)
+    dist = ExternalForceGrid(3, [True, True, False], max_force=0.01, grid_size=1.0)
     env.sim.disturbances["dynamics"].append(dist) #WARN: env.sim to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.sim` for environment variables or `env.get_wrapper_attr('sim')` that will search the reminding wrappers.
 
     ep_times = []
+    ukf_times = []
     gui_timer = None
     fxtdo_predictions = [] # x, v, v_hat, f_dis, f_hat
     ukf_predictions = []
@@ -82,7 +83,7 @@ def simulate(
         # print(f"f_mass_z={f_mass_z}")
         controller: BaseController = controller_cls(obs, info)
         fxtdo = FxTDO(1 / config.env.freq)
-        ukf = UKF(1 / config.env.freq)
+        ukf = UKF(obs, 1 / config.env.freq)
         if gui:
             gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client, gui_timer)
         i = 0
@@ -103,7 +104,11 @@ def simulate(
 
             rpms = env.sim.drone.rpm
             ukf.set_input(rpms)
-            ukf_pred = ukf.step(obs)
+            t_ukf = time.perf_counter()
+            ukf_pred = ukf.step(obs, rpms)
+            t_ukf = (time.perf_counter() - t_ukf)
+            ukf_times.append(t_ukf)
+            # print(f"t_ukf={t_ukf*1000:.1f}ms, runable at {1/t_ukf:.1f}Hz")
 
             # calculated like in physics DYN
             forces = np.array(rpms**2) * env.sim.drone.params.kf
@@ -126,7 +131,10 @@ def simulate(
             if config.sim.gui:
                 if (elapsed := time.time() - t_start) < 1 / config.env.freq:
                     time.sleep(1 / config.env.freq - elapsed)
+            # print(f"i={i}")
             i += 1
+
+        print(f"mean UKF time: t_ukf={np.mean(t_ukf*1000):.1f}ms, runable at {1/np.mean(t_ukf):.1f}Hz")
 
         controller.episode_callback()  # Update the controller internal state and models.
         log_episode_stats(obs, info, config, curr_time)

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 import numpy as np
 from filterpy.common import Q_discrete_white_noise
 from filterpy.kalman import MerweScaledSigmaPoints, UnscentedKalmanFilter
+from scipy.linalg import block_diag
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.sim import GRAVITY
@@ -176,32 +178,66 @@ class FxTDO(DisturbanceObserver):
 
 class UKF(DisturbanceObserver):
     """TODO."""
-    def __init__(self, dt: np.floating):
+    def __init__(self, initial_obs: dict[str, NDArray[np.floating]], dt: np.floating): # TODO give obs and info
         """Initialize basic parameters.
 
         Args:
+            initial_obs: The initial observation of the environment's state. See the environment's observation space for details.
             dt: Time step between callings.
         """
         dim_x = 18
-        super().__init__(dim_x, 4, 12, dt) # State = Observations = [pos, vel, rpy, ang_vel] + f + t 
+        dim_u = 4 # 4 times RPM
+        dim_y = 6 # output (from VICON) 12 if velocity is available (which it isn't), 6 if only position 
+        super().__init__(dim_x, dim_u, dim_y, dt) # State = Observations = [pos, vel, rpy, ang_vel] + f + t 
         self._sigma_points = MerweScaledSigmaPoints(n=self._state_dim, alpha=1e-3, beta=2.0, kappa=0.0)
         self._UKF = UnscentedKalmanFilter(dim_x=self._state_dim, dim_z=self._obs_dim, 
-                                          fx=self.f, hx=self.h, 
+                                          fx=self.f_vec, hx=self.h, 
                                           dt=dt, points=self._sigma_points)
         
         self._state = self._UKF.x
         
-        # Set process noise covariance (tunable)
-        dim_euclidean = 3 #(x,y,z)
-        self._UKF.Q = Q_discrete_white_noise(dim=dim_euclidean, dt=dt, var=0.001, block_size=dim_x//dim_euclidean, order_by_dim=False)
-        self._UKF.Q[12:15, 12:15] = self._UKF.Q[12:15, 12:15]*0.1
+        # Set process noise covariance (tunable). Uncertainty in the dynamics. High Q -> less trust in model
+        # Q_x = Q_discrete_white_noise(dim=2, dt=dt, var=1e-9, block_size=6, order_by_dim=False)
+        # Q_f = np.eye(3)*1e-6 # Q_discrete_white_noise(dim=3, dt=dt, var=1e-6, block_size=1, order_by_dim=False)
+        # Q_t = np.eye(3)*1e-6 # Q_discrete_white_noise(dim=3, dt=dt, var=1e-6, block_size=1, order_by_dim=False)
+        # self._UKF.Q = block_diag(Q_x, Q_f, Q_t) # np.eye(18)*1e-6 # 
+        # self._UKF.Q[12:15, 12:15] = self._UKF.Q[12:15, 12:15] * 1e1 # Force
+        # self._UKF.Q[15:18, 15:18] = self._UKF.Q[15:18, 15:18] * 1e1 # Torque
+
+        self._varQ = 1e-3
+        self._varR = 1e-4
+
+        # self._UKF.Q = Q_discrete_white_noise(dim=3, dt=self._dt, var=self._varQ, block_size=6, order_by_dim=False) # TODO manually setup matrix
+        # self._UKF.Q[12:15, 12:15] = self._UKF.Q[12:15, 12:15] * 5e0 # Force
+        # self._UKF.Q[15:18, 15:18] = self._UKF.Q[15:18, 15:18] * 5e0 # Torque
+        # self._UKF.Q = np.eye(18)*1e-9
+        # This way, pos, vel, and force (or rpy, angular vel, and torque) influence each other
+        # print(self._UKF.Q.tolist()) 
+
+        Q_p = np.eye(3)*1e-9
+        Q_a = np.eye(3)*1e-9
+        Q_v = np.eye(3)*1e-9
+        Q_w = np.eye(3)*1e-9
+        Q_f = np.eye(3)*1e-6
+        Q_t = np.eye(3)*1e-6
+        self._UKF.Q = block_diag(Q_p, Q_a, Q_v, Q_w, Q_f, Q_t)
         
-        # Set measurement noise covariance (tunable)
-        self._UKF.R = np.eye(self._obs_dim) * 0.001
+        # Set measurement noise covariance (tunable). Uncertaints in the measurements. High R -> less trust in measurements
+        self._UKF.R = np.eye(self._obs_dim) * self._varR
         
-        # # Initialize state and covariance
-        # self._UKF.x = np.zeros(self._state_dim)
-        # self._UKF.P = np.eye(self._state_dim) * 1.0
+        # Initialize state and covariance
+        self._state[:6] = [*initial_obs["pos"], *initial_obs["rpy"]] # only initialize position and angle
+        self._UKF.x = self._state
+        self._UKF.P = np.eye(self._state_dim) * 1e-6 # how certain are we initially? Basically 100%
+
+
+    def set_parameters(self, varQ: np.floating, varR: np.floating):
+        """Stores the parameters if valid. This function should not be called after step() is called for the first time."""
+        self._varQ = varQ
+        self._varR = varR
+        self._UKF.Q = Q_discrete_white_noise(dim=3, dt=self._dt, var=self._varQ, block_size=6, order_by_dim=False)
+        self._UKF.R = np.eye(self._obs_dim) * self._varR
+
 
     def f(self, x: NDArray[np.floating], dt: np.floating) -> NDArray[np.floating]:
         """State transition function that maps states and inputs to next states.
@@ -213,46 +249,147 @@ class UKF(DisturbanceObserver):
         Return:
             New state after one time step with dt
         """
+        # start = time.perf_counter()
+        # u = args.pop("u")
         pos = x[0:3]
         rpy = x[3:6]
         vel = x[6:9]
-        rpy_rates = R.from_euler("xyz", rpy).apply(x[9:12], inverse=True)  # Now in body frame
+        
+        rot = R.from_euler("xyz", rpy) # Create rotation object once saves time!
+        rpy_rates = rot.apply(x[9:12], inverse=True)  # Now in body frame
         f = x[12:15]
         t = x[15:18]
         # Compute forces and torques.
-        forces = np.array(self._input**2) * kf
+        forces = self._input**2 * kf
+        # forces = u**2 * kf
         thrust = np.array([0, 0, np.sum(forces)])
-        thrust_world_frame = R.from_euler("xyz", rpy).apply(thrust)
+        thrust_world_frame = rot.apply(thrust)
         force_world_frame = thrust_world_frame - np.array([0, 0, GRAVITY * MASS]) + f
-        z_torques = np.array(self._input**2) * km
+        z_torques = self._input**2 * km
+        # z_torques = u**2 * km
         z_torque = z_torques[0] - z_torques[1] + z_torques[2] - z_torques[3]
-        x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * (L / np.sqrt(2))
-        y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * (L / np.sqrt(2))
+        x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * L
+        y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * L
         torques = np.array([x_torque, y_torque, z_torque]) + t
-        torques = torques - np.cross(rpy_rates, np.dot(J, rpy_rates))
+        torques -= np.cross(rpy_rates, np.dot(J, rpy_rates))
         rpy_rates_deriv = np.dot(J_inv, torques)
         acc = force_world_frame / MASS
         # Update state.
-        vel = vel + acc * dt
-        rpy_rates = rpy_rates + rpy_rates_deriv * dt
-        x[0:3] = pos + vel * dt
+        vel += acc * dt
+        rpy_rates += rpy_rates_deriv * dt
+        x[0:3] = pos + vel * dt #+ 0.5*acc*dt**2
         x[3:6] = rpy + rpy_rates * dt
         x[6:9] = vel
-        x[9:12] = R.from_euler("xyz", rpy).apply(rpy_rates)
+        x[9:12] = rot.apply(rpy_rates)
+        # print(time.perf_counter() - start)
+        return x
+    
+    def dxdt(self, x: NDArray[np.floating]) -> NDArray[np.floating]:
+        """TODO."""
+        pos = x[:, 0:3]
+        rpy = x[:, 3:6]
+        vel = x[:, 6:9]
+        
+        rot = R.from_euler("xyz", rpy) # Create rotation object once saves time!
+        rpy_rates = rot.apply(x[:, 9:12], inverse=True)  # Now in body frame
+        f = x[:, 12:15]
+        t = x[:, 15:18]
+        # Compute forces and torques.
+        forces = self._input**2 * kf
+        # forces = u**2 * kf
+        thrust = np.array([0, 0, np.sum(forces)])
+        thrust_world_frame = rot.apply(thrust)
+        force_world_frame = thrust_world_frame - np.array([0, 0, GRAVITY * MASS]) + f
+        z_torques = self._input**2 * km
+        # z_torques = u**2 * km
+        z_torque = z_torques[0] - z_torques[1] + z_torques[2] - z_torques[3]
+        x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * L
+        y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * L
+        torques = np.array([x_torque, y_torque, z_torque]) + t
+        # torques -= np.cross(rpy_rates, np.dot(J, rpy_rates))
+        torques -= np.cross(rpy_rates, rpy_rates @ J) # usually transposed, but skipped since J is symmetric
+        # rpy_rates_deriv = np.dot(J_inv, torques)
+        rpy_rates_deriv = torques @ J_inv # usually transposed, but skipped since J_inv is symmetric
+        acc = force_world_frame / MASS
+        # Update state.
+        x[:, 0:3] = vel
+        x[:, 3:6] = rpy_rates
+        x[:, 6:9] = acc
+        x[:, 9:12] = rot.apply(rpy_rates_deriv)
+
+        return x
+
+    def f_vec(self, x: NDArray[np.floating], dt: np.floating) -> NDArray[np.floating]:
+        """State transition function that maps states and inputs to next states. Batched to increase performance.
+        
+        Args:
+            x: State vector, batched shape: (batches, state_dim)
+            dt: Time step size
+
+        Return:
+            New state after one time step with dt in dimension (batches, state_dim)
+        """
+        # x_ = x.copy()
+        # start = time.perf_counter()
+        # u = args.pop("u")
+        pos = x[:, 0:3]
+        rpy = x[:, 3:6]
+        vel = x[:, 6:9]
+        
+        rot = R.from_euler("xyz", rpy) # Create rotation object once saves time!
+        rpy_rates = rot.apply(x[:, 9:12], inverse=True)  # Now in body frame
+        f = x[:, 12:15]
+        t = x[:, 15:18]
+        # Compute forces and torques.
+        forces = self._input**2 * kf
+        # forces = u**2 * kf
+        thrust = np.array([0, 0, np.sum(forces)])
+        thrust_world_frame = rot.apply(thrust)
+        force_world_frame = thrust_world_frame - np.array([0, 0, GRAVITY * MASS]) + f
+        z_torques = self._input**2 * km
+        # z_torques = u**2 * km
+        z_torque = z_torques[0] - z_torques[1] + z_torques[2] - z_torques[3]
+        x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * L / np.sqrt(2)
+        y_torque = (-forces[0] + forces[1] + forces[2] - forces[3]) * L / np.sqrt(2)
+        torques = np.array([x_torque, y_torque, z_torque]) + t
+        # torques -= np.cross(rpy_rates, np.dot(J, rpy_rates))
+        torques -= np.cross(rpy_rates, rpy_rates @ J) # usually transposed, but skipped since J is symmetric
+        # rpy_rates_deriv = np.dot(J_inv, torques)
+        rpy_rates_deriv = torques @ J_inv # usually transposed, but skipped since J_inv is symmetric
+        acc = force_world_frame / MASS
+        # Update state.
+        vel += acc * dt
+        rpy_rates += rpy_rates_deriv * dt
+
+        
+        # print(f"pos={pos[0]}, x={x[0, :3]}")
+        # print(f"vel={vel[0]*dt}, x_dot={self.dxdt(x)[0, :3]*dt}") #+ +
+        # print(f"pos_new={pos[0]+vel[0]*dt}, x_new={x[0, :3]+self.dxdt(x)[0, :3]*dt}")
+        # x_[:, :3] = x[:, :3] + self.dxdt(x)[:, :3]*dt
+        x[:, 0:3] = pos + vel * dt #+ 0.5*acc*dt**2
+        x[:, 3:6] = rpy + rpy_rates * dt
+        x[:, 6:9] = vel
+        x[:, 9:12] = rot.apply(rpy_rates)
+        # print(time.perf_counter() - start)
+
+        
         return x
     
     def h(self, x: NDArray[np.floating]) -> NDArray[np.floating]:
         """Observation function that maps states to measurements."""
         return x[:self._obs_dim]
     
-    def step(self, obs: dict) -> NDArray[np.floating]:
+    def step(self, obs: dict, u: NDArray) -> NDArray[np.floating]:
         """TODO."""
         # First, do prediction step
-        self._UKF.predict()
+        self._UKF.predict() # u=u
         # Second, do correction step (=update)
-        obs = np.array( [*obs["pos"], *obs["rpy"], *obs["vel"], *obs["ang_vel"]] )
-        # obs = np.array( [*obs["pos"], *obs["rpy"]] )
+        # obs = np.array( [*obs["pos"], *obs["rpy"], *obs["vel"], *obs["ang_vel"]] )
+        obs = np.concatenate( (obs["pos"], obs["rpy"]) )
         self._UKF.update(obs)
+
+        # self._state = self._UKF.x
         
-        return self._UKF.x #self._state
+        # return self._state
+        return self._UKF.x
     
