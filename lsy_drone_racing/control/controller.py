@@ -46,7 +46,7 @@ class BaseController(ABC):
         self, obs: NDArray[np.floating], info: dict | None = None
     ) -> NDArray[np.floating]:
         """Compute the next desired state of the drone.
-
+        
         Instructions:
             Implement this method to return the target state to be sent from Crazyswarm to the
             Crazyflie using the `cmdFullState` call.
@@ -60,6 +60,11 @@ class BaseController(ABC):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] in absolute
             coordinates as a numpy array.
         """
+
+        ############################### OUR CODE ##########################################
+        
+        
+        
 
     def step_callback(
         self,
