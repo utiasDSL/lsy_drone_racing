@@ -126,16 +126,16 @@ class GaussianNoise(Noise):
         return target + noise
 
 
-class NoiseList:
+class NoiseList(list):
     """Combine list of noises as one."""
 
     def __init__(self, noises: list[Noise]):
         """Initialization of the list of noises."""
-        self.noises = noises
+        super().__init__(noises)
 
     def reset(self):
         """Sequentially reset noises."""
-        for n in self.noises:
+        for n in self:
             n.reset()
 
     def apply(self, target: NDArray[np.floating]) -> NDArray[np.floating]:
@@ -148,7 +148,7 @@ class NoiseList:
             The noisy target.
         """
         noisy = target
-        for n in self.noises:
+        for n in self:
             noisy = n.apply(noisy)
         return noisy
 
@@ -158,7 +158,7 @@ class NoiseList:
         Args:
             seed: The seed to set the random number generator to. If None, the seed is random.
         """
-        for n in self.noises:
+        for n in self:
             n.seed(seed)
 
     @staticmethod
