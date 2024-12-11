@@ -217,7 +217,6 @@ class DroneRacingEnv(gymnasium.Env):
             "vel": self.sim.drone.vel.astype(np.float32),
             "ang_vel": self.sim.drone.ang_vel.astype(np.float32),
         }
-        self.last_vel = copy.deepcopy(obs["vel"])
         obs["ang_vel"][:] = R.from_euler("xyz", obs["rpy"]).apply(obs["ang_vel"], inverse=True)
 
         gates = self.sim.gates
@@ -343,15 +342,6 @@ class DroneRacingEnv(gymnasium.Env):
                     time.sleep(t_step_ctrl)
 
         self.sim.close()
-
-    def external_wrench(
-        self,
-        external_force: NDArray[np.floating] = np.zeros(3),
-        external_torque: NDArray[np.floating] = np.zeros(3),
-    ):
-        """Apply external force or torque to the environment. This wrench stays constant until next update."""
-        self._external_force = external_force
-        self._external_torque = external_torque
 
 
 class DroneRacingThrustEnv(DroneRacingEnv):
