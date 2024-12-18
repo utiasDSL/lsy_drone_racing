@@ -83,7 +83,7 @@ def simulate(
         # print(f"f_mass_z={f_mass_z}")
         controller: BaseController = controller_cls(obs, info)
         fxtdo = FxTDO(1 / config.env.freq)
-        ukf = UKF(obs, 1 / config.env.freq)
+        ukf = UKF(1 / config.env.freq, obs)
         if gui:
             gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client, gui_timer)
         i = 0
@@ -103,9 +103,8 @@ def simulate(
 
 
             rpms = env.sim.drone.rpm
-            ukf.set_input(rpms)
             t_ukf = time.perf_counter()
-            ukf_pred = ukf.step(obs, rpms)
+            ukf_pred = ukf.step(obs, u=action) #action, rpms
             t_ukf = (time.perf_counter() - t_ukf)
             ukf_times.append(t_ukf)
             # print(f"t_ukf={t_ukf*1000:.1f}ms, runable at {1/t_ukf:.1f}Hz")
