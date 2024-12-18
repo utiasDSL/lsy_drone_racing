@@ -106,8 +106,10 @@ class DroneRacingDeployEnv(gymnasium.Env):
         # pycrazyswarm expects strings, not Path objects, so we need to convert it first
         swarm = pycrazyswarm.Crazyswarm(str(crazyswarm_config_path))
         self.cf = swarm.allcfs.crazyflies[0]
-        names = [f"gate{g}" for g in range(1, len(config.env.track.gates) + 1)]
-        names += [f"obstacle{g}" for g in range(1, len(config.env.track.obstacles) + 1)]
+        names = []
+        if not self.config.deploy.practice_without_track_objects:
+            names += [f"gate{g}" for g in range(1, len(config.env.track.gates) + 1)]
+            names += [f"obstacle{g}" for g in range(1, len(config.env.track.obstacles) + 1)]
         self.vicon = Vicon(track_names=names, timeout=5)
         self.symbolic = None
         if config.env.symbolic:
@@ -122,6 +124,13 @@ class DroneRacingDeployEnv(gymnasium.Env):
             self.symbolic = sim.symbolic()
         self._last_pos = np.zeros(3)
 
+        self.gates_visited = np.array([False] * len(config.env.track.gates))
+        self.obstacles_visited = np.array([False] * len(config.env.track.obstacles))
+
+        # Use internal variable to store results of self.obs that is updated every time
+        # self.obs is invoked in order to prevent calling it more often than necessary.
+        self._obs = None
+
     def reset(
         self, *, seed: int | None = None, options: dict | None = None
     ) -> tuple[dict[str, NDArray[np.floating]], dict]:
@@ -130,8 +139,13 @@ class DroneRacingDeployEnv(gymnasium.Env):
         We cannot reset the track in the real world. Instead, we check if the gates, obstacles and
         drone are positioned within tolerances.
         """
-        check_race_track(self.config)
-        check_drone_start_pos(self.config)
+        if (
+            self.config.deploy.check_race_track
+            and not self.config.deploy.practice_without_track_objects
+        ):
+            check_race_track(self.config)
+        if self.config.deploy.check_drone_start_pos:
+            check_drone_start_pos(self.config)
         self._last_pos[:] = self.vicon.pos[self.vicon.drone_name]
         self.target_gate = 0
         info = self.info
@@ -165,19 +179,20 @@ class DroneRacingDeployEnv(gymnasium.Env):
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
-        return_home = True # makes the drone simulate the return to home after stopping
+        return_home = True  # makes the drone simulate the return to home after stopping
 
         if return_home:
             # This is done to run the closing controller at a different frequency than the controller before
             # Does not influence other code, since this part is already in closing!
             # WARNING: When changing the frequency, you must also change the current _step!!!
-            freq_new = 100 # Hz
-            self._steps = int( self._steps / self.config.env.freq * freq_new )
+            freq_new = 100  # Hz
             self.config.env.freq = freq_new
-            t_step_ctrl = 1/self.config.env.freq
-            
+            t_step_ctrl = 1 / self.config.env.freq
+
             obs = self.obs
-            obs["acc"] = np.array([0,0,0]) # TODO, use actual value when avaiable or do one step to calculate from velocity
+            obs["acc"] = np.array(
+                [0, 0, 0]
+            )  # TODO, use actual value when avaiable or do one step to calculate from velocity
             info = self.info
             info["env_freq"] = self.config.env.freq
             info["drone_start_pos"] = self.config.env.track.drone.pos
@@ -185,19 +200,24 @@ class DroneRacingDeployEnv(gymnasium.Env):
             controller = ClosingController(obs, info)
             t_total = controller.t_total
 
-            for i in np.arange(int(t_total/t_step_ctrl)): # hover for some more time
+            for i in np.arange(int(t_total / t_step_ctrl)):  # hover for some more time
                 action = controller.compute_control(obs)
                 action = action.astype(np.float64)  # Drone firmware expects float64
-                pos, vel, acc, yaw, rpy_rate = action[:3], action[3:6], action[6:9], action[9], action[10:]
+                pos, vel, acc, yaw, rpy_rate = (
+                    action[:3],
+                    action[3:6],
+                    action[6:9],
+                    action[9],
+                    action[10:],
+                )
                 self.cf.cmdFullState(pos, vel, acc, yaw, rpy_rate)
                 obs = self.obs
-                obs["acc"] = np.array([0,0,0])
+                obs["acc"] = np.array([0, 0, 0])
                 controller.step_callback(action, obs, 0, True, False, info)
-                time.sleep(t_step_ctrl) 
+                time.sleep(t_step_ctrl)
 
         self.cf.notifySetpointsStop()
         self.cf.land(0.05, 2.0)
-
 
     @property
     def obs(self) -> dict:
@@ -216,28 +236,42 @@ class DroneRacingDeployEnv(gymnasium.Env):
         n_gates = len(self.config.env.track.gates)
 
         obs["target_gate"] = self.target_gate if self.target_gate < n_gates else -1
-        # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
-        # use the actual pose, otherwise use the nominal pose.
+
         drone_pos = self.vicon.pos[self.vicon.drone_name]
+
         gates_pos = np.array([g.pos for g in self.config.env.track.gates])
-        gate_names = [f"gate{g}" for g in range(1, len(gates_pos) + 1)]
-        real_gates_pos = np.array([self.vicon.pos[g] for g in gate_names])
-        in_range = np.linalg.norm(real_gates_pos - drone_pos, axis=1) < sensor_range
-        gates_pos[in_range] = real_gates_pos[in_range]
         gates_rpy = np.array([g.rpy for g in self.config.env.track.gates])
-        real_gates_rpy = np.array([self.vicon.rpy[g] for g in gate_names])
-        gates_rpy[in_range] = real_gates_rpy[in_range]
-        obs["gates_pos"] = gates_pos.astype(np.float32)
-        obs["gates_rpy"] = gates_rpy.astype(np.float32)
-        obs["gates_in_range"] = in_range
+        gate_names = [f"gate{g}" for g in range(1, len(gates_pos) + 1)]
 
         obstacles_pos = np.array([o.pos for o in self.config.env.track.obstacles])
         obstacle_names = [f"obstacle{g}" for g in range(1, len(obstacles_pos) + 1)]
-        real_obstacles_pos = np.array([self.vicon.pos[o] for o in obstacle_names])
-        in_range = np.linalg.norm(real_obstacles_pos - drone_pos, axis=1) < sensor_range
-        obstacles_pos[in_range] = real_obstacles_pos[in_range]
+
+        # Update objects position with vicon data if not in practice mode and object
+        # either is in range or was in range previously.
+        if not self.config.deploy.practice_without_track_objects:
+            real_gates_pos = np.array([self.vicon.pos[g] for g in gate_names])
+            real_gates_rpy = np.array([self.vicon.rpy[g] for g in gate_names])
+            real_obstacles_pos = np.array([self.vicon.pos[o] for o in obstacle_names])
+
+            # Use x-y distance to calucate sensor range, otherwise it would depend on the height of the drone
+            # and obstacle how early the obstacle is in range.
+            in_range = np.linalg.norm(real_gates_pos[:, :2] - drone_pos[:2], axis=1) < sensor_range
+            self.gates_visited = np.logical_or(self.gates_visited, in_range)
+            gates_pos[self.gates_visited] = real_gates_pos[self.gates_visited]
+            gates_rpy[self.gates_visited] = real_gates_rpy[self.gates_visited]
+            obs["gates_in_range"] = in_range
+
+            in_range = (
+                np.linalg.norm(real_obstacles_pos[:, :2] - drone_pos[:2], axis=1) < sensor_range
+            )
+            self.obstacles_visited = np.logical_or(self.obstacles_visited, in_range)
+            obstacles_pos[self.obstacles_visited] = real_obstacles_pos[self.obstacles_visited]
+            obs["obstacles_in_range"] = in_range
+
+        obs["gates_pos"] = gates_pos.astype(np.float32)
+        obs["gates_rpy"] = gates_rpy.astype(np.float32)
         obs["obstacles_pos"] = obstacles_pos.astype(np.float32)
-        obs["obstacles_in_range"] = in_range
+        self._obs = obs
         return obs
 
     @property
@@ -254,12 +288,10 @@ class DroneRacingDeployEnv(gymnasium.Env):
         """
         n_gates = len(self.config.env.track.gates)
         if self.target_gate < n_gates and self.target_gate != -1:
-            # Gate IDs go from 0 to N-1, but names go from 1 to N
-            gate_id = "gate" + str(self.target_gate + 1)
             # Real gates measure 0.4m x 0.4m, we account for meas. error
             gate_size = (0.56, 0.56)
-            gate_pos = self.vicon.pos[gate_id]
-            gate_rot = R.from_euler("xyz", self.vicon.rpy[gate_id])
+            gate_pos = self._obs["gates_pos"][self.target_gate]
+            gate_rot = R.from_euler("xyz", self._obs["gates_rpy"][self.target_gate])
             return check_gate_pass(gate_pos, gate_rot, gate_size, pos, prev_pos)
         return False
 

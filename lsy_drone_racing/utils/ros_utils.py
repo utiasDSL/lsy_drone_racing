@@ -29,7 +29,7 @@ def check_race_track(config: Munch):
     if not rng_info:
         logger.error("Randomization info not found in the configuration.")
         raise RuntimeError("Randomization info not found in the configuration.")
-    ang_tol = 0.3  # TODO: Adapt value based on experience in the lab
+    ang_tol = config.env.track.gates[0].rpy[2]  # Assume all gates have the same rotation
     assert rng_info.gate_pos.type == "uniform", "Race track checks expect uniform distributions"
     assert rng_info.obstacle_pos.type == "uniform", "Race track checks expect uniform distributions"
     for i, gate in enumerate(config.env.track.gates):

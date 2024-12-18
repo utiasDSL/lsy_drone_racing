@@ -59,11 +59,7 @@ class UniformNoise(Noise):
     """I.i.d uniform noise ~ U(low, high) per time step."""
 
     def __init__(
-        self, 
-        dim: int, 
-        mask: NDArray[np.bool] | None = None, 
-        low: float = 0.0, 
-        high: float = 1.0
+        self, dim: int, mask: NDArray[np.bool] | None = None, low: float = 0.0, high: float = 1.0
     ):
         """Initialize the uniform noise.
 

@@ -6,6 +6,15 @@
 [controller]
 file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 
+[deploy]
+### Settings only relevant for deployment
+# Whether to check if gate and obstacle positions observed by vicon are within the limits defined down below.
+check_race_track = true
+# Whether to check if the drone start position is within the limits specified down below.
+check_drone_start_pos = true
+# Lets you practice your controller without putting up gates & obstacles, assumes nominal positions given below.
+practice_without_track_objects = false
+
 [sim]
 # Physics options:
 # "pyb": PyBullet

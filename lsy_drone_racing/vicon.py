@@ -51,6 +51,7 @@ class Vicon:
         except rospy.exceptions.ROSException:
             ...  # ROS node is already running which is fine for us
         self.drone_name = None
+        self.auto_track_drone = auto_track_drone
         if auto_track_drone:
             with open(get_ros_package_path("crazyswarm") / "launch/crazyflies.yaml", "r") as f:
                 config = yaml.load(f, yaml.SafeLoader)
@@ -65,9 +66,10 @@ class Vicon:
         self.time: dict[str, float] = {}
 
         self.tf_sub = rospy.Subscriber("/tf", TFMessage, self.tf_callback)
-        self.estimator_sub = rospy.Subscriber(
-            "/estimated_state", StateVector, self.estimator_callback
-        )
+        if auto_track_drone:
+            self.estimator_sub = rospy.Subscriber(
+                "/estimated_state", StateVector, self.estimator_callback
+            )
 
         if timeout:
             tstart = time.time()
@@ -146,4 +148,5 @@ class Vicon:
     def close(self):
         """Unregister the ROS subscribers."""
         self.tf_sub.unregister()
-        self.estimator_sub.unregister()
+        if self.auto_track_drone:
+            self.estimator_sub.unregister()
