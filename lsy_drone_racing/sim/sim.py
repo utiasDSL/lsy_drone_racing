@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pybullet as p
@@ -65,6 +65,7 @@ class Sim:
         track: dict,
         sim_freq: int = 500,
         ctrl_freq: int = 500,
+        controller: Literal["pid", "mellinger"] = "mellinger",
         disturbances: dict | None = None,
         randomization: dict | None = None,
         gui: bool = False,
@@ -80,6 +81,7 @@ class Sim:
             sim_freq: The frequency at which PyBullet steps (a multiple of ctrl_freq).
             ctrl_freq: The frequency at which the onboard drone controller recalculates the rotor
                 rmps.
+            controller: The low level controller used. Can be mellinger, pid
             disturbances: Dictionary to specify disturbances being used.
             randomization: Dictionary to specify randomization of the environment.
             gui: Option to show PyBullet's GUI.
@@ -90,7 +92,7 @@ class Sim:
         """
         self.np_random = np.random.default_rng()
         assert n_drones == 1, "Only one drone is supported at the moment."
-        self.drone = Drone(controller="mellinger")
+        self.drone = Drone(controller=controller)
         self.n_drones = n_drones
         self.pyb_client = p.connect(p.GUI if gui else p.DIRECT)
         self.settings = SimSettings(sim_freq, ctrl_freq, gui, pybullet_id=self.pyb_client)
@@ -155,7 +157,7 @@ class Sim:
         """
         self.drone.desired_thrust[:] = desired_thrust
         rpm = self._thrust_to_rpm(desired_thrust)  # Pre-process/clip the action
-        
+
         disturb_force = np.zeros(3)
         disturb_torque = np.zeros(3)
         if "dynamics" in self.disturbances:

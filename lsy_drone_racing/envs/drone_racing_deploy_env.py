@@ -312,7 +312,7 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
         """
         super().__init__(config)
         self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(4,))
-        self.drone = Drone("mellinger")
+        self.drone = Drone(controller=self.CONTROLLER)
 
     def step(
         self, action: NDArray[np.floating]
