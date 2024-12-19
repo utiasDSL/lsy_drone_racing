@@ -189,7 +189,7 @@ class UKF(Estimator):
             dt: Time step between callings.
             initial_obs: Optional, the initial observation of the environment's state. See the environment's observation space for details.
         """
-        self.f_x = f_x_attitude_dyn # TODO initialize this while creating UKF object
+        self.f_x = f_x_att_ctrl # TODO initialize this while creating UKF object
         self.f_x_continuous = True
 
         dim_x = 18 # (pos, rpy, vel, rpy rates, f_dis, t_dis)
@@ -211,8 +211,8 @@ class UKF(Estimator):
         # self._UKF.Q[12:15, 12:15] = self._UKF.Q[12:15, 12:15] * 1e1 # Force
         # self._UKF.Q[15:18, 15:18] = self._UKF.Q[15:18, 15:18] * 1e1 # Torque
 
-        self._varQ = 1e-1
-        self._varR = 1e-2
+        self._varQ = 1e-2
+        self._varR = 1e-3
 
         # self._UKF.Q = Q_discrete_white_noise(dim=3, dt=self._dt, var=self._varQ, block_size=6, order_by_dim=False) # TODO manually setup matrix
         # self._UKF.Q[12:15, 12:15] = self._UKF.Q[12:15, 12:15] * 5e0 # Force
@@ -346,6 +346,20 @@ def f_x_dyn(x: NDArray[np.floating], u: NDArray[np.floating], dt: np.floating | 
 
     return x_dot
 
+def f_x_att_ctrl(x: NDArray[np.floating], u: NDArray[np.floating], dt: np.floating) -> NDArray[np.floating]:
+    """Example dynamics of the drone. Extension of the above dyn model to attitude inputs for the Mellinger controller.
+    
+    Args:
+        x: State of the system, batched with shape (batches, states)
+        u: input of the system, (batches, inputs). [Thrust, R, P, Y]
+        dt: time step size
+
+    Return:
+        The derivative of x for given x and u
+    """
+    u_RPM, _ = attitude_controller(x, u, dt)
+    return f_x_dyn(x, u_RPM, dt)
+
 def f_x_attitude_dyn(x: NDArray[np.floating], u: NDArray[np.floating], dt: np.floating) -> NDArray[np.floating]:
     """Example dynamics of the drone. Extension of the above dyn model to attitude inputs.
     
@@ -394,11 +408,20 @@ def f_x_attitude_dyn(x: NDArray[np.floating], u: NDArray[np.floating], dt: np.fl
     rpms =  pwm2rpm(pwm)
     return f_x_dyn(x, rpms, dt)
 
+def rot2frame(rot: R, yaw: np.floating) -> NDArray[np.floating]:
+    """Converts a rotation object with a given yaw into a base frame."""
+    z_axis_desired = rot.apply(np.array([0,0,1]), inverse=True) # desired z axis in body frame
+    x_axis_desired = np.array([np.cos(yaw), np.sin(yaw), 0]) # temporary x axis from yaw angle
+    y_axis_desired = np.cross(z_axis_desired, x_axis_desired) # desired y axis in body frame
+    y_axis_desired = y_axis_desired/np.linalg.norm(y_axis_desired) # normalizing y_axis
+    x_axis_desired = np.cross(y_axis_desired, z_axis_desired) # desired x axis in body frame
+
+
 def thrust2pwm(thrust: NDArray[np.floating]) -> NDArray[np.floating]:
     """Convert the desired thrust into motor PWM.
 
     Args:
-        thrust: The desired thrust per motor.
+        thrust: The desired thrust *per motor*.
 
     Returns:
         The motors' PWMs to apply to the quadrotor.
@@ -415,12 +438,54 @@ def thrust2pwm(thrust: NDArray[np.floating]) -> NDArray[np.floating]:
     thrust = np.clip(thrust, MIN_THRUST, MAX_THRUST)  # Protect against NaN values
     return np.clip((np.sqrt(thrust / KF) - PWM2RPM_CONST) / PWM2RPM_SCALE, MIN_PWM, MAX_PWM)
 
+def pwms_to_thrust(pwms: NDArray[np.floating]) -> NDArray[np.floating]:
+    pwm2rpm_scale = 0.2685
+    pwm2rpm_const = 4070.3
+    return kf * (pwm2rpm_scale * pwms + pwm2rpm_const) ** 2
+
+def thrust_to_pwm(thrust):
+    # from drone.py
+    thrust_curve_a = -1.1264
+    thrust_curve_b = 2.2541
+    thrust_curve_c = 0.0209  # Thrust curve parameters for brushed motors
+    max_pwm = 65535
+    pwm = thrust_curve_a * thrust * thrust + thrust_curve_b * thrust + thrust_curve_c
+    return np.clip(pwm, 0, 1) * max_pwm
+
+def thrust_to_rpm(thrust: NDArray[np.floating]) -> NDArray[np.floating]:
+    # From sim.py
+    min_pwm = 20000
+    max_pwm = 65535
+    pwm2rpm_scale = 0.2685
+    pwm2rpm_const = 4070.3
+    min_rpm = pwm2rpm_scale * min_pwm + pwm2rpm_const
+    max_rpm = pwm2rpm_scale * max_pwm + pwm2rpm_const
+    min_thrust = kf * min_rpm**2
+    max_thrust = kf * max_rpm**2
+
+    thrust = np.clip(thrust, min_thrust, max_thrust)
+
+    pwm = (np.sqrt(thrust / kf) - pwm2rpm_const) / pwm2rpm_scale
+    pwm = np.clip(pwm, min_pwm, max_pwm)
+    return pwm2rpm_const + pwm2rpm_scale * pwm
+
 
 def pwm2rpm(pwm: NDArray[np.floating]) -> NDArray[np.floating]:
     """Convert the motors' PWMs into RPMs."""
     PWM2RPM_SCALE = 0.2685
     PWM2RPM_CONST = 4070.3
     return PWM2RPM_CONST + PWM2RPM_SCALE * pwm
+
+def batComp(pwm: NDArray[np.floating]) -> NDArray[np.floating]:
+    """Compensate the battery voltage."""
+    supply_voltage = 3.0 # assumed supply voltage. Taken from drone.py
+    max_pwm = 65535
+    pwm = pwm/max_pwm*60
+    pwm_curve_a = -0.0006239  # PWM curve parameters for brushed motors
+    pwm_curve_b = 0.088  # PWM curve parameters for brushed motors
+    voltage = pwm_curve_a * pwm**2 + pwm_curve_b * pwm
+    percentage = np.minimum(1, voltage/supply_voltage)
+    return percentage * max_pwm
 
 def f_x_fitted(x: NDArray[np.floating], u: NDArray[np.floating], dt: np.floating) -> NDArray[np.floating]:
     """Fitted Dynamics of the drone from Haocheng.
@@ -561,3 +626,95 @@ def f_x_identified(x: NDArray[np.floating], u: NDArray[np.floating], dt: np.floa
         x_dot[i, 9:12] = rot.apply(rpy_rates)/dt # model doesn't really have the derivative, so it's calculated manually
 
     return x_dot
+
+def attitude_controller(x: NDArray[np.floating], u: NDArray[np.floating], dt: np.floating) -> NDArray[np.floating]:
+    """Simulates the attitude controller of the Mellinger controller.
+    
+    Args:
+        x: State of the system, batched with shape (batches, states)
+        u: input of the system, (batches, inputs). [Thrust, R, P, Y]
+        dt: time step size
+
+    Return:
+        Commanded RPMs
+    """
+    # From firmware controller_mellinger 
+    # l. 52
+    mass_thrust = 132000
+    # l. 66-79
+    # Attitude
+    kR_xy = 70000 # P
+    kw_xy = 20000 # D
+    ki_m_xy = 0.0 # I
+    i_range_m_xy = 1.0
+
+    # Yaw
+    kR_z = 60000 # P
+    kw_z = 12000 # D
+    ki_m_z = 500 # I
+    i_range_m_z  = 1500
+
+    # roll and pitch angular velocity
+    kd_omega_rp = 200 # D
+    
+    ### Calculate RPMs for first x (mean of UKF estimate) & u to keep RPM command constant 
+    rpy = x[0, 3:6]
+    angular_vel = x[0, 9:12]
+    thrust_des = u[0, 0]
+    rpy_des = u[0, 1:]
+
+    ### From firmware controller_mellinger:
+    # l. 220 ff
+    rot = R.from_euler("xyz", rpy)
+    rot_des = R.from_euler("xyz", rpy_des)
+    R_act = rot.as_matrix()
+    R_des = rot_des.as_matrix()
+    eR = 0.5 * ( R_des.T@R_act - R_act.T@R_des )
+    eR = np.array([eR[2,1], -eR[0,2], eR[1,0]]) # vee operator (SO3 to R3), the -y is to account for the frame of the crazyflie
+    # l.256 ff
+    angular_vel_des = np.zeros(3) # for now assuming angular_vel_des = 0 (would need to be given as input)
+    ew = angular_vel - angular_vel_des
+    ew[1] = -ew[1]
+    # l. 259 ff
+    prev_angular_vel_des = np.zeros(3) # zero for now (would need to be stored)
+    prev_angular_vel = np.zeros(3) # for now zeros, would need to be stored outside
+    err_d = ( (angular_vel_des - prev_angular_vel_des) - (angular_vel - prev_angular_vel) )/dt *0 # set to zeros cause not used
+    err_d[1] = -err_d[1]
+    # l. 268 ff
+    i_error_m = np.zeros(3) # this part is usually longer, but we say the error is zeros for now
+    # l. 279 ff
+    Mx = -kR_xy * eR[0] + kw_xy * ew[0] + ki_m_xy * i_error_m[0] + kd_omega_rp * err_d[0]
+    My = -kR_xy * eR[1] + kw_xy * ew[1] + ki_m_xy * i_error_m[1] + kd_omega_rp * err_d[1]
+    Mz = -kR_z  * eR[2] + kw_z  * ew[2] + ki_m_z  * i_error_m[2]
+    # l. 297 ff
+    if thrust_des > 0:
+        cmd_roll = np.clip(Mx, -32000, 32000)
+        cmd_pitch = np.clip(My, -32000, 32000)
+        cmd_yaw = np.clip(-Mz, -32000, 32000)
+    else:
+        cmd_roll = 0
+        cmd_pitch = 0
+        cmd_yaw = 0
+    # From firmware powerDistributionLegacy() 
+    # cmd_PWM = thrust2pwm(thrust_des/4) # /4 because we got total thrust, but function takes single thrust
+    cmd_PWM = thrust_to_pwm(thrust_des)
+    # cmd_PWM = mass_thrust*thrust_des
+    cmd_roll = cmd_roll/2
+    cmd_pitch = cmd_pitch/2
+    cmd_PWM = cmd_PWM + np.array([-cmd_roll + cmd_pitch + cmd_yaw,
+                                -cmd_roll - cmd_pitch - cmd_yaw,
+                                +cmd_roll - cmd_pitch + cmd_yaw,
+                                +cmd_roll + cmd_pitch - cmd_yaw])
+    cmd_PWM = np.clip(cmd_PWM, 20000, 65535)
+
+    # From firmware motors.c motorsSetRatio()
+    # l. 236 ff
+    cmd_PWM = batComp(cmd_PWM)
+
+    # cmd_RPMs = pwm2rpm(cmd_PWM)
+    cmd_RPMs = thrust_to_rpm((pwms_to_thrust(cmd_PWM)))
+
+    ### Stack RPMs to fit
+    u_RPM = np.zeros_like(u)
+    u_RPM += cmd_RPMs
+    return u_RPM, cmd_PWM

@@ -22,7 +22,7 @@ import pybullet as p
 
 from lsy_drone_racing.sim.noise import ExternalForceGrid
 from lsy_drone_racing.utils import load_config, load_controller
-from lsy_drone_racing.utils.disturbance_observer import UKF, FxTDO
+from lsy_drone_racing.utils.disturbance_observer import UKF, FxTDO, attitude_controller
 
 if TYPE_CHECKING:
     from munch import Munch
@@ -68,7 +68,7 @@ def simulate(
     controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
     env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
-    dist = ExternalForceGrid(3, [True, True, False], max_force=0.01, grid_size=1.0)
+    dist = ExternalForceGrid(3, [True, True, False], max_force=0.05, grid_size=1.0)
     env.sim.disturbances["dynamics"].append(dist) #WARN: env.sim to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.sim` for environment variables or `env.get_wrapper_attr('sim')` that will search the reminding wrappers.
 
     ep_times = []
@@ -76,6 +76,8 @@ def simulate(
     gui_timer = None
     fxtdo_predictions = [] # x, v, v_hat, f_dis, f_hat
     ukf_predictions = []
+    rpms_list = []
+    pwms_list = []
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         done = False
         obs, info = env.reset()
@@ -103,6 +105,11 @@ def simulate(
 
 
             rpms = env.sim.drone.rpm
+            pwms = env.sim.drone._pwms # _pwms # _setpoint.thrust
+            x = np.array([np.concatenate( (obs["pos"], obs["rpy"], obs["vel"], obs["ang_vel"]) )])
+            rpms_est, pwm_est = attitude_controller(x, np.array([action]), dt=1 / config.env.freq) #, obs["vel"], obs["ang_vel"]
+            rpms_list.append([np.array(rpms), rpms_est[0]])
+            pwms_list.append([np.mean(pwms), np.mean(pwm_est)])
             t_ukf = time.perf_counter()
             ukf_pred = ukf.step(obs, u=action) #action, rpms
             t_ukf = (time.perf_counter() - t_ukf)
@@ -140,6 +147,17 @@ def simulate(
         controller.episode_reset()
         ep_times.append(curr_time if obs["target_gate"] == -1 else None)
 
+        rpms_list = np.array(rpms_list)
+        pwms_list = np.array(pwms_list)
+        # print(inputs)
+        fig, ax = plt.subplots(2, 1, figsize=(10, 8))
+        ax[0].plot(np.arange(len(rpms_list)), np.mean(rpms_list[:,0,:], axis=1), label="True RPM Command")
+        ax[0].plot(np.arange(len(rpms_list)), np.mean(rpms_list[:,1,:], axis=1), label="Est RPM Command")
+        ax[0].legend()
+        ax[1].plot(np.arange(len(pwms_list)), pwms_list[:,0], label="True PWM Command")
+        ax[1].plot(np.arange(len(pwms_list)), pwms_list[:,1], label="Est PWM Command")
+        ax[1].legend()
+        plt.show()
         plot_predictions(fxtdo_predictions, 1 / config.env.freq)
         plot_predictions(ukf_predictions, 1 / config.env.freq)
         plt.show()
