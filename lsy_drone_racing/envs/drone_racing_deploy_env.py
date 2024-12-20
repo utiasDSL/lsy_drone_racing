@@ -92,9 +92,9 @@ class DroneRacingDeployEnv(gymnasium.Env):
                 "target_gate": spaces.Discrete(n_gates, start=-1),
                 "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_gates, 3)),
                 "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(n_gates, 3)),
-                "gates_in_range": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=np.bool_),
+                "gates_visited": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=np.bool_),
                 "obstacles_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_obstacles, 3)),
-                "obstacles_in_range": spaces.Box(
+                "obstacles_visited": spaces.Box(
                     low=0, high=1, shape=(n_obstacles,), dtype=np.bool_
                 ),
             }
@@ -259,14 +259,14 @@ class DroneRacingDeployEnv(gymnasium.Env):
             self.gates_visited = np.logical_or(self.gates_visited, in_range)
             gates_pos[self.gates_visited] = real_gates_pos[self.gates_visited]
             gates_rpy[self.gates_visited] = real_gates_rpy[self.gates_visited]
-            obs["gates_in_range"] = in_range
+            obs["gates_visited"] = in_range
 
             in_range = (
                 np.linalg.norm(real_obstacles_pos[:, :2] - drone_pos[:2], axis=1) < sensor_range
             )
             self.obstacles_visited = np.logical_or(self.obstacles_visited, in_range)
             obstacles_pos[self.obstacles_visited] = real_obstacles_pos[self.obstacles_visited]
-            obs["obstacles_in_range"] = in_range
+            obs["obstacles_visited"] = in_range
 
         obs["gates_pos"] = gates_pos.astype(np.float32)
         obs["gates_rpy"] = gates_rpy.astype(np.float32)
