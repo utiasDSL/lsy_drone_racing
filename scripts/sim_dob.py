@@ -22,7 +22,8 @@ import pybullet as p
 
 from lsy_drone_racing.sim.noise import ExternalForceGrid
 from lsy_drone_racing.utils import load_config, load_controller
-from lsy_drone_racing.utils.disturbance_observer import UKF, FxTDO, attitude_controller
+from lsy_drone_racing.utils.disturbance_observer import UKF, FxTDO
+from lsy_drone_racing.utils.drone_models import mellinger_ctrl_att
 
 if TYPE_CHECKING:
     from munch import Munch
@@ -68,7 +69,7 @@ def simulate(
     controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
     env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
-    dist = ExternalForceGrid(3, [True, True, False], max_force=0.05, grid_size=1.0)
+    dist = ExternalForceGrid(3, [True, True, False], max_force=0.01, grid_size=1.0)
     env.sim.disturbances["dynamics"].append(dist) #WARN: env.sim to get variables from other wrappers is deprecated and will be removed in v1.0, to get this variable you can do `env.unwrapped.sim` for environment variables or `env.get_wrapper_attr('sim')` that will search the reminding wrappers.
 
     ep_times = []
@@ -85,7 +86,7 @@ def simulate(
         # print(f"f_mass_z={f_mass_z}")
         controller: BaseController = controller_cls(obs, info)
         fxtdo = FxTDO(1 / config.env.freq)
-        ukf = UKF(1 / config.env.freq, obs)
+        ukf = UKF(1 / config.env.freq)
         if gui:
             gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client, gui_timer)
         i = 0
@@ -107,11 +108,11 @@ def simulate(
             rpms = env.sim.drone.rpm
             pwms = env.sim.drone._pwms # _pwms # _setpoint.thrust
             x = np.array([np.concatenate( (obs["pos"], obs["rpy"], obs["vel"], obs["ang_vel"]) )])
-            rpms_est, pwm_est = attitude_controller(x, np.array([action]), dt=1 / config.env.freq) #, obs["vel"], obs["ang_vel"]
+            rpms_est, pwm_est = mellinger_ctrl_att(x, np.array([action]), dt=1 / config.env.freq) #, obs["vel"], obs["ang_vel"]
             rpms_list.append([np.array(rpms), rpms_est[0]])
             pwms_list.append([np.mean(pwms), np.mean(pwm_est)])
             t_ukf = time.perf_counter()
-            ukf_pred = ukf.step(obs, u=action) #action, rpms
+            ukf_pred = ukf.step(obs=np.concatenate( (obs["pos"], obs["rpy"]) ), u=action) #action, rpms
             t_ukf = (time.perf_counter() - t_ukf)
             ukf_times.append(t_ukf)
             # print(f"t_ukf={t_ukf*1000:.1f}ms, runable at {1/t_ukf:.1f}Hz")
