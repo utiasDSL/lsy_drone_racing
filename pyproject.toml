@@ -26,7 +26,7 @@ dependencies = [
     "PyYAML >= 6.0.1",
     "rospkg >= 1.5.1",
     "scipy >= 1.10.1",
-    "gymnasium == 0.29.1",
+    "gymnasium >= 1.0.0",
     "toml >= 0.10.2",
     "casadi >= 3.6.5",
     "swig >= 4.2.1",            # Required for pycffirmware

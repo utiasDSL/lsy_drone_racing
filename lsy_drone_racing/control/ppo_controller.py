@@ -4,7 +4,7 @@ The controller loads the pre-trained weights of the policy and uses it to comput
 based on the current observation.
 
 .. note::
-    You need to install the 
+    You need to install the
     `stable-baselines3 <https://stable-baselines3.readthedocs.io/en/master/>`_ library to use this
     controller.
 """
@@ -88,9 +88,9 @@ class PPOController(BaseController):
                 obs["vel"],
                 obs["ang_vel"],
                 gates_pose,
-                obs["gates_in_range"],
+                obs["gates_visited"],
                 obs["obstacles_pos"].flatten(),
-                obs["obstacles_in_range"],
+                obs["obstacles_visited"],
             ]
         )
         obs = np.concatenate(

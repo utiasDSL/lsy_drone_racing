@@ -65,20 +65,15 @@ def simulate(
     env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
 
     ep_times = []
-    gui_timer = None
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         done = False
         obs, info = env.reset()
         controller: BaseController = controller_cls(obs, info)
-        if gui:
-            gui_timer = update_gui_timer(0.0, env.unwrapped.sim.pyb_client, gui_timer)
         i = 0
+        fps = 60
 
         while not done:
-            t_start = time.time()
             curr_time = i / config.env.freq
-            if gui:
-                gui_timer = update_gui_timer(curr_time, env.unwrapped.sim.pyb_client, gui_timer)
 
             action = controller.compute_control(obs, info)
             obs, reward, terminated, truncated, info = env.step(action)
@@ -89,8 +84,8 @@ def simulate(
 
             # Synchronize the GUI.
             if config.sim.gui:
-                if (elapsed := time.time() - t_start) < 1 / config.env.freq:
-                    time.sleep(1 / config.env.freq - elapsed)
+                if ((i * fps) % config.env.freq) < fps:
+                    env.render()
             i += 1
 
         controller.episode_callback()  # Update the controller internal state and models.
@@ -101,24 +96,6 @@ def simulate(
     # Close the environment
     env.close()
     return ep_times
-
-
-def update_gui_timer(t: float, client_id: int, g_id: int | None = None) -> int:
-    """Update the timer in the GUI."""
-    text = f"Ep. time: {t:.2f}s"
-    if g_id is None:
-        return p.addUserDebugText(text, textPosition=[0, 0, 1.5], physicsClientId=client_id)
-    return p.addUserDebugText(
-        text,
-        textPosition=[0, 0, 1.5],
-        textColorRGB=[1, 0, 0],
-        lifeTime=0,
-        textSize=1.5,
-        parentObjectUniqueId=0,
-        parentLinkIndex=-1,
-        replaceItemUniqueId=g_id,
-        physicsClientId=client_id,
-    )
 
 
 def log_episode_stats(obs: dict, info: dict, config: Munch, curr_time: float):
