@@ -10,13 +10,11 @@ Look for instructions in `README.md` and `edit_this.py`.
 from __future__ import annotations
 
 import logging
-import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import fire
 import gymnasium
-import pybullet as p
 
 from lsy_drone_racing.utils import load_config, load_controller
 

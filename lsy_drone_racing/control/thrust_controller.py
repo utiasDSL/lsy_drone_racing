@@ -52,11 +52,11 @@ class ThrustController(BaseController):
         # Same waypoints as in the trajectory controller. Determined by trial and error.
         waypoints = np.array(
             [
-                [1.0, 1.0, 0.0],
+                [1.0, 1.0, 0.05],
                 [0.8, 0.5, 0.2],
-                [0.55, -0.8, 0.4],
+                [0.55, -0.8, 0.5],
                 [0.2, -1.8, 0.65],
-                [1.1, -1.35, 1.0],
+                [1.1, -1.35, 1.1],
                 [0.2, 0.0, 0.65],
                 [0.0, 0.75, 0.525],
                 [0.0, 0.75, 1.1],
@@ -124,7 +124,6 @@ class ThrustController(BaseController):
         target_thrust += self.kp * pos_error
         target_thrust += self.ki * self.i_error
         target_thrust += self.kd * vel_error
-        # target_thrust += params.quad.m * desired_acc
         target_thrust[2] += self.drone_mass * self.g
 
         # Update z_axis to the current orientation of the drone

@@ -7,11 +7,11 @@
       <mass value="0.0"/>
       <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0" iyz="0.0" izz="0"/>
     </inertial>
-    <visual>
+    <visual name="v1">
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <sphere radius="0.01"/>
-      </geometry> 
+      </geometry>
       <material name="grey">
         <color rgba=".5 .5 .5 1"/>
       </material> 
@@ -24,16 +24,16 @@
       <mass value="0.0"/>
       <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0" iyz="0.0" izz="0"/>
     </inertial>
-    <visual>
+    <visual name="v2">
       <origin rpy="0 0 0" xyz="0 0 -0.245"/>
       <geometry>
-        <box size=".58 .025 .09" />
+        <box size=".58 .025 .09"/>
       </geometry> 
       <material name="grey">
         <color rgba=".5 .5 .5 1"/>
       </material> 
     </visual>
-    <collision>
+    <collision name="c2">
       <origin rpy="0 0 0" xyz="0 0 -0.245"/>
       <geometry>
         <box size=".58 .025 .09" />
@@ -52,7 +52,7 @@
       <mass value="0.0"/>
       <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0" iyz="0.0" izz="0"/>
     </inertial>
-    <visual>
+    <visual name="v3">
       <origin rpy="0 0 0" xyz="0 0 0.245"/>
       <geometry>
         <box size=".58 .025 .09" />
@@ -61,7 +61,7 @@
         <color rgba=".0 .0 .9 1"/>
       </material> 
     </visual>
-    <collision>
+    <collision name="c3"> 
       <origin rpy="0 0 0" xyz="0 0 0.245"/>
       <geometry>
         <box size=".58 .025 .09" />
@@ -80,7 +80,7 @@
       <mass value="0.0"/>
       <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0" iyz="0.0" izz="0"/>
     </inertial>
-    <visual>
+    <visual name="v4">
       <origin rpy="0 1.57 0" xyz="0.245 0 0"/>
       <geometry>
         <box size=".58 .025 .09" />
@@ -89,7 +89,7 @@
         <color rgba=".0 .9 .0 1"/>
       </material> 
     </visual>
-    <collision>
+    <collision name="c4">
       <origin rpy="0 1.57 0" xyz="0.245 0 0"/>
       <geometry>
         <box size=".58 .025 .09" />
@@ -108,7 +108,7 @@
       <mass value="0.0"/>
       <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0" iyz="0.0" izz="0"/>
     </inertial>
-    <visual>
+    <visual name="v5">
       <origin rpy="0 1.57 0" xyz="-0.245 0 0"/>
       <geometry>
         <box size=".58 .025 .09" />
@@ -117,7 +117,7 @@
         <color rgba=".9 .0 .0 1"/>
       </material> 
     </visual>
-    <collision>
+    <collision name="c5">
       <origin rpy="0 1.57 0" xyz="-0.245 0 0"/>
       <geometry>
         <box size=".58 .025 .09" />
@@ -136,8 +136,7 @@
       <mass value="0.0"/>
       <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0" iyz="0.0" izz="0"/>
     </inertial>
-
-    <visual>
+    <visual name="v6">
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <cylinder length="1.0" radius="0.05" />
@@ -146,8 +145,7 @@
         <color rgba=".1 .5 .7 1"/>
       </material> 
     </visual>
-
-    <collision>
+    <collision name="c6">
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <cylinder length="1.0" radius="0.05" />

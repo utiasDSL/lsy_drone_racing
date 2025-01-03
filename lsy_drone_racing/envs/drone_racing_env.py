@@ -27,16 +27,17 @@ from __future__ import annotations
 
 import copy as copy
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import gymnasium
+import mujoco
 import numpy as np
 from crazyflow import Sim
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.sim.noise import NoiseList
-from lsy_drone_racing.sim.physics import PhysicsMode
 from lsy_drone_racing.utils import check_gate_pass
 
 if TYPE_CHECKING:
@@ -70,15 +71,20 @@ class DroneRacingEnv(gymnasium.Env):
     - "ang_vel": Drone angular velocity
     - "gates.pos": Positions of the gates
     - "gates.rpy": Orientations of the gates
-    - "gates.visited": Flags indicating if the drone already was/ is in the sensor range of the gates and the true position is known
+    - "gates.visited": Flags indicating if the drone already was/ is in the sensor range of the
+    gates and the true position is known
     - "obstacles.pos": Positions of the obstacles
-    - "obstacles.visited": Flags indicating if the drone already was/ is in the sensor range of the obstacles and the true position is known
+    - "obstacles.visited": Flags indicating if the drone already was/ is in the sensor range of the
+      obstacles and the true position is known
     - "target_gate": The current target gate index
 
     The action space consists of a desired full-state command
     [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] that is tracked by the drone's
     low-level controller.
     """
+
+    gate_spec_path = Path(__file__).parents[1] / "sim/assets/gate.urdf"
+    obstacle_spec_path = Path(__file__).parents[1] / "sim/assets/obstacle.urdf"
 
     def __init__(self, config: dict):
         """Initialize the DroneRacingEnv.
@@ -92,13 +98,12 @@ class DroneRacingEnv(gymnasium.Env):
             n_worlds=1,
             n_drones=1,
             physics=config.sim.physics,
-            control="state",
+            control=config.sim.get("control", "state"),
             freq=config.sim.sim_freq,
             state_freq=config.env.freq,
             attitude_freq=config.sim.attitude_freq,
             rng_key=config.env.seed,
         )
-        self.contact_mask = np.array([0], dtype=bool)
         if config.sim.sim_freq % config.env.freq != 0:
             raise ValueError(f"({config.sim.sim_freq=}) is no multiple of ({config.env.freq=})")
         self.action_space = spaces.Box(low=-1, high=1, shape=(13,))
@@ -134,6 +139,7 @@ class DroneRacingEnv(gymnasium.Env):
         self._steps = 0
         self._last_drone_pos = np.zeros(3)
         self.gates, self.obstacles, self.drone = self.load_track(config.env.track)
+        self.n_gates = len(config.env.track.gates)
         self.disturbances = self.load_disturbances(config.env.get("disturbances", None))
 
         self.gates_visited = np.array([False] * len(config.env.track.gates))
@@ -151,13 +157,12 @@ class DroneRacingEnv(gymnasium.Env):
         Returns:
             Observation and info.
         """
-        # The system identification model is based on the attitude control interface. We cannot
-        # support its use with the full state control interface
         if self.config.env.reseed:
             self.sim.seed(self.config.env.seed)
         if seed is not None:
             self.sim.seed(seed)
         self.sim.reset()
+        # TODO: Add randomization of gates, obstacles, drone, and disturbances
         states = self.sim.data.states.replace(
             pos=self.drone["pos"].reshape((1, 1, 3)),
             quat=self.drone["quat"].reshape((1, 1, 4)),
@@ -168,12 +173,12 @@ class DroneRacingEnv(gymnasium.Env):
         self.target_gate = 0
         self._steps = 0
         self._last_drone_pos[:] = self.sim.data.states.pos[0, 0]
-        info = self.info
+        info = self.info()
         info["sim_freq"] = self.sim.data.core.freq
         info["low_level_ctrl_freq"] = self.sim.data.controls.attitude_freq
-        info["drone_mass"] = self.sim.default_data.params.mass[0, 0]
+        info["drone_mass"] = self.sim.default_data.params.mass[0, 0, 0]
         info["env_freq"] = self.config.env.freq
-        return self.obs, info
+        return self.obs(), info
 
     def step(
         self, action: NDArray[np.floating]
@@ -187,20 +192,21 @@ class DroneRacingEnv(gymnasium.Env):
             action: Full-state command [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate]
                 to follow.
         """
-        assert (
-            self.config.sim.physics != PhysicsMode.SYS_ID
-        ), "sys_id model not supported for full state control interface"
-        action = action.astype(np.float64)  # Drone firmware expects float64
         assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
-        self.sim.state_control(action.reshape((1, 1, 13)))
-        self.sim.step(self.sim.freq // self.sim.control_freq)
-        return self.obs, self.reward, self.terminated, False, self.info
+        # TODO: Add action noise
+        # TODO: Check why sim is being compiled twice
+        self.sim.state_control(action.reshape((1, 1, 13)).astype(np.float32))
+        self.sim.step(self.sim.freq // self.config.env.freq)
+        self.target_gate += self.gate_passed()
+        if self.target_gate == self.n_gates:
+            self.target_gate = -1
+        self._last_drone_pos[:] = self.sim.data.states.pos[0, 0]
+        return self.obs(), self.reward(), self.terminated(), False, self.info()
 
     def render(self):
         """Render the environment."""
         self.sim.render()
 
-    @property
     def obs(self) -> dict[str, NDArray[np.floating]]:
         """Return the observation of the environment."""
         obs = {
@@ -240,7 +246,6 @@ class DroneRacingEnv(gymnasium.Env):
             obs = self.disturbances["observation"].apply(obs)
         return obs
 
-    @property
     def reward(self) -> float:
         """Compute the reward for the current state.
 
@@ -254,7 +259,6 @@ class DroneRacingEnv(gymnasium.Env):
         """
         return -1.0 if self.target_gate != -1 else 0.0
 
-    @property
     def terminated(self) -> bool:
         """Check if the episode is terminated.
 
@@ -274,7 +278,7 @@ class DroneRacingEnv(gymnasium.Env):
         }
         if state not in self.state_space:
             return True  # Drone is out of bounds
-        if np.logical_and(self.sim.contacts("drone:0"), self.contact_mask).any():
+        if self.sim.contacts("drone:0").any():
             return True
         if self.sim.data.states.pos[0, 0, 2] < 0.0:
             return True
@@ -282,10 +286,9 @@ class DroneRacingEnv(gymnasium.Env):
             return True
         return False
 
-    @property
     def info(self) -> dict:
         """Return an info dictionary containing additional information about the environment."""
-        return {"collisions": self.sim.contacts("drone:0"), "symbolic_model": self.symbolic}
+        return {"collisions": self.sim.contacts("drone:0").any(), "symbolic_model": self.symbolic}
 
     def load_track(self, track: dict) -> tuple[dict, dict, dict]:
         """Load the track from the config file."""
@@ -299,7 +302,31 @@ class DroneRacingEnv(gymnasium.Env):
             for k in ("pos", "rpy", "vel", "rpy_rates")
         }
         drone["quat"] = R.from_euler("xyz", drone["rpy"]).as_quat()
+        # Load the models into the simulation and set their positions
+        self._load_track_into_sim(gates, obstacles)
         return gates, obstacles, drone
+
+    def _load_track_into_sim(self, gates: dict, obstacles: dict):
+        """Load the track into the simulation."""
+        gate_spec = mujoco.MjSpec.from_file(str(self.gate_spec_path))
+        obstacle_spec = mujoco.MjSpec.from_file(str(self.obstacle_spec_path))
+        spec = self.sim.spec
+        frame = spec.worldbody.add_frame()
+        for i in range(len(gates["pos"])):
+            gate = frame.attach_body(gate_spec.find_body("world"), "", f":g{i}")
+            gate.pos = gates["pos"][i]
+            quat = R.from_euler("xyz", gates["rpy"][i]).as_quat()
+            gate.quat = quat[[3, 0, 1, 2]]  # MuJoCo uses wxyz order instead of xyzw
+        for i in range(len(obstacles["pos"])):
+            obstacle = frame.attach_body(obstacle_spec.find_body("world"), "", f":o{i}")
+            obstacle.pos = obstacles["pos"][i]
+        # TODO: Simplify rebuilding the simulation after changing the mujoco model
+        self.sim.mj_model, self.sim.mj_data, self.sim.mjx_model, mjx_data = self.sim.compile_mj(
+            spec
+        )
+        self.sim.data = self.sim.data.replace(mjx_data=mjx_data)
+        self.sim.default_data = self.sim.data.replace()
+        self.sim.build()
 
     def load_disturbances(self, disturbances: dict | None = None) -> dict:
         """Load the disturbances from the config."""
@@ -316,10 +343,10 @@ class DroneRacingEnv(gymnasium.Env):
         Returns:
             True if the drone has passed a gate, else False.
         """
-        if self.sim.n_gates > 0 and self.target_gate < self.sim.n_gates and self.target_gate != -1:
-            gate_pos = self.sim.gates[self.target_gate]["pos"]
-            gate_rot = R.from_euler("xyz", self.sim.gates[self.target_gate]["rpy"])
-            drone_pos = self.sim.drone.pos
+        if self.n_gates > 0 and self.target_gate < self.n_gates and self.target_gate != -1:
+            gate_pos = self.gates["pos"][self.target_gate]
+            gate_rot = R.from_euler("xyz", self.gates["rpy"][self.target_gate])
+            drone_pos = self.sim.data.states.pos[0, 0]
             last_drone_pos = self._last_drone_pos
             gate_size = (0.45, 0.45)
             return check_gate_pass(gate_pos, gate_rot, gate_size, drone_pos, last_drone_pos)
@@ -343,6 +370,7 @@ class DroneRacingThrustEnv(DroneRacingEnv):
         Args:
             config: Configuration dictionary for the environment.
         """
+        config.sim.control = "attitude"
         super().__init__(config)
         bounds = np.array([1, np.pi, np.pi, np.pi], dtype=np.float32)
         self.action_space = spaces.Box(low=-bounds, high=bounds)
@@ -356,24 +384,12 @@ class DroneRacingThrustEnv(DroneRacingEnv):
             action: Thrust command [thrust, roll, pitch, yaw].
         """
         assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
-        action = action.astype(np.float64)
-        collision = False
-        # We currently need to differentiate between the sys_id backend and all others because the
-        # simulation step size is different for the sys_id backend (we do not substep in the
-        # identified model). In future iterations, the sim API should be flexible to handle both
-        # cases without an explicit step_sys_id function.
-        if self.config.sim.physics == "sys_id":
-            cmd_thrust, cmd_rpy = action[0], action[1:]
-            self.sim.step_sys_id(cmd_thrust, cmd_rpy, 1 / self.config.env.freq)
-            self.target_gate += self.gate_passed()
-            if self.target_gate == self.sim.n_gates:
-                self.target_gate = -1
-            self._last_drone_pos[:] = self.sim.drone.pos
-        else:
-            # Crazyflie firmware expects negated pitch command. TODO: Check why this is the case and
-            # fix this on the firmware side if possible.
-            cmd_thrust, cmd_rpy = action[0], action[1:] * np.array([1, -1, 1])
-            self.sim.drone.collective_thrust_cmd(cmd_thrust, cmd_rpy)
-            collision = self._inner_step_loop()
-        terminated = self.terminated or collision
-        return self.obs, self.reward, terminated, False, self.info
+        # TODO: Add action noise
+        # TODO: Check why sim is being compiled twice
+        self.sim.attitude_control(action.reshape((1, 1, 4)).astype(np.float32))
+        self.sim.step(self.sim.freq // self.config.env.freq)
+        self.target_gate += self.gate_passed()
+        if self.target_gate == self.n_gates:
+            self.target_gate = -1
+        self._last_drone_pos[:] = self.sim.data.states.pos[0, 0]
+        return self.obs(), self.reward(), self.terminated(), False, self.info()

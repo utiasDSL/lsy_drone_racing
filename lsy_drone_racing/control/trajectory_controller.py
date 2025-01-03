@@ -14,7 +14,6 @@ from __future__ import annotations  # Python 3.10 type hints
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pybullet as p
 from scipy.interpolate import CubicSpline
 
 from lsy_drone_racing.control import BaseController
@@ -37,11 +36,11 @@ class TrajectoryController(BaseController):
         super().__init__(initial_obs, initial_info)
         waypoints = np.array(
             [
-                [1.0, 1.0, 0.0],
+                [1.0, 1.0, 0.05],
                 [0.8, 0.5, 0.2],
-                [0.55, -0.8, 0.4],
+                [0.55, -0.8, 0.5],
                 [0.2, -1.8, 0.65],
-                [1.1, -1.35, 1.0],
+                [1.1, -1.35, 1.1],
                 [0.2, 0.0, 0.65],
                 [0.0, 0.75, 0.525],
                 [0.0, 0.75, 1.1],
@@ -54,23 +53,6 @@ class TrajectoryController(BaseController):
         self.trajectory = CubicSpline(t, waypoints)
         self._tick = 0
         self._freq = initial_info["env_freq"]
-
-        # Generate points along the spline for visualization
-        t_vis = np.linspace(0, self.t_total - 1, 100)
-        spline_points = self.trajectory(t_vis)
-        try:
-            # Plot the spline as a line in PyBullet
-            for i in range(len(spline_points) - 1):
-                p.addUserDebugLine(
-                    spline_points[i],
-                    spline_points[i + 1],
-                    lineColorRGB=[1, 0, 0],  # Red color
-                    lineWidth=2,
-                    lifeTime=0,  # 0 means the line persists indefinitely
-                    physicsClientId=0,
-                )
-        except p.error:
-            ...  # Ignore errors if PyBullet is not available
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None

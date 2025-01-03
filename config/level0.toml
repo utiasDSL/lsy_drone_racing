@@ -17,13 +17,9 @@ practice_without_track_objects = false
 
 [sim]
 # Physics options:
-# "pyb": PyBullet
-# "dyn": Mathematical dynamics model 
-# "pyb_gnd" PyBullet with ground effect
-# "pyb_drag": PyBullet with drag
-# "pyb_dw": PyBullet with downwash
-# "pyb_gnd_drag_dw": PyBullet with ground effect, drag, and downwash.
-# "sys_id": System identification model. Only supported for attitude control interface (DroneRacingThrust-v0)
+# "analytical": Analytical, simplified dynamics model
+# "mujoco": Mujoco dynamics. May take longer to compile at startup.
+# "sys_id": System identification model.
 physics = "analytical"
 
 camera_view = [5.0, -40.0, -40.0, 0.5, -1.0, 0.5]

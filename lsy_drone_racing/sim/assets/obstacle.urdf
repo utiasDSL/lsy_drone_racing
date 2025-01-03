@@ -9,7 +9,7 @@
       <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0" iyz="0.0" izz="0"/>
     </inertial>
 
-    <visual>
+    <visual name="v1">
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <sphere radius=".01" />
@@ -27,7 +27,7 @@
       <inertia ixx="1" ixy="0.0" ixz="0.0" iyy="1" iyz="0.0" izz="1"/>
     </inertial>
 
-    <visual>
+    <visual name="v2">
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <cylinder length="1.4" radius="0.05" />
@@ -37,7 +37,7 @@
       </material> 
     </visual>
 
-    <collision>
+    <collision name="c2">
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <cylinder length="1.4" radius="0.05" />
@@ -52,7 +52,7 @@
       <inertia ixx="0" ixy="0.0" ixz="0.0" iyy="0" iyz="0.0" izz="0"/>
     </inertial>
 
-    <visual>
+    <visual name="v3">
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <box size=".15 .15 .25" />
@@ -62,7 +62,7 @@
       </material> 
     </visual>
 
-    <collision>
+    <collision name="c3">
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <box size=".15 .15 .25" />
