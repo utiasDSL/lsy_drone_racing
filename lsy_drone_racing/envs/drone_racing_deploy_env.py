@@ -191,7 +191,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
             return_pos = obs['pos'] + obs['vel']/(np.linalg.norm(obs['vel']) + 1e-8) * BREAKING_DISTANCE
             return_pos[2] = RETURN_HEIGHT
             self.cf.goTo(goal = return_pos, yaw=0, duration=BREAKING_DURATION)
-            time.sleep(BREAKING_DURATION - 1)
+            time.sleep(BREAKING_DURATION - 1)  # Smoothly transition to next position by setting the next goal earlier
 
             return_pos[:2] = self.config.env.track.drone.pos[:2]
             self.cf.goTo(goal=return_pos, yaw=0, duration=RETURN_DURATION)
