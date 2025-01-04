@@ -38,6 +38,8 @@ from lsy_drone_racing.utils.import_utils import get_ros_package_path, pycrazyswa
 from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
 from lsy_drone_racing.vicon import Vicon
 
+import rospy
+
 if TYPE_CHECKING:
     from munch import Munch
     from numpy.typing import NDArray
@@ -199,7 +201,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
 
             self.cf.land(self.config.env.track.drone.pos[2], LAND_DURATION)
             time.sleep(LAND_DURATION)
-        except Exception as e:
+        except rospy.service.ServiceException as e:
             logger.error('Cannot return home: ' + str(e))
 
     @property
