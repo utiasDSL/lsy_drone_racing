@@ -27,6 +27,7 @@ import time
 from typing import TYPE_CHECKING
 
 import gymnasium
+import rospy
 import numpy as np
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
@@ -37,8 +38,6 @@ from lsy_drone_racing.utils import check_gate_pass
 from lsy_drone_racing.utils.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
 from lsy_drone_racing.vicon import Vicon
-
-import rospy
 
 if TYPE_CHECKING:
     from munch import Munch
