@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import copy as copy
 import logging
-import time
 from typing import TYPE_CHECKING
 
 import gymnasium
@@ -35,7 +34,6 @@ import numpy as np
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.control.closing_controller import ClosingController
 from lsy_drone_racing.sim.physics import PhysicsMode
 from lsy_drone_racing.sim.sim import Sim
 from lsy_drone_racing.utils import check_gate_pass
@@ -71,9 +69,9 @@ class DroneRacingEnv(gymnasium.Env):
     - "ang_vel": Drone angular velocity
     - "gates.pos": Positions of the gates
     - "gates.rpy": Orientations of the gates
-    - "gates.in_range": Flags indicating if the drone is in the sensor range of the gates
+    - "gates.visited": Flags indicating if the drone already was/ is in the sensor range of the gates and the true position is known
     - "obstacles.pos": Positions of the obstacles
-    - "obstacles.in_range": Flags indicating if the drone is in the sensor range of the obstacles
+    - "obstacles.visited": Flags indicating if the drone already was/ is in the sensor range of the obstacles and the true position is known
     - "target_gate": The current target gate index
 
     The action space consists of a desired full-state command
@@ -113,9 +111,9 @@ class DroneRacingEnv(gymnasium.Env):
                 "target_gate": spaces.Discrete(n_gates, start=-1),
                 "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_gates, 3)),
                 "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(n_gates, 3)),
-                "gates_in_range": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=np.bool_),
+                "gates_visited": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=np.bool_),
                 "obstacles_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_obstacles, 3)),
-                "obstacles_in_range": spaces.Box(
+                "obstacles_visited": spaces.Box(
                     low=0, high=1, shape=(n_obstacles,), dtype=np.bool_
                 ),
             }
@@ -124,6 +122,9 @@ class DroneRacingEnv(gymnasium.Env):
         self.symbolic = self.sim.symbolic() if config.env.symbolic else None
         self._steps = 0
         self._last_drone_pos = np.zeros(3)
+
+        self.gates_visited = np.array([False] * len(config.env.track.gates))
+        self.obstacles_visited = np.array([False] * len(config.env.track.obstacles))
 
     def reset(
         self, *, seed: int | None = None, options: dict | None = None
@@ -224,20 +225,30 @@ class DroneRacingEnv(gymnasium.Env):
         # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
         # use the actual pose, otherwise use the nominal pose.
         in_range = self.sim.in_range(gates, self.sim.drone, self.config.env.sensor_range)
+        self.gates_visited = np.logical_or(self.gates_visited, in_range)
+
         gates_pos = np.stack([g["nominal.pos"] for g in gates.values()])
-        gates_pos[in_range] = np.stack([g["pos"] for g in gates.values()])[in_range]
+        gates_pos[self.gates_visited] = np.stack([g["pos"] for g in gates.values()])[
+            self.gates_visited
+        ]
         gates_rpy = np.stack([g["nominal.rpy"] for g in gates.values()])
-        gates_rpy[in_range] = np.stack([g["rpy"] for g in gates.values()])[in_range]
+        gates_rpy[self.gates_visited] = np.stack([g["rpy"] for g in gates.values()])[
+            self.gates_visited
+        ]
         obs["gates_pos"] = gates_pos.astype(np.float32)
         obs["gates_rpy"] = gates_rpy.astype(np.float32)
-        obs["gates_in_range"] = in_range
+        obs["gates_visited"] = self.gates_visited
 
         obstacles = self.sim.obstacles
         in_range = self.sim.in_range(obstacles, self.sim.drone, self.config.env.sensor_range)
+        self.obstacles_visited = np.logical_or(self.obstacles_visited, in_range)
+
         obstacles_pos = np.stack([o["nominal.pos"] for o in obstacles.values()])
-        obstacles_pos[in_range] = np.stack([o["pos"] for o in obstacles.values()])[in_range]
+        obstacles_pos[self.obstacles_visited] = np.stack([o["pos"] for o in obstacles.values()])[
+            self.obstacles_visited
+        ]
         obs["obstacles_pos"] = obstacles_pos.astype(np.float32)
-        obs["obstacles_in_range"] = in_range
+        obs["obstacles_visited"] = self.obstacles_visited
 
         if "observation" in self.sim.disturbances:
             obs = self.sim.disturbances["observation"].apply(obs)
@@ -297,50 +308,6 @@ class DroneRacingEnv(gymnasium.Env):
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
-        return_home = True  # makes the drone simulate the return to home after stopping
-
-        if return_home:
-            # This is done to run the closing controller at a different frequency than the controller before
-            # Does not influence other code, since this part is already in closing!
-            # WARNING: When changing the frequency, you must also change the current _step!!!
-            freq_new = 100  # Hz
-            self._steps = int(self._steps / self.config.env.freq * freq_new)
-            self.config.env.freq = freq_new
-            t_step_ctrl = 1 / self.config.env.freq
-
-            obs = self.obs
-            obs["acc"] = np.array(
-                [0, 0, 0]
-            )  # TODO, use actual value when avaiable or do one step to calculate from velocity
-            info = self.info
-            info["env_freq"] = self.config.env.freq
-            info["drone_start_pos"] = self.config.env.track.drone.pos
-
-            controller = ClosingController(obs, info)
-            t_total = controller.t_total
-
-            for i in np.arange(int(t_total / t_step_ctrl)):  # hover for some more time
-                action = controller.compute_control(obs)
-                action = action.astype(np.float64)  # Drone firmware expects float64
-                if self.config.sim.physics == PhysicsMode.SYS_ID:
-                    print("[Warning] sys_id model not supported by return home script")
-                    break
-                pos, vel, acc, yaw, rpy_rate = (
-                    action[:3],
-                    action[3:6],
-                    action[6:9],
-                    action[9],
-                    action[10:],
-                )
-                self.sim.drone.full_state_cmd(pos, vel, acc, yaw, rpy_rate)
-                collision = self._inner_step_loop()
-                terminated = self.terminated or collision
-                obs = self.obs
-                obs["acc"] = np.array([0, 0, 0])
-                controller.step_callback(action, obs, self.reward, terminated, False, info)
-                if self.config.sim.gui:  # Only sync if gui is active
-                    time.sleep(t_step_ctrl)
-
         self.sim.close()
 
 
