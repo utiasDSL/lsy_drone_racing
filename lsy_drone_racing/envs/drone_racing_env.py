@@ -141,6 +141,8 @@ class DroneRacingEnv(gymnasium.Env):
         self.gates, self.obstacles, self.drone = self.load_track(config.env.track)
         self.n_gates = len(config.env.track.gates)
         self.disturbances = self.load_disturbances(config.env.get("disturbances", None))
+        self.contact_mask = np.ones((self.sim.n_worlds, 29), dtype=bool)
+        self.contact_mask[..., 0] = 0  # Ignore contacts with the floor
 
         self.gates_visited = np.array([False] * len(config.env.track.gates))
         self.obstacles_visited = np.array([False] * len(config.env.track.obstacles))
@@ -161,6 +163,8 @@ class DroneRacingEnv(gymnasium.Env):
             self.sim.seed(self.config.env.seed)
         if seed is not None:
             self.sim.seed(seed)
+        # Randomization of gates, obstacles and drones is compiled into the sim reset function with
+        # the sim.reset_hook function, so we don't need to explicitly do it here
         self.sim.reset()
         # TODO: Add randomization of gates, obstacles, drone, and disturbances
         states = self.sim.data.states.replace(
@@ -278,7 +282,7 @@ class DroneRacingEnv(gymnasium.Env):
         }
         if state not in self.state_space:
             return True  # Drone is out of bounds
-        if self.sim.contacts("drone:0").any():
+        if np.logical_and(self.sim.contacts("drone:0"), self.contact_mask).any():
             return True
         if self.sim.data.states.pos[0, 0, 2] < 0.0:
             return True
@@ -320,17 +324,11 @@ class DroneRacingEnv(gymnasium.Env):
         for i in range(len(obstacles["pos"])):
             obstacle = frame.attach_body(obstacle_spec.find_body("world"), "", f":o{i}")
             obstacle.pos = obstacles["pos"][i]
-        # TODO: Simplify rebuilding the simulation after changing the mujoco model
-        self.sim.mj_model, self.sim.mj_data, self.sim.mjx_model, mjx_data = self.sim.compile_mj(
-            spec
-        )
-        self.sim.data = self.sim.data.replace(mjx_data=mjx_data)
-        self.sim.default_data = self.sim.data.replace()
         self.sim.build()
 
     def load_disturbances(self, disturbances: dict | None = None) -> dict:
         """Load the disturbances from the config."""
-        dist = {}
+        dist = {}  # TODO: Add jax disturbances for the simulator dynamics
         if disturbances is None:  # Default: no passive disturbances.
             return dist
         for mode, spec in disturbances.items():

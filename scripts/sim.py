@@ -117,5 +117,7 @@ def log_episode_stats(obs: dict, info: dict, config: Munch, curr_time: float):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig()
+    logging.getLogger("lsy_drone_racing").setLevel(logging.INFO)
+    logger.setLevel(logging.INFO)
     fire.Fire(simulate)
