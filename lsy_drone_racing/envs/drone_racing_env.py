@@ -28,19 +28,28 @@ from __future__ import annotations
 import copy as copy
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import gymnasium
 import mujoco
 import numpy as np
 from crazyflow import Sim
+from crazyflow.sim.sim import identity
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
+from lsy_drone_racing.envs.utils import (
+    randomize_drone_inertia_fn,
+    randomize_drone_mass_fn,
+    randomize_drone_pos_fn,
+    randomize_drone_quat_fn,
+)
 from lsy_drone_racing.sim.noise import NoiseList
 from lsy_drone_racing.utils import check_gate_pass
 
 if TYPE_CHECKING:
+    from crazyflow.sim.structs import SimData
+    from jax import Array
     from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
@@ -106,6 +115,7 @@ class DroneRacingEnv(gymnasium.Env):
         )
         if config.sim.sim_freq % config.env.freq != 0:
             raise ValueError(f"({config.sim.sim_freq=}) is no multiple of ({config.env.freq=})")
+
         self.action_space = spaces.Box(low=-1, high=1, shape=(13,))
         n_gates, n_obstacles = len(config.env.track.gates), len(config.env.track.obstacles)
         self.observation_space = spaces.Dict(
@@ -134,6 +144,7 @@ class DroneRacingEnv(gymnasium.Env):
                 "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float64),
             }
         )
+
         self.target_gate = 0
         self.symbolic = self.sim.symbolic() if config.env.symbolic else None
         self._steps = 0
@@ -141,8 +152,11 @@ class DroneRacingEnv(gymnasium.Env):
         self.gates, self.obstacles, self.drone = self.load_track(config.env.track)
         self.n_gates = len(config.env.track.gates)
         self.disturbances = self.load_disturbances(config.env.get("disturbances", None))
+        self.randomization = self.load_randomizations(config.env.get("randomization", None))
         self.contact_mask = np.ones((self.sim.n_worlds, 29), dtype=bool)
         self.contact_mask[..., 0] = 0  # Ignore contacts with the floor
+
+        self.setup_sim()
 
         self.gates_visited = np.array([False] * len(config.env.track.gates))
         self.obstacles_visited = np.array([False] * len(config.env.track.obstacles))
@@ -167,13 +181,6 @@ class DroneRacingEnv(gymnasium.Env):
         # the sim.reset_hook function, so we don't need to explicitly do it here
         self.sim.reset()
         # TODO: Add randomization of gates, obstacles, drone, and disturbances
-        states = self.sim.data.states.replace(
-            pos=self.drone["pos"].reshape((1, 1, 3)),
-            quat=self.drone["quat"].reshape((1, 1, 4)),
-            vel=self.drone["vel"].reshape((1, 1, 3)),
-            rpy_rates=self.drone["rpy_rates"].reshape((1, 1, 3)),
-        )
-        self.sim.data = self.sim.data.replace(states=states)
         self.target_gate = 0
         self._steps = 0
         self._last_drone_pos[:] = self.sim.data.states.pos[0, 0]
@@ -335,6 +342,24 @@ class DroneRacingEnv(gymnasium.Env):
             dist[mode] = NoiseList.from_specs([spec])
         return dist
 
+    def load_randomizations(self, randomizations: dict | None = None) -> dict:
+        """Load the randomization from the config."""
+        if randomizations is None:
+            return {}
+        return {}
+
+    def setup_sim(self):
+        """Setup the simulation data and build the reset and step functions with custom hooks."""
+        pos = self.drone["pos"].reshape(self.sim.data.states.pos.shape)
+        quat = self.drone["quat"].reshape(self.sim.data.states.quat.shape)
+        vel = self.drone["vel"].reshape(self.sim.data.states.vel.shape)
+        rpy_rates = self.drone["rpy_rates"].reshape(self.sim.data.states.rpy_rates.shape)
+        states = self.sim.data.states.replace(pos=pos, quat=quat, vel=vel, rpy_rates=rpy_rates)
+        self.sim.data = self.sim.data.replace(states=states)
+        reset_hook = build_reset_hook(self.randomization)
+        self.sim.reset_hook = reset_hook
+        self.sim.build(mjx=False, data=False)  # Save the reset state and rebuild the reset function
+
     def gate_passed(self) -> bool:
         """Check if the drone has passed a gate.
 
@@ -353,6 +378,43 @@ class DroneRacingEnv(gymnasium.Env):
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
         self.sim.close()
+
+
+def build_reset_hook(randomizations: dict) -> Callable[[SimData, Array[bool]], SimData]:
+    """Build the reset hook for the simulation."""
+    modify_drone_pos = identity
+    if "drone_pos" in randomizations:
+        modify_drone_pos = randomize_drone_pos_fn(randomizations["drone_pos"])
+    modify_drone_quat = identity
+    if "drone_rpy" in randomizations:
+        modify_drone_quat = randomize_drone_quat_fn(randomizations["drone_rpy"])
+    modify_drone_mass = identity
+    if "drone_mass" in randomizations:
+        modify_drone_mass = randomize_drone_mass_fn(randomizations["drone_mass"])
+    modify_drone_inertia = identity
+    if "drone_inertia" in randomizations:
+        modify_drone_inertia = randomize_drone_inertia_fn(randomizations["drone_inertia"])
+    modify_gate_pos = identity
+    if "gate_pos" in randomizations:
+        modify_gate_pos = randomize_gate_pos_fn(randomizations["gate_pos"])
+    modify_gate_rpy = identity
+    if "gate_rpy" in randomizations:
+        modify_gate_rpy = randomize_gate_rpy_fn(randomizations["gate_rpy"])
+    modify_obstacle_pos = identity
+    if "obstacle_pos" in randomizations:
+        modify_obstacle_pos = randomize_obstacle_pos_fn(randomizations["obstacle_pos"])
+
+    def reset_hook(data: SimData, mask: Array[bool]) -> SimData:
+        data = modify_drone_pos(data, mask)
+        data = modify_drone_quat(data, mask)
+        data = modify_drone_mass(data, mask)
+        data = modify_drone_inertia(data, mask)
+        data = modify_gate_pos(data, mask)
+        data = modify_gate_rpy(data, mask)
+        data = modify_obstacle_pos(data, mask)
+        return data
+
+    return reset_hook
 
 
 class DroneRacingThrustEnv(DroneRacingEnv):
