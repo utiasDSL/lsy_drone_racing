@@ -201,33 +201,52 @@ class UKF(Estimator):
         self._state = self._UKF.x
         
         # Set process noise covariance (tunable). Uncertainty in the dynamics. High Q -> less trust in model
-        # Q_x = Q_discrete_white_noise(dim=2, dt=dt, var=1e-9, block_size=6, order_by_dim=False)
-        # Q_f = np.eye(3)*1e-6 # Q_discrete_white_noise(dim=3, dt=dt, var=1e-6, block_size=1, order_by_dim=False)
-        # Q_t = np.eye(3)*1e-6 # Q_discrete_white_noise(dim=3, dt=dt, var=1e-6, block_size=1, order_by_dim=False)
-        # self._UKF.Q = block_diag(Q_x, Q_f, Q_t) # np.eye(18)*1e-6 # 
-        # self._UKF.Q[12:15, 12:15] = self._UKF.Q[12:15, 12:15] * 1e1 # Force
-        # self._UKF.Q[15:18, 15:18] = self._UKF.Q[15:18, 15:18] * 1e1 # Torque
+        self._UKF.Q = np.eye(dim_x)
+        # self._varQ = 1e-10
+        # Q_x = Q_discrete_white_noise(dim=2, dt=dt, var=self._varQ, block_size=6, order_by_dim=False)
+        # Q_f = np.eye(3)*1e0 # Q_discrete_white_noise(dim=3, dt=dt, var=1e-6, block_size=1, order_by_dim=False)
+        # Q_t = np.eye(3)*1e0 # Q_discrete_white_noise(dim=3, dt=dt, var=1e-6, block_size=1, order_by_dim=False)
+        # self._KF.Q = block_diag(Q_x, Q_f, Q_t) # np.eye(18)*1e-6 # 
+        # self._KF.Q[12:15, 12:15] = self._KF.Q[12:15, 12:15] * 1e1 # Force
+        # self._KF.Q[15:18, 15:18] = self._KF.Q[15:18, 15:18] * 1e1 # Torque
 
-        self._varQ = 1e-2
-        self._varR = 1e-3
+        # self._varQ = 1e-1
+        # self._KF.Q = Q_discrete_white_noise(dim=3, dt=self._dt, var=self._varQ, block_size=dim_x//3, order_by_dim=False) # TODO manually setup matrix
 
-        # self._UKF.Q = Q_discrete_white_noise(dim=3, dt=self._dt, var=self._varQ, block_size=6, order_by_dim=False) # TODO manually setup matrix
-        # self._UKF.Q[12:15, 12:15] = self._UKF.Q[12:15, 12:15] * 5e0 # Force
-        # self._UKF.Q[15:18, 15:18] = self._UKF.Q[15:18, 15:18] * 5e0 # Torque
-        # self._UKF.Q = np.eye(18)*1e-9
-        # This way, pos, vel, and force (or rpy, angular vel, and torque) influence each other
-        # print(self._UKF.Q.tolist()) 
+        # See sketch for more info on how the matrix is set up
+        Q_xyz = Q_discrete_white_noise(dim=2, dt=self._dt, var=1e-1, block_size=3, order_by_dim=False) # pos & vel
+        # plt.matshow(Q_xyz)
+        # plt.show()
+        self._UKF.Q[0:3,0:3] = Q_xyz[0:3,0:3] # pos
+        self._UKF.Q[6:9,6:9] = Q_xyz[3:6,3:6] # vel
+        self._UKF.Q[0:3,6:9] = Q_xyz[0:3,3:6] # pos <-> vel
+        self._UKF.Q[6:9,0:3] = Q_xyz[3:6,0:3] # pos <-> vel
 
-        Q_p = np.eye(3)*self._varQ*1e-0
-        Q_a = np.eye(3)*self._varQ*1e-0
-        Q_v = np.eye(3)*self._varQ*1e-0
-        Q_w = np.eye(3)*self._varQ*1e-0
-        Q_f = np.eye(3)*self._varQ*1e-0
-        Q_t = np.eye(3)*self._varQ*1e-0
-        self._UKF.Q = block_diag(Q_p, Q_a, Q_v, Q_w, Q_f, Q_t)
+        Q_rpy = Q_discrete_white_noise(dim=2, dt=self._dt, var=1e-0, block_size=3, order_by_dim=False) # rpy & rpy rates
+        # plt.matshow(Q_rpy)
+        # plt.show()
+        self._UKF.Q[3:6,3:6] = Q_rpy[0:3,0:3] # rpy
+        self._UKF.Q[9:12,9:12] = Q_rpy[3:6,3:6] # rpy rates
+        self._UKF.Q[3:6,9:12] = Q_rpy[0:3,3:6] # rpy <-> rpy rates
+        self._UKF.Q[9:12,3:6] = Q_rpy[3:6,0:3] # rpy <-> rpy rates
+
+
+        
+        # self._KF.Q[0:3] = self._KF.Q[0:3] * 1e-1 # pos
+        # self._KF.Q[3:6] = self._KF.Q[3:6] * 1e-1 # rpy
+        # self._KF.Q[6:9] = self._KF.Q[6:9] * 1e-1 # vel
+        # self._KF.Q[9:12] = self._KF.Q[9:12] * 1e-1 # rpy rate
+
+        if dim_x > 12:
+            self._UKF.Q[12:15, 12:15] *= 1e-5 # Force
+            self._UKF.Q[15:18, 15:18] *= 1e-9 # Torque
         
         # Set measurement noise covariance (tunable). Uncertaints in the measurements. High R -> less trust in measurements
-        self._UKF.R = np.eye(self._obs_dim) * self._varR
+        self._UKF.R = np.eye(self._obs_dim)
+        # very low noise on the position ("mm precision" => even less noise)
+        self._UKF.R[:3, :3] = self._UKF.R[:3, :3] * 1e-8
+        # "high" measurements noise on the angles, estimate: 0.01 constains all values => std=3e-3
+        self._UKF.R[3:, 3:] = self._UKF.R[3:, 3:] * 3e-3 # 1e-5 works quite well, but bias!
         
         # Initialize state and covariance
         if initial_obs is not None:

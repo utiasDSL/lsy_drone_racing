@@ -18,7 +18,7 @@ import time
 import numpy as np
 import rospy
 import yaml
-from crazyswarm.msg import StateVector
+from vicon_bridge.msg import StateVector, Command
 from rosgraph import Master
 from scipy.spatial.transform import Rotation as R
 from tf2_msgs.msg import TFMessage
@@ -70,6 +70,11 @@ class Vicon:
             self.estimator_sub = rospy.Subscriber(
                 "/estimated_state", StateVector, self.estimator_callback
             )
+
+        self.control_pub = rospy.Publisher("/controller_command",
+                                            Command,
+                                            queue_size=1,
+                                        )
 
         if timeout:
             tstart = time.time()
