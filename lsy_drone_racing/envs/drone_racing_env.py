@@ -27,24 +27,19 @@ from __future__ import annotations
 
 import copy as copy
 import logging
+from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import gymnasium
+import jax
 import mujoco
 import numpy as np
 from crazyflow import Sim
-from crazyflow.sim.sim import identity
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.envs.utils import (
-    randomize_drone_inertia_fn,
-    randomize_drone_mass_fn,
-    randomize_drone_pos_fn,
-    randomize_drone_quat_fn,
-)
-from lsy_drone_racing.sim.noise import NoiseList
+from lsy_drone_racing.envs.utils import randomize_sim_fn
 from lsy_drone_racing.utils import check_gate_pass
 
 if TYPE_CHECKING:
@@ -92,8 +87,8 @@ class DroneRacingEnv(gymnasium.Env):
     low-level controller.
     """
 
-    gate_spec_path = Path(__file__).parents[1] / "sim/assets/gate.urdf"
-    obstacle_spec_path = Path(__file__).parents[1] / "sim/assets/obstacle.urdf"
+    gate_spec_path = Path(__file__).parents[1] / "sim/assets/gate.xml"
+    obstacle_spec_path = Path(__file__).parents[1] / "sim/assets/obstacle.xml"
 
     def __init__(self, config: dict):
         """Initialize the DroneRacingEnv.
@@ -153,7 +148,7 @@ class DroneRacingEnv(gymnasium.Env):
         self.n_gates = len(config.env.track.gates)
         self.disturbances = self.load_disturbances(config.env.get("disturbances", None))
         self.randomization = self.load_randomizations(config.env.get("randomization", None))
-        self.contact_mask = np.ones((self.sim.n_worlds, 29), dtype=bool)
+        self.contact_mask = np.ones((self.sim.n_worlds, 25), dtype=bool)
         self.contact_mask[..., 0] = 0  # Ignore contacts with the floor
 
         self.setup_sim()
@@ -180,6 +175,7 @@ class DroneRacingEnv(gymnasium.Env):
         # Randomization of gates, obstacles and drones is compiled into the sim reset function with
         # the sim.reset_hook function, so we don't need to explicitly do it here
         self.sim.reset()
+
         # TODO: Add randomization of gates, obstacles, drone, and disturbances
         self.target_gate = 0
         self._steps = 0
@@ -313,9 +309,47 @@ class DroneRacingEnv(gymnasium.Env):
             for k in ("pos", "rpy", "vel", "rpy_rates")
         }
         drone["quat"] = R.from_euler("xyz", drone["rpy"]).as_quat()
-        # Load the models into the simulation and set their positions
-        self._load_track_into_sim(gates, obstacles)
         return gates, obstacles, drone
+
+    def load_disturbances(self, disturbances: dict | None = None) -> dict:
+        """Load the disturbances from the config."""
+        # TODO: Add jax disturbances for the simulator dynamics
+        if disturbances is None:  # Default: no passive disturbances.
+            return {}
+        return {mode: self.load_random_fn(spec) for mode, spec in disturbances.items()}
+
+    def load_randomizations(self, randomizations: dict | None = None) -> dict:
+        """Load the randomization from the config."""
+        if randomizations is None:
+            return {}
+        return {mode: self.load_random_fn(spec) for mode, spec in randomizations.items()}
+
+    @staticmethod
+    def load_random_fn(fn_spec: dict) -> Callable:
+        """Convert a function spec to a function from jax.random."""
+        offset, scale = np.array(fn_spec.get("offset", 0)), np.array(fn_spec.get("scale", 1))
+        kwargs = fn_spec.get("kwargs", {})
+        if "shape" in kwargs:
+            raise KeyError("Shape must not be specified for randomization functions.")
+        kwargs = {k: np.array(v) if isinstance(v, list) else v for k, v in kwargs.items()}
+        jax_fn = partial(getattr(jax.random, fn_spec["fn"]), **kwargs)
+
+        def random_fn(*args: Any, **kwargs: Any) -> Array:
+            return jax_fn(*args, **kwargs) * scale + offset
+
+        return random_fn
+
+    def setup_sim(self):
+        """Setup the simulation data and build the reset and step functions with custom hooks."""
+        self._load_track_into_sim(self.gates, self.obstacles)
+        pos = self.drone["pos"].reshape(self.sim.data.states.pos.shape)
+        quat = self.drone["quat"].reshape(self.sim.data.states.quat.shape)
+        vel = self.drone["vel"].reshape(self.sim.data.states.vel.shape)
+        rpy_rates = self.drone["rpy_rates"].reshape(self.sim.data.states.rpy_rates.shape)
+        states = self.sim.data.states.replace(pos=pos, quat=quat, vel=vel, rpy_rates=rpy_rates)
+        self.sim.data = self.sim.data.replace(states=states)
+        self.sim.reset_hook = build_reset_hook(self.randomization)
+        self.sim.build(mjx=False, data=False)  # Save the reset state and rebuild the reset function
 
     def _load_track_into_sim(self, gates: dict, obstacles: dict):
         """Load the track into the simulation."""
@@ -323,42 +357,24 @@ class DroneRacingEnv(gymnasium.Env):
         obstacle_spec = mujoco.MjSpec.from_file(str(self.obstacle_spec_path))
         spec = self.sim.spec
         frame = spec.worldbody.add_frame()
-        for i in range(len(gates["pos"])):
-            gate = frame.attach_body(gate_spec.find_body("world"), "", f":g{i}")
+        n_gates, n_obstacles = len(gates["pos"]), len(obstacles["pos"])
+        for i in range(n_gates):
+            gate = frame.attach_body(gate_spec.find_body("gate"), "", f":{i}")
             gate.pos = gates["pos"][i]
-            quat = R.from_euler("xyz", gates["rpy"][i]).as_quat()
-            gate.quat = quat[[3, 0, 1, 2]]  # MuJoCo uses wxyz order instead of xyzw
-        for i in range(len(obstacles["pos"])):
-            obstacle = frame.attach_body(obstacle_spec.find_body("world"), "", f":o{i}")
+            gate.quat = R.from_euler("xyz", gates["rpy"][i]).as_quat()[[3, 0, 1, 2]]  # MuJoCo order
+            gate.mocap = True  # Make mocap to modify the position of static bodies during sim
+        for i in range(n_obstacles):
+            obstacle = frame.attach_body(obstacle_spec.find_body("obstacle"), "", f":{i}")
             obstacle.pos = obstacles["pos"][i]
-        self.sim.build()
+            obstacle.mocap = True
+        self.sim.build(data=False, default_data=False)
+        assert not hasattr(self.sim.data, "gate_pos")
+        assert not hasattr(self.sim.data, "obstacle_pos")
 
-    def load_disturbances(self, disturbances: dict | None = None) -> dict:
-        """Load the disturbances from the config."""
-        dist = {}  # TODO: Add jax disturbances for the simulator dynamics
-        if disturbances is None:  # Default: no passive disturbances.
-            return dist
-        for mode, spec in disturbances.items():
-            dist[mode] = NoiseList.from_specs([spec])
-        return dist
-
-    def load_randomizations(self, randomizations: dict | None = None) -> dict:
-        """Load the randomization from the config."""
-        if randomizations is None:
-            return {}
-        return {}
-
-    def setup_sim(self):
-        """Setup the simulation data and build the reset and step functions with custom hooks."""
-        pos = self.drone["pos"].reshape(self.sim.data.states.pos.shape)
-        quat = self.drone["quat"].reshape(self.sim.data.states.quat.shape)
-        vel = self.drone["vel"].reshape(self.sim.data.states.vel.shape)
-        rpy_rates = self.drone["rpy_rates"].reshape(self.sim.data.states.rpy_rates.shape)
-        states = self.sim.data.states.replace(pos=pos, quat=quat, vel=vel, rpy_rates=rpy_rates)
-        self.sim.data = self.sim.data.replace(states=states)
-        reset_hook = build_reset_hook(self.randomization)
-        self.sim.reset_hook = reset_hook
-        self.sim.build(mjx=False, data=False)  # Save the reset state and rebuild the reset function
+        gate_ids = [self.sim.mj_model.body(f"gate:{i}").id for i in range(n_gates)]
+        gates["ids"] = gate_ids
+        obstacle_ids = [self.sim.mj_model.body(f"obstacle:{i}").id for i in range(n_obstacles)]
+        obstacles["ids"] = obstacle_ids
 
     def gate_passed(self) -> bool:
         """Check if the drone has passed a gate.
@@ -366,52 +382,26 @@ class DroneRacingEnv(gymnasium.Env):
         Returns:
             True if the drone has passed a gate, else False.
         """
-        if self.n_gates > 0 and self.target_gate < self.n_gates and self.target_gate != -1:
-            gate_pos = self.gates["pos"][self.target_gate]
-            gate_rot = R.from_euler("xyz", self.gates["rpy"][self.target_gate])
-            drone_pos = self.sim.data.states.pos[0, 0]
-            last_drone_pos = self._last_drone_pos
-            gate_size = (0.45, 0.45)
-            return check_gate_pass(gate_pos, gate_rot, gate_size, drone_pos, last_drone_pos)
-        return False
+        if self.n_gates <= 0 or self.target_gate >= self.n_gates or self.target_gate == -1:
+            return False
+        gate_pos = self.gates["pos"][self.target_gate]
+        gate_rot = R.from_euler("xyz", self.gates["rpy"][self.target_gate])
+        drone_pos = self.sim.data.states.pos[0, 0]
+        gate_size = (0.45, 0.45)
+        return check_gate_pass(gate_pos, gate_rot, gate_size, drone_pos, self._last_drone_pos)
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
         self.sim.close()
 
 
-def build_reset_hook(randomizations: dict) -> Callable[[SimData, Array[bool]], SimData]:
+def build_reset_hook(randomizations: dict) -> Callable[[SimData, Array], SimData]:
     """Build the reset hook for the simulation."""
-    modify_drone_pos = identity
-    if "drone_pos" in randomizations:
-        modify_drone_pos = randomize_drone_pos_fn(randomizations["drone_pos"])
-    modify_drone_quat = identity
-    if "drone_rpy" in randomizations:
-        modify_drone_quat = randomize_drone_quat_fn(randomizations["drone_rpy"])
-    modify_drone_mass = identity
-    if "drone_mass" in randomizations:
-        modify_drone_mass = randomize_drone_mass_fn(randomizations["drone_mass"])
-    modify_drone_inertia = identity
-    if "drone_inertia" in randomizations:
-        modify_drone_inertia = randomize_drone_inertia_fn(randomizations["drone_inertia"])
-    modify_gate_pos = identity
-    if "gate_pos" in randomizations:
-        modify_gate_pos = randomize_gate_pos_fn(randomizations["gate_pos"])
-    modify_gate_rpy = identity
-    if "gate_rpy" in randomizations:
-        modify_gate_rpy = randomize_gate_rpy_fn(randomizations["gate_rpy"])
-    modify_obstacle_pos = identity
-    if "obstacle_pos" in randomizations:
-        modify_obstacle_pos = randomize_obstacle_pos_fn(randomizations["obstacle_pos"])
+    randomizations = [randomize_sim_fn(target, rng) for target, rng in randomizations.items()]
 
-    def reset_hook(data: SimData, mask: Array[bool]) -> SimData:
-        data = modify_drone_pos(data, mask)
-        data = modify_drone_quat(data, mask)
-        data = modify_drone_mass(data, mask)
-        data = modify_drone_inertia(data, mask)
-        data = modify_gate_pos(data, mask)
-        data = modify_gate_rpy(data, mask)
-        data = modify_obstacle_pos(data, mask)
+    def reset_hook(data: SimData, mask: Array) -> SimData:
+        for randomize in randomizations:
+            data = randomize(data, mask)
         return data
 
     return reset_hook

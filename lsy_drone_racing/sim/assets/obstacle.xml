@@ -1,0 +1,8 @@
+<mujoco>  
+  <compiler angle="degree"/>
+  <worldbody>
+    <body name="obstacle">
+      <geom name="obstacle" type="box" size="0.05 0.05 1" pos="0 0 -1" rgba="0.7 0.68 0.55 1"/>
+    </body>
+  </worldbody>
+</mujoco>
