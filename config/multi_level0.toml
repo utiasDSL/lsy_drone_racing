@@ -1,0 +1,78 @@
+# Level 0
+
+# | Evaluation Scenario | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes | Notes             |
+# | :-----------------: | :-----------------------: | :-------------------------: | :--------------------: | :---------------: |
+# | `level0.toml`       | *No*                      | *No*                        | *No*                   | Perfect knowledge |
+[controller]
+file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+
+[deploy]
+### Settings only relevant for deployment
+# Whether to check if gate and obstacle positions observed by vicon are within the limits defined down below.
+check_race_track = true
+# Whether to check if the drone start position is within the limits specified down below.
+check_drone_start_pos = true
+# Lets you practice your controller without putting up gates & obstacles, assumes nominal positions given below.
+practice_without_track_objects = false
+
+[sim]
+# Physics options:
+# "analytical": Analytical, simplified dynamics model
+# "mujoco": Mujoco dynamics. May take longer to compile at startup.
+# "sys_id": System identification model.
+physics = "analytical"
+
+camera_view = [5.0, -40.0, -40.0, 0.5, -1.0, 0.5]
+freq = 500                                        # Simulation frequency, in Hz
+attitude_freq = 500                               # Controller frequency, in Hz. This frequency is used to simulate the onboard controller, NOT for the environment's step function
+gui = false                                       # Enable/disable PyBullet's GUI
+
+[sim.disturbances.action]
+type = "GaussianNoise"
+std = 0.001
+
+[sim.disturbances.dynamics]
+type = "UniformNoise"
+low = [-0.1, -0.1, -0.1]
+high = [0.1, 0.1, 0.1]
+
+[env]
+id = "MultiDroneRacing-v0" # Either "MultiDroneRacingEnv-v0" or "MultiDroneRacingAttitude-v0". If using "MultiDroneRacingAttitude-v0", the drone will use the attitude controller instead of the position controller.
+n_drones = 2          # Number of drones has to match the track configuration for drones
+random_resets = false # Whether to re-seed the random number generator between episodes
+seed = 1337           # Random seed
+freq = 50             # Frequency of the environment's step function, in Hz
+symbolic = false      # Whether to include symbolic expressions in the info dict. Note: This can interfere with multiprocessing! If you want to parallelize your training, set this to false.
+sensor_range = 0.45   # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
+
+[env.track]
+# Tall gates: 1.0m height. Short gates: 0.525m height. Height is measured from the ground to the
+# center of the gate.
+[[env.track.gates]]
+pos = [0.45, -1.0, 0.56]
+rpy = [0.0, 0.0, 2.35]
+[[env.track.gates]]
+pos = [1.0, -1.55, 1.11]
+rpy = [0.0, 0.0, -0.78]
+[[env.track.gates]]
+pos = [0.0, 0.5, 0.56]
+rpy = [0.0, 0.0, 0.0]
+[[env.track.gates]]
+pos = [-0.5, -0.5, 1.11]
+rpy = [0.0, 0.0, 3.14]
+
+# Obstacle height: 1.4m. Height is measured from the ground to the top of the obstacle.
+[[env.track.obstacles]]
+pos = [1.0, -0.5, 1.4]
+[[env.track.obstacles]]
+pos = [0.5, -1.5, 1.4]
+[[env.track.obstacles]]
+pos = [-0.5, 0.0, 1.4]
+[[env.track.obstacles]]
+pos = [0.0, 1.0, 1.4]
+
+[env.track.drone]
+pos = [[1.0, 1.0, 0.05], [1.2, 1.0, 0.05]]
+rpy = [[0, 0, 0], [0, 0, 0]]
+vel = [[0, 0, 0], [0, 0, 0]]
+rpy_rates = [[0, 0, 0], [0, 0, 0]]

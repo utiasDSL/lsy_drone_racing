@@ -1,8 +1,8 @@
-"""Simulate the competition as in the IROS 2022 Safe Robot Learning competition.
+"""Simulate a multi-drone race.
 
 Run as:
 
-    $ python scripts/sim.py --config level0.toml
+    $ python scripts/multi_sim.py --config level0.toml
 
 Look for instructions in `README.md` and in the official documentation.
 """
@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import fire
 import gymnasium
+import numpy as np
 
 from lsy_drone_racing.utils import load_config, load_controller
 
@@ -22,14 +23,14 @@ if TYPE_CHECKING:
     from munch import Munch
 
     from lsy_drone_racing.control.controller import BaseController
-    from lsy_drone_racing.envs.drone_racing_env import DroneRacingEnv
+    from lsy_drone_racing.envs.multi_drone_race import MultiDroneRacingEnv
 
 
 logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "level0.toml",
+    config: str = "multi_level0.toml",
     controller: str | None = None,
     n_runs: int = 1,
     gui: bool | None = None,
@@ -57,8 +58,9 @@ def simulate(
     controller_path = control_path / (controller or config.controller.file)
     controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
-    env: DroneRacingEnv = gymnasium.make(
+    env: MultiDroneRacingEnv = gymnasium.make(
         config.env.id,
+        n_drones=config.env.n_drones,
         freq=config.env.freq,
         sim_config=config.sim,
         sensor_range=config.env.sensor_range,
@@ -69,7 +71,6 @@ def simulate(
         seed=config.env.seed,
     )
 
-    ep_times = []
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         done = False
         obs, info = env.reset()
@@ -81,6 +82,8 @@ def simulate(
             curr_time = i / config.env.freq
 
             action = controller.compute_control(obs, info)
+            action = np.array([action] * config.env.n_drones)
+            action[1, 0] += 0.2
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             # Update the controller internal state and models.
@@ -96,32 +99,16 @@ def simulate(
         controller.episode_callback()  # Update the controller internal state and models.
         log_episode_stats(obs, info, config, curr_time)
         controller.episode_reset()
-        ep_times.append(curr_time if obs["target_gate"] == -1 else None)
 
     # Close the environment
     env.close()
-    return ep_times
 
 
 def log_episode_stats(obs: dict, info: dict, config: Munch, curr_time: float):
     """Log the statistics of a single episode."""
     gates_passed = obs["target_gate"]
-    if gates_passed == -1:  # The drone has passed the final gate
-        gates_passed = len(config.env.track.gates)
-    if info["collisions"]:
-        termination = "Collision"
-    elif obs["target_gate"] == -1:
-        termination = "Task completed"
-    else:
-        termination = "Unknown"
-
-    logger.info(
-        (
-            f"Flight time (s): {curr_time}\n"
-            f"Reason for termination: {termination}\n"
-            f"Gates passed: {gates_passed}\n"
-        )
-    )
+    finished = gates_passed == -1
+    logger.info((f"Flight time (s): {curr_time}\nDrones finished: {finished}\n"))
 
 
 if __name__ == "__main__":

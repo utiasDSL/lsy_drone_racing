@@ -46,3 +46,12 @@ register(
     max_episode_steps=1800,
     disable_env_checker=True,
 )
+
+# region MultiEnvs
+
+register(
+    id="MultiDroneRacing-v0",
+    entry_point="lsy_drone_racing.envs.multi_drone_race:MultiDroneRacingEnv",
+    max_episode_steps=1800,
+    disable_env_checker=True,
+)

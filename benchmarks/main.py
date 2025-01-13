@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import fire
 import numpy as np
-from sim import time_sim_attitude_step, time_sim_reset, time_sim_step
+from sim import time_multi_drone_reset, time_multi_drone_step, time_sim_reset, time_sim_step
 
 
 def print_benchmark_results(name: str, timings: list[float]):
@@ -12,16 +13,21 @@ def print_benchmark_results(name: str, timings: list[float]):
     print(f"FPS: {1 / np.mean(timings):.2f}")
 
 
-if __name__ == "__main__":
-    n_tests = 10
-    sim_steps = 10
-    timings = time_sim_reset(n_tests=n_tests)
+def main(n_tests: int = 10, sim_steps: int = 10, multi_drone: bool = False):
+    reset_fn, step_fn = time_sim_reset, time_sim_step
+    if multi_drone:
+        reset_fn, step_fn = time_multi_drone_reset, time_multi_drone_step
+    timings = reset_fn(n_tests=n_tests)
     print_benchmark_results(name="Sim reset", timings=timings)
-    timings = time_sim_step(n_tests=n_tests, sim_steps=sim_steps)
+    timings = step_fn(n_tests=n_tests, sim_steps=sim_steps)
     print_benchmark_results(name="Sim steps", timings=timings / sim_steps)
-    timings = time_sim_step(n_tests=n_tests, sim_steps=sim_steps, physics_mode="sys_id")
+    timings = step_fn(n_tests=n_tests, sim_steps=sim_steps, physics_mode="sys_id")
     print_benchmark_results(name="Sim steps (sys_id backend)", timings=timings / sim_steps)
-    timings = time_sim_step(n_tests=n_tests, sim_steps=sim_steps, physics_mode="mujoco")
+    timings = step_fn(n_tests=n_tests, sim_steps=sim_steps, physics_mode="mujoco")
     print_benchmark_results(name="Sim steps (mujoco backend)", timings=timings / sim_steps)
-    timings = time_sim_attitude_step(n_tests=n_tests, sim_steps=sim_steps)
+    timings = step_fn(n_tests=n_tests, sim_steps=sim_steps, physics_mode="sys_id")
     print_benchmark_results(name="Sim steps (sys_id backend)", timings=timings / sim_steps)
+
+
+if __name__ == "__main__":
+    fire.Fire(main)
