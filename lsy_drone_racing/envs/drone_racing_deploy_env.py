@@ -28,12 +28,12 @@ from typing import TYPE_CHECKING
 
 import gymnasium
 import numpy as np
+from crazyflow.control.control import thrust_curve
+from crazyflow.sim.symbolic import symbolic_attitude
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.control.closing_controller import ClosingController
-from lsy_drone_racing.sim.drone import Drone
-from lsy_drone_racing.sim.sim import Sim
 from lsy_drone_racing.utils import check_gate_pass
 from lsy_drone_racing.utils.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
@@ -111,17 +111,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
             names += [f"gate{g}" for g in range(1, len(config.env.track.gates) + 1)]
             names += [f"obstacle{g}" for g in range(1, len(config.env.track.obstacles) + 1)]
         self.vicon = Vicon(track_names=names, timeout=5)
-        self.symbolic = None
-        if config.env.symbolic:
-            sim = Sim(
-                track=config.env.track,
-                sim_freq=config.sim.sim_freq,
-                ctrl_freq=config.sim.ctrl_freq,
-                disturbances=getattr(config.sim, "disturbances", {}),
-                randomization=getattr(config.env, "randomization", {}),
-                physics=config.sim.physics,
-            )
-            self.symbolic = sim.symbolic()
+        self.symbolic = symbolic_attitude(config.env.freq) if config.env.symbolic else None
         self._last_pos = np.zeros(3)
 
         self.gates_visited = np.array([False] * len(config.env.track.gates))
@@ -153,7 +143,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
         info["low_level_ctrl_freq"] = self.config.sim.ctrl_freq
         info["env_freq"] = self.config.env.freq
         info["drone_mass"] = 0.033  # Crazyflie 2.1 mass in kg
-        return self.obs, info
+        return self.obs(), info
 
     def step(
         self, action: NDArray[np.floating]
@@ -175,7 +165,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
         if self.target_gate >= len(self.config.env.track.gates):
             self.target_gate = -1
         terminated = self.target_gate == -1
-        return self.obs, -1.0, terminated, False, self.info
+        return self.obs(), -1.0, terminated, False, self.info
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
@@ -189,7 +179,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
             self.config.env.freq = freq_new
             t_step_ctrl = 1 / self.config.env.freq
 
-            obs = self.obs
+            obs = self.obs()
             obs["acc"] = np.array(
                 [0, 0, 0]
             )  # TODO, use actual value when avaiable or do one step to calculate from velocity
@@ -211,7 +201,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
                     action[10:],
                 )
                 self.cf.cmdFullState(pos, vel, acc, yaw, rpy_rate)
-                obs = self.obs
+                obs = self.obs()
                 obs["acc"] = np.array([0, 0, 0])
                 controller.step_callback(action, obs, 0, True, False, info)
                 time.sleep(t_step_ctrl)
@@ -219,7 +209,6 @@ class DroneRacingDeployEnv(gymnasium.Env):
         self.cf.notifySetpointsStop()
         self.cf.land(0.05, 2.0)
 
-    @property
     def obs(self) -> dict:
         """Return the observation of the environment."""
         drone = self.vicon.drone_name
@@ -312,7 +301,6 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
         """
         super().__init__(config)
         self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(4,))
-        self.drone = Drone("mellinger")
 
     def step(
         self, action: NDArray[np.floating]
@@ -329,12 +317,11 @@ class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
         assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
         collective_thrust, rpy = action[0], action[1:]
         rpy_deg = np.rad2deg(rpy)
-        collective_thrust = self.drone._thrust_to_pwms(collective_thrust)
-        self.cf.cmdVel(*rpy_deg, collective_thrust)
+        self.cf.cmdVel(*rpy_deg, thrust_curve(collective_thrust))
         current_pos = self.vicon.pos[self.vicon.drone_name]
         self.target_gate += self.gate_passed(current_pos, self._last_pos)
         self._last_pos[:] = current_pos
         if self.target_gate >= len(self.config.env.track.gates):
             self.target_gate = -1
         terminated = self.target_gate == -1
-        return self.obs, -1.0, terminated, False, self.info
+        return self.obs(), -1.0, terminated, False, self.info

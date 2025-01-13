@@ -107,6 +107,7 @@ def log_episode_stats(obs: dict, info: dict, config: Munch, curr_time: float):
         termination = "Task completed"
     else:
         termination = "Unknown"
+
     logger.info(
         (
             f"Flight time (s): {curr_time}\n"
@@ -120,4 +121,4 @@ if __name__ == "__main__":
     logging.basicConfig()
     logging.getLogger("lsy_drone_racing").setLevel(logging.INFO)
     logger.setLevel(logging.INFO)
-    fire.Fire(simulate)
+    fire.Fire(simulate, serialize=lambda _: None)

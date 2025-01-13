@@ -29,7 +29,6 @@ dependencies = [
     "gymnasium >= 1.0.0",
     "toml >= 0.10.2",
     "casadi >= 3.6.5",
-    "swig >= 4.2.1",            # Required for pycffirmware
 ]
 
 [project.optional-dependencies]

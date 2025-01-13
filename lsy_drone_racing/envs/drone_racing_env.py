@@ -39,7 +39,7 @@ from crazyflow import Sim
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.envs.utils import randomize_sim_fn
+from lsy_drone_racing.envs.randomize import randomize_sim_fn
 from lsy_drone_racing.utils import check_gate_pass
 
 if TYPE_CHECKING:
@@ -87,8 +87,8 @@ class DroneRacingEnv(gymnasium.Env):
     low-level controller.
     """
 
-    gate_spec_path = Path(__file__).parents[1] / "sim/assets/gate.xml"
-    obstacle_spec_path = Path(__file__).parents[1] / "sim/assets/obstacle.xml"
+    gate_spec_path = Path(__file__).parent / "assets/gate.xml"
+    obstacle_spec_path = Path(__file__).parent / "assets/obstacle.xml"
 
     def __init__(self, config: dict):
         """Initialize the DroneRacingEnv.
@@ -176,7 +176,7 @@ class DroneRacingEnv(gymnasium.Env):
         # the sim.reset_hook function, so we don't need to explicitly do it here
         self.sim.reset()
 
-        # TODO: Add randomization of gates, obstacles, drone, and disturbances
+        # TODO: Add disturbances
         self.target_gate = 0
         self._steps = 0
         self._last_drone_pos[:] = self.sim.data.states.pos[0, 0]
@@ -201,7 +201,6 @@ class DroneRacingEnv(gymnasium.Env):
         """
         assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
         # TODO: Add action noise
-        # TODO: Check why sim is being compiled twice
         self.sim.state_control(action.reshape((1, 1, 13)).astype(np.float32))
         self.sim.step(self.sim.freq // self.config.env.freq)
         self.target_gate += self.gate_passed()
@@ -435,7 +434,6 @@ class DroneRacingThrustEnv(DroneRacingEnv):
         """
         assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
         # TODO: Add action noise
-        # TODO: Check why sim is being compiled twice
         self.sim.attitude_control(action.reshape((1, 1, 4)).astype(np.float32))
         self.sim.step(self.sim.freq // self.config.env.freq)
         self.target_gate += self.gate_passed()
