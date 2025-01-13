@@ -50,7 +50,7 @@ The challenge is divided into different difficulty levels, each specified by a T
      - Sim2real transfer
 
 .. note::
-   "Rand. Between Episodes" (governed by argument `reseed_on_reset`) determines whether randomized properties and positions vary or are kept constant (by re-seeding the random number generator on each `env.reset()`) across episodes.
+   "Rand. Between Episodes" (governed by argument `random_resets`) determines whether randomized properties and positions vary or are kept constant (by re-seeding the random number generator on each `env.reset()`) across episodes.
 
 You may use the easier scenarios to develop and debug your controller. However, the final evaluation will be on the hardest scenario (Level 3).
 

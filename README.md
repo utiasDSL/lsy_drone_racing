@@ -146,7 +146,7 @@ The config folder contains settings for progressively harder scenarios:
 |                               |             |                           |                             |                        |                       |
 |           sim2real            |   **Yes**   |    Real-life hardware     |           **Yes**           |          *No*          |   Sim2real transfer   |
 
-> **Note:** "Rand. Between Episodes" (governed by argument `reseed_on_reset`) states whether randomized properties and positions vary or are kept constant (by re-seeding the random number generator on each `env.reset()`) across episodes
+> **Note:** "Rand. Between Episodes" (governed by argument `random_resets`) states whether randomized properties and positions vary or are kept constant (by re-seeding the random number generator on each `env.reset()`) across episodes
 
 ### Switching between configurations
 You can choose which configuration to use by changing the `--config` command line option. To e.g. run the example controller on the hardest scenario, you can use the following command

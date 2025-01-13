@@ -61,9 +61,9 @@ def load_controller(path: Path) -> Type[BaseController]:
 
     controllers = inspect.getmembers(controller_module, filter)
     controllers = [c for _, c in controllers if issubclass(c, BaseController)]
-    assert (
-        len(controllers) > 0
-    ), f"No controller found in {path}. Have you subclassed BaseController?"
+    assert len(controllers) > 0, (
+        f"No controller found in {path}. Have you subclassed BaseController?"
+    )
     assert len(controllers) == 1, f"Multiple controllers found in {path}. Only one is allowed."
     controller_module.Controller = controllers[0]
     assert issubclass(controller_module.Controller, BaseController)
@@ -91,7 +91,7 @@ def load_config(path: Path) -> Munch:
 
 def check_gate_pass(
     gate_pos: np.ndarray,
-    gate_rot: R,
+    gate_quat: np.ndarray,
     gate_size: np.ndarray,
     drone_pos: np.ndarray,
     last_drone_pos: np.ndarray,
@@ -111,13 +111,13 @@ def check_gate_pass(
 
     Args:
         gate_pos: The position of the gate in the world frame.
-        gate_rot: The rotation of the gate in the world frame.
+        gate_quat: The quaternion of the gate in the world frame.
         gate_size: The size of the gate box in meters.
         drone_pos: The position of the drone in the world frame.
         last_drone_pos: The position of the drone in the world frame at the last time step.
     """
     # Transform last and current drone position into current gate frame.
-    assert isinstance(gate_rot, R), "gate_rot has to be a Rotation object."
+    gate_rot = R(gate_quat, normalize=False, copy=False)
     last_pos_local = gate_rot.apply(last_drone_pos - gate_pos, inverse=True)
     pos_local = gate_rot.apply(drone_pos - gate_pos, inverse=True)
     # Check the plane intersection. If passed, calculate the point of the intersection and check if

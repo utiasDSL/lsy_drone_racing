@@ -1,23 +1,14 @@
 [sim]
-physics = "pyb"
+physics = "analytical"
 camera_view = [5.0, -40.0, -40.0, 0.5, -1.0, 0.5]
 sim_freq = 500                                    # Simulation frequency, in Hz
-ctrl_freq = 500                                   # Controller frequency, in Hz. This frequency is used to simulate the onboard controller, NOT for the environment's step function
+attitude_freq = 500                               # Controller frequency, in Hz. This frequency is used to simulate the onboard controller, NOT for the environment's step function
 gui = false                                       # Enable/disable PyBullet's GUI
 
-[sim.disturbances.action]
-type = "GaussianNoise"
-std = 0.001
-
-[sim.disturbances.dynamics]
-type = "UniformNoise"
-low = [-0.1, -0.1, -0.1]
-high = [0.1, 0.1, 0.1]
-
 [env]
-reseed = false   # Whether to re-seed the random number generator between episodes
+random_resets = false   # Whether to re-seed the random number generator between episodes
 seed = 1337      # Random seed
-freq = 60        # Frequency of the environment's step function, in Hz
+freq = 50        # Frequency of the environment's step function, in Hz
 symbolic = false # Whether to include symbolic expressions in the info dict. Note: This can interfere with multiprocessing! If you want to parallelize your training, set this to false.
 
 [env.track]
@@ -50,7 +41,17 @@ pos = [0.0, 1.0, 1.05]
 pos = [1.0, 1.0, 0.05]
 rpy = [0, 0, 0]
 vel = [0, 0, 0]
-ang_vel = [0, 0, 0]
+rpy_rates = [0, 0, 0]
+
+[env.disturbances.action]
+fn = "normal"
+scale = 0.001
+
+[env.disturbances.dynamics]
+fn = "uniform"
+[env.disturbances.dynamics.kwargs]
+minval = [-0.1, -0.1, -0.1]
+maxval = [0.1, 0.1, 0.1]
 
 [env.randomization.drone_pos]
 type = "uniform" # Everything that can be used as a distribution in numpy.random

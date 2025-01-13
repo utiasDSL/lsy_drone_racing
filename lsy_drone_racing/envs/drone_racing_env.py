@@ -168,7 +168,7 @@ class DroneRacingEnv(gymnasium.Env):
         Returns:
             Observation and info.
         """
-        if self.config.env.reseed:
+        if not self.config.env.random_resets:
             self.sim.seed(self.config.env.seed)
         if seed is not None:
             self.sim.seed(seed)
@@ -179,7 +179,7 @@ class DroneRacingEnv(gymnasium.Env):
         # TODO: Add disturbances
         self.target_gate = 0
         self._steps = 0
-        self._last_drone_pos[:] = self.sim.data.states.pos[0, 0]
+        self._last_drone_pos = self.sim.data.states.pos[0, 0]
         info = self.info()
         info["sim_freq"] = self.sim.data.core.freq
         info["low_level_ctrl_freq"] = self.sim.data.controls.attitude_freq
@@ -199,14 +199,14 @@ class DroneRacingEnv(gymnasium.Env):
             action: Full-state command [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate]
                 to follow.
         """
-        assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
         # TODO: Add action noise
-        self.sim.state_control(action.reshape((1, 1, 13)).astype(np.float32))
+        assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
+        self.sim.state_control(action.reshape((1, 1, 13)))
         self.sim.step(self.sim.freq // self.config.env.freq)
         self.target_gate += self.gate_passed()
         if self.target_gate == self.n_gates:
             self.target_gate = -1
-        self._last_drone_pos[:] = self.sim.data.states.pos[0, 0]
+        self._last_drone_pos = self.sim.data.states.pos[0, 0]
         return self.obs(), self.reward(), self.terminated(), False, self.info()
 
     def render(self):
@@ -383,11 +383,12 @@ class DroneRacingEnv(gymnasium.Env):
         """
         if self.n_gates <= 0 or self.target_gate >= self.n_gates or self.target_gate == -1:
             return False
-        gate_pos = self.gates["pos"][self.target_gate]
-        gate_rot = R.from_euler("xyz", self.gates["rpy"][self.target_gate])
+        gate_id = self.gates["ids"][self.target_gate]
+        gate_pos = self.sim.data.mjx_data.mocap_pos[0, gate_id]
+        gate_quat = self.sim.data.mjx_data.mocap_quat[0, gate_id][..., [3, 0, 1, 2]]
         drone_pos = self.sim.data.states.pos[0, 0]
         gate_size = (0.45, 0.45)
-        return check_gate_pass(gate_pos, gate_rot, gate_size, drone_pos, self._last_drone_pos)
+        return check_gate_pass(gate_pos, gate_quat, gate_size, drone_pos, self._last_drone_pos)
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
@@ -439,5 +440,5 @@ class DroneRacingThrustEnv(DroneRacingEnv):
         self.target_gate += self.gate_passed()
         if self.target_gate == self.n_gates:
             self.target_gate = -1
-        self._last_drone_pos[:] = self.sim.data.states.pos[0, 0]
+        self._last_drone_pos = self.sim.data.states.pos[0, 0]
         return self.obs(), self.reward(), self.terminated(), False, self.info()

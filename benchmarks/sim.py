@@ -23,7 +23,9 @@ import gymnasium
 import lsy_drone_racing
 
 env = gymnasium.make('DroneRacing-v0', config=config)
-
+env.reset()
+env.step(env.action_space.sample())  # JIT compile
+env.reset()
 """
 attitude_env_setup_code = """
 import gymnasium
@@ -31,6 +33,9 @@ import gymnasium
 import lsy_drone_racing
 
 env = gymnasium.make('DroneRacingThrust-v0', config=config)
+env.reset()
+env.step(env.action_space.sample())  # JIT compile
+env.reset()
 """
 
 
@@ -41,7 +46,7 @@ def time_sim_reset(n_tests: int = 10) -> NDArray[np.floating]:
 
 
 def time_sim_step(
-    n_tests: int = 10, sim_steps: int = 100, physics_mode: str = "pyb"
+    n_tests: int = 10, sim_steps: int = 100, physics_mode: str = "analytical"
 ) -> NDArray[np.floating]:
     modify_config_code = f"""config.sim.physics = '{physics_mode}'\n"""
     setup = load_config_code + modify_config_code + env_setup_code + "\nenv.reset()"
