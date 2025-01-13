@@ -5,7 +5,7 @@ between the drone racing simulation and the user's control algorithms.
 
 It serves as a bridge between the high-level race control and the low-level drone physics
 simulation. The environments defined here
-(:class:`~.DroneRacingEnv` and :class:`~.DroneRacingThrustEnv`) expose a common interface for all
+(:class:`~.DroneRacingEnv` and :class:`~.DroneRacingAttitudeEnv`) expose a common interface for all
 controller types, allowing for easy integration and testing of different control algorithms,
 comparison of control strategies, and deployment on our hardware.
 
@@ -36,6 +36,7 @@ import jax
 import mujoco
 import numpy as np
 from crazyflow import Sim
+from crazyflow.sim.symbolic import symbolic_attitude
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
@@ -56,6 +57,9 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
+
+
+# region StateEnv
 
 
 class DroneRacingEnv(gymnasium.Env):
@@ -98,71 +102,85 @@ class DroneRacingEnv(gymnasium.Env):
     gate_spec_path = Path(__file__).parent / "assets/gate.xml"
     obstacle_spec_path = Path(__file__).parent / "assets/obstacle.xml"
 
-    def __init__(self, config: dict):
+    def __init__(
+        self,
+        freq: int,
+        sim_config: dict,
+        sensor_range: float,
+        track: dict | None = None,
+        disturbances: dict | None = None,
+        randomizations: dict | None = None,
+        random_resets: bool = False,
+        seed: int = 1337,
+    ):
         """Initialize the DroneRacingEnv.
 
         Args:
             config: Configuration dictionary for the environment.
         """
         super().__init__()
-        self.config = config
         self.sim = Sim(
-            n_worlds=1,
-            n_drones=1,
-            physics=config.sim.physics,
-            control=config.sim.get("control", "state"),
-            freq=config.sim.sim_freq,
-            state_freq=config.env.freq,
-            attitude_freq=config.sim.attitude_freq,
-            rng_key=config.env.seed,
+            physics=sim_config.physics,
+            control=sim_config.get("control", "state"),
+            freq=sim_config.freq,
+            state_freq=freq,
+            attitude_freq=sim_config.attitude_freq,
+            rng_key=seed,
         )
-        if config.sim.sim_freq % config.env.freq != 0:
-            raise ValueError(f"({config.sim.sim_freq=}) is no multiple of ({config.env.freq=})")
+        # Sanitize args
+        if sim_config.freq % freq != 0:
+            raise ValueError(f"({sim_config.freq=}) is no multiple of ({freq=})")
 
+        # Env settings
+        self.freq = freq
+        self.seed = seed
+        self.symbolic = symbolic_attitude(1 / self.freq)
+        self.random_resets = random_resets
+        self.sensor_range = sensor_range
+        self.gates, self.obstacles, self.drone = self.load_track(track)
+        self.n_gates = len(track.gates)
+        specs = {} if disturbances is None else disturbances
+        self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
+        specs = {} if randomizations is None else randomizations
+        self.randomizations = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
+
+        # Spaces
         self.action_space = spaces.Box(low=-1, high=1, shape=(13,))
-        n_gates, n_obstacles = len(config.env.track.gates), len(config.env.track.obstacles)
+        n_obstacles = len(track.obstacles)
         self.observation_space = spaces.Dict(
             {
                 "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-                "target_gate": spaces.Discrete(n_gates, start=-1),
-                "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_gates, 3)),
-                "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(n_gates, 3)),
-                "gates_visited": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=np.bool_),
+                "target_gate": spaces.Discrete(self.n_gates, start=-1),
+                "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(self.n_gates, 3)),
+                "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(self.n_gates, 3)),
+                "gates_visited": spaces.Box(low=0, high=1, shape=(self.n_gates,), dtype=bool),
                 "obstacles_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_obstacles, 3)),
-                "obstacles_visited": spaces.Box(
-                    low=0, high=1, shape=(n_obstacles,), dtype=np.bool_
-                ),
+                "obstacles_visited": spaces.Box(low=0, high=1, shape=(n_obstacles,), dtype=bool),
             }
         )
         rpy_max = np.array([85 / 180 * np.pi, 85 / 180 * np.pi, np.pi], np.float32)  # Yaw unbounded
         pos_low, pos_high = np.array([-3, -3, 0]), np.array([3, 3, 2.5])
-        self.state_space = spaces.Dict(
+        self.bounds = spaces.Dict(
             {
                 "pos": spaces.Box(low=pos_low, high=pos_high, dtype=np.float64),
                 "rpy": spaces.Box(low=-rpy_max, high=rpy_max, dtype=np.float64),
-                "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float64),
-                "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float64),
             }
         )
 
+        # Helper variables
         self.target_gate = 0
-        self.symbolic = self.sim.symbolic() if config.env.symbolic else None
         self._steps = 0
         self._last_drone_pos = np.zeros(3)
-        self.gates, self.obstacles, self.drone = self.load_track(config.env.track)
-        self.n_gates = len(config.env.track.gates)
-        self.disturbances = self.load_disturbances(config.env.get("disturbances", None))
-        self.randomizations = self.load_randomizations(config.env.get("randomization", None))
         self.contact_mask = np.ones((self.sim.n_worlds, 25), dtype=bool)
         self.contact_mask[..., 0] = 0  # Ignore contacts with the floor
+        self.gates_visited = np.array([False] * self.n_gates)
+        self.obstacles_visited = np.array([False] * n_obstacles)
 
+        # Compile the reset and step functions with custom hooks
         self.setup_sim()
-
-        self.gates_visited = np.array([False] * len(config.env.track.gates))
-        self.obstacles_visited = np.array([False] * len(config.env.track.obstacles))
 
     def reset(
         self, *, seed: int | None = None, options: dict | None = None
@@ -176,24 +194,25 @@ class DroneRacingEnv(gymnasium.Env):
         Returns:
             Observation and info.
         """
-        if not self.config.env.random_resets:
-            self.np_random = np.random.default_rng(seed=self.config.env.seed)
-            self.sim.seed(self.config.env.seed)
+        if not self.random_resets:
+            self.np_random = np.random.default_rng(seed=self.seed)
+            self.sim.seed(self.seed)
         if seed is not None:
-            self.np_random = np.random.default_rng(seed=self.config.env.seed)
+            self.np_random = np.random.default_rng(seed=seed)
             self.sim.seed(seed)
         # Randomization of gates, obstacles and drones is compiled into the sim reset function with
         # the sim.reset_hook function, so we don't need to explicitly do it here
         self.sim.reset()
-
+        # Reset internal variables
         self.target_gate = 0
         self._steps = 0
         self._last_drone_pos = self.sim.data.states.pos[0, 0]
+        # Return info with additional reset information
         info = self.info()
         info["sim_freq"] = self.sim.data.core.freq
         info["low_level_ctrl_freq"] = self.sim.data.controls.attitude_freq
         info["drone_mass"] = self.sim.default_data.params.mass[0, 0, 0]
-        info["env_freq"] = self.config.env.freq
+        info["env_freq"] = self.freq
         return self.obs(), info
 
     def step(
@@ -215,7 +234,7 @@ class DroneRacingEnv(gymnasium.Env):
             action += self.disturbances["action"](subkey, (1, 1, 13))
             self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
         self.sim.state_control(action)
-        self.sim.step(self.sim.freq // self.config.env.freq)
+        self.sim.step(self.sim.freq // self.freq)
         self.target_gate += self.gate_passed()
         if self.target_gate == self.n_gates:
             self.target_gate = -1
@@ -239,7 +258,7 @@ class DroneRacingEnv(gymnasium.Env):
         # use the actual pose, otherwise use the nominal pose.
         drone_pos = self.sim.data.states.pos[0, 0]
         dist = np.linalg.norm(drone_pos[:2] - self.gates["nominal_pos"][:, :2])
-        in_range = dist < self.config.env.sensor_range
+        in_range = dist < self.sensor_range
         self.gates_visited = np.logical_or(self.gates_visited, in_range)
 
         gates_pos = self.gates["nominal_pos"].copy()
@@ -251,7 +270,7 @@ class DroneRacingEnv(gymnasium.Env):
         obs["gates_visited"] = self.gates_visited
 
         dist = np.linalg.norm(drone_pos[:2] - self.obstacles["nominal_pos"][:, :2])
-        in_range = dist < self.config.env.sensor_range
+        in_range = dist < self.sensor_range
         self.obstacles_visited = np.logical_or(self.obstacles_visited, in_range)
 
         obstacles_pos = self.obstacles["nominal_pos"].copy()
@@ -285,14 +304,9 @@ class DroneRacingEnv(gymnasium.Env):
         state = {
             "pos": np.array(self.sim.data.states.pos[0, 0], dtype=np.float32),
             "rpy": np.array(R.from_quat(quat).as_euler("xyz"), dtype=np.float32),
-            "vel": np.array(self.sim.data.states.vel[0, 0], dtype=np.float32),
-            "ang_vel": np.array(
-                R.from_quat(quat).apply(self.sim.data.states.rpy_rates[0, 0], inverse=True),
-                dtype=np.float32,
-            ),
         }
-        if state not in self.state_space:
-            return True  # Drone is out of bounds
+        if state not in self.bounds:  # Drone is out of bounds
+            return True
         if np.logical_and(self.sim.contacts("drone:0"), self.contact_mask).any():
             return True
         if self.sim.data.states.pos[0, 0, 2] < 0.0:
@@ -318,33 +332,6 @@ class DroneRacingEnv(gymnasium.Env):
         }
         drone["quat"] = R.from_euler("xyz", drone["rpy"]).as_quat()
         return gates, obstacles, drone
-
-    def load_disturbances(self, disturbances: dict | None = None) -> dict:
-        """Load the disturbances from the config."""
-        if disturbances is None:  # Default: no passive disturbances.
-            return {}
-        return {mode: self.load_random_fn(spec) for mode, spec in disturbances.items()}
-
-    def load_randomizations(self, randomizations: dict | None = None) -> dict:
-        """Load the randomization from the config."""
-        if randomizations is None:
-            return {}
-        return {mode: self.load_random_fn(spec) for mode, spec in randomizations.items()}
-
-    @staticmethod
-    def load_random_fn(fn_spec: dict) -> Callable:
-        """Convert a function spec to a function from jax.random."""
-        offset, scale = np.array(fn_spec.get("offset", 0)), np.array(fn_spec.get("scale", 1))
-        kwargs = fn_spec.get("kwargs", {})
-        if "shape" in kwargs:
-            raise KeyError("Shape must not be specified for randomization functions.")
-        kwargs = {k: np.array(v) if isinstance(v, list) else v for k, v in kwargs.items()}
-        jax_fn = partial(getattr(jax.random, fn_spec["fn"]), **kwargs)
-
-        def random_fn(*args: Any, **kwargs: Any) -> Array:
-            return jax_fn(*args, **kwargs) * scale + offset
-
-        return random_fn
 
     def setup_sim(self):
         """Setup the simulation data and build the reset and step functions with custom hooks."""
@@ -379,9 +366,7 @@ class DroneRacingEnv(gymnasium.Env):
             obstacle.pos = obstacles["pos"][i]
             obstacle.mocap = True
         self.sim.build(data=False, default_data=False)
-        assert not hasattr(self.sim.data, "gate_pos")
-        assert not hasattr(self.sim.data, "obstacle_pos")
-
+        # Save the ids and mocap ids of the gates and obstacles
         mj_model = self.sim.mj_model
         gates["ids"] = [mj_model.body(f"gate:{i}").id for i in range(n_gates)]
         gates["mocap_ids"] = [int(mj_model.body(f"gate:{i}").mocapid) for i in range(n_gates)]
@@ -410,12 +395,85 @@ class DroneRacingEnv(gymnasium.Env):
         self.sim.close()
 
 
+# region AttitudeEnv
+
+
+class DroneRacingAttitudeEnv(DroneRacingEnv):
+    """Drone racing environment with a collective thrust attitude command interface.
+
+    The action space consists of the collective thrust and body-fixed attitude commands
+    [collective_thrust, roll, pitch, yaw].
+    """
+
+    def __init__(
+        self,
+        freq: int,
+        sim_config: dict,
+        sensor_range: float,
+        track: dict | None = None,
+        disturbances: dict | None = None,
+        randomizations: dict | None = None,
+        random_resets: bool = False,
+        seed: int = 1337,
+    ):
+        """Initialize the DroneRacingAttitudeEnv.
+
+        Args:
+            config: Configuration dictionary for the environment.
+        """
+        sim_config.control = "attitude"
+        super().__init__(
+            freq, sim_config, sensor_range, track, disturbances, randomizations, random_resets, seed
+        )
+        bounds = np.array([1, np.pi, np.pi, np.pi], dtype=np.float32)
+        self.action_space = spaces.Box(low=-bounds, high=bounds)
+
+    def step(
+        self, action: NDArray[np.floating]
+    ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
+        """Step the drone racing environment with a thrust and attitude command.
+
+        Args:
+            action: Thrust command [thrust, roll, pitch, yaw].
+        """
+        assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
+        if "action" in self.disturbances:
+            key, subkey = jax.random.split(self.sim.data.core.rng_key)
+            action += self.disturbances["action"](subkey, (1, 1, 4))
+            self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
+        self.sim.attitude_control(action.reshape((1, 1, 4)).astype(np.float32))
+        self.sim.step(self.sim.freq // self.freq)
+        self.target_gate += self.gate_passed()
+        if self.target_gate == self.n_gates:
+            self.target_gate = -1
+        self._last_drone_pos = self.sim.data.states.pos[0, 0]
+        return self.obs(), self.reward(), self.terminated(), False, self.info()
+
+
+# region Factories
+
+
+def rng_spec2fn(fn_spec: dict) -> Callable:
+    """Convert a function spec to a wrapped and scaled function from jax.random."""
+    offset, scale = np.array(fn_spec.get("offset", 0)), np.array(fn_spec.get("scale", 1))
+    kwargs = fn_spec.get("kwargs", {})
+    if "shape" in kwargs:
+        raise KeyError("Shape must not be specified for randomization functions.")
+    kwargs = {k: np.array(v) if isinstance(v, list) else v for k, v in kwargs.items()}
+    jax_fn = partial(getattr(jax.random, fn_spec["fn"]), **kwargs)
+
+    def random_fn(*args: Any, **kwargs: Any) -> Array:
+        return jax_fn(*args, **kwargs) * scale + offset
+
+    return random_fn
+
+
 def build_reset_hook(
     randomizations: dict, gate_mocap_ids: list[int], obstacle_mocap_ids: list[int]
 ) -> Callable[[SimData, Array], SimData]:
     """Build the reset hook for the simulation."""
     randomization_fns = []
-    for target, rng in randomizations.items():
+    for target, rng in sorted(randomizations.items()):
         match target:
             case "drone_pos":
                 randomization_fns.append(randomize_drone_pos_fn(rng))
@@ -454,43 +512,3 @@ def build_dynamics_disturbance_fn(
         return data.replace(states=states, core=data.core.replace(rng_key=key))
 
     return dynamics_disturbance
-
-
-class DroneRacingThrustEnv(DroneRacingEnv):
-    """Drone racing environment with a collective thrust attitude command interface.
-
-    The action space consists of the collective thrust and body-fixed attitude commands
-    [collective_thrust, roll, pitch, yaw].
-    """
-
-    def __init__(self, config: dict):
-        """Initialize the DroneRacingThrustEnv.
-
-        Args:
-            config: Configuration dictionary for the environment.
-        """
-        config.sim.control = "attitude"
-        super().__init__(config)
-        bounds = np.array([1, np.pi, np.pi, np.pi], dtype=np.float32)
-        self.action_space = spaces.Box(low=-bounds, high=bounds)
-
-    def step(
-        self, action: NDArray[np.floating]
-    ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
-        """Step the drone racing environment with a thrust and attitude command.
-
-        Args:
-            action: Thrust command [thrust, roll, pitch, yaw].
-        """
-        assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
-        if "action" in self.disturbances:
-            key, subkey = jax.random.split(self.sim.data.core.rng_key)
-            action += self.disturbances["action"](subkey, (1, 1, 4))
-            self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
-        self.sim.attitude_control(action.reshape((1, 1, 4)).astype(np.float32))
-        self.sim.step(self.sim.freq // self.config.env.freq)
-        self.target_gate += self.gate_passed()
-        if self.target_gate == self.n_gates:
-            self.target_gate = -1
-        self._last_drone_pos = self.sim.data.states.pos[0, 0]
-        return self.obs(), self.reward(), self.terminated(), False, self.info()

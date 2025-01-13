@@ -12,7 +12,7 @@ from lsy_drone_racing.sim.physics import PhysicsMode
 @pytest.mark.parametrize(
     "config_file", ["level0.toml", "level1.toml", "level2.toml", "level3.toml"]
 )
-@pytest.mark.parametrize("env_id", ["DroneRacing-v0", "DroneRacingThrust-v0"])
+@pytest.mark.parametrize("env_id", ["DroneRacing-v0", "DroneRacingAttitude-v0"])
 @pytest.mark.integration
 def test_sim(physics: PhysicsMode, config_file: str, env_id: str):
     """Test the simulation environment with different physics modes."""

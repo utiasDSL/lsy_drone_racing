@@ -8,11 +8,11 @@ Key components:
 
 * :class:`~.DroneRacingDeployEnv`: A Gymnasium environment for controlling a real Crazyflie drone in
   a physical race track, using Vicon motion capture for positioning.
-* :class:`~.DroneRacingThrustDeployEnv`: A variant of :class:`~.DroneRacingDeployEnv` that uses
+* :class:`~.DroneRacingAttitudeDeployEnv`: A variant of :class:`~.DroneRacingDeployEnv` that uses
   collective thrust and attitude commands for control.
 
 These environments maintain consistent interfaces with their simulation counterparts
-(:class:`~.DroneRacingEnv` and :class:`~.DroneRacingThrustEnv`), allowing for seamless transition
+(:class:`~.DroneRacingEnv` and :class:`~.DroneRacingAttitudeEnv`), allowing for seamless transition
 from simulation to real-world deployment. They handle the complexities of interfacing with physical
 hardware while providing the same observation and action spaces as the simulation environments.
 
@@ -273,11 +273,11 @@ class DroneRacingDeployEnv(gymnasium.Env):
         return False
 
 
-class DroneRacingThrustDeployEnv(DroneRacingDeployEnv):
+class DroneRacingAttitudeDeployEnv(DroneRacingDeployEnv):
     """A Gymnasium environment for deploying drone racing algorithms on real hardware.
 
     This environment mirrors the functionality of the
-    class:~lsy_drone_racing.envs.drone_racing_thrust_env.DroneRacingThrustEnv, but interfaces with
+    class:~lsy_drone_racing.envs.drone_racing_thrust_env.DroneRacingAttitudeEnv, but interfaces with
     real-world hardware (Crazyflie drone and Vicon motion capture system) instead of a simulation.
     """
 

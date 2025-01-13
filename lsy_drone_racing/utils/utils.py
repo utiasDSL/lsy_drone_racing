@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Type
 
 import numpy as np
 import toml
-from munch import munchify
+from ml_collections import ConfigDict
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.control.controller import BaseController
@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any
 
-    from munch import Munch
     from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
@@ -74,7 +73,7 @@ def load_controller(path: Path) -> Type[BaseController]:
         raise e
 
 
-def load_config(path: Path) -> Munch:
+def load_config(path: Path) -> ConfigDict:
     """Load the race config file.
 
     Args:
@@ -85,8 +84,9 @@ def load_config(path: Path) -> Munch:
     """
     assert path.exists(), f"Configuration file not found: {path}"
     assert path.suffix == ".toml", f"Configuration file has to be a TOML file: {path}"
+
     with open(path, "r") as f:
-        return munchify(toml.load(f))
+        return ConfigDict(toml.load(f))
 
 
 def check_gate_pass(

@@ -27,8 +27,8 @@ register(
 )
 
 register(
-    id="DroneRacingThrust-v0",
-    entry_point="lsy_drone_racing.envs.drone_racing_env:DroneRacingThrustEnv",
+    id="DroneRacingAttitude-v0",
+    entry_point="lsy_drone_racing.envs.drone_racing_env:DroneRacingAttitudeEnv",
     max_episode_steps=1800,
     disable_env_checker=True,
 )
@@ -41,8 +41,8 @@ register(
 )
 
 register(
-    id="DroneRacingThrustDeploy-v0",
-    entry_point="lsy_drone_racing.envs.drone_racing_deploy_env:DroneRacingThrustDeployEnv",
+    id="DroneRacingAttitudeDeploy-v0",
+    entry_point="lsy_drone_racing.envs.drone_racing_deploy_env:DroneRacingAttitudeDeployEnv",
     max_episode_steps=1800,
     disable_env_checker=True,
 )

@@ -43,7 +43,7 @@ def test_thrust_controller(physics: PhysicsMode):
         Path(__file__).parents[2] / "lsy_drone_racing/control/thrust_controller.py"
     )
     # Change the action space to collective thrust
-    env = gymnasium.make("DroneRacingThrust-v0", config=config)
+    env = gymnasium.make("DroneRacingAttitude-v0", config=config)
     obs, info = env.reset()
     ctrl = ctrl_cls(obs, info)
     while True:

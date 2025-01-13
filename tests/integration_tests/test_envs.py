@@ -8,7 +8,7 @@ from munch import munchify
 from lsy_drone_racing.sim.physics import PhysicsMode
 
 CONFIG_FILES = ["level0.toml", "level1.toml", "level2.toml", "level3.toml"]
-ENVIRONMENTS = ["DroneRacing-v0", "DroneRacingThrust-v0"]
+ENVIRONMENTS = ["DroneRacing-v0", "DroneRacingAttitude-v0"]
 
 
 @pytest.mark.parametrize("physics", PhysicsMode)

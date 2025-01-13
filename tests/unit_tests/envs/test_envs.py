@@ -9,7 +9,7 @@ from lsy_drone_racing.sim.physics import PhysicsMode
 from lsy_drone_racing.utils import load_config
 
 
-@pytest.mark.parametrize("env", ["DroneRacing-v0", "DroneRacingThrust-v0"])
+@pytest.mark.parametrize("env", ["DroneRacing-v0", "DroneRacingAttitude-v0"])
 @pytest.mark.unit
 def test_passive_checker_wrapper_warnings(env: str):
     """Check passive env checker wrapper warnings.

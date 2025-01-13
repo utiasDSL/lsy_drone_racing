@@ -32,7 +32,7 @@ import gymnasium
 
 import lsy_drone_racing
 
-env = gymnasium.make('DroneRacingThrust-v0', config=config)
+env = gymnasium.make('DroneRacingAttitude-v0', config=config)
 env.reset()
 env.step(env.action_space.sample())  # JIT compile
 env.reset()

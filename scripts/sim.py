@@ -33,7 +33,6 @@ def simulate(
     controller: str | None = None,
     n_runs: int = 1,
     gui: bool | None = None,
-    env_id: str | None = None,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
@@ -43,8 +42,6 @@ def simulate(
             the controller specified in the config file is used.
         n_runs: The number of episodes.
         gui: Enable/disable the simulation GUI.
-        env_id: The id of the environment to use. If None, the environment specified in the config
-            file is used.
 
     Returns:
         A list of episode times.
@@ -60,7 +57,17 @@ def simulate(
     controller_path = control_path / (controller or config.controller.file)
     controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
-    env: DroneRacingEnv = gymnasium.make(env_id or config.env.id, config=config)
+    env: DroneRacingEnv = gymnasium.make(
+        config.env.id,
+        freq=config.env.freq,
+        sim_config=config.sim,
+        sensor_range=config.env.sensor_range,
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        random_resets=config.env.random_resets,
+        seed=config.env.seed,
+    )
 
     ep_times = []
     for _ in range(n_runs):  # Run n_runs episodes with the controller
