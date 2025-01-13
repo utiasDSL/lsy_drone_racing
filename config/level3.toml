@@ -25,7 +25,7 @@ gui = false                                       # Enable/disable PyBullet's GU
 
 [env]
 id = "DroneRacing-v0" # Either "DroneRacing-v0" or "DroneRacingThrust-v0". If using "DroneRacingThrust-v0", the drone will use the thrust controller instead of the position controller.
-random_resets = false        # Whether to re-seed the random number generator between episodes
+random_resets = true        # Whether to re-seed the random number generator between episodes
 seed = 1337           # Random seed
 freq = 50             # Frequency of the environment's step function, in Hz
 symbolic = false      # Whether to include symbolic expressions in the info dict. Note: This can interfere with multiprocessing! If you want to parallelize your training, set this to false.

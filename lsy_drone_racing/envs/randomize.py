@@ -15,29 +15,6 @@ from jax import Array
 from jax.scipy.spatial.transform import Rotation as R
 
 
-def randomize_sim_fn(
-    target: str, randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array]
-) -> Callable[[SimData, Array], SimData]:
-    """Create a function that randomizes aspects of the simulation."""
-    match target:
-        case "drone_pos":
-            return randomize_drone_pos_fn(randomize_fn)
-        case "drone_rpy":
-            return randomize_drone_quat_fn(randomize_fn)
-        case "drone_mass":
-            return randomize_drone_mass_fn(randomize_fn)
-        case "drone_inertia":
-            return randomize_drone_inertia_fn(randomize_fn)
-        case "gate_pos":
-            return randomize_gate_pos_fn(randomize_fn)
-        case "gate_rpy":
-            return randomize_gate_rpy_fn(randomize_fn)
-        case "obstacle_pos":
-            return randomize_obstacle_pos_fn(randomize_fn)
-        case _:
-            raise ValueError(f"Invalid target: {target}")
-
-
 def randomize_drone_pos_fn(
     randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array],
 ) -> Callable[[SimData, Array], SimData]:
@@ -97,10 +74,9 @@ def randomize_drone_inertia_fn(
 
 
 def randomize_gate_pos_fn(
-    randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array],
+    randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array], gate_ids: list[int]
 ) -> Callable[[SimData, Array], SimData]:
     """Create a function that randomizes the gate position."""
-    gate_ids = [0, 1, 2, 3]  # TODO: Make this dynamic
 
     def randomize_gate_pos(data: SimData, mask: Array) -> SimData:
         key, subkey = jax.random.split(data.core.rng_key)
@@ -114,10 +90,9 @@ def randomize_gate_pos_fn(
 
 
 def randomize_gate_rpy_fn(
-    randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array],
+    randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array], gate_ids: list[int]
 ) -> Callable[[SimData, Array], SimData]:
     """Create a function that randomizes the gate rotation."""
-    gate_ids = [0, 1, 2, 3]  # TODO: Make this dynamic
 
     def randomize_gate_rpy(data: SimData, mask: Array) -> SimData:
         key, subkey = jax.random.split(data.core.rng_key)
@@ -133,10 +108,9 @@ def randomize_gate_rpy_fn(
 
 
 def randomize_obstacle_pos_fn(
-    randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array],
+    randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array], obstacle_ids: list[int]
 ) -> Callable[[SimData, Array], SimData]:
     """Create a function that randomizes the obstacle position."""
-    obstacle_ids = [4, 5, 6, 7]  # TODO: Make this dynamic
 
     def randomize_obstacle_pos(data: SimData, mask: Array) -> SimData:
         key, subkey = jax.random.split(data.core.rng_key)

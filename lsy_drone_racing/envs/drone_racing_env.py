@@ -39,7 +39,15 @@ from crazyflow import Sim
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.envs.randomize import randomize_sim_fn
+from lsy_drone_racing.envs.randomize import (
+    randomize_drone_inertia_fn,
+    randomize_drone_mass_fn,
+    randomize_drone_pos_fn,
+    randomize_drone_quat_fn,
+    randomize_gate_pos_fn,
+    randomize_gate_rpy_fn,
+    randomize_obstacle_pos_fn,
+)
 from lsy_drone_racing.utils import check_gate_pass
 
 if TYPE_CHECKING:
@@ -147,7 +155,7 @@ class DroneRacingEnv(gymnasium.Env):
         self.gates, self.obstacles, self.drone = self.load_track(config.env.track)
         self.n_gates = len(config.env.track.gates)
         self.disturbances = self.load_disturbances(config.env.get("disturbances", None))
-        self.randomization = self.load_randomizations(config.env.get("randomization", None))
+        self.randomizations = self.load_randomizations(config.env.get("randomization", None))
         self.contact_mask = np.ones((self.sim.n_worlds, 25), dtype=bool)
         self.contact_mask[..., 0] = 0  # Ignore contacts with the floor
 
@@ -250,7 +258,7 @@ class DroneRacingEnv(gymnasium.Env):
         obstacles_pos[self.obstacles_visited] = self.obstacles["pos"][self.obstacles_visited]
         obs["obstacles_pos"] = obstacles_pos.astype(np.float32)
         obs["obstacles_visited"] = self.obstacles_visited
-        # TODO: Observation disturbances?
+        # TODO: Decide on observation disturbances
         return obs
 
     def reward(self) -> float:
@@ -347,7 +355,9 @@ class DroneRacingEnv(gymnasium.Env):
         rpy_rates = self.drone["rpy_rates"].reshape(self.sim.data.states.rpy_rates.shape)
         states = self.sim.data.states.replace(pos=pos, quat=quat, vel=vel, rpy_rates=rpy_rates)
         self.sim.data = self.sim.data.replace(states=states)
-        self.sim.reset_hook = build_reset_hook(self.randomization)
+        self.sim.reset_hook = build_reset_hook(
+            self.randomizations, self.gates["mocap_ids"], self.obstacles["mocap_ids"]
+        )
         if "dynamics" in self.disturbances:
             self.sim.disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
         self.sim.build(mjx=False, data=False)  # Save the reset state and rebuild the reset function
@@ -400,13 +410,33 @@ class DroneRacingEnv(gymnasium.Env):
         self.sim.close()
 
 
-def build_reset_hook(randomizations: dict) -> Callable[[SimData, Array], SimData]:
+def build_reset_hook(
+    randomizations: dict, gate_mocap_ids: list[int], obstacle_mocap_ids: list[int]
+) -> Callable[[SimData, Array], SimData]:
     """Build the reset hook for the simulation."""
-    randomizations = [randomize_sim_fn(target, rng) for target, rng in randomizations.items()]
+    randomization_fns = []
+    for target, rng in randomizations.items():
+        match target:
+            case "drone_pos":
+                randomization_fns.append(randomize_drone_pos_fn(rng))
+            case "drone_rpy":
+                randomization_fns.append(randomize_drone_quat_fn(rng))
+            case "drone_mass":
+                randomization_fns.append(randomize_drone_mass_fn(rng))
+            case "drone_inertia":
+                randomization_fns.append(randomize_drone_inertia_fn(rng))
+            case "gate_pos":
+                randomization_fns.append(randomize_gate_pos_fn(rng, gate_mocap_ids))
+            case "gate_rpy":
+                randomization_fns.append(randomize_gate_rpy_fn(rng, gate_mocap_ids))
+            case "obstacle_pos":
+                randomization_fns.append(randomize_obstacle_pos_fn(rng, obstacle_mocap_ids))
+            case _:
+                raise ValueError(f"Invalid target: {target}")
 
     def reset_hook(data: SimData, mask: Array) -> SimData:
-        for randomize in randomizations:
-            data = randomize(data, mask)
+        for randomize_fn in randomization_fns:
+            data = randomize_fn(data, mask)
         return data
 
     return reset_hook
