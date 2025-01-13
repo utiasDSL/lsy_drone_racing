@@ -91,7 +91,7 @@ def load_config(path: Path) -> Munch:
 
 def check_gate_pass(
     gate_pos: np.ndarray,
-    gate_quat: np.ndarray,
+    gate_rot: R,
     gate_size: np.ndarray,
     drone_pos: np.ndarray,
     last_drone_pos: np.ndarray,
@@ -111,13 +111,13 @@ def check_gate_pass(
 
     Args:
         gate_pos: The position of the gate in the world frame.
-        gate_quat: The quaternion of the gate in the world frame.
+        gate_rot: The rotation of the gate.
         gate_size: The size of the gate box in meters.
         drone_pos: The position of the drone in the world frame.
         last_drone_pos: The position of the drone in the world frame at the last time step.
     """
     # Transform last and current drone position into current gate frame.
-    gate_rot = R(gate_quat, normalize=False, copy=False)
+    assert isinstance(gate_rot, R), "gate_rot has to be a Rotation object."
     last_pos_local = gate_rot.apply(last_drone_pos - gate_pos, inverse=True)
     pos_local = gate_rot.apply(drone_pos - gate_pos, inverse=True)
     # Check the plane intersection. If passed, calculate the point of the intersection and check if

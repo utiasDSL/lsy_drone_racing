@@ -221,8 +221,6 @@ class DroneRacingEnv(gymnasium.Env):
             "vel": np.array(self.sim.data.states.vel[0, 0], dtype=np.float32),
             "ang_vel": np.array(self.sim.data.states.rpy_rates[0, 0], dtype=np.float32),
         }
-        obs["ang_vel"][:] = R.from_euler("xyz", obs["rpy"]).apply(obs["ang_vel"], inverse=True)
-
         obs["target_gate"] = self.target_gate if self.target_gate < len(self.gates) else -1
         # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
         # use the actual pose, otherwise use the nominal pose.
@@ -247,9 +245,7 @@ class DroneRacingEnv(gymnasium.Env):
         obstacles_pos[self.obstacles_visited] = self.obstacles["pos"][self.obstacles_visited]
         obs["obstacles_pos"] = obstacles_pos.astype(np.float32)
         obs["obstacles_visited"] = self.obstacles_visited
-
-        if "observation" in self.disturbances:
-            obs = self.disturbances["observation"].apply(obs)
+        # TODO: Observation disturbances?
         return obs
 
     def reward(self) -> float:
@@ -370,10 +366,13 @@ class DroneRacingEnv(gymnasium.Env):
         assert not hasattr(self.sim.data, "gate_pos")
         assert not hasattr(self.sim.data, "obstacle_pos")
 
-        gate_ids = [self.sim.mj_model.body(f"gate:{i}").id for i in range(n_gates)]
-        gates["ids"] = gate_ids
-        obstacle_ids = [self.sim.mj_model.body(f"obstacle:{i}").id for i in range(n_obstacles)]
-        obstacles["ids"] = obstacle_ids
+        mj_model = self.sim.mj_model
+        gates["ids"] = [mj_model.body(f"gate:{i}").id for i in range(n_gates)]
+        gates["mocap_ids"] = [int(mj_model.body(f"gate:{i}").mocapid) for i in range(n_gates)]
+        obstacles["ids"] = [mj_model.body(f"obstacle:{i}").id for i in range(n_obstacles)]
+        obstacles["mocap_ids"] = [
+            int(mj_model.body(f"obstacle:{i}").mocapid) for i in range(n_obstacles)
+        ]
 
     def gate_passed(self) -> bool:
         """Check if the drone has passed a gate.
@@ -383,12 +382,12 @@ class DroneRacingEnv(gymnasium.Env):
         """
         if self.n_gates <= 0 or self.target_gate >= self.n_gates or self.target_gate == -1:
             return False
-        gate_id = self.gates["ids"][self.target_gate]
-        gate_pos = self.sim.data.mjx_data.mocap_pos[0, gate_id]
-        gate_quat = self.sim.data.mjx_data.mocap_quat[0, gate_id][..., [3, 0, 1, 2]]
+        gate_mj_id = self.gates["mocap_ids"][self.target_gate]
+        gate_pos = self.sim.data.mjx_data.mocap_pos[0, gate_mj_id].squeeze()
+        gate_rot = R.from_quat(self.sim.data.mjx_data.mocap_quat[0, gate_mj_id], scalar_first=True)
         drone_pos = self.sim.data.states.pos[0, 0]
         gate_size = (0.45, 0.45)
-        return check_gate_pass(gate_pos, gate_quat, gate_size, drone_pos, self._last_drone_pos)
+        return check_gate_pass(gate_pos, gate_rot, gate_size, drone_pos, self._last_drone_pos)
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
