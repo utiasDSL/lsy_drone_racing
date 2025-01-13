@@ -39,7 +39,6 @@ Explore the extensive Python API, which includes modules for:
 
 - :doc:`Drone Control <control/index>`
 - :doc:`Racing Environments <envs/index>`
-- :doc:`Simulation Tools <sim/index>`
 - :doc:`Utility Functions <utils/index>`
 - :doc:`Vicon Motion Capture Integration <vicon>`
 
