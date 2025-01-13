@@ -28,12 +28,12 @@ from typing import TYPE_CHECKING
 
 import gymnasium
 import numpy as np
+import rospy
 from crazyflow.control.control import thrust_curve
 from crazyflow.sim.symbolic import symbolic_attitude
 from gymnasium import spaces
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.control.closing_controller import ClosingController
 from lsy_drone_racing.utils import check_gate_pass
 from lsy_drone_racing.utils.import_utils import get_ros_package_path, pycrazyswarm
 from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_track
@@ -169,45 +169,33 @@ class DroneRacingDeployEnv(gymnasium.Env):
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
-        return_home = True  # makes the drone simulate the return to home after stopping
+        RETURN_HEIGHT = 1.75  # m
+        BREAKING_DISTANCE = 1.0  # m
+        BREAKING_DURATION = 4.0  # s
+        RETURN_DURATION = 5.0  # s
+        LAND_DURATION = 4.5  # s
 
-        if return_home:
-            # This is done to run the closing controller at a different frequency than the controller before
-            # Does not influence other code, since this part is already in closing!
-            # WARNING: When changing the frequency, you must also change the current _step!!!
-            freq_new = 100  # Hz
-            self.config.env.freq = freq_new
-            t_step_ctrl = 1 / self.config.env.freq
+        try:  # prevent hanging process if drone not reachable
+            self.cf.notifySetpointsStop()
+            obs = self.obs
 
-            obs = self.obs()
-            obs["acc"] = np.array(
-                [0, 0, 0]
-            )  # TODO, use actual value when avaiable or do one step to calculate from velocity
-            info = self.info
-            info["env_freq"] = self.config.env.freq
-            info["drone_start_pos"] = self.config.env.track.drone.pos
+            return_pos = (
+                obs["pos"] + obs["vel"] / (np.linalg.norm(obs["vel"]) + 1e-8) * BREAKING_DISTANCE
+            )
+            return_pos[2] = RETURN_HEIGHT
+            self.cf.goTo(goal=return_pos, yaw=0, duration=BREAKING_DURATION)
+            time.sleep(
+                BREAKING_DURATION - 1
+            )  # Smoothly transition to next position by setting the next goal earlier
 
-            controller = ClosingController(obs, info)
-            t_total = controller.t_total
+            return_pos[:2] = self.config.env.track.drone.pos[:2]
+            self.cf.goTo(goal=return_pos, yaw=0, duration=RETURN_DURATION)
+            time.sleep(RETURN_DURATION)
 
-            for i in np.arange(int(t_total / t_step_ctrl)):  # hover for some more time
-                action = controller.compute_control(obs)
-                action = action.astype(np.float64)  # Drone firmware expects float64
-                pos, vel, acc, yaw, rpy_rate = (
-                    action[:3],
-                    action[3:6],
-                    action[6:9],
-                    action[9],
-                    action[10:],
-                )
-                self.cf.cmdFullState(pos, vel, acc, yaw, rpy_rate)
-                obs = self.obs()
-                obs["acc"] = np.array([0, 0, 0])
-                controller.step_callback(action, obs, 0, True, False, info)
-                time.sleep(t_step_ctrl)
-
-        self.cf.notifySetpointsStop()
-        self.cf.land(0.05, 2.0)
+            self.cf.land(self.config.env.track.drone.pos[2], LAND_DURATION)
+            time.sleep(LAND_DURATION)
+        except rospy.service.ServiceException as e:
+            logger.error("Cannot return home: " + str(e))
 
     def obs(self) -> dict:
         """Return the observation of the environment."""
