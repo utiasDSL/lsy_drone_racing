@@ -1,3 +1,10 @@
+"""Randomization functions for the simulation.
+
+The functions in this module are inserted (compiled) into the reset function of the simulation for
+efficiency. Because of this, they have to be functionally pure to work with JAX (see
+https://jax.readthedocs.io/en/latest/notebooks/Common_Gotchas_in_JAX.html#pure-functions).
+"""
+
 from typing import Callable
 
 import jax
