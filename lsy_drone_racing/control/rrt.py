@@ -59,7 +59,7 @@ class RRT:
                  max_iter=50000,
                  gates=None,
                  play_area=None,
-                 robot_radius=0.001,
+                 robot_radius=0.01,
                  ):
         """
         Setting Parameter
@@ -118,20 +118,23 @@ class RRT:
 
                     if self.calc_dist_to_goal(new_node.x, new_node.y, new_node.z, gate) <= self.expand_dis:
                         if self.check_collision(new_node.p, gate.p, self.obstacle_list):
-                            gate.parent = new_node
-                            path_segment = self.generate_final_course(len(self.node_list) - 1)
-                            print("Path segment found")
-                            break
+                                if self.check_collision_with_gate(nearest_node.p, new_node.p, gate, margin=0.1):
+                                    gate.parent = new_node
+                                    path_segment = self.generate_final_course(len(self.node_list) - 1)
+                                    print("Path segment found")
+                                    break
 
             if path_segment is None:  # Handle case where no path to gate is found
                 print(f"Cannot find path to gate/goal: {gate.p}")
                 return None
 
-            full_path.extend(path_segment[:-1])  # Avoid duplicate nodes between segments
-            
+            if full_path and np.array_equal(full_path[-1], path_segment[0]):
+                full_path.extend(path_segment[1:])  # Skip duplicate start node
+            else:
+                full_path.extend(path_segment)  # Append the entire segment if no overlap
             
 
-            current_start = gate
+            current_start = self.Node(path_segment[-1][0], path_segment[-1][1], path_segment[-1][2])
             
 
     # Set the next gate as the goal
@@ -195,48 +198,18 @@ class RRT:
         else:
             rnd = self.goal.p  # goal sampling
         return self.Node(rnd[0], rnd[1], rnd[2])
+    
+
+    def check_collision_with_gate(self, near_node, new_node, gate, margin=0.1):
+        """
+        Check if the path from near_node to new_node passes through the gate's center.
+        margin: Defines the size of the "box" around the gate.
+        """
+        dist_to_gate = np.linalg.norm(gate.p - new_node)  # Distance to the gate center
+        return dist_to_gate <= margin  # Ensure it's within the margin of the gate center
 
 
-    # def draw_graph(self, rnd=None):
-    #     plt.clf()
-    #     # for stopping simulation with the esc key.
-    #     plt.gcf().canvas.mpl_connect(
-    #         'key_release_event',
-    #         lambda event: [exit(0) if event.key == 'escape' else None])
-    #     if rnd is not None:
-    #         plt.plot(rnd.x, rnd.y, "^k")
-    #         if self.robot_radius > 0.0:
-    #             self.plot_circle(rnd.x, rnd.y, self.robot_radius, '-r')
-    #     for node in self.node_list:
-    #         if node.parent:
-    #             plt.plot(node.path_x, node.path_y, "-g")
 
-    #     for (ox, oy, oz, size) in self.obstacle_list:
-    #         self.plot_circle(ox, oy, size)
-
-    #     if self.play_area is not None:
-    #         plt.plot([self.play_area.xmin, self.play_area.xmax,
-    #                   self.play_area.xmax, self.play_area.xmin,
-    #                   self.play_area.xmin],
-    #                  [self.play_area.ymin, self.play_area.ymin,
-    #                   self.play_area.ymax, self.play_area.ymax,
-    #                   self.play_area.ymin],
-    #                  "-k")
-
-    #     plt.plot(self.start.x, self.start.y, "xr")
-    #     plt.plot(self.end.x, self.end.y, "xr")
-    #     plt.axis("equal")
-    #     plt.axis([self.min_rand, self.max_rand, self.min_rand, self.max_rand])
-    #     plt.grid(True)
-    #     plt.pause(0.01)
-
-    # @staticmethod
-    # def plot_circle(x, y, size, color="-b"):  # pragma: no cover
-    #     deg = list(range(0, 360, 5))
-    #     deg.append(0)
-    #     xl = [x + size * math.cos(np.deg2rad(d)) for d in deg]
-    #     yl = [y + size * math.sin(np.deg2rad(d)) for d in deg]
-    #     plt.plot(xl, yl, color)
 
     @staticmethod
     def get_nearest_node_index(node_list, rnd_node):
