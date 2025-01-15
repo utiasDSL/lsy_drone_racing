@@ -48,21 +48,23 @@ class RRT_Controller(BaseController):
         # Get intial position
         # print("initial_obs:", initial_obs, type(initial_obs))
         self.start = initial_obs['pos'][:3]
+        print(self.start)
         # print("initial_info:", initial_obs)
         self.current_target_index = initial_obs["target_gate"]
         if self.current_target_index != -1:
             self.target_position = initial_obs["gates_pos"][self.current_target_index]
+            print(initial_obs["gates_pos"])
         self.obs_list = [(*obstacle, 0.001) for obstacle in initial_obs["obstacles_pos"]]
         self.rrt = RRT(
                        start=self.start,
-                       goal=self.target_position,
+                       goal=initial_obs["gates_pos"][0],
                        rand_area=[0, 100],
                        obstacle_list= self.obs_list,
-                       
+                       gates=(initial_obs["gates_pos"]).tolist(),
                        play_area=[-10,10,-10,10,0,10],
-                       max_iter = 500
+                       max_iter = 5000
                        )
-        print(initial_obs["obstacles_pos"])
+        # print(initial_obs["obstacles_pos"])
         self.rrt_path = self.rrt.planning()
 
         if self.rrt_path is None:
@@ -97,25 +99,8 @@ class RRT_Controller(BaseController):
         # If the current target index is not -1, move toward the next gate.
         target_pos = self.trajectory(min(self._tick / self._freq, self.t_total))
 
-        # Check if drone has reached the target gate, if so, update the target to the next gate
-        if np.linalg.norm(obs['pos'][:3] - self.target_position) < 0.1:  # Threshold to trigger gate pass
-            self.current_target_index += 1
-            if self.current_target_index < len(obs['gates_pos']):
-                self.start = obs['pos'][:3]
-                self.target_position = obs['gates_pos'][self.current_target_index]
-                old_obs = obs['gates_pos'][self.current_target_index - 1]
-                old_ga = np.array([old_obs[0], old_obs[1], old_obs[2], 0.01])
-                self.obs_list.append(old_ga)
-    
-                rrt  = RRT(start=self.start, goal=self.target_position, obstacle_list= self.obs_list, rand_area=[0,100],                       play_area=[-10,10,-10,10,0,10],
-                       max_iter= 500)
                 
-                rrt_path = rrt.planning()
-                print(rrt)
-                # self.rrt_path = (self.rrt_path)
-                print(rrt_path)
-                
-                self.trajectory = CubicSpline(np.linspace(0, self.t_total, len(self.rrt_path)), self.rrt_path)
+        self.trajectory = CubicSpline(np.linspace(0, self.t_total, len(self.rrt_path)), self.rrt_path)
                 
         # print(self.current_target_index)
         return np.concatenate((target_pos, np.zeros(10)))

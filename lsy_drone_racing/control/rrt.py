@@ -36,6 +36,7 @@ class RRT:
             self.parent = None
             self.p = np.array([x,y,z])
 
+
     class AreaBounds:
 
         def __init__(self, area):
@@ -55,9 +56,10 @@ class RRT:
                  expand_dis=3.0,
                  path_resolution=0.5,
                  goal_sample_rate=5,
-                 max_iter=500,
+                 max_iter=50000,
+                 gates=None,
                  play_area=None,
-                 robot_radius=0.0,
+                 robot_radius=0.001,
                  ):
         """
         Setting Parameter
@@ -71,7 +73,9 @@ class RRT:
 
         """
         self.start = self.Node(start[0], start[1], start[2])
-        self.end = self.Node(goal[0], goal[1], goal[2])
+        self.goal = self.Node(goal[0], goal[1], goal[2])
+        self.gates = [self.Node(g[0], g[1], g[2]) for g in (gates or [])]
+        self.final_goal = self.start
         self.min_rand = rand_area[0]
         self.max_rand = rand_area[1]
         if play_area is not None:
@@ -88,47 +92,54 @@ class RRT:
 
     def planning(self, animation=True):
         """
-        rrt path planning
-
-        animation: flag for animation on or off
+        RRT path planning through gates and to the final goal.
         """
+        full_path = []
+        current_start = self.start
+        
 
-        self.node_list = [self.start]
-        for i in range(self.max_iter):
-            # print(self.node_list)
-           # print("##################################")
-            rnd_node = self.get_random_node()
+        for i, gate in enumerate(self.gates + [self.goal]):  # Include gates and final goal + [self.goal]
+           
+
+            self.goal = gate
+            self.node_list = [current_start]
+            # print(f"Position at {current_start.p} current goal {self.goal.p}")
+            path_segment = None
+            print(f"current starting pos is {current_start.p}, and current goal is {self.goal.p}")
+            for j in range(self.max_iter):
+                rnd_node = self.get_random_node()
+                nearest_ind = self.get_nearest_node_index(self.node_list, rnd_node)
+                nearest_node = self.node_list[nearest_ind]
+                new_node = self.steer(nearest_node, rnd_node, self.expand_dis)
+
+                if self.check_if_outside_play_area(new_node, self.play_area) and \
+                self.check_collision(nearest_node.p, new_node.p, self.obstacle_list):
+                    self.node_list.append(new_node)
+
+                    if self.calc_dist_to_goal(new_node.x, new_node.y, new_node.z, gate) <= self.expand_dis:
+                        if self.check_collision(new_node.p, gate.p, self.obstacle_list):
+                            gate.parent = new_node
+                            path_segment = self.generate_final_course(len(self.node_list) - 1)
+                            print("Path segment found")
+                            break
+
+            if path_segment is None:  # Handle case where no path to gate is found
+                print(f"Cannot find path to gate/goal: {gate.p}")
+                return None
+
+            full_path.extend(path_segment[:-1])  # Avoid duplicate nodes between segments
             
-            nearest_ind = self.get_nearest_node_index(self.node_list, rnd_node)
-            # print(nearest_ind)
-            # print(rnd_node)
-            nearest_node = self.node_list[nearest_ind]
-            # print(nearest_node, rnd_node)
-            new_node = self.steer(nearest_node, rnd_node, self.expand_dis)
-            # print(self.check_if_outside_play_area(new_node, self.play_area), self.check_collision(
-            #        nearest_node.p, new_node.p, self.obstacle_list))
-            if self.check_if_outside_play_area(new_node, self.play_area) and \
-               self.check_collision(
-                   nearest_node.p, new_node.p, self.obstacle_list):
-                print(self.obstacle_list)
-                self.node_list.append(new_node)
+            
 
-            # if animation and i % 5 == 0:
-            #     self.draw_graph(rnd_node)
+            current_start = gate
+            
 
-                if self.calc_dist_to_goal(self.node_list[-1].x,
-                                        self.node_list[-1].y,
-                                        self.node_list[-1].z) <= self.expand_dis:
-                    # final_node = self.steer(self.node_list[-1], self.end,
-                    #                         self.expand_dis)
-                    if self.check_collision(new_node.p, self.end.p, self.obstacle_list):
-                        self.end.parent = new_node
-                        return self.generate_final_course(len(self.node_list) - 1)
+    # Set the next gate as the goal
 
-            # if animation and i % 5:
-            #     # self.draw_graph(rnd_node)
 
-        return None  # cannot find path
+            # full_path.append(self.goal.p)
+        return np.array(full_path)
+
 
     def steer(self, from_node, to_node, extend_length=float(1)):
 
@@ -151,35 +162,29 @@ class RRT:
 
 
     def generate_final_course(self, goal_ind):
-
+        """
+        Generate final course (path) by tracing parent nodes.
+        """
         path = []
-        node = self.end
-
-        if (node.p == node.parent.p).all(): node = node.parent
-        while node.parent:
+        node = self.node_list[goal_ind]
+        while node is not None:  # Check for NoneType
             path.append(node.p)
             node = node.parent
-        path.append(self.start.p)
-        return np.array(path[::-1])
+        return path[::-1]  # Reverse the path
 
-        
 
-        return path
-
-    def calc_dist_to_goal(self, x, y, z):
-        dist = np.sqrt(np.sum((np.array([x,y,z]) - self.end.p) ** 2))
-        # Check cause it might be buggy
+    def calc_dist_to_goal(self, x, y, z, target_node):
+        dist = np.sqrt(np.sum((np.array([x, y, z]) - target_node.p) ** 2))
         return dist
-
-    # def get_random_node(self):
-    #     if random.randint(0, 100) > self.goal_sample_rate:
-    #         rnd = self.Node(
-    #             random.uniform(self.min_rand, self.max_rand),
-    #             random.uniform(self.min_rand, self.max_rand))
-    #     else:  # goal point sampling
-    #         rnd = self.Node(self.end.x, self.end.y)
-    #     return rnd
-    
+        # def get_random_node(self):
+        #     if random.randint(0, 100) > self.goal_sample_rate:
+        #         rnd = self.Node(
+        #             random.uniform(self.min_rand, self.max_rand),
+        #             random.uniform(self.min_rand, self.max_rand))
+        #     else:  # goal point sampling
+        #         rnd = self.Node(self.end.x, self.end.y)
+        #     return rnd
+        
     def get_random_node(self):
         if random.random() > self.goal_sample_rate / 100.0:
             rnd = (
@@ -188,7 +193,7 @@ class RRT:
                 random.uniform(self.min_rand, self.max_rand)
             )
         else:
-            rnd = self.end.p  # goal sampling
+            rnd = self.goal.p  # goal sampling
         return self.Node(rnd[0], rnd[1], rnd[2])
 
 
@@ -272,16 +277,28 @@ class RRT:
         for p in points:
             for ox, oy, oz, radius in obs:
                 # Check if the point p is within the obstacle's radius
-                if np.linalg.norm(np.array([ox, oy, oz]) - p) <= radius:
+                if np.linalg.norm(np.array([ox, oy, oz]) - p) <= radius + self.robot_radius:
                     return False  # Collision detected
 
         return True  # No collision
+
+    def plan_through_waypoints(self, waypoints):
+        all_paths = []  # Store the entire path through all gates
+        current_start = self.start  # Initialize the start position
         
-
-
-
-
-        return True  # safe
+        for waypoint in waypoints:
+            self.start = current_start  # Set the new start
+            self.goal = waypoint        # Set the current goal
+            path_segment = self.planning(animation=False)
+            
+            if path_segment:
+                all_paths.extend(path_segment)  # Append the path segment
+                current_start = path_segment[-1]  # Update the start for the next segment
+            else:
+                print(f"Failed to find a path to waypoint {waypoint}")
+                break
+        
+        return all_paths
 
 
     @staticmethod
@@ -295,44 +312,32 @@ class RRT:
         return d, theta, phi
 
 
-def main(gx=6.0, gy=10.0, gz = 11):
-    print("start " + __file__)
+def main():
+    # Define start and goal positions
+    start = [0, 0, 0]  # Example start position
+    waypoints = np.array([
+        [0.45, -1.0, 0.525],
+        [1.0, -1.55, 1.0],
+        [0.0, 0.5, 0.525],
+        [-0.5, -0.5, 1.0]
+    ])
 
-    # ====Search Path with RRT====
-    obstacleList = [
-    (5, 5, 5, 1),  # [x, y, z, radius]
-    (3, 6, 7, 2),
-    (3, 8, 4, 2),
-    (3, 10, 2, 2),
-    (7, 5, 3, 2),
-    (9, 5, 6, 2),
-    (8, 10, 5, 1)
-]
-
-    # Set Initial parameters
+    # Initialize RRT with start and first waypoint as goal
     rrt = RRT(
-        start=[0, 0, 0],
-        goal=[gx, gy, gz],
-        rand_area=[],
-        obstacle_list=obstacleList,
-        # play_area=[0, 10, 0, 14]
-        robot_radius=0.8
-        )
-    path = rrt.planning(animation=show_animation)
+        start=start,
+        goal=waypoints[0],  # Set the first waypoint as the initial goal
+        rand_area=[-2, 2],  # Define random sampling space
+        obstacle_list=[]    # Add your obstacle list here if necessary
+    )
+
+    # Plan path through all waypoints
+    path = rrt.plan_through_waypoints(waypoints)
 
     if path is None:
         print("Cannot find path")
     else:
-        print("found path!!")
+        print("Found path!")
         print(path)
-
-        # Draw final path
-        # if show_animation:
-        #     rrt.draw_graph()
-        #     plt.plot([x for (x, y) in path], [y for (x, y) in path], '-r')
-        #     plt.grid(True)
-        #     plt.pause(0.01)  # Need for Mac
-        #     plt.show()
 
 
 if __name__ == '__main__':
