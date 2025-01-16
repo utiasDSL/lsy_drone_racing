@@ -49,9 +49,10 @@ register(
 
 # region MultiEnvs
 
+# TODO: Register specialized, non-vectorized envs for single worlds
 register(
     id="MultiDroneRacing-v0",
-    entry_point="lsy_drone_racing.envs.multi_drone_race:MultiDroneRacingEnv",
+    entry_point="lsy_drone_racing.envs.vec_drone_race:VectorMultiDroneRaceEnv",
     max_episode_steps=1800,
     disable_env_checker=True,
 )

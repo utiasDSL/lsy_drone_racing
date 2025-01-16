@@ -73,6 +73,7 @@ import gymnasium
 import lsy_drone_racing
 
 env = gymnasium.make('MultiDroneRacing-v0',
+    n_envs=1,  # TODO: Remove this for single-world envs
     n_drones=config.env.n_drones,
     freq=config.env.freq,
     sim_config=config.sim,

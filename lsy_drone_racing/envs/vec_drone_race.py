@@ -19,6 +19,7 @@ import numpy as np
 from crazyflow import Sim
 from crazyflow.sim.symbolic import symbolic_attitude
 from gymnasium import spaces
+from gymnasium.vector.utils import batch_space
 from jax.scipy.spatial.transform import Rotation as JaxR
 from scipy.spatial.transform import Rotation as R
 
@@ -44,7 +45,7 @@ logger = logging.getLogger(__name__)
 # region StateEnv
 
 
-class MultiDroneRacingEnv(gymnasium.Env):
+class VectorMultiDroneRaceEnv(gymnasium.Env):
     """A Gymnasium environment for drone racing simulations.
 
     This environment simulates a drone racing scenario where a single drone navigates through a
@@ -138,38 +139,44 @@ class MultiDroneRacingEnv(gymnasium.Env):
         self.randomizations = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
 
         # Spaces
-        self.action_space = spaces.Box(low=-1, high=1, shape=(n_drones, 13))
+        self.single_action_space = spaces.Box(low=-1, high=1, shape=(n_drones, 13))
+        self.action_space = batch_space(self.single_action_space, n_envs)
         n_gates, n_obstacles = len(track.gates), len(track.obstacles)
-        self.observation_space = spaces.Dict(
+        self.single_observation_space = spaces.Dict(
             {
-                "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-                "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-                "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-                "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-                "target_gate": spaces.Discrete(n_gates, start=-1),
-                "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_gates, 3)),
-                "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(n_gates, 3)),
-                "gates_visited": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=bool),
-                "obstacles_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_obstacles, 3)),
-                "obstacles_visited": spaces.Box(low=0, high=1, shape=(n_obstacles,), dtype=bool),
+                "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_drones, 3)),
+                "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(n_drones, 3)),
+                "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(n_drones, 3)),
+                "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(n_drones, 3)),
+                "target_gate": spaces.MultiDiscrete([n_gates] * n_drones, start=[-1] * n_drones),
+                "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_drones, n_gates, 3)),
+                "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(n_drones, n_gates, 3)),
+                "gates_visited": spaces.Box(low=0, high=1, shape=(n_drones, n_gates), dtype=bool),
+                "obstacles_pos": spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(n_drones, n_obstacles, 3)
+                ),
+                "obstacles_visited": spaces.Box(
+                    low=0, high=1, shape=(n_drones, n_obstacles), dtype=bool
+                ),
             }
         )
+        self.observation_space = batch_space(self.single_observation_space, n_envs)
         rpy_max = np.array([85 / 180 * np.pi, 85 / 180 * np.pi, np.pi], np.float32)  # Yaw unbounded
         pos_low, pos_high = np.array([-3, -3, 0]), np.array([3, 3, 2.5])
         self.pos_bounds = spaces.Box(low=pos_low, high=pos_high, dtype=np.float64)
         self.rpy_bounds = spaces.Box(low=-rpy_max, high=rpy_max, dtype=np.float64)
 
         # Helper variables
-        self.target_gate = np.zeros(self.sim.n_drones, dtype=int)
+        self.target_gate = np.zeros((n_envs, n_drones), dtype=int)
         self._steps = 0
-        self._last_drone_pos = np.zeros((self.sim.n_drones, 3))
-        self.gates_visited = np.zeros((self.sim.n_drones, n_gates), dtype=bool)
-        self.obstacles_visited = np.zeros((self.sim.n_drones, n_obstacles), dtype=bool)
+        self._last_drone_pos = np.zeros((n_envs, n_drones, 3))
+        self.gates_visited = np.zeros((n_envs, n_drones, n_gates), dtype=bool)
+        self.obstacles_visited = np.zeros((n_envs, n_drones, n_obstacles), dtype=bool)
 
         # Compile the reset and step functions with custom hooks
         self.setup_sim()
         self.contact_masks = self.load_contact_masks()  # Can only be loaded after the sim is built
-        self.disabled_drones = np.zeros(self.sim.n_drones, dtype=bool)
+        self.disabled_drones = np.zeros((n_envs, n_drones), dtype=bool)
 
     def reset(
         self, *, seed: int | None = None, options: dict | None = None
@@ -195,7 +202,7 @@ class MultiDroneRacingEnv(gymnasium.Env):
         # Reset internal variables
         self.target_gate[...] = 0
         self._steps = 0
-        self._last_drone_pos = self.sim.data.states.pos[0]
+        self._last_drone_pos = self.sim.data.states.pos
         self.disabled_drones[...] = False
         # Return info with additional reset information
         info = self.info()
@@ -217,11 +224,10 @@ class MultiDroneRacingEnv(gymnasium.Env):
             action: Full-state command [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate]
                 to follow.
         """
-        assert action.shape == self.action_space.shape, f"Invalid action shape: {action.shape}"
         action = action.reshape((self.sim.n_worlds, self.sim.n_drones, 13))
         if "action" in self.disturbances:
             key, subkey = jax.random.split(self.sim.data.core.rng_key)
-            action += self.disturbances["action"](subkey, (1, 1, 13))
+            action += self.disturbances["action"](subkey, action.shape)
             self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
 
         self.sim.state_control(action)
@@ -229,8 +235,8 @@ class MultiDroneRacingEnv(gymnasium.Env):
         # TODO: Clean up the accelerated functions
         self.disabled_drones = np.array(
             self._disabled_drones(
-                self.sim.data.states.pos[0],
-                self.sim.data.states.quat[0],
+                self.sim.data.states.pos,
+                self.sim.data.states.quat,
                 self.pos_bounds.low,
                 self.pos_bounds.high,
                 self.rpy_bounds.low,
@@ -253,10 +259,11 @@ class MultiDroneRacingEnv(gymnasium.Env):
             self.sim.data.states.pos[0],
             self._last_drone_pos,
         )
+        # TODO: Auto-reset envs. Add configuration option to disable for single-world envs
         self.target_gate += np.array(passed) * ~self.disabled_drones
         self.target_gate[self.target_gate >= n_gates] = -1
-        self._last_drone_pos = self.sim.data.states.pos[0]
-        return self.obs(), self.reward(), self.terminated(), False, self.info()
+        self._last_drone_pos = self.sim.data.states.pos
+        return self.obs(), self.reward(), self.terminated(), self.truncated(), self.info()
 
     def render(self):
         """Render the environment."""
@@ -287,12 +294,14 @@ class MultiDroneRacingEnv(gymnasium.Env):
             self.obstacles["nominal_pos"],
         )
         self.obstacles_visited = np.asarray(obstacles_visited, dtype=bool)
+        quat = self.sim.data.states.quat
+        rpy = R.from_quat(quat.reshape(-1, 4)).as_euler("xyz").reshape((*quat.shape[:-1], 3))
         # TODO: Decide on observation disturbances
         obs = {
-            "pos": np.array(self.sim.data.states.pos[0], dtype=np.float32),
-            "rpy": R.from_quat(self.sim.data.states.quat[0]).as_euler("xyz").astype(np.float32),
-            "vel": np.array(self.sim.data.states.vel[0], dtype=np.float32),
-            "ang_vel": np.array(self.sim.data.states.rpy_rates[0], dtype=np.float32),
+            "pos": np.array(self.sim.data.states.pos, dtype=np.float32),
+            "rpy": rpy.astype(np.float32),
+            "vel": np.array(self.sim.data.states.vel, dtype=np.float32),
+            "ang_vel": np.array(self.sim.data.states.rpy_rates, dtype=np.float32),
             "target_gate": self.target_gate,
             "gates_pos": np.asarray(gates_pos, dtype=np.float32),
             "gates_rpy": np.asarray(gates_rpy, dtype=np.float32),
@@ -355,11 +364,17 @@ class MultiDroneRacingEnv(gymnasium.Env):
         Returns:
             True if all drones have been disabled, else False.
         """
-        return self.disabled_drones.all()
+        return self.disabled_drones
+
+    def truncated(self) -> NDArray[np.bool_]:
+        """Array of booleans indicating if the episode is truncated."""
+        return np.zeros((self.sim.n_worlds, self.sim.n_drones), dtype=np.bool_)
 
     def info(self) -> dict:
         """Return an info dictionary containing additional information about the environment."""
-        return {"collisions": np.any(self.sim.contacts(), axis=-1), "symbolic_model": self.symbolic}
+        contacts, mask = self.sim.contacts(), self.contact_masks
+        contacts = np.any(np.logical_and(contacts[:, None, :], mask[None, :, :]), axis=-1)
+        return {"collisions": contacts, "symbolic_model": self.symbolic}
 
     @staticmethod
     @jax.jit
@@ -405,7 +420,8 @@ class MultiDroneRacingEnv(gymnasium.Env):
         n_contacts = self.sim.n_drones * object_contacts + drone_contacts
         masks = np.zeros((self.sim.n_drones, n_contacts), dtype=bool)
         mj_model = self.sim.mj_model
-        geom1, geom2 = self.sim.data.mjx_data.contact.geom1, self.sim.data.mjx_data.contact.geom2
+        geom1 = self.sim.data.mjx_data.contact.geom1[0]  # We only need one world to create the mask
+        geom2 = self.sim.data.mjx_data.contact.geom2[0]
         for i in range(self.sim.n_drones):
             geom_start = mj_model.body_geomadr[mj_model.body(f"drone:{i}").id]
             geom_count = mj_model.body_geomnum[mj_model.body(f"drone:{i}").id]
@@ -422,10 +438,10 @@ class MultiDroneRacingEnv(gymnasium.Env):
     def setup_sim(self):
         """Setup the simulation data and build the reset and step functions with custom hooks."""
         self._load_track_into_sim(self.gates, self.obstacles)
-        pos = self.drone["pos"].reshape(self.sim.data.states.pos.shape)
-        quat = self.drone["quat"].reshape(self.sim.data.states.quat.shape)
-        vel = self.drone["vel"].reshape(self.sim.data.states.vel.shape)
-        rpy_rates = self.drone["rpy_rates"].reshape(self.sim.data.states.rpy_rates.shape)
+        pos = self.sim.data.states.pos.at[...].set(self.drone["pos"])
+        quat = self.sim.data.states.quat.at[...].set(self.drone["quat"])
+        vel = self.sim.data.states.vel.at[...].set(self.drone["vel"])
+        rpy_rates = self.sim.data.states.rpy_rates.at[...].set(self.drone["rpy_rates"])
         states = self.sim.data.states.replace(pos=pos, quat=quat, vel=vel, rpy_rates=rpy_rates)
         self.sim.data = self.sim.data.replace(states=states)
         self.sim.reset_hook = build_reset_hook(
@@ -496,8 +512,7 @@ class MultiDroneRacingEnv(gymnasium.Env):
     @jax.jit
     def warp_disabled_drones(data: SimData, mask: NDArray) -> SimData:
         """Warp the disabled drones below the ground."""
-        mask = mask.reshape((1, -1, 1))
-        pos = jax.numpy.where(mask, -1, data.states.pos)
+        pos = jax.numpy.where(mask[..., None], -1, data.states.pos)
         return data.replace(states=data.states.replace(pos=pos))
 
     def close(self):
@@ -508,7 +523,7 @@ class MultiDroneRacingEnv(gymnasium.Env):
 # region AttitudeEnv
 
 
-class MultiDroneRacingAttitudeEnv(MultiDroneRacingEnv):
+class VectorDroneRaceAttitudeEnv(VectorMultiDroneRaceEnv):
     """Drone racing environment with a collective thrust attitude command interface.
 
     The action space consists of the collective thrust and body-fixed attitude commands
