@@ -13,20 +13,26 @@ def print_benchmark_results(name: str, timings: list[float]):
     print(f"FPS: {1 / np.mean(timings):.2f}")
 
 
-def main(n_tests: int = 10, sim_steps: int = 10, multi_drone: bool = False):
+def main(
+    n_tests: int = 2,
+    number: int = 100,
+    multi_drone: bool = False,
+    reset: bool = True,
+    step: bool = True,
+):
     reset_fn, step_fn = time_sim_reset, time_sim_step
     if multi_drone:
         reset_fn, step_fn = time_multi_drone_reset, time_multi_drone_step
-    timings = reset_fn(n_tests=n_tests)
-    print_benchmark_results(name="Sim reset", timings=timings)
-    timings = step_fn(n_tests=n_tests, sim_steps=sim_steps)
-    print_benchmark_results(name="Sim steps", timings=timings / sim_steps)
-    timings = step_fn(n_tests=n_tests, sim_steps=sim_steps, physics_mode="sys_id")
-    print_benchmark_results(name="Sim steps (sys_id backend)", timings=timings / sim_steps)
-    timings = step_fn(n_tests=n_tests, sim_steps=sim_steps, physics_mode="mujoco")
-    print_benchmark_results(name="Sim steps (mujoco backend)", timings=timings / sim_steps)
-    timings = step_fn(n_tests=n_tests, sim_steps=sim_steps, physics_mode="sys_id")
-    print_benchmark_results(name="Sim steps (sys_id backend)", timings=timings / sim_steps)
+    if reset:
+        timings = reset_fn(n_tests=n_tests, number=number)
+        print_benchmark_results(name="Sim reset", timings=timings / number)
+    if step:
+        timings = step_fn(n_tests=n_tests, number=number)
+        print_benchmark_results(name="Sim steps", timings=timings / number)
+        timings = step_fn(n_tests=n_tests, number=number, physics_mode="sys_id")
+        print_benchmark_results(name="Sim steps (sys_id backend)", timings=timings / number)
+        # timings = step_fn(n_tests=n_tests, number=number, physics_mode="mujoco")
+        # print_benchmark_results(name="Sim steps (mujoco backend)", timings=timings / number)
 
 
 if __name__ == "__main__":
