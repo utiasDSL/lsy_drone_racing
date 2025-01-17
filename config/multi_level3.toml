@@ -30,7 +30,7 @@ gui = false                                       # Enable/disable PyBullet's GU
 [env]
 id = "MultiDroneRacing-v0" # Either "MultiDroneRacingEnv-v0" or "MultiDroneRacingAttitude-v0". If using "MultiDroneRacingAttitude-v0", the drone will use the attitude controller instead of the position controller.
 n_drones = 2          # Number of drones has to match the track configuration for drones
-random_resets = false # Whether to re-seed the random number generator between episodes
+random_resets = true  # Whether to re-seed the random number generator between episodes
 seed = 1337           # Random seed
 freq = 50             # Frequency of the environment's step function, in Hz
 symbolic = false      # Whether to include symbolic expressions in the info dict. Note: This can interfere with multiprocessing! If you want to parallelize your training, set this to false.
@@ -67,3 +67,55 @@ pos = [[1.0, 1.0, 0.05], [1.2, 1.0, 0.05]]
 rpy = [[0, 0, 0], [0, 0, 0]]
 vel = [[0, 0, 0], [0, 0, 0]]
 rpy_rates = [[0, 0, 0], [0, 0, 0]]
+
+[env.disturbances.action]
+fn = "normal"
+scale = 0.001
+
+[env.disturbances.dynamics]
+fn = "uniform"
+[env.disturbances.dynamics.kwargs]
+minval = [-0.1, -0.1, -0.1]
+maxval = [0.1, 0.1, 0.1]
+
+[env.randomizations.drone_pos]
+fn = "uniform"
+[env.randomizations.drone_pos.kwargs]
+minval = [-0.1, -0.1, 0.0]
+maxval = [0.1, 0.1, 0.02]
+
+[env.randomizations.drone_rpy]
+fn = "uniform"
+[env.randomizations.drone_rpy.kwargs]
+minval = [-0.1, -0.1, -0.1]
+maxval = [0.1, 0.1, 0.1]
+
+[env.randomizations.drone_mass]
+fn = "uniform"
+[env.randomizations.drone_mass.kwargs]
+minval = -0.01
+maxval = 0.01
+
+[env.randomizations.drone_inertia]
+fn = "uniform"
+[env.randomizations.drone_inertia.kwargs]
+minval = [-0.000001, -0.000001, -0.000001]
+maxval = [0.000001, 0.000001, 0.000001]
+
+[env.randomizations.gate_pos]
+fn = "uniform"
+[env.randomizations.gate_pos.kwargs]
+minval = [-0.15, -0.15, -0.1]
+maxval = [0.15, 0.15, 0.1]
+
+[env.randomizations.gate_rpy]
+fn = "uniform"
+[env.randomizations.gate_rpy.kwargs]
+minval = [0.0, 0.0, -0.1]
+maxval = [0.0, 0.0, 0.1]
+
+[env.randomizations.obstacle_pos]
+fn = "uniform"
+[env.randomizations.obstacle_pos.kwargs]
+minval = [-0.15, -0.15, -0.05]
+maxval = [0.15, 0.15, 0.05]
