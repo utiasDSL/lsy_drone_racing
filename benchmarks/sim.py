@@ -73,11 +73,12 @@ config = load_config(Path('{Path(__file__).parents[1] / "config/multi_level3.tom
 
 multi_drone_env_setup_code = """
 import gymnasium
+import jax
 
 import lsy_drone_racing
 
 env = gymnasium.make('MultiDroneRacing-v0',
-    n_envs=1000,  # TODO: Remove this for single-world envs
+    n_envs=1,  # TODO: Remove this for single-world envs
     n_drones=config.env.n_drones,
     freq=config.env.freq,
     sim_config=config.sim,
@@ -87,11 +88,18 @@ env = gymnasium.make('MultiDroneRacing-v0',
     randomizations=config.env.get("randomizations"),
     random_resets=config.env.random_resets,
     seed=config.env.seed,
-    device='gpu',
+    device='cpu',
 )
+
 env.reset()
-env.step(env.action_space.sample())  # JIT compile
-env.reset()
+# JIT step
+env.step(env.action_space.sample())
+jax.block_until_ready(env.unwrapped.data)
+# JIT masked reset (used in autoreset)
+mask = env.unwrapped.data.marked_for_reset
+mask = mask.at[0].set(True)
+env.unwrapped.reset(mask=mask)
+jax.block_until_ready(env.unwrapped.data)
 env.action_space.seed(2)
 """
 

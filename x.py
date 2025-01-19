@@ -1,7 +1,11 @@
+import time
+from pathlib import Path
+
+import gymnasium
 import jax
 import numpy as np
-import time
-from lsy_drone_racing.envs.vec_drone_race2 import VectorMultiDroneRaceEnv
+
+from lsy_drone_racing.utils import load_config
 
 
 def analyze_timings(times: list[float], n_steps: int, n_worlds: int, freq: float) -> None:
@@ -82,39 +86,48 @@ def profile_step(sim, n_steps: int, device: str):
     analyze_timings(times, n_steps, sim.n_worlds, env.freq)
 
 
-def profile_env_step(env, n_steps: int, device: str):
+def profile_env_step(env, n_steps: int):
     """Profile the environment step performance."""
     times = []
-    device = jax.devices(device)[0]
-    action = env.action_space.sample()
-    env.step(action)
+
+    env.reset()
+    # JIT step
+    env.step(env.action_space.sample())
+    jax.block_until_ready(env.unwrapped.data)
+    # JIT masked reset (used in autoreset)
+    mask = env.unwrapped.data.marked_for_reset
+    mask = mask.at[0].set(True)
+    env.unwrapped.reset(mask=mask)
+    jax.block_until_ready(env.unwrapped.data)
 
     for _ in range(n_steps):
         tstart = time.perf_counter()
-        env.step(action)
+        obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
+        jax.block_until_ready(obs)
         times.append(time.perf_counter() - tstart)
 
     print("Env step performance:")
-    analyze_timings(times, n_steps, env.sim.n_worlds, env.freq)
+    analyze_timings(times, n_steps, env.unwrapped.sim.n_worlds, env.unwrapped.freq)
 
-
-from lsy_drone_racing.utils import load_config
-from pathlib import Path
 
 config = load_config(Path(__file__).parent / "config/multi_level3.toml")
 
-env = VectorMultiDroneRaceEnv(
-    1,
-    config.env.n_drones,
-    config.env.freq,
-    config.sim,
+env = gymnasium.make(
+    "MultiDroneRacing-v0",
+    n_envs=1,  # TODO: Remove this for single-world envs
+    n_drones=config.env.n_drones,
+    freq=config.env.freq,
+    sim_config=config.sim,
     sensor_range=config.env.sensor_range,
     track=config.env.track,
-    disturbances=config.env.disturbances,
-    randomizations=config.env.randomizations,
+    disturbances=config.env.get("disturbances"),
+    randomizations=config.env.get("randomizations"),
     random_resets=config.env.random_resets,
     seed=config.env.seed,
+    device="cpu",
 )
+env.action_space.seed(2)
+
 # profile_reset(env.sim, 100, "cpu")
 # profile_step(env.sim, 100, "cpu")
-profile_env_step(env, 100, "cpu")
+profile_env_step(env, 100)
