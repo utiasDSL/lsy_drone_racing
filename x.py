@@ -1,8 +1,7 @@
 import jax
 import numpy as np
 import time
-import jax.numpy as jnp
-from lsy_drone_racing.envs.vec_drone_race import VectorMultiDroneRaceEnv
+from lsy_drone_racing.envs.vec_drone_race2 import VectorMultiDroneRaceEnv
 
 
 def analyze_timings(times: list[float], n_steps: int, n_worlds: int, freq: float) -> None:
@@ -66,12 +65,45 @@ def profile_reset(sim, n_steps: int, device: str):
     analyze_timings(times_masked, n_steps, sim.n_worlds, sim.freq)
 
 
+def profile_step(sim, n_steps: int, device: str):
+    """Profile the Crazyflow simulator step performance."""
+    times = []
+    device = jax.devices(device)[0]
+
+    sim.step(sim.freq // env.freq)
+    jax.block_until_ready(sim.data)
+
+    for _ in range(n_steps):
+        tstart = time.perf_counter()
+        sim.step(sim.freq // env.freq)
+        times.append(time.perf_counter() - tstart)
+
+    print("Sim step performance:")
+    analyze_timings(times, n_steps, sim.n_worlds, env.freq)
+
+
+def profile_env_step(env, n_steps: int, device: str):
+    """Profile the environment step performance."""
+    times = []
+    device = jax.devices(device)[0]
+    action = env.action_space.sample()
+    env.step(action)
+
+    for _ in range(n_steps):
+        tstart = time.perf_counter()
+        env.step(action)
+        times.append(time.perf_counter() - tstart)
+
+    print("Env step performance:")
+    analyze_timings(times, n_steps, env.sim.n_worlds, env.freq)
+
+
 from lsy_drone_racing.utils import load_config
 from pathlib import Path
 
 config = load_config(Path(__file__).parent / "config/multi_level3.toml")
 
-sim = VectorMultiDroneRaceEnv(
+env = VectorMultiDroneRaceEnv(
     1,
     config.env.n_drones,
     config.env.freq,
@@ -82,5 +114,7 @@ sim = VectorMultiDroneRaceEnv(
     randomizations=config.env.randomizations,
     random_resets=config.env.random_resets,
     seed=config.env.seed,
-).sim
-profile_reset(sim, 100, "cpu")
+)
+# profile_reset(env.sim, 100, "cpu")
+# profile_step(env.sim, 100, "cpu")
+profile_env_step(env, 100, "cpu")

@@ -74,7 +74,7 @@ def simulate(
 
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         obs, info = env.reset()
-        controller: BaseController = controller_cls(obs, info)
+        controller: BaseController = controller_cls(obs, info, config)
         i = 0
         fps = 60
 

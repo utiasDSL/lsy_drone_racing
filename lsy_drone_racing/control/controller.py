@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 class BaseController(ABC):
     """Base class for controller implementations."""
 
-    def __init__(self, initial_obs: dict[str, NDArray[np.floating]], initial_info: dict):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialization of the controller.
 
         Instructions:
@@ -36,9 +36,11 @@ class BaseController(ABC):
             constants, counters, pre-plan trajectories, etc.
 
         Args:
-            initial_obs: The initial observation of the environment's state. See the environment's
+            obs: The initial observation of the environment's state. See the environment's
                 observation space for details.
-            initial_info: Additional environment information from the reset.
+            info: The initial environment information from the reset.
+            config: The race configuration. See the config files for details. Contains additional
+                information such as disturbance configurations, randomizations, etc.
         """
 
     @abstractmethod

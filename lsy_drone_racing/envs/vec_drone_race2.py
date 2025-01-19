@@ -18,6 +18,8 @@ import mujoco
 import numpy as np
 from crazyflow import Sim
 from crazyflow.sim.symbolic import symbolic_attitude
+from crazyflow.utils import leaf_replace
+from flax.struct import dataclass
 from gymnasium import spaces
 from gymnasium.vector.utils import batch_space
 from jax.scipy.spatial.transform import Rotation as JaxR
@@ -42,7 +44,57 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# region StateEnv
+# region EnvData
+
+
+@dataclass
+class EnvData:
+    """Struct holding the data of all auxiliary variables for the environment."""
+
+    # Dynamic variables
+    target_gate: Array
+    gates_visited: Array
+    obstacles_visited: Array
+    last_drone_pos: Array
+    marked_for_reset: Array
+    disabled_drones: Array
+    # Static variables
+    contact_masks: Array
+    pos_limit_low: Array
+    pos_limit_high: Array
+    rpy_limit_low: Array
+    rpy_limit_high: Array
+    gate_mocap_ids: Array
+
+    @classmethod
+    def create(
+        cls,
+        n_envs: int,
+        n_drones: int,
+        n_gates: int,
+        n_obstacles: int,
+        contact_masks: Array,
+        gate_mocap_ids: Array,
+        device: jax.Device,
+    ) -> EnvData:
+        """Create a new environment data struct with default values."""
+        return cls(
+            target_gate=jp.zeros((n_envs, n_drones), dtype=int, device=device),
+            gates_visited=jp.zeros((n_envs, n_drones, n_gates), dtype=bool, device=device),
+            obstacles_visited=jp.zeros((n_envs, n_drones, n_obstacles), dtype=bool, device=device),
+            last_drone_pos=jp.zeros((n_envs, n_drones, 3), dtype=np.float32, device=device),
+            marked_for_reset=jp.zeros((n_envs, n_drones), dtype=bool, device=device),
+            disabled_drones=jp.zeros((n_envs, n_drones), dtype=bool, device=device),
+            contact_masks=jp.array(contact_masks, dtype=bool, device=device),
+            pos_limit_low=jp.full(3, -jp.inf, dtype=np.float32, device=device),
+            pos_limit_high=jp.full(3, jp.inf, dtype=np.float32, device=device),
+            rpy_limit_low=jp.full(3, -jp.pi, dtype=np.float32, device=device),
+            rpy_limit_high=jp.full(3, jp.pi, dtype=np.float32, device=device),
+            gate_mocap_ids=jp.array(gate_mocap_ids, dtype=int, device=device),
+        )
+
+
+# region Core Env
 
 
 class VectorMultiDroneRaceEnv(gymnasium.Env):
@@ -131,7 +183,7 @@ class VectorMultiDroneRaceEnv(gymnasium.Env):
         # Env settings
         self.freq = freq
         self.seed = seed
-        self.autoreset = False  # Can be overridden by subclasses
+        self.autoreset = True  # Can be overridden by subclasses
         self.device = jax.devices(device)[0]
         self.symbolic = symbolic_attitude(1 / self.freq)
         self.random_resets = random_resets
@@ -165,24 +217,23 @@ class VectorMultiDroneRaceEnv(gymnasium.Env):
             }
         )
         self.observation_space = batch_space(self.single_observation_space, n_envs)
-        rpy_max = np.array([85 / 180 * np.pi, 85 / 180 * np.pi, np.pi], np.float32)  # Yaw unbounded
-        pos_low, pos_high = np.array([-3, -3, 0]), np.array([3, 3, 2.5])
-        self.pos_bounds = spaces.Box(low=pos_low, high=pos_high, dtype=np.float64)
-        self.rpy_bounds = spaces.Box(low=-rpy_max, high=rpy_max, dtype=np.float64)
 
-        # Helper variables
-        self.target_gate = np.zeros((n_envs, n_drones), dtype=int)
-        self._last_drone_pos = np.zeros((n_envs, n_drones, 3))
-        self.gates_visited = jp.zeros((n_envs, n_drones, n_gates), dtype=bool, device=self.device)
-        self.obstacles_visited = jp.zeros(
-            (n_envs, n_drones, n_obstacles), dtype=bool, device=self.device
-        )
-        # self.marked_for_reset = jp.zeros((n_envs, n_drones), dtype=bool, device=self.device)
-        self.marked_for_reset = np.zeros((n_envs, n_drones), dtype=bool)
         # Compile the reset and step functions with custom hooks
         self.setup_sim()
-        self.contact_masks = self.load_contact_masks()  # Can only be loaded after the sim is built
-        self.disabled_drones = np.zeros((n_envs, n_drones), dtype=bool)
+
+        # Create the environment data struct
+        rpy_limit = np.array([85 / 180 * np.pi, 85 / 180 * np.pi, np.pi], np.float32)
+        masks = self.load_contact_masks()
+        gate_mocap_ids = self.gates["mocap_ids"]
+        self.data = EnvData.create(
+            n_envs, n_drones, n_gates, n_obstacles, masks, gate_mocap_ids, self.device
+        )
+        self.data = self.data.replace(
+            pos_limit_low=np.array([-3, -3, 0]),
+            pos_limit_high=np.array([3, 3, 2.5]),
+            rpy_limit_low=-rpy_limit,
+            rpy_limit_high=rpy_limit,
+        )
 
     def reset(
         self,
@@ -208,11 +259,18 @@ class VectorMultiDroneRaceEnv(gymnasium.Env):
         # Randomization of gates, obstacles and drones is compiled into the sim reset function with
         # the sim.reset_hook function, so we don't need to explicitly do it here
         self.sim.reset(mask=mask)
-        # Reset internal variables
-        self.target_gate[mask, ...] = 0
-        self._last_drone_pos[mask, ...] = self.sim.data.states.pos[mask, ...]
-        self.disabled_drones[mask, ...] = False
+        self.data = self.reset_data(self.data, self.sim.data.states.pos, mask)
         return self.obs(), self.info()
+
+    @staticmethod
+    def reset_data(data: EnvData, drone_pos: Array, mask: NDArray[np.bool_]) -> EnvData:
+        """Reset auxiliary variables of the environment data."""
+        target_gate = data.target_gate.at[mask, ...].set(0)
+        last_drone_pos = data.last_drone_pos.at[mask, ...].set(drone_pos)
+        disabled_drones = data.disabled_drones.at[mask, ...].set(False)
+        return data.replace(
+            target_gate=target_gate, last_drone_pos=last_drone_pos, disabled_drones=disabled_drones
+        )
 
     def step(
         self, action: NDArray[np.floating]
@@ -228,39 +286,43 @@ class VectorMultiDroneRaceEnv(gymnasium.Env):
         """
         self.apply_action(action)
         self.sim.step(self.sim.freq // self.freq)
-        # TODO: Clean up the accelerated functions
-        disabled_drones = self._disabled_drones(
-            self.sim.data.states.pos,
-            self.sim.data.states.quat,
-            self.pos_bounds.low,
-            self.pos_bounds.high,
-            self.rpy_bounds.low,
-            self.rpy_bounds.high,
-            self.target_gate,
-            self.disabled_drones,
-            self.sim.contacts(),
-            self.contact_masks,
-        )
-        self.disabled_drones = np.array(disabled_drones)
-        self.sim.data = self.warp_disabled_drones(self.sim.data, disabled_drones)
-        # TODO: Clean up the accelerated functions
-        n_gates = len(self.gates["pos"])
-        passed = self._gate_passed(
-            self.gates["mocap_ids"][self.target_gate % n_gates],
-            self.sim.data.mjx_data.mocap_pos,
-            self.sim.data.mjx_data.mocap_quat,
-            self.sim.data.states.pos,
-            self._last_drone_pos,
-        )
-        # TODO: Auto-reset envs. Add configuration option to disable for single-world envs
-        self.target_gate += np.asarray(passed * ~disabled_drones)
-        self.target_gate[self.target_gate >= n_gates] = -1
-        self._last_drone_pos = np.array(self.sim.data.states.pos)
-        if self.autoreset and self.marked_for_reset.any():
+        self.sim.data = self.warp_disabled_drones(self.sim.data, self.data.disabled_drones)
+        # Apply the environment logic. Check which drones are now disabled, check which gates have
+        # been passed, and update the target gate.
+        drone_pos, drone_quat = self.sim.data.states.pos, self.sim.data.states.quat
+        gate_pos, gate_quat = self.sim.data.mjx_data.mocap_pos, self.sim.data.mjx_data.mocap_quat
+        contacts = self.sim.contacts()
+        self.data = self._step(self.data, drone_pos, drone_quat, gate_pos, gate_quat, contacts)
+        # Auto-reset envs. Add configuration option to disable for single-world envs
+        if self.autoreset and self.data.marked_for_reset.any():
             self.reset(mask=self.marked_for_reset)
         terminated, truncated = self.terminated(), self.truncated()
         self.marked_for_reset = np.any(terminated | truncated, axis=-1)
         return self.obs(), self.reward(), terminated, truncated, self.info()
+
+    @staticmethod
+    def _step(
+        data: EnvData,
+        drone_pos: Array,
+        drone_quat: Array,
+        gates_pos: Array,
+        gates_quat: Array,
+        contacts: Array,
+    ) -> EnvData:
+        """Step the environment data."""
+        disabled_drones = _disabled_drones(drone_pos, drone_quat, contacts, data)
+        gate_pos = gates_pos[jp.arange(gates_pos.shape[0])[:, None], data.gate_mocap_ids]
+        gate_quat = gates_quat[jp.arange(gates_quat.shape[0])[:, None], data.gate_mocap_ids]
+        # We need to convert the gate quat from MuJoCo order to scipy order
+        gate_quat = gate_quat[..., [3, 0, 1, 2]]
+        passed = _gate_passed(drone_pos, gate_pos, gate_quat, data.last_drone_pos)
+        target_gate = data.target_gate + passed * ~disabled_drones
+        target_gate = jp.where(target_gate >= data.n_gates, -1, target_gate)
+        marked_for_reset = ...  # TODO: Implement this
+        data = data.replace(
+            last_drone_pos=drone_pos, target_gate=target_gate, disabled_drones=disabled_drones
+        )
+        return data
 
     @staticmethod
     @jax.jit
@@ -287,7 +349,7 @@ class VectorMultiDroneRaceEnv(gymnasium.Env):
         # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
         # use the actual pose, otherwise use the nominal pose.
         self.gates_visited, gates_pos, gates_rpy = self._obs_gates(
-            self.gates_visited,
+            self.data.gates_visited,
             self.sim.data.states.pos,
             self.sim.data.mjx_data.mocap_pos,
             self.sim.data.mjx_data.mocap_quat,
@@ -297,7 +359,7 @@ class VectorMultiDroneRaceEnv(gymnasium.Env):
             self.gates["nominal_rpy"],
         )
         self.obstacles_visited, obstacles_pos = self._obs_obstacles(
-            self.obstacles_visited,
+            self.data.obstacles_visited,
             self.sim.data.states.pos,
             self.sim.data.mjx_data.mocap_pos,
             self.obstacles["mocap_ids"],
@@ -398,30 +460,6 @@ class VectorMultiDroneRaceEnv(gymnasium.Env):
     def _collision_info(contacts: Array, mask: Array) -> Array:
         return jp.any(jp.logical_and(contacts[:, None, :], mask), axis=-1)
 
-    @staticmethod
-    @jax.jit
-    def _disabled_drones(
-        pos: Array,
-        quat: Array,
-        pos_low: NDArray,
-        pos_high: NDArray,
-        rpy_low: NDArray,
-        rpy_high: NDArray,
-        target_gate: NDArray,
-        disabled_drones: NDArray,
-        contacts: Array,
-        contact_masks: NDArray,
-    ) -> Array:
-        rpy = JaxR.from_quat(quat).as_euler("xyz")
-        disabled = jp.logical_or(disabled_drones, jp.all(pos < pos_low, axis=-1))
-        disabled = jp.logical_or(disabled, jp.all(pos > pos_high, axis=-1))
-        disabled = jp.logical_or(disabled, jp.all(rpy < rpy_low, axis=-1))
-        disabled = jp.logical_or(disabled, jp.all(rpy > rpy_high, axis=-1))
-        disabled = jp.logical_or(disabled, target_gate == -1)
-        contacts = jp.any(jp.logical_and(contacts[:, None, :], contact_masks), axis=-1)
-        disabled = jp.logical_or(disabled, contacts)
-        return disabled
-
     def load_track(self, track: dict) -> tuple[dict, dict, dict]:
         """Load the track from the config file."""
         gate_pos = np.array([g["pos"] for g in track.gates])
@@ -502,36 +540,6 @@ class VectorMultiDroneRaceEnv(gymnasium.Env):
 
     @staticmethod
     @jax.jit
-    def _gate_passed(
-        mocap_ids: Array,
-        mocap_pos: Array,
-        mocap_quat: Array,
-        drone_pos: Array,
-        last_drone_pos: NDArray,
-    ) -> bool:
-        """Check if the drone has passed a gate.
-
-        Returns:
-            True if the drone has passed a gate, else False.
-        """
-        # TODO: Test. Cover cases with no gates.
-        gate_pos = mocap_pos[jp.arange(mocap_pos.shape[0])[:, None], mocap_ids]
-        gate_quat = mocap_quat[jp.arange(mocap_pos.shape[0])[:, None], mocap_ids]
-        gate_rot = JaxR.from_quat(gate_quat[..., [1, 2, 3, 0]])
-        gate_size = (0.45, 0.45)
-        last_pos_local = gate_rot.apply(last_drone_pos - gate_pos, inverse=True)
-        pos_local = gate_rot.apply(drone_pos - gate_pos, inverse=True)
-        # Check if the line between the last position and the current position intersects the plane.
-        # If so, calculate the point of the intersection and check if it is within the gate box.
-        passed_plane = (last_pos_local[..., 1] < 0) & (pos_local[..., 1] > 0)
-        alpha = -last_pos_local[..., 1] / (pos_local[..., 1] - last_pos_local[..., 1])
-        x_intersect = alpha * (pos_local[..., 0]) + (1 - alpha) * last_pos_local[..., 0]
-        z_intersect = alpha * (pos_local[..., 2]) + (1 - alpha) * last_pos_local[..., 2]
-        in_box = (abs(x_intersect) < gate_size[0] / 2) & (abs(z_intersect) < gate_size[1] / 2)
-        return passed_plane & in_box
-
-    @staticmethod
-    @jax.jit
     def warp_disabled_drones(data: SimData, mask: NDArray) -> SimData:
         """Warp the disabled drones below the ground."""
         pos = jax.numpy.where(mask[..., None], -1, data.states.pos)
@@ -540,6 +548,44 @@ class VectorMultiDroneRaceEnv(gymnasium.Env):
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
         self.sim.close()
+
+
+# region Env fns
+
+
+def _disabled_drones(pos: Array, quat: Array, contacts: Array, data: EnvData) -> Array:
+    rpy = JaxR.from_quat(quat).as_euler("xyz")
+    disabled = jp.logical_or(data.disabled_drones, jp.all(pos < data.pos_limit_low, axis=-1))
+    disabled = jp.logical_or(disabled, jp.all(pos > data.pos_limit_high, axis=-1))
+    disabled = jp.logical_or(disabled, jp.all(rpy < data.rpy_limit_low, axis=-1))
+    disabled = jp.logical_or(disabled, jp.all(rpy > data.rpy_limit_high, axis=-1))
+    disabled = jp.logical_or(disabled, data.target_gate == -1)
+    contacts = jp.any(jp.logical_and(contacts[:, None, :], data.contact_masks), axis=-1)
+    disabled = jp.logical_or(disabled, contacts)
+    return disabled
+
+
+def _gate_passed(
+    gate_pos: Array, gate_quat: Array, drone_pos: Array, last_drone_pos: NDArray
+) -> bool:
+    """Check if the drone has passed a gate.
+
+    Returns:
+        True if the drone has passed a gate, else False.
+    """
+    # TODO: Test. Cover cases with no gates.
+    gate_rot = JaxR.from_quat(gate_quat)
+    gate_size = (0.45, 0.45)
+    last_pos_local = gate_rot.apply(last_drone_pos - gate_pos, inverse=True)
+    pos_local = gate_rot.apply(drone_pos - gate_pos, inverse=True)
+    # Check if the line between the last position and the current position intersects the plane.
+    # If so, calculate the point of the intersection and check if it is within the gate box.
+    passed_plane = (last_pos_local[..., 1] < 0) & (pos_local[..., 1] > 0)
+    alpha = -last_pos_local[..., 1] / (pos_local[..., 1] - last_pos_local[..., 1])
+    x_intersect = alpha * (pos_local[..., 0]) + (1 - alpha) * last_pos_local[..., 0]
+    z_intersect = alpha * (pos_local[..., 2]) + (1 - alpha) * last_pos_local[..., 2]
+    in_box = (abs(x_intersect) < gate_size[0] / 2) & (abs(z_intersect) < gate_size[1] / 2)
+    return passed_plane & in_box
 
 
 # region AttitudeEnv
