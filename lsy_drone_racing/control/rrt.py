@@ -1,87 +1,31 @@
-"""
-
-Path planning Sample Code with Randomized Rapidly-Exploring Random Trees (RRT)
-
-author: AtsushiSakai(@Atsushi_twi)
-
-"""
-
 import math
 import random
-
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
-
-show_animation = True
-
+from scipy.spatial import KDTree
 
 class RRT:
-    """
-    Class for RRT planning
-    """
-
     class Node:
-        """
-        RRT Node
-        """
-
         def __init__(self, x, y, z):
             self.x = x
             self.y = y
-            self.z = z # default z to 0 if not provided
+            self.z = z
             self.path_x = []
             self.path_y = []
             self.path_z = []
             self.parent = None
-            self.p = np.array([x,y,z])
+            self.cost = 0.0
+            self.p = np.array([x, y, z])
 
-
-    class AreaBounds:
-
-        def __init__(self, area):
-            self.xmin = float(area[0])
-            self.xmax = float(area[1])
-            self.ymin = float(area[2])
-            self.ymax = float(area[3])
-            self.zmin = float(area[4]) 
-            self.zmax = float(area[5]) 
-
-
-    def __init__(self,
-                 start,
-                 goal,
-                 obstacle_list,
-                 rand_area,
-                 expand_dis=3.0,
-                 path_resolution=0.5,
-                 goal_sample_rate=5,
-                 max_iter=50000,
-                 gates=None,
-                 play_area=None,
-                 robot_radius=0.01,
-                 ):
-        """
-        Setting Parameter
-
-        start:Start Position [x,y]
-        goal:Goal Position [x,y]
-        obstacleList:obstacle Positions [[x,y,size],...]
-        randArea:Random Sampling Area [min,max]
-        play_area:stay inside this area [xmin,xmax,ymin,ymax]
-        robot_radius: robot body modeled as circle with given radius
-
-        """
+    def __init__(self, start, goal, obstacle_list, gates, rand_area, gates_rpy,
+                 expand_dis=0.6, path_resolution=0.3, goal_sample_rate=30,
+                 max_iter=50000, play_area=None, robot_radius=0.01,
+                 gate_width=0.01, gate_height=0.01, gate_depth=0.9):
         self.start = self.Node(start[0], start[1], start[2])
         self.goal = self.Node(goal[0], goal[1], goal[2])
         self.gates = [self.Node(g[0], g[1], g[2]) for g in (gates or [])]
-        self.final_goal = self.start
+        self.final_goal = self.goal
         self.min_rand = rand_area[0]
         self.max_rand = rand_area[1]
-        if play_area is not None:
-            self.play_area = self.AreaBounds(play_area)
-        else:
-            self.play_area = None
         self.expand_dis = expand_dis
         self.path_resolution = path_resolution
         self.goal_sample_rate = goal_sample_rate
@@ -89,229 +33,214 @@ class RRT:
         self.obstacle_list = obstacle_list
         self.node_list = []
         self.robot_radius = robot_radius
+        self.play_area = play_area
+        self.gate_width = gate_width
+        self.gate_height = gate_height
+        self.gate_depth = gate_depth
+        self.gates_rpy = gates_rpy
+        self.obstacle_kd_tree = KDTree([obs[:3] for obs in obstacle_list]) if obstacle_list else None
 
-    def planning(self, animation=True):
-        """
-        RRT path planning through gates and to the final goal.
-        """
+    def planning(self):
         full_path = []
         current_start = self.start
-        
 
-        for i, gate in enumerate(self.gates + [self.goal]):  # Include gates and final goal + [self.goal]
-           
-
+        for i, gate in enumerate(self.gates + [self.final_goal]):
             self.goal = gate
             self.node_list = [current_start]
-            # print(f"Position at {current_start.p} current goal {self.goal.p}")
-            path_segment = None
-            print(f"current starting pos is {current_start.p}, and current goal is {self.goal.p}")
-            for j in range(self.max_iter):
+
+            path_found = False
+            for _ in range(self.max_iter):
                 rnd_node = self.get_random_node()
                 nearest_ind = self.get_nearest_node_index(self.node_list, rnd_node)
                 nearest_node = self.node_list[nearest_ind]
                 new_node = self.steer(nearest_node, rnd_node, self.expand_dis)
 
-                if self.check_if_outside_play_area(new_node, self.play_area) and \
-                self.check_collision(nearest_node.p, new_node.p, self.obstacle_list):
+                if self.check_collision(new_node.p):
+                    near_inds = self.find_near_nodes(new_node)
+                    new_node = self.choose_parent(new_node, near_inds)
                     self.node_list.append(new_node)
+                    self.rewire(new_node, near_inds)
 
-                    if self.calc_dist_to_goal(new_node.x, new_node.y, new_node.z, gate) <= self.expand_dis:
-                        if self.check_collision(new_node.p, gate.p, self.obstacle_list):
-                                if self.check_collision_with_gate(nearest_node.p, new_node.p, gate, margin=0.1):
-                                    gate.parent = new_node
-                                    path_segment = self.generate_final_course(len(self.node_list) - 1)
-                                    print("Path segment found")
-                                    break
+                    dist_to_gate = self.calc_dist_to_goal(new_node.x, new_node.y, new_node.z, gate)
 
-            if path_segment is None:  # Handle case where no path to gate is found
-                print(f"Cannot find path to gate/goal: {gate.p}")
+                    if dist_to_gate <= self.expand_dis * 2:
+                        rpy = self.gates_rpy[0][i] if i < len(self.gates_rpy[0]) else (0, 0, 0)
+                        if self.check_gate_passage(nearest_node.p, new_node.p, gate, rpy):
+                            path_segment = self.generate_final_course(len(self.node_list) - 1)
+                            path_found = True
+                            break
+
+            if not path_found:
                 return None
 
-            if full_path and np.array_equal(full_path[-1], path_segment[0]):
-                full_path.extend(path_segment[1:])  # Skip duplicate start node
+            full_path.extend(path_segment if not full_path else path_segment[1:])
+
+            last_point = np.array(path_segment[-1])
+            direction_to_next_gate = np.array([gate.x, gate.y, gate.z]) - last_point
+            direction_norm = np.linalg.norm(direction_to_next_gate)
+
+            if direction_norm < 1e-10:
+                new_start = last_point
             else:
-                full_path.extend(path_segment)  # Append the entire segment if no overlap
-            
+                direction_to_next_gate = direction_to_next_gate / direction_norm
+                new_start = last_point + direction_to_next_gate * (self.expand_dis * 0.5)
 
-            current_start = self.Node(path_segment[-1][0], path_segment[-1][1], path_segment[-1][2])
-            
+            current_start = self.Node(*new_start)
 
-    # Set the next gate as the goal
+        return full_path
 
+    def get_random_node(self):
+        if random.randint(0, 100) > self.goal_sample_rate:
+            rnd = self.Node(
+                random.uniform(self.min_rand, self.max_rand),
+                random.uniform(self.min_rand, self.max_rand),
+                random.uniform(self.min_rand, self.max_rand))
+        else:
+            rnd = self.Node(self.goal.x, self.goal.y, self.goal.z)
+        return rnd
 
-            # full_path.append(self.goal.p)
-        return np.array(full_path)
+    def steer(self, from_node, to_node, extend_length=float("inf")):
+        new_node = self.Node(from_node.x, from_node.y, from_node.z)
+        d = np.linalg.norm(to_node.p - from_node.p)
 
+        if d < 1e-10:
+            return new_node
 
-    def steer(self, from_node, to_node, extend_length=float(1)):
+        if extend_length > d:
+            extend_length = d
 
+        new_node.p = from_node.p + (to_node.p - from_node.p) / d * extend_length
+        new_node.x, new_node.y, new_node.z = new_node.p
+        new_node.parent = from_node
+        new_node.cost = from_node.cost + extend_length
 
+        return new_node
 
-        dist = np.linalg.norm(from_node.p - to_node.p)
+    def check_collision(self, point):
+        clearance = 0.05
+        if self.obstacle_kd_tree:
+            nearest_dist, nearest_idx = self.obstacle_kd_tree.query(point)
+            nearest_obstacle = self.obstacle_list[nearest_idx]
+            d = np.linalg.norm(np.array(nearest_obstacle[:3]) - point)
+            if d <= nearest_obstacle[3] + self.robot_radius + clearance:
+                return False
+        return True
 
-        # print(to_node, from_node.p)
-
-        if dist > extend_length:
-            diff = from_node.p - to_node.p
-            to_node.p = from_node.p - diff / dist * extend_length
-        to_node.parent = from_node
-
-   
-
-
-
-        return to_node
-
-
-    def generate_final_course(self, goal_ind):
-        """
-        Generate final course (path) by tracing parent nodes.
-        """
-        path = []
-        node = self.node_list[goal_ind]
-        while node is not None:  # Check for NoneType
-            path.append(node.p)
-            node = node.parent
-        return path[::-1]  # Reverse the path
-
+    def get_nearest_node_index(self, node_list, rnd_node):
+        dlist = [(np.sum((node.p - rnd_node.p)**2) + 1e-10) for node in node_list]
+        return dlist.index(min(dlist))
 
     def calc_dist_to_goal(self, x, y, z, target_node):
-        dist = np.sqrt(np.sum((np.array([x, y, z]) - target_node.p) ** 2))
-        return dist
-        # def get_random_node(self):
-        #     if random.randint(0, 100) > self.goal_sample_rate:
-        #         rnd = self.Node(
-        #             random.uniform(self.min_rand, self.max_rand),
-        #             random.uniform(self.min_rand, self.max_rand))
-        #     else:  # goal point sampling
-        #         rnd = self.Node(self.end.x, self.end.y)
-        #     return rnd
-        
-    def get_random_node(self):
-        if random.random() > self.goal_sample_rate / 100.0:
-            rnd = (
-                random.uniform(self.min_rand, self.max_rand),
-                random.uniform(self.min_rand, self.max_rand),
-                random.uniform(self.min_rand, self.max_rand)
-            )
-        else:
-            rnd = self.goal.p  # goal sampling
-        return self.Node(rnd[0], rnd[1], rnd[2])
-    
+        diff = np.array([x, y, z]) - target_node.p
+        return max(np.linalg.norm(diff), 1e-10)
 
-    def check_collision_with_gate(self, near_node, new_node, gate, margin=0.1):
-        """
-        Check if the path from near_node to new_node passes through the gate's center.
-        margin: Defines the size of the "box" around the gate.
-        """
-        dist_to_gate = np.linalg.norm(gate.p - new_node)  # Distance to the gate center
-        return dist_to_gate <= margin  # Ensure it's within the margin of the gate center
+    def find_near_nodes(self, new_node):
+        r = self.expand_dis * 2.0
+        dlist = [np.sum((node.p - new_node.p)**2) for node in self.node_list]
+        near_inds = [i for i, d in enumerate(dlist) if d <= r**2]
+        return near_inds
 
+    def choose_parent(self, new_node, near_inds):
+        if not near_inds:
+            return new_node
 
-
-
-    @staticmethod
-    def get_nearest_node_index(node_list, rnd_node):
-        # print(rnd_node, node_list)
-        dlist = [((node.p)[0] - (rnd_node.p)[0])**2 + ((node.p)[1] - (rnd_node.p)[1])**2 + ((node.p)[2] + (rnd_node.p)[2])**2
-                 for node in node_list]
-        
-        min_ind = dlist.index(min(dlist))
-        # print(min_ind)
-
-        return min_ind
-
-    @staticmethod
-    def check_if_outside_play_area(node, play_area):
-
-        if play_area is None:
-            return True  # no play_area was defined, every pos should be ok
-
-        if node.x < play_area.xmin or node.x > play_area.xmax or \
-           node.y < play_area.ymin or node.y > play_area.ymax:
-            return False  # outside - bad
-        else:
-            return True  # inside - ok
-        # NEED TO ADD Z
-
-    # @staticmethod
-    def check_collision(self, near_node, new_node, obs):
-        """
-        Check for collisions along the path from near_node to new_node.
-
-        obs: List of obstacles where each obstacle is (x, y, z, radius).
-        """
-
-        dist = np.linalg.norm(near_node - new_node)
-        n = max(2, int(dist / 1))  # Ensure at least two points
-        points = np.linspace(near_node, new_node, n)
-
-        for p in points:
-            for ox, oy, oz, radius in obs:
-                # Check if the point p is within the obstacle's radius
-                if np.linalg.norm(np.array([ox, oy, oz]) - p) <= radius + self.robot_radius:
-                    return False  # Collision detected
-
-        return True  # No collision
-
-    def plan_through_waypoints(self, waypoints):
-        all_paths = []  # Store the entire path through all gates
-        current_start = self.start  # Initialize the start position
-        
-        for waypoint in waypoints:
-            self.start = current_start  # Set the new start
-            self.goal = waypoint        # Set the current goal
-            path_segment = self.planning(animation=False)
-            
-            if path_segment:
-                all_paths.extend(path_segment)  # Append the path segment
-                current_start = path_segment[-1]  # Update the start for the next segment
+        costs = []
+        for i in near_inds:
+            near_node = self.node_list[i]
+            t_node = self.steer(near_node, new_node)
+            if self.check_collision(t_node.p):
+                costs.append(near_node.cost + np.linalg.norm(near_node.p - t_node.p))
             else:
-                print(f"Failed to find a path to waypoint {waypoint}")
-                break
-        
-        return all_paths
+                costs.append(float("inf"))
 
+        min_cost = min(costs)
+        if min_cost == float("inf"):
+            return new_node
 
-    @staticmethod
-    def calc_distance_and_angle(from_node, to_node):
-        dx = to_node.x - from_node.x
-        dy = to_node.y - from_node.y
-        dz = to_node.z - from_node.z  # Calculate difference in z direction
-        d = math.hypot(math.hypot(dx, dy), dz)  # 3D distance
-        theta = math.atan2(dy, dx)  # 2D angle
-        phi = math.atan2(dz, math.hypot(dx, dy))  # 3D angle (vertical)
-        return d, theta, phi
+        new_node.parent = self.node_list[near_inds[costs.index(min_cost)]]
+        new_node.cost = min_cost
+        return new_node
 
+    def rewire(self, new_node, near_inds):
+        for i in near_inds:
+            near_node = self.node_list[i]
+            edge_cost = np.linalg.norm(near_node.p - new_node.p)
+            cost = new_node.cost + edge_cost
 
-def main():
-    # Define start and goal positions
-    start = [0, 0, 0]  # Example start position
-    waypoints = np.array([
-        [0.45, -1.0, 0.525],
-        [1.0, -1.55, 1.0],
-        [0.0, 0.5, 0.525],
-        [-0.5, -0.5, 1.0]
-    ])
+            if cost < near_node.cost:
+                t_node = self.steer(new_node, near_node)
+                if self.check_collision(t_node.p):
+                    near_node.parent = new_node
+                    near_node.cost = cost
 
-    # Initialize RRT with start and first waypoint as goal
-    rrt = RRT(
-        start=start,
-        goal=waypoints[0],  # Set the first waypoint as the initial goal
-        rand_area=[-2, 2],  # Define random sampling space
-        obstacle_list=[]    # Add your obstacle list here if necessary
-    )
+    def generate_final_course(self, goal_ind):
+        path = []
+        node = self.node_list[goal_ind]
+        while node.parent is not None:
+            path.append(node.p)
+            node = node.parent
+        path.append(node.p)
+        return path[::-1]
 
-    # Plan path through all waypoints
-    path = rrt.plan_through_waypoints(waypoints)
+    def check_gate_passage(self, point1, point2, gate, rpy):
+        gate_pos = np.array([gate.x, gate.y, gate.z])
+        R = self.get_rotation_matrix(*rpy)
+    
+        p1_local = R.T @ (point1 - gate_pos)
+        p2_local = R.T @ (point2 - gate_pos)
+    
+        # Ensure the path crosses the gate plane
+        if p1_local[2] * p2_local[2] > 0:
+            return False
+    
+        # Compute intersection with the gate plane
+        t = -p1_local[2] / (p2_local[2] - p1_local[2])
+        intersection = p1_local + t * (p2_local - p1_local)
+    
+        # Stricter bounding box check
+        safe_width = self.gate_width * 0.5
+        safe_height = self.gate_height * 0.5
+    
+        if abs(intersection[0]) > safe_width / 2 or abs(intersection[1]) > safe_height / 2:
+            return False
+    
+        # Gate clearance check
+        clearance_margin = 0.1  # Additional buffer around the gate edges
+        if abs(intersection[0]) > (self.gate_width / 2 - clearance_margin) or \
+           abs(intersection[1]) > (self.gate_height / 2 - clearance_margin):
+            return False
+    
+        # Better approach angle filtering
+        trajectory = p2_local - p1_local
+        approach_angle = np.arctan2(np.sqrt(trajectory[0]**2 + trajectory[1]**2), abs(trajectory[2]))
+    
+        if approach_angle > np.pi / 6:  # Stricter angle constraint
+            return False
+    
+        # Collision-free straight line check through the gate
+        num_samples = 10
+        for i in range(num_samples):
+            sample_point = p1_local + (p2_local - p1_local) * (i / num_samples)
+            if not self.check_collision(R @ sample_point + gate_pos):
+                return False
+    
+        return True
 
-    if path is None:
-        print("Cannot find path")
-    else:
-        print("Found path!")
-        print(path)
+    def get_rotation_matrix(self, roll, pitch, yaw):
+        cos_r, sin_r = np.cos(roll), np.sin(roll)
+        cos_p, sin_p = np.cos(pitch), np.sin(pitch)
+        cos_y, sin_y = np.cos(yaw), np.sin(yaw)
 
+        Rx = np.array([[1, 0, 0],
+                       [0, cos_r, -sin_r],
+                       [0, sin_r, cos_r]])
 
-if __name__ == '__main__':
-    main()
+        Ry = np.array([[cos_p, 0, sin_p],
+                       [0, 1, 0],
+                       [-sin_p, 0, cos_p]])
+
+        Rz = np.array([[cos_y, -sin_y, 0],
+                       [sin_y, cos_y, 0],
+                       [0, 0, 1]])
+
+        return Rz @ Ry @ Rx

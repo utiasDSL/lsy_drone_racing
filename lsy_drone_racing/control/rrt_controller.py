@@ -47,29 +47,44 @@ class RRT_Controller(BaseController):
         """
         # Get intial position
         # print("initial_obs:", initial_obs, type(initial_obs))
+        # initial_info['env_freq']
         self.start = initial_obs['pos'][:3]
-        print(self.start)
+        # print(self.start)
         # print("initial_info:", initial_obs)
         self.current_target_index = initial_obs["target_gate"]
         if self.current_target_index != -1:
             self.target_position = initial_obs["gates_pos"][self.current_target_index]
-            print(initial_obs["gates_pos"])
-        self.obs_list = [(*obstacle, 0.001) for obstacle in initial_obs["obstacles_pos"]]
+            # print(initial_obs["gates_pos"])
+        self.obs_list = [(*obstacle, 0.1) for obstacle in initial_obs["obstacles_pos"]]
+        gate_radius = 0.001
+        gates_rpy = [initial_obs['gates_rpy']]
+        # print(gates_rpy)
+        # self.obs_list.extend(gates_as_obstacles)
+        print(self.obs_list)
         self.rrt = RRT(
                        start=self.start,
                        goal=initial_obs["gates_pos"][0],
-                       rand_area=[0, 100],
+                       rand_area=[0, 1000],
                        obstacle_list= self.obs_list,
                        gates=(initial_obs["gates_pos"]).tolist(),
-                       play_area=[-10,10,-10,10,0,10],
-                       max_iter = 5000
+                    #    play_area=[-10,10,-10,10,0,10],
+                       max_iter = 50000,
+                       gates_rpy = gates_rpy,
+                    #    gates_as_obstacles = gates_as_obstacles,
                        )
-        # print(initial_obs["obstacles_pos"])
+        # # print(initial_obs["obstacles_pos"])
         self.rrt_path = self.rrt.planning()
+        self.gates_pos = initial_obs["gates_pos"]
+        self.gates_rpy = [initial_obs['gates_rpy']]
+        self.initial_obs = initial_obs
+        self.initial_info = initial_info
+        # self.plan_path()
+        self._tick = 0
+        self._freq = initial_info["env_freq"]
 
-        if self.rrt_path is None:
-            raise ValueError("RRT failed to find a path.")
-        self.rrt_path = np.array(self.rrt_path)  # Convert to NumPy array
+        # if self.rrt_path is None:
+        #     raise ValueError("RRT failed to find a path.")
+        # self.rrt_path = np.array(self.rrt_path)  # Convert to NumPy array
 
         # Create a cubic spline from the RRT path
         self.t_total = len(self.rrt_path)  # Total time proportional to the number of waypoints
@@ -77,7 +92,10 @@ class RRT_Controller(BaseController):
         self.trajectory = CubicSpline(t, self.rrt_path)
         self._tick = 0
         self._freq = initial_info["env_freq"]
-        
+
+        # self._last_replan = 0
+        # self.replan_threshold = 1.0
+    
         try:
             t_vis = np.linspace(0, self.t_total - 1, 100)
             spline_points = self.trajectory(t_vis)
@@ -95,15 +113,15 @@ class RRT_Controller(BaseController):
 
 
     def compute_control(self, obs: NDArray[np.floating], info: dict | None = None) -> NDArray[np.floating]:
-        """Compute the control for the drone to follow the path through gates."""
-        # If the current target index is not -1, move toward the next gate.
-        target_pos = self.trajectory(min(self._tick / self._freq, self.t_total))
 
-                
-        self.trajectory = CubicSpline(np.linspace(0, self.t_total, len(self.rrt_path)), self.rrt_path)
+        # Get target position from current trajectory
+        target_pos = self.trajectory(min(self._tick / self._freq, self.t_total))
                 
         # print(self.current_target_index)
         return np.concatenate((target_pos, np.zeros(10)))
+    
+
+
 
     def step_callback(
         self,
@@ -132,3 +150,16 @@ class RRT_Controller(BaseController):
     def episode_reset(self):
         """Reset the time step counter."""
         self._tick = 0
+
+    # def calculate_square_bounds(center, width, height, depth):
+
+    #     x_c, y_c, z_c = center
+    #     bounds = {
+    #         "x_min": x_c - width / 2,
+    #         "x_max": x_c + width / 2,
+    #         "y_min": y_c - height / 2,
+    #         "y_max": y_c + height / 2,
+    #         "z_min": z_c - depth / 2,
+    #         "z_max": z_c + depth / 2,
+    #     }
+    #     return bounds
