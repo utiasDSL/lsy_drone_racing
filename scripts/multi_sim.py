@@ -60,7 +60,6 @@ def simulate(
     # Create the racing environment
     env: MultiDroneRacingEnv = gymnasium.make(
         config.env.id,
-        n_envs=2,  # TODO: Remove this for single-world envs
         n_drones=config.env.n_drones,
         freq=config.env.freq,
         sim_config=config.sim,
@@ -82,7 +81,7 @@ def simulate(
             curr_time = i / config.env.freq
 
             action = controller.compute_control(obs, info)
-            action = np.array([action] * config.env.n_drones * 2)
+            action = np.array([action] * config.env.n_drones * env.unwrapped.sim.n_worlds)
             action[1, 0] += 0.2
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated | truncated

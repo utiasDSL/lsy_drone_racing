@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from munch import Munch
 
     from lsy_drone_racing.control.controller import BaseController
-    from lsy_drone_racing.envs.drone_racing_env import DroneRacingEnv
+    from lsy_drone_racing.envs.drone_race import DroneRaceEnv
 
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ def simulate(
     controller_path = control_path / (controller or config.controller.file)
     controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
-    env: DroneRacingEnv = gymnasium.make(
+    env: DroneRaceEnv = gymnasium.make(
         config.env.id,
         freq=config.env.freq,
         sim_config=config.sim,
@@ -73,7 +73,7 @@ def simulate(
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         done = False
         obs, info = env.reset()
-        controller: BaseController = controller_cls(obs, info)
+        controller: BaseController = controller_cls(obs, info, config)
         i = 0
         fps = 60
 
@@ -108,19 +108,9 @@ def log_episode_stats(obs: dict, info: dict, config: Munch, curr_time: float):
     gates_passed = obs["target_gate"]
     if gates_passed == -1:  # The drone has passed the final gate
         gates_passed = len(config.env.track.gates)
-    if info["collisions"]:
-        termination = "Collision"
-    elif obs["target_gate"] == -1:
-        termination = "Task completed"
-    else:
-        termination = "Unknown"
-
+    finished = gates_passed == len(config.env.track.gates)
     logger.info(
-        (
-            f"Flight time (s): {curr_time}\n"
-            f"Reason for termination: {termination}\n"
-            f"Gates passed: {gates_passed}\n"
-        )
+        f"Flight time (s): {curr_time}\nFinished: {finished}\nGates passed: {gates_passed}\n"
     )
 
 

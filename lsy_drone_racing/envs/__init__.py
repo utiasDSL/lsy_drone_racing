@@ -15,23 +15,35 @@ Note:
 
 from gymnasium import register
 
-from lsy_drone_racing.envs.drone_racing_env import DroneRacingEnv
-
-__all__ = ["DroneRacingEnv"]
+# region SingleDroneEnvs
 
 register(
     id="DroneRacing-v0",
-    entry_point="lsy_drone_racing.envs.drone_racing_env:DroneRacingEnv",
+    entry_point="lsy_drone_racing.envs.drone_race:DroneRaceEnv",
+    vector_entry_point="lsy_drone_racing.envs.drone_race:VecDroneRaceEnv",
     max_episode_steps=1800,  # 30 seconds * 60 Hz,
     disable_env_checker=True,  # Remove warnings about 2D observations
 )
 
 register(
     id="DroneRacingAttitude-v0",
-    entry_point="lsy_drone_racing.envs.drone_racing_env:DroneRacingAttitudeEnv",
+    entry_point="lsy_drone_racing.envs.drone_race:DroneRaceAttitudeEnv",
+    vector_entry_point="lsy_drone_racing.envs.drone_race:VecDroneRaceAttitudeEnv",
     max_episode_steps=1800,
     disable_env_checker=True,
 )
+
+# region MultiDroneEnvs
+
+register(
+    id="MultiDroneRacing-v0",
+    entry_point="lsy_drone_racing.envs.multi_drone_race:MultiDroneRaceEnv",
+    vector_entry_point="lsy_drone_racing.envs.multi_drone_race:VecMultiDroneRaceEnv",
+    max_episode_steps=1800,
+    disable_env_checker=True,
+)
+
+# region DeployEnvs
 
 register(
     id="DroneRacingDeploy-v0",
@@ -43,16 +55,6 @@ register(
 register(
     id="DroneRacingAttitudeDeploy-v0",
     entry_point="lsy_drone_racing.envs.drone_racing_deploy_env:DroneRacingAttitudeDeployEnv",
-    max_episode_steps=1800,
-    disable_env_checker=True,
-)
-
-# region MultiEnvs
-
-# TODO: Register specialized, non-vectorized envs for single worlds
-register(
-    id="MultiDroneRacing-v0",
-    entry_point="lsy_drone_racing.envs.vec_drone_race:VectorMultiDroneRaceEnv",
     max_episode_steps=1800,
     disable_env_checker=True,
 )

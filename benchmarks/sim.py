@@ -76,9 +76,9 @@ import gymnasium
 import jax
 
 import lsy_drone_racing
+from lsy_drone_racing.envs.multi_drone_race import MultiDroneRaceEnv
 
 env = gymnasium.make('MultiDroneRacing-v0',
-    n_envs=1,  # TODO: Remove this for single-world envs
     n_drones=config.env.n_drones,
     freq=config.env.freq,
     sim_config=config.sim,
@@ -98,7 +98,7 @@ jax.block_until_ready(env.unwrapped.data)
 # JIT masked reset (used in autoreset)
 mask = env.unwrapped.data.marked_for_reset
 mask = mask.at[0].set(True)
-env.unwrapped.reset(mask=mask)
+super(MultiDroneRaceEnv, env.unwrapped).reset(mask=mask)  # enforce masked reset compile
 jax.block_until_ready(env.unwrapped.data)
 env.action_space.seed(2)
 """

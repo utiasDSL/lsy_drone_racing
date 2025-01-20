@@ -61,7 +61,7 @@ pos = [-0.5, 0.0, 1.4]
 pos = [1.0, 1.0, 0.07]
 rpy = [0, 0, 0]
 vel = [0, 0, 0]
-rpy_rates = [0, 0, 0]
+ang_vel = [0, 0, 0]
 
 [env.disturbances.action]
 fn = "normal"
