@@ -25,12 +25,12 @@ def main(
         reset_fn, step_fn = time_multi_drone_reset, time_multi_drone_step
     if reset:
         timings = reset_fn(n_tests=n_tests, number=number)
-        print_benchmark_results(name="Sim reset", timings=timings / number)
+        print_benchmark_results(name="Racing env reset", timings=timings / number)
     if step:
         timings = step_fn(n_tests=n_tests, number=number)
-        print_benchmark_results(name="Sim steps", timings=timings / number)
+        print_benchmark_results(name="Racing env steps", timings=timings / number)
         timings = step_fn(n_tests=n_tests, number=number, physics_mode="sys_id")
-        print_benchmark_results(name="Sim steps (sys_id backend)", timings=timings / number)
+        print_benchmark_results(name="Racing env steps (sys_id backend)", timings=timings / number)
         # timings = step_fn(n_tests=n_tests, number=number, physics_mode="mujoco")
         # print_benchmark_results(name="Sim steps (mujoco backend)", timings=timings / number)
 

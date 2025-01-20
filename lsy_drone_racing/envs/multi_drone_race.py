@@ -1,4 +1,5 @@
 """Multi-agent drone racing environments."""
+
 from typing import Literal
 
 import numpy as np
@@ -8,7 +9,7 @@ from gymnasium.vector.utils import batch_space
 from ml_collections import ConfigDict
 from numpy.typing import NDArray
 
-from lsy_drone_racing.envs.race_core import RaceCoreEnv, action_space, observation_space
+from lsy_drone_racing.envs.race_core import RaceCoreEnv, build_action_space, build_observation_space
 
 
 class MultiDroneRaceEnv(RaceCoreEnv, Env):
@@ -18,6 +19,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         freq: int,
         sim_config: ConfigDict,
         sensor_range: float,
+        action_space: Literal["state", "attitude"] = "state",
         track: ConfigDict | None = None,
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
@@ -32,6 +34,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
             freq=freq,
             sim_config=sim_config,
             sensor_range=sensor_range,
+            action_space=action_space,
             track=track,
             disturbances=disturbances,
             randomizations=randomizations,
@@ -40,9 +43,11 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
             max_episode_steps=max_episode_steps,
             device=device,
         )
-        self.action_space = batch_space(action_space("state"), n_drones)
+        self.action_space = batch_space(build_action_space(action_space), n_drones)
         n_gates, n_obstacles = len(track.gates), len(track.obstacles)
-        self.observation_space = batch_space(observation_space(n_gates, n_obstacles), n_drones)
+        self.observation_space = batch_space(
+            build_observation_space(n_gates, n_obstacles), n_drones
+        )
         self.autoreset = False
 
     def reset(self, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
@@ -68,6 +73,7 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
         freq: int,
         sim_config: ConfigDict,
         sensor_range: float,
+        action_space: Literal["state", "attitude"] = "state",
         track: ConfigDict | None = None,
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
@@ -82,6 +88,7 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
             freq=freq,
             sim_config=sim_config,
             sensor_range=sensor_range,
+            action_space=action_space,
             track=track,
             disturbances=disturbances,
             randomizations=randomizations,
@@ -90,10 +97,10 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
             max_episode_steps=max_episode_steps,
             device=device,
         )
-        self.single_action_space = batch_space(action_space("state"), n_drones)
+        self.single_action_space = batch_space(build_action_space(action_space), n_drones)
         self.action_space = batch_space(batch_space(self.single_action_space), num_envs)
         n_gates, n_obstacles = len(track.gates), len(track.obstacles)
         self.single_observation_space = batch_space(
-            observation_space(n_gates, n_obstacles), n_drones
+            build_observation_space(n_gates, n_obstacles), n_drones
         )
         self.observation_space = batch_space(batch_space(self.single_observation_space), num_envs)

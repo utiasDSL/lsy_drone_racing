@@ -108,7 +108,7 @@ class EnvData:
         )
 
 
-def action_space(control_mode: Literal["state", "attitude"]) -> spaces.Box:
+def build_action_space(control_mode: Literal["state", "attitude"]) -> spaces.Box:
     if control_mode == "state":
         return spaces.Box(low=-1, high=1, shape=(13,))
     elif control_mode == "attitude":
@@ -118,7 +118,7 @@ def action_space(control_mode: Literal["state", "attitude"]) -> spaces.Box:
         raise ValueError(f"Invalid control mode: {control_mode}")
 
 
-def observation_space(n_gates: int, n_obstacles: int) -> spaces.Dict:
+def build_observation_space(n_gates: int, n_obstacles: int) -> spaces.Dict:
     """Create the observation space for the environment."""
     obs_spec = {
         "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
@@ -185,6 +185,7 @@ class RaceCoreEnv:
         freq: int,
         sim_config: ConfigDict,
         sensor_range: float,
+        action_space: Literal["state", "attitude"] = "state",
         track: ConfigDict | None = None,
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
@@ -211,7 +212,7 @@ class RaceCoreEnv:
             n_worlds=n_envs,
             n_drones=n_drones,
             physics=sim_config.physics,
-            control=sim_config.get("control", "state"),
+            control=action_space,
             freq=sim_config.freq,
             state_freq=freq,
             attitude_freq=sim_config.attitude_freq,
@@ -320,13 +321,18 @@ class RaceCoreEnv:
 
     def apply_action(self, action: NDArray[np.floating]):
         """Apply the commanded state action to the simulation."""
-        action = action.reshape((self.sim.n_worlds, self.sim.n_drones, 13))
+        action = action.reshape((self.sim.n_worlds, self.sim.n_drones, -1))
         if "action" in self.disturbances:
             key, subkey = jax.random.split(self.sim.data.core.rng_key)
             action += self.disturbances["action"](subkey, action.shape)
             self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
-
-        self.sim.state_control(action)
+        match self.sim.control:
+            case "attitude":
+                self.sim.attitude_control(action)
+            case "state":
+                self.sim.state_control(action)
+            case _:
+                raise ValueError(f"Unsupported control mode: {self.sim.control}")
 
     def render(self):
         """Render the environment."""
@@ -550,10 +556,10 @@ class RaceCoreEnv:
         n_gates, n_obstacles = len(self.gates["pos"]), len(self.obstacles["pos"])
         mj_model = self.sim.mj_model
         self.gates["ids"] = [mj_model.body(f"gate:{i}").id for i in range(n_gates)]
-        mj_ids = [int(mj_model.body(f"gate:{i}").mocapid) for i in range(n_gates)]
+        mj_ids = [int(mj_model.body(f"gate:{i}").mocapid.squeeze()) for i in range(n_gates)]
         self.gates["mj_ids"] = jp.array(mj_ids, dtype=np.int32, device=self.device)
         self.obstacles["ids"] = [mj_model.body(f"obstacle:{i}").id for i in range(n_obstacles)]
-        mj_ids = [int(mj_model.body(f"obstacle:{i}").mocapid) for i in range(n_obstacles)]
+        mj_ids = [int(mj_model.body(f"obstacle:{i}").mocapid.squeeze()) for i in range(n_obstacles)]
         self.obstacles["mj_ids"] = jp.array(mj_ids, dtype=np.int32, device=self.device)
 
     def _load_contact_masks(self, sim: Sim) -> Array:
@@ -622,66 +628,6 @@ class RaceCoreEnv:
         """Warp the disabled drones below the ground."""
         pos = jax.numpy.where(mask[..., None], -1, data.states.pos)
         return data.replace(states=data.states.replace(pos=pos))
-
-
-# region AttitudeEnv
-
-
-class VectorDroneRaceAttitudeEnv(RaceCoreEnv):
-    """Drone racing environment with a collective thrust attitude command interface.
-
-    The action space consists of the collective thrust and body-fixed attitude commands
-    [collective_thrust, roll, pitch, yaw].
-    """
-
-    def __init__(
-        self,
-        n_drones: int,
-        freq: int,
-        sim_config: ConfigDict,
-        sensor_range: float,
-        track: ConfigDict | None = None,
-        disturbances: ConfigDict | None = None,
-        randomizations: ConfigDict | None = None,
-        random_resets: bool = False,
-        seed: int = 1337,
-    ):
-        """Initialize the DroneRacingAttitudeEnv.
-
-        Args:
-            n_drones: Number of drones in the environment.
-            freq: Environment frequency.
-            sim_config: Configuration dictionary for the simulation.
-            sensor_range: Sensor range for gate and obstacle detection.
-            track: Track configuration.
-            disturbances: Disturbance configuration.
-            randomizations: Randomization configuration.
-            random_resets: Flag to randomize the environment on reset.
-            seed: Random seed of the environment.
-        """
-        sim_config.control = "attitude"
-        super().__init__(
-            n_drones,
-            freq,
-            sim_config,
-            sensor_range,
-            track,
-            disturbances,
-            randomizations,
-            random_resets,
-            seed,
-        )
-        bounds = np.array([[1, np.pi, np.pi, np.pi] for _ in range(n_drones)], dtype=np.float32)
-        self.action_space = spaces.Box(low=-bounds, high=bounds)
-
-    def apply_action(self, action: NDArray[np.floating]):
-        """Apply the commanded attitude action to the simulation."""
-        action = action.reshape((self.sim.n_worlds, self.sim.n_drones, 4))
-        if "action" in self.disturbances:
-            key, subkey = jax.random.split(self.sim.data.core.rng_key)
-            action += self.disturbances["action"](subkey, action.shape)
-            self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
-        self.sim.attitude_control(action)
 
 
 # region Factories

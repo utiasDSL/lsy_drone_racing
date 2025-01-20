@@ -14,7 +14,7 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pybullet as p
+from crazyflow.constants import MASS
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
@@ -24,23 +24,23 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-class ThrustController(BaseController):
+class AttitudeController(BaseController):
     """Example of a controller using the collective thrust and attitude interface.
 
     Modified from https://github.com/utiasDSL/crazyswarm-import/blob/ad2f7ea987f458a504248a1754b124ba39fc2f21/ros_ws/src/crazyswarm/scripts/position_ctl_m.py
     """
 
-    def __init__(self, initial_obs: dict[str, NDArray[np.floating]], initial_info: dict):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialization of the controller.
 
         Args:
-            initial_obs: The initial observation of the environment's state. See the environment's
+            obs: The initial observation of the environment's state. See the environment's
                 observation space for details.
-            initial_info: Additional environment information from the reset.
+            info: Additional environment information from the reset.
         """
-        super().__init__(initial_obs, initial_info)
-        self.low_level_ctrl_freq = initial_info["low_level_ctrl_freq"]
-        self.drone_mass = initial_info["drone_mass"]
+        super().__init__(obs, info, config)
+        self.freq = config.env.freq
+        self.drone_mass = MASS
         self.kp = np.array([0.4, 0.4, 1.25])
         self.ki = np.array([0.05, 0.05, 0.05])
         self.kd = np.array([0.2, 0.2, 0.4])
@@ -58,8 +58,8 @@ class ThrustController(BaseController):
                 [0.2, -1.8, 0.65],
                 [1.1, -1.35, 1.1],
                 [0.2, 0.0, 0.65],
-                [0.0, 0.75, 0.525],
-                [0.0, 0.75, 1.1],
+                [0.0, 0.7, 0.525],
+                [0.0, 0.7, 1.1],
                 [-0.5, -0.5, 1.1],
                 [-0.5, -1.0, 1.1],
             ]
@@ -71,27 +71,11 @@ class ThrustController(BaseController):
         cs_z = CubicSpline(ts, waypoints[:, 2])
 
         des_completion_time = 15
-        ts = np.linspace(0, 1, int(initial_info["env_freq"] * des_completion_time))
+        ts = np.linspace(0, 1, int(self.freq * des_completion_time))
 
         self.x_des = cs_x(ts)
         self.y_des = cs_y(ts)
         self.z_des = cs_z(ts)
-
-        try:
-            # Draw interpolated Trajectory. Limit segments to avoid excessive drawings
-            stride = max(1, len(self.x_des) // 100)
-            trajectory = np.vstack([self.x_des, self.y_des, self.z_des])[..., ::stride].T
-            for i in range(len(trajectory) - 1):
-                p.addUserDebugLine(
-                    trajectory[i],
-                    trajectory[i + 1],
-                    lineColorRGB=[1, 0, 0],
-                    lineWidth=2,
-                    lifeTime=0,
-                    physicsClientId=0,
-                )
-        except p.error:
-            ...  # Ignore pybullet errors if not running in the pybullet GUI
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
@@ -116,7 +100,7 @@ class ThrustController(BaseController):
         vel_error = des_vel - obs["vel"]
 
         # Update integral error
-        self.i_error += pos_error * (1 / self.low_level_ctrl_freq)
+        self.i_error += pos_error * (1 / self.freq)
         self.i_error = np.clip(self.i_error, -self.ki_range, self.ki_range)
 
         # Compute target thrust

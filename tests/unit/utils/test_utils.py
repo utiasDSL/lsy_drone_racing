@@ -36,6 +36,7 @@ def test_map2pi():
 
 @pytest.mark.unit
 def test_check_gate_pass():
+    # TODO: Check accelerated function in RaceCore instead
     gate_pos = np.array([0, 0, 0])
     gate_rot = R.from_euler("xyz", [0, 0, 0])
     gate_size = np.array([1, 1])

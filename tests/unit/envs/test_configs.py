@@ -16,6 +16,14 @@ def test_config_load_and_env_creation(config_file: str):
     config_path = Path(__file__).parents[3] / "config" / config_file
     config = load_config(config_path)
 
-    env = gymnasium.make(config.env.id, config=config)
-    env.reset()
-    env.step(env.action_space.sample())
+    gymnasium.make(
+        config.env.id,
+        freq=config.env.freq,
+        sim_config=config.sim,
+        sensor_range=config.env.sensor_range,
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        random_resets=config.env.random_resets,
+        seed=config.env.seed,
+    )

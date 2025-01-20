@@ -24,12 +24,12 @@ attitude_freq = 500                               # Controller frequency, in Hz.
 gui = false                                       # Enable/disable PyBullet's GUI
 
 [env]
-id = "DroneRacing-v0" # Either "DroneRacing-v0" or "DroneRacingAttitude-v0". If using "DroneRacingAttitude-v0", the drone will use the attitude controller instead of the position controller.
-random_resets = false         # Whether to re-seed the random number generator between episodes
-seed = 1337           # Random seed
-freq = 50             # Frequency of the environment's step function, in Hz
-symbolic = false      # Whether to include symbolic expressions in the info dict. Note: This can interfere with multiprocessing! If you want to parallelize your training, set this to false.
-sensor_range = 0.45   # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
+id = "DroneRacing-v0"   # "DroneRacing-v0" for single races, "MultiDroneRacing-v0" for multi-drone races. Each environment also implements a vector-environment for faster training
+random_resets = false   # Whether to re-seed the random number generator between episodes
+seed = 1337             # Random seed
+freq = 50               # Frequency of the environment's step function, in Hz
+sensor_range = 0.45     # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
+action_space = "state"  # Action space of the environment. Can be either "state" or "attitude"
 
 [env.track]
 # Tall gates: 1.0m height. Short gates: 0.525m height. Height is measured from the ground to the
