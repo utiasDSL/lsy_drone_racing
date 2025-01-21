@@ -76,12 +76,14 @@ def test_attitude_controller(physics: str):
 
 @pytest.mark.integration
 @pytest.mark.parametrize("yaw", [0, np.pi / 2, np.pi, 3 * np.pi / 2])
-@pytest.mark.parametrize("physics", ["analytical", "sys_id"])
+@pytest.mark.parametrize("physics", ["analytical"])
 def test_trajectory_controller_finish(yaw: float, physics: str):
     """Test if the trajectory controller can finish the track.
 
     To catch bugs that only occur with orientations other than the unit quaternion, we test if the
     controller can finish the track with different desired yaws.
+
+    Does not work for sys_id physics mode, since it assumes a 0 yaw angle.
     """
     config = load_config(Path(__file__).parents[2] / "config/level0.toml")
     config.sim.physics = physics

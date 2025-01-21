@@ -13,6 +13,12 @@ from lsy_drone_racing.envs.race_core import RaceCoreEnv, build_action_space, bui
 
 
 class MultiDroneRaceEnv(RaceCoreEnv, Env):
+    """Multi-agent drone racing environment.
+
+    This environment enables multiple agents to simultaneously compete with each other on the same
+    track.
+    """
+
     def __init__(
         self,
         n_drones: int,
@@ -28,6 +34,22 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
     ):
+        """Initialize the multi-agent drone racing environment.
+
+        Args:
+            n_drones: Number of drones.
+            freq: Environment step frequency.
+            sim_config: Simulation configuration.
+            sensor_range: Sensor range.
+            action_space: Control mode for the drones. See `build_action_space` for details.
+            track: Track configuration.
+            disturbances: Disturbance configuration.
+            randomizations: Randomization configuration.
+            random_resets: Flag to reset the environment randomly.
+            seed: Random seed.
+            max_episode_steps: Maximum number of steps per episode.
+            device: Device used for the environment and the simulation.
+        """
         super().__init__(
             n_envs=1,
             n_drones=n_drones,
@@ -51,6 +73,15 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         self.autoreset = False
 
     def reset(self, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
+        """Reset the environment for all drones.
+
+        Args:
+            seed: Random seed.
+            options: Additional reset options. Not used.
+
+        Returns:
+            Observation and info for all drones.
+        """
         obs, info = super().reset(seed=seed, options=options)
         obs = {k: v[0] for k, v in obs.items()}
         info = {k: v[0] for k, v in info.items()}
@@ -59,6 +90,14 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
     def step(
         self, action: NDArray[np.floating]
     ) -> tuple[dict, NDArray[np.floating], NDArray[np.bool_], NDArray[np.bool_], dict]:
+        """Step the environment for all drones.
+
+        Args:
+            action: Action for all drones, i.e., a batch of (n_drones, action_dim) arrays.
+
+        Returns:
+            Observation, reward, terminated, truncated, and info for all drones.
+        """
         obs, reward, terminated, truncated, info = super().step(action)
         obs = {k: v[0] for k, v in obs.items()}
         info = {k: v[0] for k, v in info.items()}
@@ -66,6 +105,11 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
 
 
 class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
+    """Vectorized multi-agent drone racing environment.
+
+    This environment enables vectorized training of multi-agent drone racing agents.
+    """
+
     def __init__(
         self,
         num_envs: int,
@@ -82,6 +126,23 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
     ):
+        """Vectorized multi-agent drone racing environment.
+
+        Args:
+            num_envs: Number of worlds in the vectorized environment.
+            n_drones: Number of drones in each world.
+            freq: Environment step frequency.
+            sim_config: Simulation configuration.
+            sensor_range: Sensor range.
+            action_space: Control mode for the drones. See `build_action_space` for details.
+            track: Track configuration.
+            disturbances: Disturbance configuration.
+            randomizations: Randomization configuration.
+            random_resets: Flag to reset the environment randomly.
+            seed: Random seed.
+            max_episode_steps: Maximum number of steps per episode.
+            device: Device used for the environment and the simulation.
+        """
         super().__init__(
             n_envs=num_envs,
             n_drones=n_drones,

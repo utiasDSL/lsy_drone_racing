@@ -31,12 +31,13 @@ class AttitudeController(BaseController):
     """
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
-        """Initialization of the controller.
+        """Initialize the attitude controller.
 
         Args:
             obs: The initial observation of the environment's state. See the environment's
                 observation space for details.
             info: Additional environment information from the reset.
+            config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
         self.freq = config.env.freq

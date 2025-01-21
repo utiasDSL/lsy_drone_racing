@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from ml_collections import ConfigDict
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.control.controller import BaseController
@@ -11,7 +12,7 @@ from lsy_drone_racing.utils import check_gate_pass, load_config, load_controller
 @pytest.mark.unit
 def test_load_config():
     config = load_config(Path(__file__).parents[3] / "config/level0.toml")
-    assert isinstance(config, dict), f"Config file is not a dictionary: {config}"
+    assert isinstance(config, ConfigDict), f"Config file is not a ConfigDict: {type(config)}"
 
 
 @pytest.mark.unit

@@ -109,10 +109,11 @@ class EnvData:
 
 
 def build_action_space(control_mode: Literal["state", "attitude"]) -> spaces.Box:
+    """Create the action space for the environment."""
     if control_mode == "state":
         return spaces.Box(low=-1, high=1, shape=(13,))
     elif control_mode == "attitude":
-        lim = np.array([1, np.pi, np.pi, np.pi])
+        lim = np.array([1, np.pi, np.pi, np.pi], dtype=np.float32)
         return spaces.Box(low=-lim, high=lim)
     else:
         raise ValueError(f"Invalid control mode: {control_mode}")
@@ -122,10 +123,10 @@ def build_observation_space(n_gates: int, n_obstacles: int) -> spaces.Dict:
     """Create the observation space for the environment."""
     obs_spec = {
         "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-        "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+        "rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(3,)),
         "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
         "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-        "target_gate": spaces.MultiDiscrete([n_gates], start=[-1]),
+        "target_gate": spaces.Discrete(n_gates, start=-1),
         "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_gates, 3)),
         "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(n_gates, 3)),
         "gates_visited": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=bool),
@@ -197,15 +198,20 @@ class RaceCoreEnv:
         """Initialize the DroneRacingEnv.
 
         Args:
-            n_drones: Number of drones in the environment.
-            freq: Environment frequency.
+            n_envs: Number of worlds in the vectorized environment.
+            n_drones: Number of drones.
+            freq: Environment step frequency.
             sim_config: Configuration dictionary for the simulation.
             sensor_range: Sensor range for gate and obstacle detection.
+            action_space: Control mode for the drones. See `build_action_space` for details.
             track: Track configuration.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
             random_resets: Flag to randomize the environment on reset.
             seed: Random seed of the environment.
+            max_episode_steps: Maximum number of steps per episode. Needs to be tracked manually for
+                vectorized environments.
+            device: Device used for the environment and the simulation.
         """
         super().__init__()
         self.sim = Sim(
@@ -271,6 +277,7 @@ class RaceCoreEnv:
 
         Args:
             seed: Random seed.
+            options: Additional reset options. Not used.
             mask: Mask of worlds to reset.
 
         Returns:
@@ -279,6 +286,7 @@ class RaceCoreEnv:
         # TODO: Allow per-world sim seeding
         if seed is not None:
             self.sim.seed(seed)
+            self._np_random = np.random.default_rng(seed)  # Also update gymnasium's rng
         elif not self.random_resets:
             self.sim.seed(self.seed)
         # Randomization of gates, obstacles and drones is compiled into the sim reset function with
