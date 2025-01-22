@@ -82,7 +82,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             Observation and info for all drones.
         """
-        obs, info = super().reset(seed=seed, options=options)
+        obs, info = self._reset(seed=seed, options=options)
         obs = {k: v[0] for k, v in obs.items()}
         info = {k: v[0] for k, v in info.items()}
         return obs, info
@@ -98,7 +98,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             Observation, reward, terminated, truncated, and info for all drones.
         """
-        obs, reward, terminated, truncated, info = super().step(action)
+        obs, reward, terminated, truncated, info = self._step(action)
         obs = {k: v[0] for k, v in obs.items()}
         info = {k: v[0] for k, v in info.items()}
         return obs, reward[0], terminated[0], truncated[0], info
@@ -165,3 +165,25 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
             build_observation_space(n_gates, n_obstacles), n_drones
         )
         self.observation_space = batch_space(batch_space(self.single_observation_space), num_envs)
+
+    def reset(self, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
+        """Reset the environment for all drones.
+
+        Args:
+            seed: Random seed.
+            options: Additional reset options. Not used.
+
+        Returns:
+            Observation and info for all drones.
+        """
+        return self._reset(seed=seed, options=options)
+
+    def step(
+        self, action: NDArray[np.floating]
+    ) -> tuple[dict, NDArray[np.floating], NDArray[np.bool_], NDArray[np.bool_], dict]:
+        """Step the environment for all drones.
+
+        Args:
+            action: Action for all drones, i.e., a batch of (n_drones, action_dim) arrays.
+        """
+        return self._step(action)

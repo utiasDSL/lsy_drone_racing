@@ -270,7 +270,7 @@ class RaceCoreEnv:
             self.device,
         )
 
-    def reset(
+    def _reset(
         self, *, seed: int | None = None, options: dict | None = None, mask: Array | None = None
     ) -> tuple[dict[str, NDArray[np.floating]], dict]:
         """Reset the environment.
@@ -292,10 +292,10 @@ class RaceCoreEnv:
         # Randomization of gates, obstacles and drones is compiled into the sim reset function with
         # the sim.reset_hook function, so we don't need to explicitly do it here
         self.sim.reset(mask=mask)
-        self.data = self._reset(self.data, self.sim.data.states.pos, mask)
+        self.data = self._reset_env_data(self.data, self.sim.data.states.pos, mask)
         return self.obs(), self.info()
 
-    def step(
+    def _step(
         self, action: NDArray[np.floating]
     ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
         """Step the firmware_wrapper class and its environment.
@@ -321,10 +321,12 @@ class RaceCoreEnv:
         # previous flags, not the ones from the current step
         marked_for_reset = self.data.marked_for_reset
         # Apply the environment logic with updated simulation data.
-        self.data = self._step(self.data, drone_pos, drone_quat, mocap_pos, mocap_quat, contacts)
+        self.data = self._step_env(
+            self.data, drone_pos, drone_quat, mocap_pos, mocap_quat, contacts
+        )
         # Auto-reset envs. Add configuration option to disable for single-world envs
         if self.autoreset and marked_for_reset.any():
-            self.reset(mask=marked_for_reset)
+            self._reset(mask=marked_for_reset)
         return self.obs(), self.reward(), self.terminated(), self.truncated(), self.info()
 
     def apply_action(self, action: NDArray[np.floating]):
@@ -422,7 +424,7 @@ class RaceCoreEnv:
 
     @staticmethod
     @jax.jit
-    def _reset(data: EnvData, drone_pos: Array, mask: Array | None = None) -> EnvData:
+    def _reset_env_data(data: EnvData, drone_pos: Array, mask: Array | None = None) -> EnvData:
         """Reset auxiliary variables of the environment data."""
         mask = jp.ones(data.steps.shape, dtype=bool) if mask is None else mask
         target_gate = jp.where(mask[..., None], 0, data.target_gate)
@@ -443,7 +445,7 @@ class RaceCoreEnv:
 
     @staticmethod
     @jax.jit
-    def _step(
+    def _step_env(
         data: EnvData,
         drone_pos: Array,
         drone_quat: Array,
