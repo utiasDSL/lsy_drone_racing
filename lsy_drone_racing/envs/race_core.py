@@ -31,6 +31,7 @@ from lsy_drone_racing.envs.randomize import (
     randomize_gate_rpy_fn,
     randomize_obstacle_pos_fn,
 )
+from lsy_drone_racing.utils.utils import gate_passed
 
 if TYPE_CHECKING:
     from crazyflow.sim.structs import SimData
@@ -457,15 +458,15 @@ class RaceCoreEnv:
         n_gates = len(data.gate_mj_ids)
         disabled_drones = RaceCoreEnv._disabled_drones(drone_pos, drone_quat, contacts, data)
         gates_pos = mocap_pos[:, data.gate_mj_ids]
+        obstacles_pos = mocap_pos[:, data.obstacle_mj_ids]
         # We need to convert the mocap quat from MuJoCo order to scipy order
         gates_quat = mocap_quat[:, data.gate_mj_ids][..., [3, 0, 1, 2]]
-        obstacles_pos = mocap_pos[:, data.obstacle_mj_ids]
         # Extract the gate poses of the current target gates and check if the drones have passed
         # them between the last and current position
         gate_ids = data.gate_mj_ids[data.target_gate % n_gates]
         gate_pos = gates_pos[jp.arange(gates_pos.shape[0])[:, None], gate_ids]
         gate_quat = gates_quat[jp.arange(gates_quat.shape[0])[:, None], gate_ids]
-        passed = RaceCoreEnv._gate_passed(drone_pos, data.last_drone_pos, gate_pos, gate_quat)
+        passed = gate_passed(drone_pos, data.last_drone_pos, gate_pos, gate_quat, (0.45, 0.45))
         # Update the target gate index. Increment by one if drones have passed a gate
         target_gate = data.target_gate + passed * ~disabled_drones
         target_gate = jp.where(target_gate >= n_gates, -1, target_gate)
@@ -510,6 +511,30 @@ class RaceCoreEnv:
         mask, real_pos = obstacles_visited[..., None], mocap_pos[:, obstacle_mocap_ids]
         obstacles_pos = jp.where(mask, real_pos[:, None], nominal_obstacle_pos[None, None])
         return gates_pos, gates_rpy, obstacles_pos
+
+    @staticmethod
+    def _disabled_drones(pos: Array, quat: Array, contacts: Array, data: EnvData) -> Array:
+        rpy = JaxR.from_quat(quat).as_euler("xyz")
+        disabled = jp.logical_or(data.disabled_drones, jp.all(pos < data.pos_limit_low, axis=-1))
+        disabled = jp.logical_or(disabled, jp.all(pos > data.pos_limit_high, axis=-1))
+        disabled = jp.logical_or(disabled, jp.all(rpy < data.rpy_limit_low, axis=-1))
+        disabled = jp.logical_or(disabled, jp.all(rpy > data.rpy_limit_high, axis=-1))
+        disabled = jp.logical_or(disabled, data.target_gate == -1)
+        contacts = jp.any(jp.logical_and(contacts[:, None, :], data.contact_masks), axis=-1)
+        disabled = jp.logical_or(disabled, contacts)
+        return disabled
+
+    @staticmethod
+    def _visited(drone_pos: Array, target_pos: Array, sensor_range: float, visited: Array) -> Array:
+        dpos = drone_pos[..., None, :2] - target_pos[:, None, :, :2]
+        return jp.logical_or(visited, jp.linalg.norm(dpos, axis=-1) < sensor_range)
+
+    @staticmethod
+    @jax.jit
+    def _warp_disabled_drones(data: SimData, mask: Array) -> SimData:
+        """Warp the disabled drones below the ground."""
+        pos = jax.numpy.where(mask[..., None], -1, data.states.pos)
+        return data.replace(states=data.states.replace(pos=pos))
 
     def _load_track(self, track: dict) -> tuple[dict, dict, dict]:
         """Load the track from the config file."""
@@ -592,52 +617,6 @@ class RaceCoreEnv:
         masks[:, (geom1_valid | geom2_valid).squeeze()] = 0  # Floor contacts are not collisions
         masks = np.tile(masks[None, ...], (sim.n_worlds, 1, 1))
         return masks
-
-    @staticmethod
-    def _disabled_drones(pos: Array, quat: Array, contacts: Array, data: EnvData) -> Array:
-        rpy = JaxR.from_quat(quat).as_euler("xyz")
-        disabled = jp.logical_or(data.disabled_drones, jp.all(pos < data.pos_limit_low, axis=-1))
-        disabled = jp.logical_or(disabled, jp.all(pos > data.pos_limit_high, axis=-1))
-        disabled = jp.logical_or(disabled, jp.all(rpy < data.rpy_limit_low, axis=-1))
-        disabled = jp.logical_or(disabled, jp.all(rpy > data.rpy_limit_high, axis=-1))
-        disabled = jp.logical_or(disabled, data.target_gate == -1)
-        contacts = jp.any(jp.logical_and(contacts[:, None, :], data.contact_masks), axis=-1)
-        disabled = jp.logical_or(disabled, contacts)
-        return disabled
-
-    @staticmethod
-    def _gate_passed(
-        drone_pos: Array, last_drone_pos: Array, gate_pos: Array, gate_quat: Array
-    ) -> bool:
-        """Check if the drone has passed a gate.
-
-        Returns:
-            True if the drone has passed a gate, else False.
-        """
-        gate_rot = JaxR.from_quat(gate_quat)
-        gate_size = (0.45, 0.45)
-        last_pos_local = gate_rot.apply(last_drone_pos - gate_pos, inverse=True)
-        pos_local = gate_rot.apply(drone_pos - gate_pos, inverse=True)
-        # Check if the line between the last position and the current position intersects the plane.
-        # If so, calculate the point of the intersection and check if it is within the gate box.
-        passed_plane = (last_pos_local[..., 1] < 0) & (pos_local[..., 1] > 0)
-        alpha = -last_pos_local[..., 1] / (pos_local[..., 1] - last_pos_local[..., 1])
-        x_intersect = alpha * (pos_local[..., 0]) + (1 - alpha) * last_pos_local[..., 0]
-        z_intersect = alpha * (pos_local[..., 2]) + (1 - alpha) * last_pos_local[..., 2]
-        in_box = (abs(x_intersect) < gate_size[0] / 2) & (abs(z_intersect) < gate_size[1] / 2)
-        return passed_plane & in_box
-
-    @staticmethod
-    def _visited(drone_pos: Array, target_pos: Array, sensor_range: float, visited: Array) -> Array:
-        dpos = drone_pos[..., None, :2] - target_pos[:, None, :, :2]
-        return jp.logical_or(visited, jp.linalg.norm(dpos, axis=-1) < sensor_range)
-
-    @staticmethod
-    @jax.jit
-    def _warp_disabled_drones(data: SimData, mask: Array) -> SimData:
-        """Warp the disabled drones below the ground."""
-        pos = jax.numpy.where(mask[..., None], -1, data.states.pos)
-        return data.replace(states=data.states.replace(pos=pos))
 
 
 # region Factories

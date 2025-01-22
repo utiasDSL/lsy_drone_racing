@@ -6,12 +6,14 @@ import importlib.util
 import inspect
 import logging
 import sys
+from functools import partial
 from typing import TYPE_CHECKING, Type
 
-import numpy as np
+import jax
 import toml
+from jax.numpy import vectorize
+from jax.scipy.spatial.transform import Rotation as R
 from ml_collections import ConfigDict
-from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.control.controller import BaseController
 
@@ -19,21 +21,9 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any
 
-    from numpy.typing import NDArray
+    from jax import Array
 
 logger = logging.getLogger(__name__)
-
-
-def map2pi(angle: NDArray[np.floating]) -> NDArray[np.floating]:
-    """Map an angle or array of angles to the interval of [-pi, pi].
-
-    Args:
-        angle: Number or array of numbers.
-
-    Returns:
-        The remapped angles.
-    """
-    return ((angle + np.pi) % (2 * np.pi)) - np.pi
 
 
 def load_controller(path: Path) -> Type[BaseController]:
@@ -89,12 +79,14 @@ def load_config(path: Path) -> ConfigDict:
         return ConfigDict(toml.load(f))
 
 
-def check_gate_pass(
-    gate_pos: np.ndarray,
-    gate_rot: R,
-    gate_size: np.ndarray,
-    drone_pos: np.ndarray,
-    last_drone_pos: np.ndarray,
+@jax.jit
+@partial(vectorize, signature="(3),(3),(3),(4)->()", excluded=[4])
+def gate_passed(
+    drone_pos: Array,
+    last_drone_pos: Array,
+    gate_pos: Array,
+    gate_quat: Array,
+    gate_size: tuple[float, float],
 ) -> bool:
     """Check if the drone has passed the current gate.
 
@@ -110,23 +102,22 @@ def check_gate_pass(
         goal changes.
 
     Args:
-        gate_pos: The position of the gate in the world frame.
-        gate_rot: The rotation of the gate.
-        gate_size: The size of the gate box in meters.
         drone_pos: The position of the drone in the world frame.
         last_drone_pos: The position of the drone in the world frame at the last time step.
+        gate_pos: The position of the gate in the world frame.
+        gate_quat: The rotation of the gate as a wxyz quaternion.
+        gate_size: The size of the gate box in meters.
     """
     # Transform last and current drone position into current gate frame.
-    assert isinstance(gate_rot, R), "gate_rot has to be a Rotation object."
+    gate_rot = R.from_quat(gate_quat)
     last_pos_local = gate_rot.apply(last_drone_pos - gate_pos, inverse=True)
     pos_local = gate_rot.apply(drone_pos - gate_pos, inverse=True)
     # Check the plane intersection. If passed, calculate the point of the intersection and check if
     # it is within the gate box.
-    if last_pos_local[1] < 0 and pos_local[1] > 0:  # Drone has passed the goal plane
-        alpha = -last_pos_local[1] / (pos_local[1] - last_pos_local[1])
-        x_intersect = alpha * (pos_local[0]) + (1 - alpha) * last_pos_local[0]
-        z_intersect = alpha * (pos_local[2]) + (1 - alpha) * last_pos_local[2]
-        # Divide gate size by 2 to get the distance from the center to the edges
-        if abs(x_intersect) < gate_size[0] / 2 and abs(z_intersect) < gate_size[1] / 2:
-            return True
-    return False
+    passed_plane = (last_pos_local[1] < 0) & (pos_local[1] > 0)
+    alpha = -last_pos_local[1] / (pos_local[1] - last_pos_local[1])
+    x_intersect = alpha * (pos_local[0]) + (1 - alpha) * last_pos_local[0]
+    z_intersect = alpha * (pos_local[2]) + (1 - alpha) * last_pos_local[2]
+    # Divide gate size by 2 to get the distance from the center to the edges
+    in_box = (abs(x_intersect) < gate_size[0] / 2) & (abs(z_intersect) < gate_size[1] / 2)
+    return passed_plane & in_box
