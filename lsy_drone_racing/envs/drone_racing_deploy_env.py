@@ -194,9 +194,8 @@ class DroneRacingDeployEnv(gymnasium.Env):
             )
             return_pos[2] = RETURN_HEIGHT
             self.cf.goTo(goal=return_pos, yaw=0, duration=BREAKING_DURATION)
-            time.sleep(
-                BREAKING_DURATION - 1
-            )  # Smoothly transition to next position by setting the next goal earlier
+            # Smoothly transition to next position by setting the next goal earlier
+            time.sleep(BREAKING_DURATION - 1)
 
             return_pos[:2] = self.config.env.track.drone.pos[:2]
             self.cf.goTo(goal=return_pos, yaw=0, duration=RETURN_DURATION)
@@ -244,8 +243,8 @@ class DroneRacingDeployEnv(gymnasium.Env):
             real_gates_rpy = np.array([self.vicon.rpy[g] for g in gate_names])
             real_obstacles_pos = np.array([self.vicon.pos[o] for o in obstacle_names])
 
-        # Use x-y distance to calucate sensor range, otherwise it would depend on the height of the drone
-        # and obstacle how early the obstacle is in range.
+        # Use x-y distance to calucate sensor range, otherwise it would depend on the height of the
+        # drone and obstacle how early the obstacle is in range.
         in_range = np.linalg.norm(real_gates_pos[:, :2] - drone_pos[:2], axis=1) < sensor_range
         self.gates_visited = np.logical_or(self.gates_visited, in_range)
         gates_pos[self.gates_visited] = real_gates_pos[self.gates_visited]
