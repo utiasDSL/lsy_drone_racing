@@ -19,9 +19,9 @@ WORKDIR /home/lsy_drone_racing
 COPY pyproject.toml ./
 # Install dependencies and cache the build step (only rebuilds when pyproject.toml changes) 
 RUN pip install build
-RUN pip install --no-cache-dir .[test,rl]
+RUN pip install --no-cache-dir .[test]
 # Copy the rest of the application
 COPY . .
-RUN pip install -e .[test,rl]
+RUN pip install -e .[test]
 
 ENTRYPOINT ["python", "/home/lsy_drone_racing/scripts/sim.py", "--gui", "False"]

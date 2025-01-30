@@ -52,7 +52,7 @@ class Vicon:
             ...  # ROS node is already running which is fine for us
         self.drone_name = None
         self.auto_track_drone = auto_track_drone
-        if auto_track_drone:
+        if auto_track_drone:  # TODO: Remove crazyswarm dependency
             with open(get_ros_package_path("crazyswarm") / "launch/crazyflies.yaml", "r") as f:
                 config = yaml.load(f, yaml.SafeLoader)
             assert len(config["crazyflies"]) == 1, "Only one crazyfly allowed at a time!"

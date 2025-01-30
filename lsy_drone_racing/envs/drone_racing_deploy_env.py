@@ -40,7 +40,7 @@ from lsy_drone_racing.utils.ros_utils import check_drone_start_pos, check_race_t
 from lsy_drone_racing.vicon import Vicon
 
 if TYPE_CHECKING:
-    from munch import Munch
+    from ml_collections import ConfigDict
     from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
 
     CONTROLLER = "mellinger"
 
-    def __init__(self, config: dict | Munch):
+    def __init__(self, config: dict | ConfigDict):
         """Initialize the crazyflie drone and the motion capture system.
 
         Args:
@@ -281,7 +281,7 @@ class DroneRacingAttitudeDeployEnv(DroneRacingDeployEnv):
     real-world hardware (Crazyflie drone and Vicon motion capture system) instead of a simulation.
     """
 
-    def __init__(self, config: dict | Munch):
+    def __init__(self, config: dict | ConfigDict):
         """Initialize the crazyflie drone and the motion capture system.
 
         Args:

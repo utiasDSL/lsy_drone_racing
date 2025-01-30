@@ -108,7 +108,7 @@ You can also install the extended dependencies with
 ```bash
 conda activate race
 cd ~/repos/lsy_drone_racing
-pip install -e .[rl, test]
+pip install -e .[test]
 ```
 and check if all tests complete with 
 ```bash

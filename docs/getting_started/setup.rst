@@ -91,13 +91,13 @@ If everything is installed correctly, this will open the simulator and simulate 
 Extended Dependencies
 ---------------------
 
-To install extended dependencies for reinforcement learning and testing:
+To install extended dependencies for testing:
 
 .. code-block:: bash
 
    conda activate race
    cd ~/repos/lsy_drone_racing
-   pip install -e .[rl, test]
+   pip install -e .[test]
 
 You can then run the tests to ensure everything is working:
 

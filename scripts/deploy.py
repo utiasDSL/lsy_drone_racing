@@ -3,7 +3,7 @@
 
 Usage:
 
-python deploy.py <path/to/controller.py> <path/to/config.yaml>
+python deploy.py <path/to/controller.py> <path/to/config.toml>
 
 """
 

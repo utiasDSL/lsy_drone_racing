@@ -70,7 +70,7 @@ def load_config(path: Path) -> ConfigDict:
         path: Path to the config file.
 
     Returns:
-        The munchified config dict.
+        The configuration.
     """
     assert path.exists(), f"Configuration file not found: {path}"
     assert path.suffix == ".toml", f"Configuration file has to be a TOML file: {path}"

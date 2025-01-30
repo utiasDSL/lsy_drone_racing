@@ -11,12 +11,12 @@ from scipy.spatial.transform import Rotation as R
 from lsy_drone_racing.vicon import Vicon
 
 if TYPE_CHECKING:
-    from munch import Munch
+    from ml_collections import ConfigDict
 
 logger = logging.getLogger("rosout." + __name__)
 
 
-def check_race_track(config: Munch):
+def check_race_track(config: ConfigDict):
     """Check if the race track's gates and obstacles are within tolerances.
 
     Args:
@@ -33,13 +33,13 @@ def check_race_track(config: Munch):
     assert rng_info.gate_pos.type == "uniform", "Race track checks expect uniform distributions"
     assert rng_info.obstacle_pos.type == "uniform", "Race track checks expect uniform distributions"
     for i, gate in enumerate(config.env.track.gates):
-        name = f"gate{i+1}"
+        name = f"gate{i + 1}"
         gate_pos, gate_rot = vicon.pos[name], R.from_euler("xyz", vicon.rpy[name])
         check_bounds(name, gate_pos, gate.pos, rng_info.gate_pos.low, rng_info.gate_pos.high)
         check_rotation(name, gate_rot, R.from_euler("xyz", gate.rpy), ang_tol)
 
     for i, obstacle in enumerate(config.env.track.obstacles):
-        name = f"obstacle{i+1}"
+        name = f"obstacle{i + 1}"
         low, high = rng_info.obstacle_pos.low, rng_info.obstacle_pos.high
         check_bounds(name, vicon.pos[name][:2], obstacle.pos[:2], low[:2], high[:2])
 
@@ -66,7 +66,7 @@ def check_rotation(name: str, actual_rot: R, desired_rot: R, ang_tol: float):
         raise RuntimeError(f"{name} exceeds rotation tolerances ({ang_tol})")
 
 
-def check_drone_start_pos(config: Munch):
+def check_drone_start_pos(config: ConfigDict):
     """Check if the real drone start position matches the settings.
 
     Args:

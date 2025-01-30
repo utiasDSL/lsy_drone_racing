@@ -36,9 +36,9 @@ WORKDIR /home/lsy_drone_racing
 COPY pyproject.toml ./
 # Install dependencies and cache the build step (only rebuilds when pyproject.toml changes) 
 RUN pip install build
-RUN pip install --no-cache-dir .[test,rl]
+RUN pip install --no-cache-dir .[test]
 # Copy the rest of the application
 COPY . .
-RUN pip install --no-cache-dir -e .[test,rl]
+RUN pip install --no-cache-dir -e .[test]
 
 CMD bash -c "source /home/crazyswarm/ros_ws/devel/setup.bash && python /home/lsy_drone_racing/scripts/deploy.py"

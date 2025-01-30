@@ -19,7 +19,7 @@ import gymnasium
 from lsy_drone_racing.utils import load_config, load_controller
 
 if TYPE_CHECKING:
-    from munch import Munch
+    from ml_collections import ConfigDict
 
     from lsy_drone_racing.control.controller import BaseController
     from lsy_drone_racing.envs.drone_race import DroneRaceEnv
@@ -103,7 +103,7 @@ def simulate(
     return ep_times
 
 
-def log_episode_stats(obs: dict, info: dict, config: Munch, curr_time: float):
+def log_episode_stats(obs: dict, info: dict, config: ConfigDict, curr_time: float):
     """Log the statistics of a single episode."""
     gates_passed = obs["target_gate"]
     if gates_passed == -1:  # The drone has passed the final gate

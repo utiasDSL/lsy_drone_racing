@@ -20,7 +20,7 @@ import numpy as np
 from lsy_drone_racing.utils import load_config, load_controller
 
 if TYPE_CHECKING:
-    from munch import Munch
+    from ml_collections import ConfigDict
 
     from lsy_drone_racing.control.controller import BaseController
     from lsy_drone_racing.envs.multi_drone_race import MultiDroneRacingEnv
@@ -105,7 +105,7 @@ def simulate(
     env.close()
 
 
-def log_episode_stats(obs: dict, info: dict, config: Munch, curr_time: float):
+def log_episode_stats(obs: dict, info: dict, config: ConfigDict, curr_time: float):
     """Log the statistics of a single episode."""
     gates_passed = obs["target_gate"]
     finished = gates_passed == -1

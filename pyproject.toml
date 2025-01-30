@@ -19,22 +19,18 @@ classifiers = [
 
 dependencies = [
     "fire >= 0.6.0",
-    "munch >= 4.0.0",
     "numpy >= 1.24.1, < 2.0.0",
-    "pandas >= 2.0.3",
-    "pybullet >= 3.2.6",
-    "PyYAML >= 6.0.1",
-    "rospkg >= 1.5.1",
+    "PyYAML >= 6.0.1",  # TODO: Remove after removing crazyswarm dependency
+    "rospkg >= 1.5.1",  # TODO: Remove after moving to cflib
     "scipy >= 1.10.1",
     "gymnasium >= 1.0.0",
     "toml >= 0.10.2",
-    "casadi >= 3.6.5",
+    "ml_collections >= 1.0",
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0.0"]
-rl = ["stable-baselines3"]
-
+online_submission = ["pandas", "kaggle"]
 
 [tool.setuptools.packages]
 find = {}
