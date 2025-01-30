@@ -184,9 +184,8 @@ class DroneRacingDeployEnv(gymnasium.Env):
             )
             return_pos[2] = RETURN_HEIGHT
             self.cf.goTo(goal=return_pos, yaw=0, duration=BREAKING_DURATION)
-            time.sleep(
-                BREAKING_DURATION - 1
-            )  # Smoothly transition to next position by setting the next goal earlier
+            # Smoothly transition to next position by setting the next goal earlier
+            time.sleep(BREAKING_DURATION - 1)
 
             return_pos[:2] = self.config.env.track.drone.pos[:2]
             self.cf.goTo(goal=return_pos, yaw=0, duration=RETURN_DURATION)
@@ -223,6 +222,9 @@ class DroneRacingDeployEnv(gymnasium.Env):
         obstacles_pos = np.array([o.pos for o in self.config.env.track.obstacles])
         obstacle_names = [f"obstacle{g}" for g in range(1, len(obstacles_pos) + 1)]
 
+        real_gates_pos = gates_pos
+        real_gates_rpy = gates_rpy
+        real_obstacles_pos = obstacles_pos
         # Update objects position with vicon data if not in practice mode and object
         # either is in range or was in range previously.
         if not self.config.deploy.practice_without_track_objects:
@@ -230,20 +232,20 @@ class DroneRacingDeployEnv(gymnasium.Env):
             real_gates_rpy = np.array([self.vicon.rpy[g] for g in gate_names])
             real_obstacles_pos = np.array([self.vicon.pos[o] for o in obstacle_names])
 
-            # Use x-y distance to calucate sensor range, otherwise it would depend on the height of the drone
-            # and obstacle how early the obstacle is in range.
-            in_range = np.linalg.norm(real_gates_pos[:, :2] - drone_pos[:2], axis=1) < sensor_range
-            self.gates_visited = np.logical_or(self.gates_visited, in_range)
-            gates_pos[self.gates_visited] = real_gates_pos[self.gates_visited]
-            gates_rpy[self.gates_visited] = real_gates_rpy[self.gates_visited]
-            obs["gates_visited"] = in_range
+        # Use x-y distance to calucate sensor range, otherwise it would depend on the height of the
+        # drone and obstacle how early the obstacle is in range.
+        in_range = np.linalg.norm(real_gates_pos[:, :2] - drone_pos[:2], axis=1) < sensor_range
+        self.gates_visited = np.logical_or(self.gates_visited, in_range)
+        gates_pos[self.gates_visited] = real_gates_pos[self.gates_visited]
+        gates_rpy[self.gates_visited] = real_gates_rpy[self.gates_visited]
+        obs["gates_visited"] = self.gates_visited
+        print(f"gates visited: {self.gates_visited}")
 
-            in_range = (
-                np.linalg.norm(real_obstacles_pos[:, :2] - drone_pos[:2], axis=1) < sensor_range
-            )
-            self.obstacles_visited = np.logical_or(self.obstacles_visited, in_range)
-            obstacles_pos[self.obstacles_visited] = real_obstacles_pos[self.obstacles_visited]
-            obs["obstacles_visited"] = in_range
+        in_range = np.linalg.norm(real_obstacles_pos[:, :2] - drone_pos[:2], axis=1) < sensor_range
+        self.obstacles_visited = np.logical_or(self.obstacles_visited, in_range)
+        obstacles_pos[self.obstacles_visited] = real_obstacles_pos[self.obstacles_visited]
+        obs["obstacles_visited"] = self.obstacles_visited
+        print(f"obs visited: {self.obstacles_visited}")
 
         obs["gates_pos"] = gates_pos.astype(np.float32)
         obs["gates_rpy"] = gates_rpy.astype(np.float32)

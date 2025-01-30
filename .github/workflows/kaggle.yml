@@ -10,6 +10,8 @@ on:
 
 jobs:
   online-competition:
+    # Skip this job if running on the main repo to prevent failing CI/CD. Only run on student forks.
+    if: ${{ github.repository != 'utiasDSL/lsy_drone_racing' }}
 
     runs-on: ubuntu-latest
     env: # Or as an environment variable
