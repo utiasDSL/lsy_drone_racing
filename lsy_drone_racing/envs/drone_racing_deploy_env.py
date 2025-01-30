@@ -250,13 +250,11 @@ class DroneRacingDeployEnv(gymnasium.Env):
         gates_pos[self.gates_visited] = real_gates_pos[self.gates_visited]
         gates_rpy[self.gates_visited] = real_gates_rpy[self.gates_visited]
         obs["gates_visited"] = self.gates_visited
-        print(f"gates visited: {self.gates_visited}")
 
         in_range = np.linalg.norm(real_obstacles_pos[:, :2] - drone_pos[:2], axis=1) < sensor_range
         self.obstacles_visited = np.logical_or(self.obstacles_visited, in_range)
         obstacles_pos[self.obstacles_visited] = real_obstacles_pos[self.obstacles_visited]
         obs["obstacles_visited"] = self.obstacles_visited
-        print(f"obs visited: {self.obstacles_visited}")
 
         obs["gates_pos"] = gates_pos.astype(np.float32)
         obs["gates_rpy"] = gates_rpy.astype(np.float32)
