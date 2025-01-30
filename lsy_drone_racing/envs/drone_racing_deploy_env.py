@@ -76,6 +76,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
         Args:
             config: The configuration of the environment.
         """
+        raise NotImplementedError("The deployment environment is currently not functional.")
         super().__init__()
         self.config = config
         self.action_space = gymnasium.spaces.Box(low=-1, high=1, shape=(13,))
@@ -86,12 +87,12 @@ class DroneRacingDeployEnv(gymnasium.Env):
         self.observation_space = spaces.Dict(
             {
                 "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
-                "rpy": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                "quat": spaces.Box(low=-1, high=1, shape=(4,)),
                 "vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "ang_vel": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
                 "target_gate": spaces.Discrete(n_gates, start=-1),
                 "gates_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_gates, 3)),
-                "gates_rpy": spaces.Box(low=-np.pi, high=np.pi, shape=(n_gates, 3)),
+                "gates_quat": spaces.Box(low=-1, high=1, shape=(n_gates, 4)),
                 "gates_visited": spaces.Box(low=0, high=1, shape=(n_gates,), dtype=np.bool_),
                 "obstacles_pos": spaces.Box(low=-np.inf, high=np.inf, shape=(n_obstacles, 3)),
                 "obstacles_visited": spaces.Box(
@@ -199,13 +200,11 @@ class DroneRacingDeployEnv(gymnasium.Env):
     def obs(self) -> dict:
         """Return the observation of the environment."""
         drone = self.vicon.drone_name
-        rpy = self.vicon.rpy[drone]
-        ang_vel = R.from_euler("xyz", rpy).inv().apply(self.vicon.ang_vel[drone])
         obs = {
             "pos": self.vicon.pos[drone].astype(np.float32),
-            "rpy": rpy.astype(np.float32),
+            "quat": self.vicon.quat[drone].astype(np.float32),
             "vel": self.vicon.vel[drone].astype(np.float32),
-            "ang_vel": ang_vel.astype(np.float32),
+            "ang_vel": self.vicon.ang_vel[drone].astype(np.float32),
         }
 
         sensor_range = self.config.env.sensor_range
@@ -246,7 +245,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
         obs["obstacles_visited"] = self.obstacles_visited
 
         obs["gates_pos"] = gates_pos.astype(np.float32)
-        obs["gates_rpy"] = gates_rpy.astype(np.float32)
+        obs["gates_quat"] = R.from_euler("xyz", gates_rpy).as_quat().astype(np.float32)
         obs["obstacles_pos"] = obstacles_pos.astype(np.float32)
         self._obs = obs
         return obs
@@ -268,7 +267,7 @@ class DroneRacingDeployEnv(gymnasium.Env):
             # Real gates measure 0.4m x 0.4m, we account for meas. error
             gate_size = (0.56, 0.56)
             gate_pos = self._obs["gates_pos"][self.target_gate]
-            gate_rot = R.from_euler("xyz", self._obs["gates_rpy"][self.target_gate])
+            gate_rot = R.from_quat(self._obs["gates_quat"][self.target_gate])
             return check_gate_pass(gate_pos, gate_rot, gate_size, pos, prev_pos)
         return False
 

@@ -112,7 +112,7 @@ class AttitudeController(BaseController):
         target_thrust[2] += self.drone_mass * self.g
 
         # Update z_axis to the current orientation of the drone
-        z_axis = R.from_euler("xyz", obs["rpy"]).as_matrix()[:, 2]
+        z_axis = R.from_quat(obs["quat"]).as_matrix()[:, 2]
 
         # update current thrust
         thrust_desired = target_thrust.dot(z_axis)

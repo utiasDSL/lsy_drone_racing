@@ -34,9 +34,9 @@ def check_race_track(config: ConfigDict):
     assert rng_info.obstacle_pos.type == "uniform", "Race track checks expect uniform distributions"
     for i, gate in enumerate(config.env.track.gates):
         name = f"gate{i + 1}"
-        gate_pos, gate_rot = vicon.pos[name], R.from_euler("xyz", vicon.rpy[name])
+        gate_pos, gate_rot = vicon.pos[name], R.from_quat(vicon.quat[name])
         check_bounds(name, gate_pos, gate.pos, rng_info.gate_pos.low, rng_info.gate_pos.high)
-        check_rotation(name, gate_rot, R.from_euler("xyz", gate.rpy), ang_tol)
+        check_rotation(name, gate_rot, R.from_quat(gate.quat), ang_tol)
 
     for i, obstacle in enumerate(config.env.track.obstacles):
         name = f"obstacle{i + 1}"

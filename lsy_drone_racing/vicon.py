@@ -60,7 +60,7 @@ class Vicon:
         self.track_names = track_names
         # Register the Vicon subscribers for the drone and any other tracked object
         self.pos: dict[str, np.ndarray] = {}
-        self.rpy: dict[str, np.ndarray] = {}
+        self.quat: dict[str, np.ndarray] = {}
         self.vel: dict[str, np.ndarray] = {}
         self.ang_vel: dict[str, np.ndarray] = {}
         self.time: dict[str, float] = {}
@@ -90,8 +90,7 @@ class Vicon:
         if self.drone_name is None:
             return
         self.pos[self.drone_name] = np.array(data.pos)
-        rpy = R.from_quat(data.quat).as_euler("xyz")
-        self.rpy[self.drone_name] = np.array(rpy)
+        self.quat[self.drone_name] = np.array(data.quat)
         self.vel[self.drone_name] = np.array(data.vel)
         self.ang_vel[self.drone_name] = np.array(data.omega_b)
 
@@ -110,10 +109,10 @@ class Vicon:
                 continue
             T, Rot = tf.transform.translation, tf.transform.rotation
             pos = np.array([T.x, T.y, T.z])
-            rpy = R.from_quat([Rot.x, Rot.y, Rot.z, Rot.w]).as_euler("xyz")
+            quat = np.array([Rot.x, Rot.y, Rot.z, Rot.w])
             self.time[name] = time.time()
             self.pos[name] = pos
-            self.rpy[name] = rpy
+            self.quat[name] = quat
 
     def pose(self, name: str) -> tuple[np.ndarray, np.ndarray]:
         """Get the latest pose of a tracked object.
@@ -122,14 +121,14 @@ class Vicon:
             name: The name of the object.
 
         Returns:
-            The position and rotation of the object. The rotation is in roll-pitch-yaw format.
+            The position and orientation (as xyzw quaternion) of the object.
         """
-        return self.pos[name], self.rpy[name]
+        return self.pos[name], self.quat[name]
 
     @property
     def poses(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the latest poses of all objects."""
-        return np.stack(self.pos.values()), np.stack(self.rpy.values())
+        return np.stack(self.pos.values()), np.stack(self.quat.values())
 
     @property
     def names(self) -> list[str]:
