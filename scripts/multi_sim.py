@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import fire
 import gymnasium
 import numpy as np
+from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 
 from lsy_drone_racing.utils import load_config, load_controller
 
@@ -69,7 +70,9 @@ def simulate(
         randomizations=config.env.get("randomizations"),
         random_resets=config.env.random_resets,
         seed=config.env.seed,
+        action_space=config.env.action_space,
     )
+    env = JaxToNumpy(env)
 
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         obs, info = env.reset()
@@ -81,7 +84,9 @@ def simulate(
             curr_time = i / config.env.freq
 
             action = controller.compute_control(obs, info)
-            action = np.array([action] * config.env.n_drones * env.unwrapped.sim.n_worlds)
+            action = np.array(
+                [action] * config.env.n_drones * env.unwrapped.sim.n_worlds, dtype=np.float32
+            )
             action[1, 0] += 0.2
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated | truncated
@@ -92,9 +97,15 @@ def simulate(
             # Synchronize the GUI.
             if config.sim.gui:
                 if ((i * fps) % config.env.freq) < fps:
-                    env.render()
+                    try:
+                        env.render()
+                    # TODO: JaxToNumpy not working with None (returned by env.render()). Open issue
+                    # in gymnasium and fix this.
+                    except Exception as e:
+                        if not e.args[0].startswith("No known conversion for Jax type"):
+                            raise e
             i += 1
-            if done.all():
+            if done:
                 break
 
         controller.episode_callback()  # Update the controller internal state and models.

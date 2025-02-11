@@ -101,7 +101,9 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         obs, reward, terminated, truncated, info = self._step(action)
         obs = {k: v[0] for k, v in obs.items()}
         info = {k: v[0] for k, v in info.items()}
-        return obs, reward[0], terminated[0], truncated[0], info
+        # TODO: Fix by moving towards pettingzoo API
+        # https://pettingzoo.farama.org/api/parallel/
+        return obs, reward[0, 0], terminated[0].all(), truncated[0].all(), info
 
 
 class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):

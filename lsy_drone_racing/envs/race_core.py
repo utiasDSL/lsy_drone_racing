@@ -358,20 +358,20 @@ class RaceCoreEnv:
             self.obstacles["nominal_pos"],
         )
         obs = {
-            "pos": np.array(self.sim.data.states.pos, dtype=np.float32),
-            "quat": np.array(self.sim.data.states.quat, dtype=np.float32),
-            "vel": np.array(self.sim.data.states.vel, dtype=np.float32),
-            "ang_vel": np.array(self.sim.data.states.ang_vel, dtype=np.float32),
-            "target_gate": np.array(self.data.target_gate, dtype=int),
-            "gates_pos": np.asarray(gates_pos, dtype=np.float32),
-            "gates_quat": np.asarray(gates_quat, dtype=np.float32),
-            "gates_visited": np.asarray(self.data.gates_visited, dtype=bool),
-            "obstacles_pos": np.asarray(obstacles_pos, dtype=np.float32),
-            "obstacles_visited": np.asarray(self.data.obstacles_visited, dtype=bool),
+            "pos": self.sim.data.states.pos,
+            "quat": self.sim.data.states.quat,
+            "vel": self.sim.data.states.vel,
+            "ang_vel": self.sim.data.states.ang_vel,
+            "target_gate": self.data.target_gate,
+            "gates_pos": gates_pos,
+            "gates_quat": gates_quat,
+            "gates_visited": self.data.gates_visited,
+            "obstacles_pos": obstacles_pos,
+            "obstacles_visited": self.data.obstacles_visited,
         }
         return obs
 
-    def reward(self) -> NDArray[np.float32]:
+    def reward(self) -> Array:
         """Compute the reward for the current state.
 
         Note:
@@ -382,19 +382,19 @@ class RaceCoreEnv:
         Returns:
             Reward for the current state.
         """
-        return np.array(-1.0 * (self.data.target_gate == -1), dtype=np.float32)
+        return -1.0 * (self.data.target_gate == -1)  # Implicit float conversion
 
-    def terminated(self) -> NDArray[np.bool_]:
+    def terminated(self) -> Array:
         """Check if the episode is terminated.
 
         Returns:
             True if all drones have been disabled, else False.
         """
-        return np.array(self.data.disabled_drones, dtype=bool)
+        return self.data.disabled_drones
 
-    def truncated(self) -> NDArray[np.bool_]:
+    def truncated(self) -> Array:
         """Array of booleans indicating if the episode is truncated."""
-        return np.tile(self.data.steps >= self.data.max_episode_steps, (self.sim.n_drones, 1))
+        return self._truncated(self.data.steps, self.data.max_episode_steps, self.sim.n_drones)
 
     def info(self) -> dict:
         """Return an info dictionary containing additional information about the environment."""
@@ -493,6 +493,11 @@ class RaceCoreEnv:
         mask, real_pos = obstacles_visited[..., None], mocap_pos[:, obstacle_mocap_ids]
         obstacles_pos = jp.where(mask, real_pos[:, None], nominal_obstacle_pos[None, None])
         return gates_pos, gates_quat, obstacles_pos
+
+    @staticmethod
+    @partial(jax.jit, static_argnames="n_drones")
+    def _truncated(steps: Array, max_episode_steps: Array, n_drones: int) -> Array:
+        return jp.tile(steps >= max_episode_steps, (n_drones, 1))
 
     @staticmethod
     def _disabled_drones(pos: Array, contacts: Array, data: EnvData) -> Array:
