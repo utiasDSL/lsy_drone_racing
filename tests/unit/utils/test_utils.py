@@ -5,7 +5,7 @@ import pytest
 from ml_collections import ConfigDict
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.control.controller import BaseController
+from lsy_drone_racing.control.controller import Controller
 from lsy_drone_racing.utils import gate_passed, load_config, load_controller
 
 
@@ -20,7 +20,7 @@ def test_load_controller():
     c = load_controller(
         Path(__file__).parents[3] / "lsy_drone_racing/control/trajectory_controller.py"
     )
-    assert issubclass(c, BaseController), f"Controller {c} is not a subclass of BaseController"
+    assert issubclass(c, Controller), f"Controller {c} is not a subclass of `Controller`"
 
 
 @pytest.mark.unit

@@ -18,13 +18,13 @@ from crazyflow.constants import MASS
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.control import BaseController
+from lsy_drone_racing.control import Controller
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-class AttitudeController(BaseController):
+class AttitudeController(Controller):
     """Example of a controller using the collective thrust and attitude interface.
 
     Modified from https://github.com/utiasDSL/crazyswarm-import/blob/ad2f7ea987f458a504248a1754b124ba39fc2f21/ros_ws/src/crazyswarm/scripts/position_ctl_m.py

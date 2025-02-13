@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.interpolate import CubicSpline
 
-from lsy_drone_racing.control import BaseController
+from lsy_drone_racing.control import Controller
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-class TrajectoryController(BaseController):
+class TrajectoryController(Controller):
     """Controller that follows a pre-defined trajectory."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):

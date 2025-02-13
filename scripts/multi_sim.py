@@ -23,7 +23,7 @@ from lsy_drone_racing.utils import load_config, load_controller
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
 
-    from lsy_drone_racing.control.controller import BaseController
+    from lsy_drone_racing.control.controller import Controller
     from lsy_drone_racing.envs.multi_drone_race import MultiDroneRacingEnv
 
 
@@ -76,7 +76,7 @@ def simulate(
 
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         obs, info = env.reset()
-        controller: BaseController = controller_cls(obs, info, config)
+        controller: Controller = controller_cls(obs, info, config)
         i = 0
         fps = 60
 

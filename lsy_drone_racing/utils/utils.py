@@ -15,7 +15,7 @@ from jax.numpy import vectorize
 from jax.scipy.spatial.transform import Rotation as R
 from ml_collections import ConfigDict
 
-from lsy_drone_racing.control.controller import BaseController
+from lsy_drone_racing.control.controller import Controller
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def load_controller(path: Path) -> Type[BaseController]:
+def load_controller(path: Path) -> Type[Controller]:
     """Load the controller module from the given path and return the Controller class.
 
     Args:
@@ -45,17 +45,15 @@ def load_controller(path: Path) -> Type[BaseController]:
         Args:
             mod: Any attribute of the controller module to be checked.
         """
-        subcls = inspect.isclass(mod) and issubclass(mod, BaseController)
+        subcls = inspect.isclass(mod) and issubclass(mod, Controller)
         return subcls and mod.__module__ == controller_module.__name__
 
     controllers = inspect.getmembers(controller_module, filter)
-    controllers = [c for _, c in controllers if issubclass(c, BaseController)]
-    assert len(controllers) > 0, (
-        f"No controller found in {path}. Have you subclassed BaseController?"
-    )
+    controllers = [c for _, c in controllers if issubclass(c, Controller)]
+    assert len(controllers) > 0, f"No controller found in {path}. Have you subclassed Controller?"
     assert len(controllers) == 1, f"Multiple controllers found in {path}. Only one is allowed."
     controller_module.Controller = controllers[0]
-    assert issubclass(controller_module.Controller, BaseController)
+    assert issubclass(controller_module.Controller, Controller)
 
     try:
         return controller_module.Controller

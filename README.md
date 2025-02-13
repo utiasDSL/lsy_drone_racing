@@ -418,6 +418,6 @@ In a second terminal:
 python scripts/deploy.py --controller <your_controller.py> --config level3.toml
 ```
 
-where `<your_controller.py>` implements a controller that inherits from `lsy_drone_racing.control.BaseController`
+where `<your_controller.py>` implements a controller that inherits from `lsy_drone_racing.control.Controller`
 
 

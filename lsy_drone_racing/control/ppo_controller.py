@@ -17,13 +17,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 from stable_baselines3 import PPO
 
-from lsy_drone_racing.control import BaseController
+from lsy_drone_racing.control import Controller
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-class PPOController(BaseController):
+class PPOController(Controller):
     """Controller using a pre-trained PPO model."""
 
     def __init__(self, initial_obs: dict[str, NDArray[np.floating]], initial_info: dict):

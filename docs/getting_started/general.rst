@@ -5,13 +5,13 @@ Welcome to the LSY Drone Racing Project! This is a platform developed by the LSY
 
 Implementing Your Own Algorithms
 --------------------------------
-To implement your own controller, you need to implement a ``Controller`` class in the :mod:`lsy_drone_racing.control` module. The only restriction we place on controllers is that they have to implement the interface defined by the :class:`BaseController <lsy_drone_racing.control.controller.BaseController>` class. Apart from that, you are encouraged to use the full spectrum of control algorithms, e.g., MPC, trajectory optimization, reinforcement learning, etc., to compete in the challenge. Please make sure to put your controller implementation in the :mod:`lsy_drone_racing.control` module to make sure that it is correctly recognized by our scripts.
+To implement your own controller, you need to implement a ``Controller`` class in the :mod:`lsy_drone_racing.control` module. The only restriction we place on controllers is that they have to implement the interface defined by the :class:`Controller <lsy_drone_racing.control.controller.Controller>` class. Apart from that, you are encouraged to use the full spectrum of control algorithms, e.g., MPC, trajectory optimization, reinforcement learning, etc., to compete in the challenge. Please make sure to put your controller implementation in the :mod:`lsy_drone_racing.control` module to make sure that it is correctly recognized by our scripts.
 
 .. note::
     Make sure to inherit from the base class for your controller implementation. This ensures that your controller is compatible with our scripts. Also make sure to only create one controller class per file. Otherwise, we do not know which controller to load from the file.
 
 .. warning::
-    You are not allowed to modify the interface of the :class:`BaseController <lsy_drone_racing.control.controller.BaseController>` class. Doing so will make your controller incompatible with the deployment environment and we won't be able to run your controller on our setup.
+    You are not allowed to modify the interface of the :class:`Controller <lsy_drone_racing.control.controller.Controller>` class. Doing so will make your controller incompatible with the deployment environment and we won't be able to run your controller on our setup.
 
 .. warning::
     Many students are enthusiastic about deep reinforcement learning and try to use it to solve the challenge. While you are completely free in choosing your control algorithm, we know from experience that training good agents is non-trivial, requires significant compute, and can be difficult to transfer into the real world setup. Students taking this approach should make sure they already have some experience with RL, and take their policies to the real world setup early to address potential sim2real issues. 
