@@ -6,7 +6,7 @@
 
 [![Python Version]][Python Version URL] [![Ruff Check]][Ruff Check URL] [![Documentation Status]][Documentation Status URL] [![Tests]][Tests URL]
 
-[Python Version]: https://img.shields.io/badge/python-3.8-blue.svg
+[Python Version]: https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue
 [Python Version URL]: https://www.python.org
 
 [Ruff Check]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml/badge.svg?style=flat-square
