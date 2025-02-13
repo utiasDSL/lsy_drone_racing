@@ -19,7 +19,6 @@ from crazyflow import Sim
 from crazyflow.sim.symbolic import symbolic_attitude
 from flax.struct import dataclass
 from gymnasium import spaces
-from jax.scipy.spatial.transform import Rotation as JaxR
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.envs.randomize import (

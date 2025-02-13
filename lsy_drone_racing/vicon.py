@@ -20,7 +20,6 @@ import rospy
 import yaml
 from crazyswarm.msg import StateVector
 from rosgraph import Master
-from scipy.spatial.transform import Rotation as R
 from tf2_msgs.msg import TFMessage
 
 from lsy_drone_racing.utils.import_utils import get_ros_package_path

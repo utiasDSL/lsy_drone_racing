@@ -3,6 +3,7 @@ from pathlib import Path
 import gymnasium
 import numpy as np
 import pytest
+from gymnasium.wrappers import JaxToNumpy
 
 from lsy_drone_racing.utils import load_config, load_controller
 
@@ -59,10 +60,11 @@ def test_attitude_controller(physics: str):
         random_resets=config.env.random_resets,
         seed=config.env.seed,
     )
+    env = JaxToNumpy(env)
     obs, info = env.reset()
     ctrl = ctrl_cls(obs, info, config)
     while True:
-        action = ctrl.compute_control(obs, info)
+        action = ctrl.compute_control(obs, info).astype(np.float32)
         obs, reward, terminated, truncated, info = env.step(action)
         ctrl.step_callback(action, obs, reward, terminated, truncated, info)
         if terminated or truncated:
