@@ -1,15 +1,18 @@
 """Multi-agent drone racing environments."""
 
-from typing import Literal
+from __future__ import annotations
 
-import numpy as np
+from typing import TYPE_CHECKING, Literal
+
 from gymnasium import Env
 from gymnasium.vector import VectorEnv
 from gymnasium.vector.utils import batch_space
-from ml_collections import ConfigDict
-from numpy.typing import NDArray
 
 from lsy_drone_racing.envs.race_core import RaceCoreEnv, build_action_space, build_observation_space
+
+if TYPE_CHECKING:
+    from jax import Array
+    from ml_collections import ConfigDict
 
 
 class MultiDroneRaceEnv(RaceCoreEnv, Env):
@@ -87,9 +90,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         info = {k: v[0] for k, v in info.items()}
         return obs, info
 
-    def step(
-        self, action: NDArray[np.floating]
-    ) -> tuple[dict, NDArray[np.floating], NDArray[np.bool_], NDArray[np.bool_], dict]:
+    def step(self, action: Array) -> tuple[dict, Array, Array, Array, dict]:
         """Step the environment for all drones.
 
         Args:
@@ -180,9 +181,7 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
         """
         return self._reset(seed=seed, options=options)
 
-    def step(
-        self, action: NDArray[np.floating]
-    ) -> tuple[dict, NDArray[np.floating], NDArray[np.bool_], NDArray[np.bool_], dict]:
+    def step(self, action: Array) -> tuple[dict, Array, Array, Array, dict]:
         """Step the environment for all drones.
 
         Args:

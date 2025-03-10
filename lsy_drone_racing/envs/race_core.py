@@ -19,7 +19,6 @@ from crazyflow import Sim
 from crazyflow.sim.symbolic import symbolic_attitude
 from flax.struct import dataclass
 from gymnasium import spaces
-from jax.scipy.spatial.transform import Rotation as JaxR
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.envs.randomize import (
@@ -264,7 +263,7 @@ class RaceCoreEnv:
 
     def _reset(
         self, *, seed: int | None = None, options: dict | None = None, mask: Array | None = None
-    ) -> tuple[dict[str, NDArray[np.floating]], dict]:
+    ) -> tuple[dict[str, Array], dict]:
         """Reset the environment.
 
         Args:
@@ -287,9 +286,7 @@ class RaceCoreEnv:
         self.data = self._reset_env_data(self.data, self.sim.data.states.pos, mask)
         return self.obs(), self.info()
 
-    def _step(
-        self, action: NDArray[np.floating]
-    ) -> tuple[dict[str, NDArray[np.floating]], float, bool, bool, dict]:
+    def _step(self, action: Array) -> tuple[dict[str, Array], float, bool, bool, dict]:
         """Step the firmware_wrapper class and its environment.
 
         This function should be called once at the rate of ctrl_freq. Step processes and high level
@@ -319,7 +316,7 @@ class RaceCoreEnv:
             self._reset(mask=marked_for_reset)
         return self.obs(), self.reward(), self.terminated(), self.truncated(), self.info()
 
-    def apply_action(self, action: NDArray[np.floating]):
+    def apply_action(self, action: Array):
         """Apply the commanded state action to the simulation."""
         action = action.reshape((self.sim.n_worlds, self.sim.n_drones, -1))
         if "action" in self.disturbances:
@@ -342,7 +339,7 @@ class RaceCoreEnv:
         """Close the environment by stopping the drone and landing back at the starting position."""
         self.sim.close()
 
-    def obs(self) -> dict[str, NDArray[np.floating]]:
+    def obs(self) -> dict[str, Array]:
         """Return the observation of the environment."""
         # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
         # use the actual pose, otherwise use the nominal pose.
@@ -564,13 +561,19 @@ class RaceCoreEnv:
         frame = self.sim.spec.worldbody.add_frame()
         n_gates, n_obstacles = len(self.gates["pos"]), len(self.obstacles["pos"])
         for i in range(n_gates):
-            gate = frame.attach_body(gate_spec.find_body("gate"), "", f":{i}")
+            gate_body = gate_spec.body("gate")
+            if gate_body is None:
+                raise ValueError("Gate body not found in gate spec")
+            gate = frame.attach_body(gate_body, "", f":{i}")
             gate.pos = self.gates["pos"][i]
             # Convert from scipy order to MuJoCo order
             gate.quat = self.gates["quat"][i][[3, 0, 1, 2]]
             gate.mocap = True  # Make mocap to modify the position of static bodies during sim
         for i in range(n_obstacles):
-            obstacle = frame.attach_body(obstacle_spec.find_body("obstacle"), "", f":{i}")
+            obstacle_body = obstacle_spec.body("obstacle")
+            if obstacle_body is None:
+                raise ValueError("Obstacle body not found in obstacle spec")
+            obstacle = frame.attach_body(obstacle_body, "", f":{i}")
             obstacle.pos = self.obstacles["pos"][i]
             obstacle.mocap = True
         self.sim.build(data=False, default_data=False)

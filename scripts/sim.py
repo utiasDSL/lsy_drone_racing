@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import fire
 import gymnasium
+from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 
 from lsy_drone_racing.utils import load_config, load_controller
 
@@ -68,6 +69,7 @@ def simulate(
         random_resets=config.env.random_resets,
         seed=config.env.seed,
     )
+    env = JaxToNumpy(env)
 
     ep_times = []
     for _ in range(n_runs):  # Run n_runs episodes with the controller

@@ -129,7 +129,7 @@ class AttitudeController(BaseController):
         R_desired = np.vstack([x_axis_desired, y_axis_desired, z_axis_desired]).T
         euler_desired = R.from_matrix(R_desired).as_euler("xyz", degrees=False)
         thrust_desired, euler_desired
-        return np.concatenate([[thrust_desired], euler_desired])
+        return np.concatenate([[thrust_desired], euler_desired], dtype=np.float32)
 
     def step_callback(
         self,

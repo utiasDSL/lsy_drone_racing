@@ -71,7 +71,7 @@ class TrajectoryController(BaseController):
                 array.
         """
         target_pos = self.trajectory(min(self._tick / self._freq, self.t_total))
-        return np.concatenate((target_pos, np.zeros(10)))
+        return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
 
     def step_callback(
         self,
