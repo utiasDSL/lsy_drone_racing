@@ -563,13 +563,19 @@ class RaceCoreEnv:
         frame = self.sim.spec.worldbody.add_frame()
         n_gates, n_obstacles = len(self.gates["pos"]), len(self.obstacles["pos"])
         for i in range(n_gates):
-            gate = frame.attach_body(gate_spec.find_body("gate"), "", f":{i}")
+            gate_body = gate_spec.body("gate")
+            if gate_body is None:
+                raise ValueError("Gate body not found in gate spec")
+            gate = frame.attach_body(gate_body, "", f":{i}")
             gate.pos = self.gates["pos"][i]
             # Convert from scipy order to MuJoCo order
             gate.quat = self.gates["quat"][i][[3, 0, 1, 2]]
             gate.mocap = True  # Make mocap to modify the position of static bodies during sim
         for i in range(n_obstacles):
-            obstacle = frame.attach_body(obstacle_spec.find_body("obstacle"), "", f":{i}")
+            obstacle_body = obstacle_spec.body("obstacle")
+            if obstacle_body is None:
+                raise ValueError("Obstacle body not found in obstacle spec")
+            obstacle = frame.attach_body(obstacle_body, "", f":{i}")
             obstacle.pos = self.obstacles["pos"][i]
             obstacle.mocap = True
         self.sim.build(data=False, default_data=False)

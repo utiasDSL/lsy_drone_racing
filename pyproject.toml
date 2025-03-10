@@ -19,6 +19,7 @@ classifiers = [
     "Intended Audience :: Science/Research",
 ]
 
+# TODO: Include crazyflow once it's installable via pip
 dependencies = [
     "fire >= 0.6.0",
     "numpy >= 1.24.1, < 2.0.0",
