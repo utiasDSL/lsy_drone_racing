@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.vicon import Vicon
+from lsy_drone_racing.ros.ros_connector import Vicon
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict

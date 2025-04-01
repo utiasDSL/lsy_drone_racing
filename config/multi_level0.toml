@@ -3,8 +3,10 @@
 # | Evaluation Scenario | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes | Notes             |
 # | :-----------------: | :-----------------------: | :-------------------------: | :--------------------: | :---------------: |
 # | `level0.toml`       | *No*                      | *No*                        | *No*                   | Perfect knowledge |
-[controller]
+[[controller]]
 file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+[[controller]]  # Add the controller files for each drone
+file = "trajectory_controller.py"
 
 [deploy]
 ### Settings only relevant for deployment

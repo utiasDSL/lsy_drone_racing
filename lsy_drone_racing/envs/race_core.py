@@ -134,7 +134,7 @@ def build_observation_space(n_gates: int, n_obstacles: int) -> spaces.Dict:
 
 
 class RaceCoreEnv:
-    """A Gymnasium environment for drone racing simulations.
+    """The core environment for drone racing simulations.
 
     This environment simulates a drone racing scenario where a single drone navigates through a
     series of gates in a predefined track. It supports various configuration options for

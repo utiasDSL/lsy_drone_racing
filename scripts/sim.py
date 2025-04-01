@@ -73,22 +73,21 @@ def simulate(
 
     ep_times = []
     for _ in range(n_runs):  # Run n_runs episodes with the controller
-        done = False
         obs, info = env.reset()
         controller: Controller = controller_cls(obs, info, config)
         i = 0
         fps = 60
 
-        while not done:
+        while True:
             curr_time = i / config.env.freq
 
             action = controller.compute_control(obs, info)
             obs, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
             # Update the controller internal state and models.
             controller.step_callback(action, obs, reward, terminated, truncated, info)
             # Add up reward, collisions
-
+            if terminated or truncated:
+                break
             # Synchronize the GUI.
             if config.sim.gui:
                 if ((i * fps) % config.env.freq) < fps:
