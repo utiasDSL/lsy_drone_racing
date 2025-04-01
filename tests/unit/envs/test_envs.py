@@ -4,7 +4,7 @@ from pathlib import Path
 import gymnasium
 import pytest
 from gymnasium.utils.env_checker import check_env
-from gymnasium.wrappers import JaxToNumpy
+from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 
 from lsy_drone_racing.utils import load_config
 
@@ -32,4 +32,4 @@ def test_passive_checker_wrapper_warnings(action_space: str):
             seed=config.env.seed,
             disable_env_checker=False,
         )
-        check_env(JaxToNumpy(env))
+        check_env(JaxToNumpy(env.unwrapped))

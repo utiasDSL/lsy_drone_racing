@@ -11,9 +11,8 @@ from gymnasium.vector.utils import batch_space
 from lsy_drone_racing.envs.race_core import RaceCoreEnv, build_action_space, build_observation_space
 
 if TYPE_CHECKING:
-    import numpy as np
+    from jax import Array
     from ml_collections import ConfigDict
-    from numpy.typing import NDArray
 
 
 class DroneRaceEnv(RaceCoreEnv, Env):
@@ -83,7 +82,7 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         info = {k: v[0, 0] for k, v in info.items()}
         return obs, info
 
-    def step(self, action: NDArray[np.floating]) -> tuple[dict, float, bool, bool, dict]:
+    def step(self, action: Array) -> tuple[dict, float, bool, bool, dict]:
         """Step the environment.
 
         Args:
@@ -168,9 +167,7 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
         info = {k: v[:, 0] for k, v in info.items()}
         return obs, info
 
-    def step(
-        self, action: NDArray[np.floating]
-    ) -> tuple[dict, NDArray[np.floating], NDArray[np.bool_], NDArray[np.bool_], dict]:
+    def step(self, action: Array) -> tuple[dict, Array, Array, Array, dict]:
         """Step the environment in all worlds.
 
         Args:

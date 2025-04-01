@@ -3,7 +3,7 @@ from pathlib import Path
 import gymnasium
 import numpy as np
 import pytest
-from gymnasium.wrappers import JaxToNumpy
+from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 
 from lsy_drone_racing.utils import load_config, load_controller
 
@@ -28,6 +28,8 @@ def test_controllers(controller_file: str):
         random_resets=config.env.random_resets,
         seed=config.env.seed,
     )
+    env = JaxToNumpy(env)
+
     obs, info = env.reset()
     ctrl = ctrl_cls(obs, info, config)
     while True:
@@ -100,6 +102,8 @@ def test_trajectory_controller_finish(yaw: float, physics: str):
         random_resets=config.env.random_resets,
         seed=config.env.seed,
     )
+    env = JaxToNumpy(env)
+
     obs, info = env.reset()
     ctrl = ctrl_cls(obs, info, config)
     while True:
