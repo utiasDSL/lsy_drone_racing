@@ -10,8 +10,8 @@ from lsy_drone_racing.utils import load_config
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("action_space", ["state", "attitude"])
-def test_passive_checker_wrapper_warnings(action_space: str):
+@pytest.mark.parametrize("control_mode", ["state", "attitude"])
+def test_passive_checker_wrapper_warnings(control_mode: str):
     """Check passive env checker wrapper warnings.
 
     We disable the passive env checker by default. This test ensures that unexpected warnings are
@@ -24,7 +24,7 @@ def test_passive_checker_wrapper_warnings(action_space: str):
             freq=config.env.freq,
             sim_config=config.sim,
             sensor_range=config.env.sensor_range,
-            action_space=action_space,
+            control_mode=control_mode,
             track=config.env.track,
             disturbances=config.env.get("disturbances"),
             randomizations=config.env.get("randomizations"),

@@ -22,9 +22,9 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         self,
         freq: int,
         sim_config: ConfigDict,
+        track: ConfigDict,
         sensor_range: float = 0.5,
-        action_space: Literal["state", "attitude"] = "state",
-        track: ConfigDict | None = None,
+        control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
         random_resets: bool = False,
@@ -37,9 +37,9 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         Args:
             freq: Environment step frequency.
             sim_config: Simulation configuration.
-            sensor_range: Sensor range.
-            action_space: Control mode for the drones. See `build_action_space` for details.
             track: Track configuration.
+            sensor_range: Sensor range.
+            control_mode: Control mode for the drones. See `build_action_space` for details.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
             random_resets: Flag to reset the environment randomly.
@@ -52,9 +52,9 @@ class DroneRaceEnv(RaceCoreEnv, Env):
             n_drones=1,
             freq=freq,
             sim_config=sim_config,
-            sensor_range=sensor_range,
-            action_space=action_space,
             track=track,
+            sensor_range=sensor_range,
+            control_mode=control_mode,
             disturbances=disturbances,
             randomizations=randomizations,
             random_resets=random_resets,
@@ -62,7 +62,7 @@ class DroneRaceEnv(RaceCoreEnv, Env):
             max_episode_steps=max_episode_steps,
             device=device,
         )
-        self.action_space = build_action_space(action_space)
+        self.action_space = build_action_space(control_mode)
         n_gates, n_obstacles = len(track.gates), len(track.obstacles)
         self.observation_space = build_observation_space(n_gates, n_obstacles)
         self.autoreset = False
@@ -105,9 +105,9 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
         num_envs: int,
         freq: int,
         sim_config: ConfigDict,
+        track: ConfigDict,
         sensor_range: float = 0.5,
-        action_space: Literal["state", "attitude"] = "state",
-        track: ConfigDict | None = None,
+        control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
         random_resets: bool = False,
@@ -121,9 +121,9 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
             num_envs: Number of worlds in the vectorized environment.
             freq: Environment step frequency.
             sim_config: Simulation configuration.
-            sensor_range: Sensor range.
-            action_space: Control mode for the drones. See `build_action_space` for details.
             track: Track configuration.
+            sensor_range: Sensor range.
+            control_mode: Control mode for the drones. See `build_action_space` for details.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
             random_resets: Flag to reset the environment randomly.
@@ -136,9 +136,9 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
             n_drones=1,
             freq=freq,
             sim_config=sim_config,
-            sensor_range=sensor_range,
-            action_space=action_space,
             track=track,
+            sensor_range=sensor_range,
+            control_mode=control_mode,
             disturbances=disturbances,
             randomizations=randomizations,
             random_resets=random_resets,
@@ -146,7 +146,7 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
             max_episode_steps=max_episode_steps,
             device=device,
         )
-        self.single_action_space = build_action_space(action_space)
+        self.single_action_space = build_action_space(control_mode)
         self.action_space = batch_space(self.single_action_space, num_envs)
         n_gates, n_obstacles = len(track.gates), len(track.obstacles)
         self.single_observation_space = build_observation_space(n_gates, n_obstacles)

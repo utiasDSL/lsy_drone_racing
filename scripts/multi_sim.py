@@ -70,7 +70,7 @@ def simulate(
         randomizations=config.env.get("randomizations"),
         random_resets=config.env.random_resets,
         seed=config.env.seed,
-        action_space=config.env.action_space,
+        control_mode=config.env.control_mode,
     )
     env = JaxToNumpy(env)
 

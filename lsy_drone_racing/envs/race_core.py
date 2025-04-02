@@ -30,6 +30,7 @@ from lsy_drone_racing.envs.randomize import (
     randomize_gate_rpy_fn,
     randomize_obstacle_pos_fn,
 )
+from lsy_drone_racing.envs.utils import load_track
 from lsy_drone_racing.utils.utils import gate_passed
 
 if TYPE_CHECKING:
@@ -180,8 +181,8 @@ class RaceCoreEnv:
         freq: int,
         sim_config: ConfigDict,
         sensor_range: float,
-        action_space: Literal["state", "attitude"] = "state",
-        track: ConfigDict | None = None,
+        track: ConfigDict,
+        control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
         random_resets: bool = False,
@@ -197,7 +198,7 @@ class RaceCoreEnv:
             freq: Environment step frequency.
             sim_config: Configuration dictionary for the simulation.
             sensor_range: Sensor range for gate and obstacle detection.
-            action_space: Control mode for the drones. See `build_action_space` for details.
+            control_mode: Control mode for the drones. See `build_action_space` for details.
             track: Track configuration.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
@@ -212,7 +213,7 @@ class RaceCoreEnv:
             n_worlds=n_envs,
             n_drones=n_drones,
             physics=sim_config.physics,
-            control=action_space,
+            control=control_mode,
             freq=sim_config.freq,
             state_freq=freq,
             attitude_freq=sim_config.attitude_freq,
@@ -230,7 +231,7 @@ class RaceCoreEnv:
         self.device = jax.devices(device)[0]
         self.random_resets = random_resets
         self.sensor_range = sensor_range
-        self.gates, self.obstacles, self.drone = self._load_track(track)
+        self.gates, self.obstacles, self.drone = load_track(track)
         specs = {} if disturbances is None else disturbances
         self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
         specs = {} if randomizations is None else randomizations
@@ -516,23 +517,6 @@ class RaceCoreEnv:
         """Warp the disabled drones below the ground."""
         pos = jax.numpy.where(mask[..., None], -1, data.states.pos)
         return data.replace(states=data.states.replace(pos=pos))
-
-    def _load_track(self, track: dict) -> tuple[dict, dict, dict]:
-        """Load the track from the config file."""
-        gate_pos = np.array([g["pos"] for g in track.gates])
-        gate_quat = R.from_euler("xyz", np.array([g["rpy"] for g in track.gates])).as_quat()
-        gates = {
-            "pos": gate_pos,
-            "quat": gate_quat,
-            "nominal_pos": gate_pos,
-            "nominal_quat": gate_quat,
-        }
-        obstacle_pos = np.array([o["pos"] for o in track.obstacles])
-        obstacles = {"pos": obstacle_pos, "nominal_pos": obstacle_pos}
-        drone_keys = ("pos", "rpy", "vel", "ang_vel")
-        drone = {k: np.array(track.drone.get(k), dtype=np.float32) for k in drone_keys}
-        drone["quat"] = R.from_euler("xyz", drone["rpy"]).as_quat()
-        return gates, obstacles, drone
 
     def _setup_sim(self):
         """Setup the simulation data and build the reset and step functions with custom hooks."""

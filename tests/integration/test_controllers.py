@@ -55,7 +55,7 @@ def test_attitude_controller(physics: str):
         freq=config.env.freq,
         sim_config=config.sim,
         sensor_range=config.env.sensor_range,
-        action_space="attitude",
+        control_mode="attitude",
         track=config.env.track,
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),
