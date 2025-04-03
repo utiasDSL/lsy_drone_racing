@@ -44,7 +44,12 @@ def main(config: str = "level3.toml", controller: str | None = None):
         sensor_range=config.env.sensor_range,
         control_mode=config.env.control_mode,
     )
-    obs, info = env.reset()
+    options = {
+        "check_drone_start_pos": config.deploy.check_drone_start_pos,
+        "check_race_track": config.deploy.check_race_track,
+        "practice_without_track_objects": config.deploy.practice_without_track_objects,
+    }
+    obs, info = env.reset(options=options)
     next_obs = obs  # Set next_obs to avoid errors when the loop never enters
 
     control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
@@ -56,12 +61,9 @@ def main(config: str = "level3.toml", controller: str | None = None):
         while rclpy.ok():
             t_loop = time.perf_counter()
             obs, info = env.unwrapped.obs(), env.unwrapped.info()
+            obs = {k: v[0] for k, v in obs.items()}
             action = controller.compute_control(obs, info)
-            t1 = time.perf_counter()
             next_obs, reward, terminated, truncated, info = env.step(action)
-            t2 = time.perf_counter()
-            print(f"Step time: {t2 - t1:.3e}s")
-            print(obs["pos"])
             controller.step_callback(action, next_obs, reward, terminated, truncated, info)
             if terminated or truncated:
                 break
@@ -83,4 +85,5 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING)
     logging.getLogger("jax").setLevel(logging.ERROR)
     logger.setLevel(logging.INFO)
+    logging.getLogger("lsy_drone_racing").setLevel(logging.INFO)
     fire.Fire(main)

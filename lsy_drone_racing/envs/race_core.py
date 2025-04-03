@@ -19,7 +19,6 @@ from crazyflow import Sim
 from crazyflow.sim.symbolic import symbolic_attitude
 from flax.struct import dataclass
 from gymnasium import spaces
-from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.envs.randomize import (
     randomize_drone_inertia_fn,
@@ -30,8 +29,7 @@ from lsy_drone_racing.envs.randomize import (
     randomize_gate_rpy_fn,
     randomize_obstacle_pos_fn,
 )
-from lsy_drone_racing.envs.utils import load_track
-from lsy_drone_racing.utils.utils import gate_passed
+from lsy_drone_racing.envs.utils import gate_passed, load_track
 
 if TYPE_CHECKING:
     from crazyflow.sim.structs import SimData

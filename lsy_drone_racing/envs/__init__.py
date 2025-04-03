@@ -38,13 +38,11 @@ register(
 register(
     id="RealDroneRacing-v0",
     entry_point="lsy_drone_racing.envs.real_race_env:RealDroneRaceEnv",
-    max_episode_steps=1800,
     disable_env_checker=True,
 )
 
 register(
     id="RealMultiDroneRacing-v0",
     entry_point="lsy_drone_racing.envs.real_race_env:RealMultiDroneRaceEnv",
-    max_episode_steps=1800,
     disable_env_checker=True,
 )
