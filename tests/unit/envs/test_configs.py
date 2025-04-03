@@ -27,3 +27,24 @@ def test_config_load_and_env_creation(config_file: str):
         random_resets=config.env.random_resets,
         seed=config.env.seed,
     )
+
+
+@pytest.mark.parametrize("config_file", ["multi_level0.toml", "multi_level3.toml"])
+@pytest.mark.unit
+def test_multi_config_load_and_env_creation(config_file: str):
+    """Test if config files can be loaded and used to create a functioning environment."""
+    # Load the config
+    config_path = Path(__file__).parents[3] / "config" / config_file
+    config = load_config(config_path)
+
+    gymnasium.make(
+        config.env.id,
+        freq=config.env.kwargs[0]["freq"],
+        sim_config=config.sim,
+        sensor_range=config.env.kwargs[0]["sensor_range"],
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        random_resets=config.env.random_resets,
+        seed=config.env.seed,
+    )

@@ -4,15 +4,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
+import gymnasium
 from gymnasium import Env
 from gymnasium.vector import VectorEnv
 from gymnasium.vector.utils import batch_space
+from packaging.version import Version
 
 from lsy_drone_racing.envs.race_core import RaceCoreEnv, build_action_space, build_observation_space
 
 if TYPE_CHECKING:
     from jax import Array
     from ml_collections import ConfigDict
+
+AutoresetMode = None
+if Version(gymnasium.__version__) >= Version("1.1"):
+    from gymnasium.vector import AutoresetMode
 
 
 class MultiDroneRaceEnv(RaceCoreEnv, Env):
@@ -24,7 +30,6 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
 
     def __init__(
         self,
-        n_drones: int,
         freq: int,
         sim_config: ConfigDict,
         track: ConfigDict,
@@ -53,6 +58,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
             max_episode_steps: Maximum number of steps per episode.
             device: Device used for the environment and the simulation.
         """
+        n_gates, n_obstacles, n_drones = len(track.gates), len(track.obstacles), len(track.drones)
         super().__init__(
             n_envs=1,
             n_drones=n_drones,
@@ -69,7 +75,6 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
             device=device,
         )
         self.action_space = batch_space(build_action_space(control_mode), n_drones)
-        n_gates, n_obstacles = len(track.gates), len(track.obstacles)
         self.observation_space = batch_space(
             build_observation_space(n_gates, n_obstacles), n_drones
         )
@@ -113,10 +118,11 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
     This environment enables vectorized training of multi-agent drone racing agents.
     """
 
+    metadata = {"autoreset_mode": AutoresetMode.NEXT_STEP if AutoresetMode is not None else None}
+
     def __init__(
         self,
         num_envs: int,
-        n_drones: int,
         freq: int,
         sim_config: ConfigDict,
         track: ConfigDict,
@@ -133,7 +139,6 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
 
         Args:
             num_envs: Number of worlds in the vectorized environment.
-            n_drones: Number of drones in each world.
             freq: Environment step frequency.
             sim_config: Simulation configuration.
             track: Track configuration.
@@ -146,6 +151,7 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
             max_episode_steps: Maximum number of steps per episode.
             device: Device used for the environment and the simulation.
         """
+        n_gates, n_obstacles, n_drones = len(track.gates), len(track.obstacles), len(track.drones)
         super().__init__(
             n_envs=num_envs,
             n_drones=n_drones,
@@ -161,9 +167,9 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
             max_episode_steps=max_episode_steps,
             device=device,
         )
+        self.num_envs = num_envs
         self.single_action_space = batch_space(build_action_space(control_mode), n_drones)
         self.action_space = batch_space(batch_space(self.single_action_space), num_envs)
-        n_gates, n_obstacles = len(track.gates), len(track.obstacles)
         self.single_observation_space = batch_space(
             build_observation_space(n_gates, n_obstacles), n_drones
         )

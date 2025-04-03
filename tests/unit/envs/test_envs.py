@@ -33,3 +33,22 @@ def test_passive_checker_wrapper_warnings(control_mode: str):
             disable_env_checker=False,
         )
         check_env(JaxToNumpy(env.unwrapped))
+    env.close()
+
+    config = load_config(Path(__file__).parents[3] / "config/multi_level0.toml")
+    with warnings.catch_warnings(record=True):
+        env = gymnasium.make(
+            "MultiDroneRacing-v0",
+            freq=config.env.kwargs[0]["freq"],
+            sim_config=config.sim,
+            sensor_range=config.env.kwargs[0]["sensor_range"],
+            control_mode=control_mode,
+            track=config.env.track,
+            disturbances=config.env.get("disturbances"),
+            randomizations=config.env.get("randomizations"),
+            random_resets=config.env.random_resets,
+            seed=config.env.seed,
+            disable_env_checker=False,
+        )
+        check_env(JaxToNumpy(env.unwrapped))
+    env.close()

@@ -16,9 +16,13 @@ check_race_track = true
 check_drone_start_pos = true
 # Lets you practice your controller without putting up gates & obstacles, assumes nominal positions given below.
 practice_without_track_objects = false
+
 [[deploy.drones]]
 id = 91
-channel = 100
+channel = 80
+[[deploy.drones]]
+id = 6
+channel = 80
 
 [sim]
 # Physics options:
@@ -34,12 +38,16 @@ gui = false                                       # Enable/disable PyBullet's GU
 
 [env]
 id = "MultiDroneRacing-v0"
-n_drones = 2            # Number of drones has to match the track configuration for drones
-random_resets = false   # Whether to re-seed the random number generator between episodes
+random_resets = true    # Whether to re-seed the random number generator between episodes
 seed = 1337             # Random seed
+[[env.kwargs]]
 freq = 50               # Frequency of the environment's step function, in Hz
 sensor_range = 0.5     # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
 control_mode = "state"  # Control mode of the environment. Can be either "state" or "attitude"
+[[env.kwargs]]
+freq = 100
+sensor_range = 0.5
+control_mode = "attitude"
 
 [env.track]
 # Tall gates: 1.0m height. Short gates: 0.525m height. Height is measured from the ground to the

@@ -4,15 +4,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
+import gymnasium
 from gymnasium import Env
 from gymnasium.vector import VectorEnv
 from gymnasium.vector.utils import batch_space
+from packaging.version import Version
 
 from lsy_drone_racing.envs.race_core import RaceCoreEnv, build_action_space, build_observation_space
 
 if TYPE_CHECKING:
     from jax import Array
     from ml_collections import ConfigDict
+
+AutoresetMode = None
+if Version(gymnasium.__version__) >= Version("1.1"):
+    from gymnasium.vector import AutoresetMode
 
 
 class DroneRaceEnv(RaceCoreEnv, Env):
@@ -100,6 +106,8 @@ class DroneRaceEnv(RaceCoreEnv, Env):
 class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
     """Vectorized single-agent drone racing environment."""
 
+    metadata = {"autoreset_mode": AutoresetMode.NEXT_STEP if AutoresetMode is not None else None}
+
     def __init__(
         self,
         num_envs: int,
@@ -146,6 +154,7 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
             max_episode_steps=max_episode_steps,
             device=device,
         )
+        self.num_envs = num_envs
         self.single_action_space = build_action_space(control_mode)
         self.action_space = batch_space(self.single_action_space, num_envs)
         n_gates, n_obstacles = len(track.gates), len(track.obstacles)

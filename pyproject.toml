@@ -29,6 +29,7 @@ dependencies = [
     "gymnasium >= 1.0.0",
     "toml >= 0.10.2",
     "ml-collections >= 1.0",
+    "packaging >= 24.0",
 ]
 
 [project.optional-dependencies]
