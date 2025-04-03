@@ -7,7 +7,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
-from uuid import uuid4
 
 import cflib
 import jax
@@ -18,7 +17,6 @@ from cflib.crtp.crtpstack import CRTPPacket, CRTPPort
 from cflib.utils.power_switch import PowerSwitch
 from gymnasium import Env
 from scipy.spatial.transform import Rotation as R
-from std_msgs.msg import Float64MultiArray
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
 from lsy_drone_racing.ros import ROSConnector
@@ -54,11 +52,12 @@ class EnvData:
 class RealRaceCoreEnv:
     """Deployable version of the multi-agent drone racing environment."""
 
+    POS_UPDATE_FREQ = 30  # Frequency of position updates to the drone estimator in Hz
+
     def __init__(
         self,
         drones: list[dict[str, int]],
         rank: int,
-        n_drones: int,
         freq: int,
         track: ConfigDict,
         randomizations: ConfigDict,
@@ -72,9 +71,9 @@ class RealRaceCoreEnv:
             freq: Environment step frequency.
             sensor_range: Sensor range.
         """
-        rclpy.init()
+        assert rclpy.ok(), "ROS2 is not running. Please start ROS2 before creating a deploy env."
         # Static env data
-        self.n_drones = n_drones
+        self.n_drones = len(drones)
         self.gates, self.obstacles, self.drones = load_track(track)
         self.n_gates = len(self.gates.pos)
         self.n_obstacles = len(self.obstacles.pos)
@@ -92,7 +91,7 @@ class RealRaceCoreEnv:
         self.randomizations = randomizations
         # Dynamic data
         self.data = EnvData.create(
-            n_drones=n_drones, n_gates=self.n_gates, n_obstacles=self.n_obstacles
+            n_drones=self.n_drones, n_gates=self.n_gates, n_obstacles=self.n_obstacles
         )
         # Establish drone connection
         self._drone_healthy = mp.Event()
@@ -100,33 +99,41 @@ class RealRaceCoreEnv:
         self.drone = self._connect_to_drone(
             radio_id=rank, radio_channel=drones[rank]["channel"], drone_id=drones[rank]["id"]
         )
+        self._last_drone_pos_update = 0  # Last time a position was sent to the drone estimator
 
-        self._ros_connector = ROSConnector(estimator_names=self.drone_names, timeout=5.0)
-        post_fix = "full_state" if control_mode == "attitude" else "state"
-        msg_name = f"/{self.drone_name}/" + post_fix
-        self.node = rclpy.create_node("RealRaceCoreEnv" + uuid4().hex)
-        self._action_pub = self.node.create_publisher(Float64MultiArray, msg_name, 10)
+        self._ros_connector = ROSConnector(
+            estimator_names=self.drone_names,
+            cmd_topic=f"/estimator/{self.drone_name}/cmd",
+            timeout=5.0,
+        )
         self._jit()
 
     def _reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment and return the initial observation and info."""
-        if options is None or options.get("check_race_track", True):
-            check_race_track(self.gates, self.obstacles, self.randomizations)
-        if options is None or options.get("check_drone_start_pos", True):
-            check_drone_start_pos(self.drones.pos, self.randomizations, self.drone_name)
+        options = {} if options is None else options
         # Update the position of gates and obstacles with the real positions measured from Mocap. If
         # disabled, they are equal to the nominal positions defined in the track config.
-        if options is None or not options.get("practice_without_track_objects", False):
+        if not options.get("practice_without_track_objects", False):
             # Update the ground truth position and orientation of the gates and obstacles
             tf_names = [f"gate{i}" for i in range(1, self.n_gates + 1)]
             tf_names += [f"obstacle{i}" for i in range(1, self.n_obstacles + 1)]
             ros_connector = ROSConnector(tf_names=tf_names, timeout=5.0)
+            try:  # Make sure to close the connection if anything goes wrong
+                pos, quat = ros_connector.pos, ros_connector.quat
+            finally:
+                ros_connector.close()
             for i in range(self.n_gates):
-                self.gates.pos[i, ...] = ros_connector.pos[f"gate{i + 1}"]
-                self.gates.quat[i, ...] = ros_connector.quat[f"gate{i + 1}"]
+                self.gates.pos[i, ...] = pos[f"gate{i + 1}"]
+                self.gates.quat[i, ...] = quat[f"gate{i + 1}"]
             for i in range(self.n_obstacles):
-                self.obstacles.pos[i, ...] = ros_connector.pos[f"obstacle{i + 1}"]
+                self.obstacles.pos[i, ...] = pos[f"obstacle{i + 1}"]
             ros_connector.close()
+
+            if options.get("check_race_track", True):  # If no track objects are used, skip this
+                check_race_track(self.gates, self.obstacles, self.randomizations)
+        if options.get("check_drone_start_pos", True):
+            pos = self.drones.pos[self.rank, ...]
+            check_drone_start_pos(pos, self.randomizations, self.drone_name)
 
         self._reset_env_data(self.data)
         self._reset_drone()
@@ -141,23 +148,34 @@ class RealRaceCoreEnv:
         """Perform a step in the environment."""
         # Note: We do not send the action to the drone here.
         self.send_action(action)
-        obs = self.obs()
+
+        drone_pos = np.stack([self._ros_connector.pos[drone] for drone in self.drone_names])
+        assert drone_pos.dtype == np.float32, "Drone position must be of type float32"
+        drone_quat = np.stack([self._ros_connector.quat[drone] for drone in self.drone_names])
+        assert drone_quat.dtype == np.float32, "Drone quaternion must be of type float32"
+        # Check if the drone is in the sensor range of the gates and obstacles
+        dpos = drone_pos[:, None, :2] - self.gates.pos[None, :, :2]
+        self.data.gates_visited |= np.linalg.norm(dpos, axis=-1) < self.sensor_range
+        dpos = drone_pos[:, None, :2] - self.obstacles.pos[None, :, :2]
+        self.data.obstacles_visited |= np.linalg.norm(dpos, axis=-1) < self.sensor_range
+
         gate_pos = self.gates.pos[self.data.target_gate]
         gate_quat = self.gates.quat[self.data.target_gate]
-        drone_pos = obs["pos"]
 
         with jax.default_device(self.device):  # Ensure gate_passed runs on the CPU
             passed = gate_passed(
-                drone_pos, self.data.last_drone_pos, gate_pos, gate_quat, (0.45, 0.45)
+                drone_pos, self.data.last_drone_pos, gate_pos, gate_quat, (1.45, 1.45)
             )
         self.data.target_gate += np.asarray(passed)
         self.data.target_gate[self.data.target_gate >= self.n_gates] = -1
         self.data.last_drone_pos[...] = drone_pos
 
-        # Send vicon position updates to the drone
-        self.drone.extpos.send_extpose(*obs["pos"][self.rank], *obs["quat"][self.rank])
-
-        return obs, self.reward(), self.terminated(), self.truncated(), self.info()
+        # Send vicon position updates to the drone at a fixed frequency irrespective of the env freq
+        # Sending too many updates may deteriorate the performance of the drone, hence the limiter
+        if (t := time.perf_counter()) - self._last_drone_pos_update > 1 / self.POS_UPDATE_FREQ:
+            self.drone.extpos.send_extpose(*drone_pos[self.rank], *drone_quat[self.rank])
+            self._last_drone_pos_update = t
+        return self.obs(), self.reward(), self.terminated(), self.truncated(), self.info()
 
     def obs(self) -> dict[str, NDArray]:
         """Return the observation of the environment."""
@@ -171,18 +189,10 @@ class RealRaceCoreEnv:
         obstacles_pos = np.where(mask, self.obstacles.pos, self.obstacles.nominal_pos).astype(
             np.float32
         )
-        drone_pos = np.stack(
-            [self._ros_connector.pos[drone] for drone in self.drone_names], dtype=np.float32
-        )
-        drone_quat = np.stack(
-            [self._ros_connector.quat[drone] for drone in self.drone_names], dtype=np.float32
-        )
-        drone_vel = np.stack(
-            [self._ros_connector.vel[drone] for drone in self.drone_names], dtype=np.float32
-        )
-        drone_ang_vel = np.stack(
-            [self._ros_connector.ang_vel[drone] for drone in self.drone_names], dtype=np.float32
-        )
+        drone_pos = np.stack([self._ros_connector.pos[drone] for drone in self.drone_names])
+        drone_quat = np.stack([self._ros_connector.quat[drone] for drone in self.drone_names])
+        drone_vel = np.stack([self._ros_connector.vel[drone] for drone in self.drone_names])
+        drone_ang_vel = np.stack([self._ros_connector.ang_vel[drone] for drone in self.drone_names])
         obs = {
             "pos": drone_pos,
             "quat": drone_quat,
@@ -244,25 +254,20 @@ class RealRaceCoreEnv:
             self.drone.commander.send_full_state_setpoint(
                 pos, vel, acc, quat, rollrate, pitchrate, yawrate
             )
-            return
-        # TODO: Publish command with ros connector
-        # self._ros_connector.send_action(self.drone_name, action)
+        self._ros_connector.publish_cmd(action)
 
     def _connect_to_drone(self, radio_id: int, radio_channel: int, drone_id: int) -> Crazyflie:
         cflib.crtp.init_drivers()
-        uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:x}".upper()
-        import time
+        uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
 
         power_switch = PowerSwitch(uri)
         power_switch.stm_power_cycle()
         time.sleep(2)
 
         drone = Crazyflie(rw_cache=str(Path(__file__).parent / ".cache"))
-
         event = mp.Event()
 
-        def connect_callback(link_uri: str):
-            # TODO: Apply settings
+        def connect_callback(_: str):
             event.set()
 
         drone.fully_connected.add_callback(connect_callback)
@@ -322,7 +327,6 @@ class RealRaceCoreEnv:
 
     def _return_to_start(self):
         # Enable high-level functions of the drone and disable low-level control access
-        logger.warning("Returning to start position")
         self.drone.commander.send_stop_setpoint()
         self.drone.commander.send_notify_setpoint_stop()
         self.drone.param.set_value("commander.enHighLevel", "1")
@@ -378,16 +382,16 @@ class RealRaceCoreEnv:
             if self.data.target_gate[self.rank] == -1:
                 self._return_to_start()
         finally:  # Kill the drone
-            pk = CRTPPacket()
-            pk.port = CRTPPort.LOCALIZATION
-            pk.channel = Localization.GENERIC_CH
-            pk.data = struct.pack("<B", Localization.EMERGENCY_STOP)
-            self.drone.send_packet(pk)
-            self.drone.close_link()
-            # Close all ROS connections
-            self._ros_connector.close()
-            self._action_pub.destroy()
-            self.node.destroy_node()
+            try:
+                pk = CRTPPacket()
+                pk.port = CRTPPort.LOCALIZATION
+                pk.channel = Localization.GENERIC_CH
+                pk.data = struct.pack("<B", Localization.EMERGENCY_STOP)
+                self.drone.send_packet(pk)
+                self.drone.close_link()
+            finally:
+                # Close all ROS connections
+                self._ros_connector.close()
 
 
 class RealDroneRaceEnv(RealRaceCoreEnv, Env):
@@ -404,7 +408,6 @@ class RealDroneRaceEnv(RealRaceCoreEnv, Env):
         super().__init__(
             drones=drones,
             rank=rank,
-            n_drones=1,
             freq=freq,
             track=track,
             randomizations=randomizations,
@@ -426,7 +429,6 @@ class RealMultiDroneRaceEnv(RealRaceCoreEnv, Env):
         self,
         drones: list[dict[str, int]],
         rank: int,
-        n_drones: int,
         freq: int,
         track: ConfigDict,
         randomizations: ConfigDict,
@@ -436,13 +438,19 @@ class RealMultiDroneRaceEnv(RealRaceCoreEnv, Env):
         super().__init__(
             drones=drones,
             rank=rank,
-            n_drones=n_drones,
             freq=freq,
             randomizations=randomizations,
             track=track,
             sensor_range=sensor_range,
             control_mode=control_mode,
         )
+
+    def reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
+        return self._reset(seed=seed, options=options)
+
+    def step(self, action: NDArray) -> tuple[dict, float, bool, bool, dict]:
+        obs, reward, terminated, truncated, info = self._step(action)
+        return obs, reward[self.rank], terminated[self.rank], truncated[self.rank], info
 
 
 def thrust2pwm(thrust):

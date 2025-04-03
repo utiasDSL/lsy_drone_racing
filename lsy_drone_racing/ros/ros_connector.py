@@ -17,6 +17,7 @@ import atexit
 import multiprocessing as mp
 import time
 from functools import partial
+from queue import Empty
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -29,6 +30,8 @@ from tf2_msgs.msg import TFMessage
 if TYPE_CHECKING:
     from multiprocessing.sharedctypes import Synchronized, SynchronizedArray
     from multiprocessing.synchronize import Event
+
+    from numpy.typing import NDArray
 
 
 class ROSConnector:
@@ -43,6 +46,7 @@ class ROSConnector:
         self,
         tf_names: list[str] | None = None,
         estimator_names: list[str] | None = None,
+        cmd_topic: str | None = None,
         timeout: float = 1.0,
     ):
         """Load the crazyflies.yaml file and register the subscribers for the Vicon pose data.
@@ -94,6 +98,14 @@ class ROSConnector:
                 ),
             )
             self.processes.append(estimator_process)
+
+        self.cmd_pub, self.cmd_queue = None, None
+        if cmd_topic is not None:  # Create a process for the command publisher
+            self.cmd_queue = ctx.Queue(maxsize=10)
+            self.cmd_pub = ctx.Process(
+                target=command_publisher, args=(self.cmd_queue, cmd_topic, self.shutdown)
+            )
+            self.cmd_pub.start()
 
         for p in self.processes:
             p.start()
@@ -150,22 +162,6 @@ class ROSConnector:
         forces = np.asarray(self._forces, dtype=np.float32).reshape(-1, 6)
         return {n: forces[i] for i, n in enumerate(self.estimator_names)}
 
-    def pose(self, name: str) -> tuple[np.ndarray, np.ndarray]:
-        """Get the latest pose of a tracked object.
-
-        Args:
-            name: The name of the object.
-
-        Returns:
-            The position and orientation (as xyzw quaternion) of the object.
-        """
-        return self.pos[name], self.quat[name]
-
-    @property
-    def poses(self) -> tuple[np.ndarray, np.ndarray]:
-        """Get the latest poses of all objects."""
-        return np.stack(self.pos.values()), np.stack(self.quat.values())
-
     @property
     def active(self) -> bool:
         """Check if Vicon has sent data for each object."""
@@ -175,6 +171,17 @@ class ROSConnector:
         vel_ready = not np.any(np.isnan(np.array(self._vel, dtype=np.float32)))
         ang_vel_ready = not np.any(np.isnan(np.array(self._ang_vel, dtype=np.float32)))
         return pos_ready and quat_ready and vel_ready and ang_vel_ready
+
+    def publish_cmd(self, value: NDArray):
+        """Publish a command to ROS.
+
+        Note:
+            The command publisher topic must be set on initialization. Otherwise this function will
+            raise an error.
+        """
+        if self.cmd_pub is None:
+            raise ValueError("Command publisher not initialized.")
+        self.cmd_queue.put(value)
 
     def close(self):
         """Unregister the ROS subscriptions and shut down the node."""
@@ -228,10 +235,8 @@ def estimate_update(
         quat: The shared memory arrays for the orientation data.
         times: The shared memory arrays for the time data.
     """
-    if not names:
-        return
     rclpy.init()
-    node = rclpy.create_node("pose_updater_" + uuid4().hex)
+    node = rclpy.create_node("estimate_updater_" + uuid4().hex)
 
     subs = []
     for name in names:
@@ -255,6 +260,33 @@ def estimate_update(
         rclpy.spin_once(node, timeout_sec=0.1)
     for sub in subs:
         sub.destroy()
+    node.destroy_node()
+
+
+def command_publisher(queue: mp.Queue, cmd_topic: str, shutdown: Event):
+    """Publish commands from a queue to a ROS topic.
+
+    Args:
+        queue: The queue containing commands to publish.
+        cmd_topic: The topic name.
+        shutdown: The event to signal shutdown.
+    """
+    rclpy.init()
+    node = rclpy.create_node("cmd_publisher_" + uuid4().hex)
+    publisher = node.create_publisher(Float64MultiArray, cmd_topic, 10)
+
+    while not shutdown.is_set():
+        try:
+            cmd = None
+            cmd = queue.get(timeout=0.1)  # Get the latest message from the queue. Block if empty
+            while True:  # Get the latest message if queue holds more
+                cmd = queue.get_nowait()
+        except Empty:  # We have cleared the queue or timed out, either is fine
+            pass
+        if cmd is not None:
+            cmd = np.array(cmd, dtype=np.float64)
+            publisher.publish(Float64MultiArray(data=cmd))
+
     node.destroy_node()
 
 

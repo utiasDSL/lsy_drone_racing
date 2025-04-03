@@ -33,6 +33,7 @@ def main(config: str = "level3.toml", controller: str | None = None):
         controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
             the controller specified in the config file is used.
     """
+    rclpy.init()
     config = load_config(Path(__file__).parents[1] / "config" / config)
     env: RealDroneRaceEnv = gymnasium.make(
         "RealDroneRacing-v0",
@@ -44,19 +45,19 @@ def main(config: str = "level3.toml", controller: str | None = None):
         sensor_range=config.env.sensor_range,
         control_mode=config.env.control_mode,
     )
-    options = {
-        "check_drone_start_pos": config.deploy.check_drone_start_pos,
-        "check_race_track": config.deploy.check_race_track,
-        "practice_without_track_objects": config.deploy.practice_without_track_objects,
-    }
-    obs, info = env.reset(options=options)
-    next_obs = obs  # Set next_obs to avoid errors when the loop never enters
-
-    control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
-    controller_path = control_path / (controller or config.controller.file)
-    controller_cls = load_controller(controller_path)
-    controller = controller_cls(obs, info, config)
     try:
+        options = {
+            "check_drone_start_pos": config.deploy.check_drone_start_pos,
+            "check_race_track": config.deploy.check_race_track,
+            "practice_without_track_objects": config.deploy.practice_without_track_objects,
+        }
+        obs, info = env.reset(options=options)
+        next_obs = obs  # Set next_obs to avoid errors when the loop never enters
+
+        control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
+        controller_path = control_path / (controller or config.controller.file)
+        controller_cls = load_controller(controller_path)
+        controller = controller_cls(obs, info, config)
         start_time = time.perf_counter()
         while rclpy.ok():
             t_loop = time.perf_counter()
@@ -73,10 +74,8 @@ def main(config: str = "level3.toml", controller: str | None = None):
                 exc = dt - 1 / config.env.freq
                 logger.warning(f"Controller execution time exceeded loop frequency by {exc:.3f}s.")
         ep_time = time.perf_counter() - start_time
-        controller.episode_callback()
-        logger.info(
-            f"Track time: {ep_time:.3f}s" if next_obs["target_gate"] == -1 else "Task not completed"
-        )
+        finished_track = next_obs["target_gate"] == -1
+        logger.info(f"Track time: {ep_time:.3f}s" if finished_track else "Task not completed")
     finally:
         env.close()
 

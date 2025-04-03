@@ -453,9 +453,13 @@ class RaceCoreEnv:
         marked_for_reset = jp.all(disabled_drones | truncated[..., None], axis=-1)
         # Update which gates and obstacles are or have been in range of the drone
         sensor_range = data.sensor_range
-        gates_visited = RaceCoreEnv._visited(drone_pos, gates_pos, sensor_range, data.gates_visited)
-        obstacles_visited = RaceCoreEnv._visited(
-            drone_pos, obstacles_pos, sensor_range, data.obstacles_visited
+        dpos = drone_pos[..., None, :2] - gates_pos[:, None, :, :2]
+        gates_visited = jp.logical_or(
+            data.gates_visited, jp.linalg.norm(dpos, axis=-1) < sensor_range
+        )
+        dpos = drone_pos[..., None, :2] - obstacles_pos[:, None, :, :2]
+        obstacles_visited = jp.logical_or(
+            data.obstacles_visited, jp.linalg.norm(dpos, axis=-1) < sensor_range
         )
         data = data.replace(
             last_drone_pos=drone_pos,
@@ -503,11 +507,6 @@ class RaceCoreEnv:
         contacts = jp.any(jp.logical_and(contacts[:, None, :], data.contact_masks), axis=-1)
         disabled = jp.logical_or(disabled, contacts)
         return disabled
-
-    @staticmethod
-    def _visited(drone_pos: Array, target_pos: Array, sensor_range: float, visited: Array) -> Array:
-        dpos = drone_pos[..., None, :2] - target_pos[:, None, :, :2]
-        return jp.logical_or(visited, jp.linalg.norm(dpos, axis=-1) < sensor_range)
 
     @staticmethod
     @jax.jit
