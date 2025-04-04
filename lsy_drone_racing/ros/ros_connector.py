@@ -1,14 +1,16 @@
-"""The Vicon module provides an interface to the Vicon motion capture system for position tracking.
+"""The ROS connector module provides an interface for communication with ROS2 topics.
 
-It defines the Vicon class, which handles communication with the Vicon system through ROS messages.
-The Vicon class is responsible for:
+It defines the ROSConnector class, which handles communication with ROS2 through multiprocessing
+to ensure non-blocking operation. The module is responsible for:
 
-* Tracking the drone and other objects (gates, obstacles) in the racing environment.
-* Providing real-time pose (position and orientation) data for tracked objects.
-* Calculating velocities and angular velocities based on pose changes.
+* Tracking objects (drones, gates, obstacles) through ROS topics
+* Providing real-time pose (position and orientation) data for tracked objects
+* Publishing commands to ROS topics asynchronously
 
-This module is necessary to provide the real-world positioning data for the drone and race track
-elements.
+The main objective for the ROSConnector is to interface with ROS2 messages with minimal latency.It
+uses a multiprocessing architecture to prevent ROS callbacks from blocking the main application
+thread. Data is shared between processes using synchronized shared memory arrays, allowing for
+efficient, thread-safe data access without copying.
 """
 
 from __future__ import annotations
@@ -35,11 +37,32 @@ if TYPE_CHECKING:
 
 
 class ROSConnector:
-    """Vicon interface for the pose estimation data for the drone and any other tracked objects.
+    """A non-blocking interface for ROS2 communication using multiprocessing.
 
-    Vicon sends a stream of ROS messages containing the current pose data. We subscribe to these
-    messages and save the pose data for each object in dictionaries. Users can then retrieve the
-    latest pose data directly from these dictionaries.
+    The ROSConnector class provides a thread-safe way to receive data from ROS2 topics and publish
+    commands without blocking the main application thread. It uses separate processes for
+    subscribing to topics and publishing commands, with data shared through synchronized memory
+    arrays.
+
+    The class supports two types of tracking:
+    1. Simple pose tracking from /tf topics
+    2. Full state estimation including velocity, angular velocity, and disturbance forces from an
+       estimator node.
+
+    Data is accessed through property methods that convert the shared memory arrays into
+    dictionaries keyed by object names.
+
+    Example:
+        ```python
+        # Track drone position and state from estimator
+        conn = ROSConnector(estimator_names=["cf1"], cmd_topic="/estimator/cf1/cmd", timeout=1.0)
+        # Access the latest position data
+        drone_pos = conn.pos["cf1"]
+        # Publish a command (non-blocking)
+        conn.publish_cmd(np.array([1.0, 0.0, 0.0, 0.0]))
+        # Clean up when done
+        conn.close()
+        ```
     """
 
     def __init__(
@@ -49,13 +72,26 @@ class ROSConnector:
         cmd_topic: str | None = None,
         timeout: float = 1.0,
     ):
-        """Load the crazyflies.yaml file and register the subscribers for the Vicon pose data.
+        """Initialize the ROSConnector with the specified tracking objects and command topic.
+
+        Note:
+            It is strongly recommended to use the timeout parameter to ensure that the connector has
+            valid data for all objects. Otherwise, data may contain NaN values until the first
+            update has been received.
 
         Args:
-            tf_names: The name of objects that only require pose tracking from /tf.
-            estimator_names: The name of objects that should be tracked with state estimation.
-            timeout: If greater than 0, Vicon waits for position updates of all tracked objects
-                before returning.
+            tf_names: Names of objects to track using only pose data from `/tf` topic. If None,
+                nothing will be tracked.
+            estimator_names: Names of objects to track with full state estimation. If None, nothing
+                will be tracked.
+            cmd_topic: Topic name for publishing commands. If None, command publishing is disabled.
+            timeout: If greater than 0, wait for position updates of all tracked objects before
+                returning.
+
+        Raises:
+            AssertionError: If ROS is not initialized before creating the connector.
+            TimeoutError: If updates for all tracked objects aren't received within the specified
+                timeout period.
         """
         assert rclpy.ok(), "ROS must be initialized before creating a ROSConnector instance."
         self.tf_names = [] if tf_names is None else tf_names
@@ -128,43 +164,43 @@ class ROSConnector:
 
     @property
     def pos(self) -> dict[str, np.ndarray]:
-        """Get the latest position data for all tracked objects."""
+        """The latest position data for all tracked objects."""
         pos = np.asarray(self._pos, dtype=np.float32).reshape(-1, 3)
         return {n: pos[i] for i, n in enumerate(self.names)}
 
     @property
     def quat(self) -> dict[str, np.ndarray]:
-        """Get the latest orientation data for all tracked objects."""
+        """The latest orientation data for all tracked objects."""
         quat = np.asarray(self._quat, dtype=np.float32).reshape(-1, 4)
         return {n: quat[i] for i, n in enumerate(self.names)}
 
     @property
     def vel(self) -> dict[str, np.ndarray]:
-        """Get the latest velocity data for all tracked objects."""
+        """The latest velocity data for all tracked objects."""
         vel = np.asarray(self._vel, dtype=np.float32).reshape(-1, 3)
         return {n: vel[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def ang_vel(self) -> dict[str, np.ndarray]:
-        """Get the latest angular velocity data for all tracked objects."""
+        """The latest angular velocity data for all tracked objects."""
         ang_vel = np.asarray(self._ang_vel, dtype=np.float32).reshape(-1, 3)
         return {n: ang_vel[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def disturbance(self) -> dict[str, np.ndarray]:
-        """Get the latest disturbance data for all tracked objects."""
+        """The latest disturbance data for all tracked objects."""
         disturbance = np.asarray(self._disturbance, dtype=np.float32).reshape(-1, 6)
         return {n: disturbance[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def forces(self) -> dict[str, np.ndarray]:
-        """Get the latest estimated forces data for all tracked objects."""
+        """The latest estimated forces data for all tracked objects."""
         forces = np.asarray(self._forces, dtype=np.float32).reshape(-1, 6)
         return {n: forces[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def active(self) -> bool:
-        """Check if Vicon has sent data for each object."""
+        """Check if each object has received an update already."""
         # Check if drone is being tracked and if drone has already received updates
         pos_ready = not np.any(np.isnan(np.array(self._pos, dtype=np.float32)))
         quat_ready = not np.any(np.isnan(np.array(self._quat, dtype=np.float32)))
@@ -174,6 +210,10 @@ class ROSConnector:
 
     def publish_cmd(self, value: NDArray):
         """Publish a command to ROS.
+
+        This is a non-blocking function that puts the command into a multiprocessing queue. Commands
+        are picked up by the command publisher process and published to the ROS topic
+        asynchronously.
 
         Note:
             The command publisher topic must be set on initialization. Otherwise this function will
@@ -204,6 +244,7 @@ def tf_update(
         pos: The shared memory arrays for the position data.
         quat: The shared memory arrays for the orientation data.
         times: The shared memory arrays for the time data.
+        shutdown: The event to signal shutdown.
     """
     rclpy.init()
     node = rclpy.create_node("tf_updater_" + uuid4().hex)
@@ -230,10 +271,16 @@ def estimate_update(
     """Update the shared memory arrays with the latest pose data from the estimator node.
 
     Args:
-        names: The names of the objects to track.
+        all_names: The names of all objects that are being tracked.
+        names: The names of the objects only being tracked by the estimator.
         pos: The shared memory arrays for the position data.
         quat: The shared memory arrays for the orientation data.
+        vel: The shared memory arrays for the velocity data.
+        ang_vel: The shared memory arrays for the angular velocity data.
+        disturbance: The shared memory arrays for the disturbance data.
+        forces: The shared memory arrays for the forces data.
         times: The shared memory arrays for the time data.
+        shutdown: The event to signal shutdown.
     """
     rclpy.init()
     node = rclpy.create_node("estimate_updater_" + uuid4().hex)
@@ -297,6 +344,15 @@ def tf_callback(
     quat: SynchronizedArray,
     times: SynchronizedArray,
 ):
+    """Save the pose data from the /tf topic into shared memory arrays.
+
+    Args:
+        data: The TFMessage message.
+        names: The names of the objects to track.
+        pos: The shared memory array for the position values.
+        quat: The shared memory array for the orientation values.
+        times: The shared memory array for the time values.
+    """
     for tf in data.transforms:
         name = tf.child_frame_id.split("/")[-1]
         if name in names:
@@ -309,16 +365,19 @@ def tf_callback(
 
 def pose_callback(
     data: PoseStamped,
+    idx: int,
     pos: SynchronizedArray,
     quat: SynchronizedArray,
     times: Synchronized,
-    idx: int,
 ):
     """Save the drone pose from the estimator node.
 
     Args:
         data: The PoseStamped message.
-        idx: The index of the object.
+        idx: The index of the object the pose is referring to.
+        pos: The shared memory array for the position values.
+        quat: The shared memory array for the orientation values.
+        times: The shared memory array for the time values.
     """
     T, Rot = data.pose.position, data.pose.orientation
     pos[idx * 3 : (idx + 1) * 3] = [T.x, T.y, T.z]
@@ -333,7 +392,9 @@ def twist_callback(
 
     Args:
         data: The TwistStamped message.
-        name: The name of the object.
+        idx: The index of the object the velocity is referring to.
+        vel: The shared memory array for the velocity values.
+        ang_vel: The shared memory array for the angular velocity values.
     """
     linear, angular = data.twist.linear, data.twist.angular
     vel[idx * 3 : (idx + 1) * 3] = [linear.x, linear.y, linear.z]
@@ -345,7 +406,8 @@ def disturbance_callback(data: WrenchStamped, idx: int, disturbance: Synchronize
 
     Args:
         data: The WrenchStamped message.
-        name: The name of the object.
+        idx: The index of the object the force is referring to.
+        disturbance: The shared memory array for the disturbances.
     """
     force, torque = data.wrench.force, data.wrench.torque
     disturbance[idx * 6 + (idx + 1) * 6] = [force.x, force.y, force.z, torque.x, torque.y, torque.z]
@@ -356,6 +418,7 @@ def forces_callback(data: Float64MultiArray, idx: int, forces: SynchronizedArray
 
     Args:
         data: The Float64MultiArray message.
-        name: The name of the object
+        idx: The index of the object the force is referring to.
+        forces: The shared memory array for the forces.
     """
     forces[idx * 4 : (idx + 1) * 4] = data.data

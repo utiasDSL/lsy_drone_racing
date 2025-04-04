@@ -38,7 +38,6 @@ def main(config: str = "level3.toml", controller: str | None = None):
     env: RealDroneRaceEnv = gymnasium.make(
         "RealDroneRacing-v0",
         drones=config.deploy.drones,
-        rank=0,
         freq=config.env.freq,
         track=config.env.track,
         randomizations=config.env.randomizations,
