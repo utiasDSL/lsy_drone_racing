@@ -17,7 +17,18 @@ if TYPE_CHECKING:
 
 
 def load_track(track: ConfigDict) -> tuple[ConfigDict, ConfigDict, ConfigDict]:
-    """Load the track from the config file."""
+    """Load the track from a config dict.
+
+    Gates and obstacles are loaded as a config dicts with keys `pos`, `quat`, `nominal_pos`, and
+    `nominal_quat`. Drones are loaded as a config dicts with keys `pos`, `rpy`, `quat`, `vel` and
+    `ang_vel`.
+
+    Args:
+        track: The track config dict.
+
+    Returns:
+        The gates, obstacles, and drones as config dicts.
+    """
     assert "gates" in track, "Track must contain gates field."
     assert "obstacles" in track, "Track must contain obstacles field."
     assert "drones" in track, "Track must contain drones field."

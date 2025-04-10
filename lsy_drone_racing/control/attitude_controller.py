@@ -1,4 +1,4 @@
-"""This module implements a ThrustController for quadrotor control.
+"""This module implements an AttitudeController for quadrotor control.
 
 It utilizes the collective thrust interface for drone control to compute control commands based on
 current state observations and desired waypoints. The attitude control is handled by computing a
@@ -25,10 +25,7 @@ if TYPE_CHECKING:
 
 
 class AttitudeController(Controller):
-    """Example of a controller using the collective thrust and attitude interface.
-
-    Modified from https://github.com/utiasDSL/crazyswarm-import/blob/ad2f7ea987f458a504248a1754b124ba39fc2f21/ros_ws/src/crazyswarm/scripts/position_ctl_m.py
-    """
+    """Example of a controller using the collective thrust and attitude interface."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialize the attitude controller.

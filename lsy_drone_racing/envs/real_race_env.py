@@ -59,7 +59,11 @@ class EnvData:
 
 # region CoreEnv
 class RealRaceCoreEnv:
-    """Deployable version of the multi-agent drone racing environment."""
+    """Deployable version of the (multi-agent) drone racing environments.
+
+    This class acts as a generic core implementation of the environment logic that can be reused for
+    both single-agent and multi-agent deployments.
+    """
 
     POS_UPDATE_FREQ = 30  # Frequency of position updates to the drone estimator in Hz
 
@@ -73,7 +77,7 @@ class RealRaceCoreEnv:
         sensor_range: float = 0.5,
         control_mode: Literal["state", "attitude"] = "state",
     ):
-        """Initialize the deployable version of the multi-agent drone racing environment.
+        """Create a deployable version of the drone racing environment.
 
         Args:
             drones: List of all drones in the race, including their channel and id.
@@ -391,7 +395,12 @@ class RealRaceCoreEnv:
             )
 
     def close(self):
-        """Close the environment."""
+        """Close the environment.
+
+        If the drone has finished the track, it will try to return to the start position.
+        Irrespective of succeeding or not, the drone will be stopped immediately afterwards or in
+        case of errors, and close the connections to the ROSConnector.
+        """
         try:  # Check if drone has successfully completed the track and return home
             if self.data.target_gate[self.rank] == -1:
                 self._return_to_start()
@@ -442,6 +451,17 @@ class RealDroneRaceEnv(RealRaceCoreEnv, Env):
         control_mode: Literal["state", "attitude"] = "state",
     ):
         """Initialize the multi-drone environment.
+
+        Action space:
+            The action space is a single action vector for the drone with the environment rank.
+            See :class:`~.RealRaceCoreEnv` for more information. Depending on the control mode, it
+            is either a 13D desired drone state setpoint, or a 4D desired attitude and collective
+            thrust setpoint.
+
+        Observation space:
+            The observation space is a dictionary containing the state of all drones in the race.
+            It mimics exactly the observation space of
+            :class:`lsy_drone_racing.envs.drone_race.DroneRaceEnv`.
 
         Note:
             rclpy must be initialized before creating this environment.
@@ -504,11 +524,24 @@ class RealMultiDroneRaceEnv(RealRaceCoreEnv, Env):
     - Provides sensor range simulation for gates and obstacles
     - Handles automatic return-to-home behavior when the race is completed
 
+    Action space:
+        The action space is a **single** action vector for the drone with the environment rank.
+        See :class:`~.RealRaceCoreEnv` for more information.
+
+    Warning:
+        The action space differs from the action space of the simulated counterpart. This deviation
+        is necessary to run different controller types at different frequencies that asynchronously
+        publish ther commands to the drone.
+
+    Observation space:
+        The observation space is a dictionary containing the state of all drones in the race.
+        It mimics exactly the observation space of
+        :class:`lsy_drone_racing.envs.multi_drone_race.MultiDroneRaceEnv`.
+
     Note:
         Each instance of this environment controls only one drone (specified by rank), but provides
         observations for all drones in the race. This allows us to run controllers at different
         frequencies for different drones. Consequently the step method applies actions only to the
-        controlled drone.
     """
 
     def __init__(

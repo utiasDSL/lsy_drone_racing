@@ -88,5 +88,6 @@ def check_rotation(name: str, actual_rot: R, desired_rot: R, ang_tol: float):
     if (actual_rot.inv() * desired_rot).magnitude() > ang_tol:
         actual, desired = actual_rot.as_euler("xyz"), desired_rot.as_euler("xyz")
         raise RuntimeError(
-            f"{name} exceeds rotation tolerances ({ang_tol}). Rotation is: {actual}, should be: {desired}"
+            f"{name} exceeds rotation tolerances ({ang_tol}).\n"
+            f"Rotation is: {actual}, should be: {desired}"
         )

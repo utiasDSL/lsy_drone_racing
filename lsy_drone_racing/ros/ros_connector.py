@@ -3,11 +3,11 @@
 It defines the ROSConnector class, which handles communication with ROS2 through multiprocessing
 to ensure non-blocking operation. The module is responsible for:
 
-* Tracking objects (drones, gates, obstacles) through ROS topics
-* Providing real-time pose (position and orientation) data for tracked objects
-* Publishing commands to ROS topics asynchronously
+* Providing real-time state estimation (position, orientation, velocity, ...) for drones
+* Tracking objects (gates, obstacles) through ROS /tf
+* Publishing commands to ROS topics asynchronously for estimator nodes and logging
 
-The main objective for the ROSConnector is to interface with ROS2 messages with minimal latency.It
+The main objective for the ROSConnector is to interface with ROS2 messages with minimal latency. It
 uses a multiprocessing architecture to prevent ROS callbacks from blocking the main application
 thread. Data is shared between processes using synchronized shared memory arrays, allowing for
 efficient, thread-safe data access without copying.

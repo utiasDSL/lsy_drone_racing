@@ -1,6 +1,20 @@
-"""Collection of environments for multi-drone racing simulations.
+"""Core environment for drone racing simulations.
 
-This module is the multi-drone counterpart to the regular drone racing environments.
+This module provides the shared logic for simulating drone racing environments. It defines a core
+environment class that wraps our drone simulation, drone control, gate tracking, and collision
+detection. The module serves as the base for both single-drone and multi-drone racing environments.
+
+The environment is designed to be configurable, supporting:
+* Different control modes (state or attitude)
+* Customizable tracks with gates and obstacles
+* Various randomization options for robust policy training
+* Disturbance modeling for realistic flight conditions
+* Vectorized execution for parallel training
+
+This module is primarily used as a base for the higher-level environments in
+:mod:`~lsy_drone_racing.envs.drone_race` and :mod:`~lsy_drone_racing.envs.multi_drone_race`,
+which provide Gymnasium-compatible interfaces for reinforcement learning, MPC and other control
+techniques.
 """
 
 from __future__ import annotations
@@ -47,7 +61,31 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EnvData:
-    """Struct holding the data of all auxiliary variables for the environment."""
+    """Struct holding the data of all auxiliary variables for the environment.
+
+    This dataclass stores the dynamic and static state of the environment that is not directly
+    part of the physics simulation. It includes information about gate progress, drone status,
+    and environment boundaries. Static variables are initialized once and do not change during the
+    episode.
+
+    Dynamic variables:
+        target_gate: Current target gate index for each drone in each environment
+        gates_visited: Boolean flags indicating which gates have been visited by each drone
+        obstacles_visited: Boolean flags indicating which obstacles have been detected
+        last_drone_pos: Previous positions of drones, used for gate passing detection
+        marked_for_reset: Flags indicating which environments need to be reset
+        disabled_drones: Flags indicating which drones have crashed or are otherwise disabled
+        steps: Current step count for each environment
+
+    Static variables:
+        contact_masks: Masks for contact detection between drones and objects
+        pos_limit_low: Lower position limits for the environment
+        pos_limit_high: Upper position limits for the environment
+        gate_mj_ids: MuJoCo IDs for the gates
+        obstacle_mj_ids: MuJoCo IDs for the obstacles
+        max_episode_steps: Maximum number of steps per episode
+        sensor_range: Range at which drones can detect gates and obstacles
+    """
 
     # Dynamic variables
     target_gate: Array
@@ -102,7 +140,15 @@ class EnvData:
 
 
 def build_action_space(control_mode: Literal["state", "attitude"]) -> spaces.Box:
-    """Create the action space for the environment."""
+    """Create the action space for the environment.
+
+    Args:
+        control_mode: The control mode to use. Either "state" for full-state control
+            or "attitude" for attitude control.
+
+    Returns:
+        A Box space representing the action space for the specified control mode.
+    """
     if control_mode == "state":
         return spaces.Box(low=-1, high=1, shape=(13,))
     elif control_mode == "attitude":
@@ -113,7 +159,15 @@ def build_action_space(control_mode: Literal["state", "attitude"]) -> spaces.Box
 
 
 def build_observation_space(n_gates: int, n_obstacles: int) -> spaces.Dict:
-    """Create the observation space for the environment."""
+    """Create the observation space for the environment.
+
+    The observation space is a dictionary containing the drone state, gate information,
+    and obstacle information.
+
+    Args:
+        n_gates: Number of gates in the environment.
+        n_obstacles: Number of obstacles in the environment.
+    """
     obs_spec = {
         "pos": spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
         "quat": spaces.Box(low=-1, high=1, shape=(4,)),

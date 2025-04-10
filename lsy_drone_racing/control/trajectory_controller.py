@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class TrajectoryController(Controller):
-    """Controller that follows a pre-defined trajectory."""
+    """Trajectory controller following a pre-defined trajectory."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialization of the controller.

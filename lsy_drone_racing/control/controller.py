@@ -31,9 +31,9 @@ class Controller(ABC):
         """Initialization of the controller.
 
         Instructions:
-            The controller's constructor has access the initial state `initial_obs` and the a priori
-            infromation contained in dictionary `initial_info`. Use this method to initialize
-            constants, counters, pre-plan trajectories, etc.
+            The controller's constructor has access the initial observation `obs`, the a priori
+            information contained in dictionary `info`, and the config of the race track. Use this
+            method to initialize constants, counters, pre-plan trajectories, etc.
 
         Args:
             obs: The initial observation of the environment's state. See the environment's
@@ -59,8 +59,8 @@ class Controller(ABC):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] in absolute
-            coordinates as a numpy array.
+            A drone state command [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] in
+            absolute coordinates or an attitude command [thrust, roll, pitch, yaw] as a numpy array.
         """
 
     def step_callback(
