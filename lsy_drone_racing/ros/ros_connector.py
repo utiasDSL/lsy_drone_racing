@@ -45,24 +45,25 @@ class ROSConnector:
     arrays.
 
     The class supports two types of tracking:
-    1. Simple pose tracking from /tf topics
-    2. Full state estimation including velocity, angular velocity, and disturbance forces from an
-       estimator node.
+
+    * Simple pose tracking from `/tf` topics
+    * Full state estimation including velocity, angular velocity, and disturbance forces from an
+      estimator node.
 
     Data is accessed through property methods that convert the shared memory arrays into
     dictionaries keyed by object names.
 
     Example:
-        ```python
-        # Track drone position and state from estimator
-        conn = ROSConnector(estimator_names=["cf1"], cmd_topic="/estimator/cf1/cmd", timeout=1.0)
-        # Access the latest position data
-        drone_pos = conn.pos["cf1"]
-        # Publish a command (non-blocking)
-        conn.publish_cmd(np.array([1.0, 0.0, 0.0, 0.0]))
-        # Clean up when done
-        conn.close()
-        ```
+        >>> # Track drone position and state from estimator
+        >>> conn = ROSConnector(
+        ...     estimator_names=["cf1"], cmd_topic="/estimator/cf1/cmd", timeout=1.0
+        ... )
+        >>> # Access the latest position data
+        >>> drone_pos = conn.pos["cf1"]
+        >>> # Publish a command (non-blocking)
+        >>> conn.publish_cmd(np.array([1.0, 0.0, 0.0, 0.0]))
+        >>> # Clean up when done
+        >>> conn.close()
     """
 
     def __init__(

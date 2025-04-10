@@ -6,5 +6,6 @@ lsy_drone_racing.envs
 .. toctree::
     :hidden:
 
-    drone_racing_env
-    drone_racing_deploy_env
+    drone_race
+    real_drone_race
+    

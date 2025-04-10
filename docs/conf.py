@@ -25,9 +25,9 @@ extensions = ["sphinx.ext.autodoc", "sphinx.ext.napoleon", "sphinx.ext.todo"]
 # Autodoc config
 autodoc_member_order = "bysource"
 
-# Mock imports on ReadTheDocs that are not available with pip
+# Mock imports on ReadTheDocs that are not available with pip or that we do not want to install (mainly for ROS2)
 if on_rtd:
-    autodoc_mock_imports = ["pycffirmware", "rospy", "rosgraph", "pycrazyswarm", "stable_baselines3", "tf2_msgs", "crazyswarm"]
+    autodoc_mock_imports = ["cflib", "tf2_msgs", "rclpy", "std_msgs", "geometry_msgs"]
 
 
 # Add any paths that contain templates here, relative to this directory.

@@ -29,13 +29,6 @@ jobs:
           cache-environment: true
       - run: pip install .[online_submission,test]
         shell: micromamba-shell {0}
-      - name: Install cffirmware
-        run: |
-          git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
-          cd pycffirmware
-          git submodule update --init --recursive
-          ./wrapper/build_linux.sh
-        shell: micromamba-shell {0}
       - name: Run simulation tests
         run: python scripts/kaggle.py
         shell: micromamba-shell {0}

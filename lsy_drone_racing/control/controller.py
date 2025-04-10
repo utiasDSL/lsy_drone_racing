@@ -50,8 +50,7 @@ class Controller(ABC):
         """Compute the next desired state of the drone.
 
         Instructions:
-            Implement this method to return the target state to be sent from Crazyswarm to the
-            Crazyflie using the `cmdFullState` call.
+            Implement this method to return the target state to be sent to the Crazyflie.
 
         Args:
             obs: The current observation of the environment. See the environment's observation space

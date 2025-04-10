@@ -19,10 +19,11 @@ Before you begin, ensure you have the following:
 Required Repositories
 ---------------------
 
-The LSY Autonomous Drone Racing project requires two repositories:
+The LSY Autonomous Drone Racing project requires you to fork the drone racing repository:
 
-1. `pycffirmware <https://github.com/utiasDSL/pycffirmware/tree/drone_racing>`_ (drone_racing branch): A simulator for the on-board controller response of the drones we are using to accurately model their behavior.
-2. `lsy_drone_racing <https://github.com/utiasDSL/lsy_drone_racing>`_ (main branch): This repository contains the drone simulation, environments, and scripts to simulate and deploy the drones in the racing challenge.
+`lsy_drone_racing <https://github.com/utiasDSL/lsy_drone_racing>`_ (main branch)
+
+This repository contains the drone simulation, environments, and scripts to simulate and deploy the drones in the racing challenge.
 
 Forking the Repository
 ----------------------
@@ -63,18 +64,6 @@ Follow these steps to set up the project:
       cd ~/repos/lsy_drone_racing
       pip install --upgrade pip
       pip install -e .
-
-#. Install the pycffirmware package:
-
-   .. code-block:: bash
-
-      cd ~/repos
-      git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
-      cd pycffirmware
-      git submodule update --init --recursive
-      sudo apt update
-      sudo apt install build-essential
-      ./wrapper/build_linux.sh
 
 Testing the Installation
 ------------------------

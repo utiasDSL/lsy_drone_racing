@@ -5,6 +5,7 @@ environment class that wraps our drone simulation, drone control, gate tracking,
 detection. The module serves as the base for both single-drone and multi-drone racing environments.
 
 The environment is designed to be configurable, supporting:
+
 * Different control modes (state or attitude)
 * Customizable tracks with gates and obstacles
 * Various randomization options for robust policy training
@@ -68,16 +69,13 @@ class EnvData:
     and environment boundaries. Static variables are initialized once and do not change during the
     episode.
 
-    Dynamic variables:
+    Args:
         target_gate: Current target gate index for each drone in each environment
         gates_visited: Boolean flags indicating which gates have been visited by each drone
         obstacles_visited: Boolean flags indicating which obstacles have been detected
         last_drone_pos: Previous positions of drones, used for gate passing detection
         marked_for_reset: Flags indicating which environments need to be reset
         disabled_drones: Flags indicating which drones have crashed or are otherwise disabled
-        steps: Current step count for each environment
-
-    Static variables:
         contact_masks: Masks for contact detection between drones and objects
         pos_limit_low: Lower position limits for the environment
         pos_limit_high: Upper position limits for the environment
@@ -194,33 +192,36 @@ class RaceCoreEnv:
     randomization, disturbances, and physics models.
 
     The environment provides:
-    - A customizable track with gates and obstacles
-    - Configurable simulation and control frequencies
-    - Support for different physics models (e.g., identified dynamics, analytical dynamics)
-    - Randomization of drone properties and initial conditions
-    - Disturbance modeling for realistic flight conditions
-    - Symbolic expressions for advanced control techniques (optional)
+
+    * A customizable track with gates and obstacles
+    * Configurable simulation and control frequencies
+    * Support for different physics models (e.g., identified dynamics, analytical dynamics)
+    * Randomization of drone properties and initial conditions
+    * Disturbance modeling for realistic flight conditions
+    * Symbolic expressions for advanced control techniques (optional)
 
     The environment tracks the drone's progress through the gates and provides termination
     conditions based on gate passages and collisions.
 
     The observation space is a dictionary with the following keys:
-    - "pos": Drone position
-    - "quat": Drone orientation as a quaternion (x, y, z, w)
-    - "vel": Drone linear velocity
-    - "ang_vel": Drone angular velocity
-    - "gates_pos": Positions of the gates
-    - "gates_quat": Orientations of the gates
-    - "gates_visited": Flags indicating if the drone already was/ is in the sensor range of the
-    gates and the true position is known
-    - "obstacles_pos": Positions of the obstacles
-    - "obstacles_visited": Flags indicating if the drone already was/ is in the sensor range of the
+
+    * pos: Drone position
+    * quat: Drone orientation as a quaternion (x, y, z, w)
+    * vel: Drone linear velocity
+    * ang_vel: Drone angular velocity
+    * gates_pos: Positions of the gates
+    * gates_quat: Orientations of the gates
+    * gates_visited: Flags indicating if the drone already was/ is in the sensor range of the
+      gates and the true position is known
+    * obstacles_pos: Positions of the obstacles
+    * obstacles_visited: Flags indicating if the drone already was/ is in the sensor range of the
       obstacles and the true position is known
-    - "target_gate": The current target gate index
+    * target_gate: The current target gate index
 
     The action space consists of a desired full-state command
     [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] that is tracked by the drone's
-    low-level controller.
+    low-level controller, or a desired collective thrust and attitude command [collective thrust,
+    roll, pitch, yaw].
     """
 
     gate_spec_path = Path(__file__).parent / "assets/gate.xml"

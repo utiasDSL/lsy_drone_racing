@@ -12,11 +12,11 @@ We use a Vicon motion tracking system to track the motion of the drone. The Vico
 
 Deploying Your Controller
 ~~~~~~~~~~~~~~~~~~~~~~~~~
-To deploy your controller on the real drone, use the deployment script in the ``lsy_drone_racing/scripts`` folder. Before running the script, make sure to set the correct drone parameters in the Crazyswarm package. Place the drone on its start position, power it on, and launch the Crazyswarm ROS node with 
+To deploy your controller on the real drone, use the deployment script in the ``lsy_drone_racing/scripts`` folder. Place the drone on its start position, power it on, and launch the estimators.
 
-.. code-block:: bash
+.. todo::
 
-    roslaunch crazyswarm hover_swarm.launch
+    Instructions for launching the estimators
 
 .. note::
     Make sure the drone has enough battery to complete the track. If a red LED is constantly turned on, the drone is low on battery. A blinking red LED indicates that the battery is sufficiently charged.

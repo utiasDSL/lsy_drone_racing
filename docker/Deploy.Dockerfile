@@ -14,21 +14,8 @@ RUN pip install --upgrade pip
 RUN pip install --ignore-installed "pyyaml>=6.0"
 RUN apt-get install -y ros-noetic-tf ros-noetic-tf-conversions
 
-# Install crazyswarm
-RUN python -m pip install --no-cache-dir pytest numpy PyYAML scipy
-RUN git clone --depth 1 https://github.com/USC-ACTLab/crazyswarm.git
-WORKDIR /home/crazyswarm
-RUN source /opt/ros/noetic/setup.bash && ./build.sh
-
-# Install the drone firmare emulator
-WORKDIR /home
-RUN git clone --depth 1 -b drone_racing https://github.com/utiasDSL/pycffirmware.git
-WORKDIR /home/pycffirmware
-RUN git submodule update --init --recursive
-# Numpy 2.0 is not compatible with pycffirmware, but would be installed by default
-RUN pip install "numpy<2"
-RUN ./wrapper/build_linux.sh
-RUN rm -rf /home/pycffirmware/.git
+# Install cflib
+RUN python -m pip install cflib
 
 # Copy only pyproject.toml first to leverage Docker cache for dependency installation
 # This allows us to avoid reinstalling dependencies if only the source code changes
@@ -41,4 +28,4 @@ RUN pip install --no-cache-dir .[test]
 COPY . .
 RUN pip install --no-cache-dir -e .[test]
 
-CMD bash -c "source /home/crazyswarm/ros_ws/devel/setup.bash && python /home/lsy_drone_racing/scripts/deploy.py"
+CMD bash -c "python /home/lsy_drone_racing/scripts/deploy.py"

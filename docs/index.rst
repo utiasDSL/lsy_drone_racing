@@ -40,7 +40,7 @@ Explore the extensive Python API, which includes modules for:
 - :doc:`Drone Control <control/index>`
 - :doc:`Racing Environments <envs/index>`
 - :doc:`Utility Functions <utils/index>`
-- :doc:`Vicon Motion Capture Integration <vicon>`
+- :doc:`ROS2 Integration <ros/index>`
 
 We hope this documentation helps you dive into the exciting world of autonomous drone racing. Good luck, and may the best algorithm win!
 
@@ -71,11 +71,9 @@ We hope this documentation helps you dive into the exciting world of autonomous 
 
    envs/index
 
-   sim/index
-
    utils/index
 
-   vicon
+   ros/index
 
 
 Indices and tables

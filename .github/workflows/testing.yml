@@ -17,13 +17,6 @@ jobs:
       - name: Install dependencies and package
         run: pip install .
         shell: micromamba-shell {0}
-      - name: Install cffirmware
-        run: |
-          git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
-          cd pycffirmware
-          git submodule update --init --recursive
-          ./wrapper/build_linux.sh
-        shell: micromamba-shell {0}
       - name: Test with pytest
         run: |
           pip install pytest pytest-cov

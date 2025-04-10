@@ -1,5 +1,5 @@
-utils.ros_utils
-===============
+ros.ros_utils
+=============
 
-.. automodule:: lsy_drone_racing.utils.ros_utils
+.. automodule:: lsy_drone_racing.ros.ros_utils
     :members:

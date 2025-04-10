@@ -3,16 +3,6 @@ RUN pip install --upgrade pip
 RUN apt update
 WORKDIR /home
 
-# Install the drone firmare emulator
-RUN apt install swig build-essential git -y
-RUN git clone --depth 1 -b drone_racing https://github.com/utiasDSL/pycffirmware.git
-WORKDIR /home/pycffirmware
-RUN git submodule update --init --recursive
-# Numpy 2.0 is not compatible with pycffirmware, but would be installed by default
-RUN pip install "numpy<2"
-RUN ./wrapper/build_linux.sh
-RUN rm -rf /home/pycffirmware/.git
-
 # Copy only pyproject.toml first to leverage Docker cache for dependency installation
 # This allows us to avoid reinstalling dependencies if only the source code changes
 WORKDIR /home/lsy_drone_racing
