@@ -18,7 +18,7 @@ Key Features:
 ^^^^^^^^^^^^^
 
 1. **Simulation Environment**: Test your algorithms in a realistic virtual environment before deploying to real drones.
-2. **Deployment Tools**: Seamlessly transition from simulation to real-world racing.
+2. **Deployment Tools**: Transition from simulation to real-world racing with interfaces compatible with the simulation environment.
 3. **Online Competition**: Participate in virtual drone racing competitions to benchmark your algorithms against others.
 4. **Comprehensive Python API**: Access a comprehensive documentation of the Python API to get a deeper understanding of how the simulation and deployment environments work under the hood.
 
@@ -35,7 +35,7 @@ Learn about the :doc:`drone racing challenge <challenge/overview>`, including de
 Python API
 ^^^^^^^^^^
 
-Explore the extensive Python API, which includes modules for:
+If you want to understand the ins and outs of the framework, you can explore the extensive Python API, which includes modules for:
 
 - :doc:`Drone Control <control/index>`
 - :doc:`Racing Environments <envs/index>`

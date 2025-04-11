@@ -238,7 +238,6 @@ class RaceCoreEnv:
         control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
-        random_resets: bool = False,
         seed: int = 1337,
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
@@ -255,7 +254,6 @@ class RaceCoreEnv:
             track: Track configuration.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
-            random_resets: Flag to randomize the environment on reset.
             seed: Random seed of the environment.
             max_episode_steps: Maximum number of steps per episode. Needs to be tracked manually for
                 vectorized environments.
@@ -282,7 +280,6 @@ class RaceCoreEnv:
         self.seed = seed
         self.autoreset = True  # Can be overridden by subclasses
         self.device = jax.devices(device)[0]
-        self.random_resets = random_resets
         self.sensor_range = sensor_range
         self.gates, self.obstacles, self.drone = load_track(track)
         specs = {} if disturbances is None else disturbances
@@ -332,8 +329,6 @@ class RaceCoreEnv:
         if seed is not None:
             self.sim.seed(seed)
             self._np_random = np.random.default_rng(seed)  # Also update gymnasium's rng
-        elif not self.random_resets:
-            self.sim.seed(self.seed)
         # Randomization of gates, obstacles and drones is compiled into the sim reset function with
         # the sim.reset_hook function, so we don't need to explicitly do it here
         self.sim.reset(mask=mask)

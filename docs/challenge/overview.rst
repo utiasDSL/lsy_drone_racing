@@ -1,8 +1,6 @@
 Overview
 ========
 
-Welcome to the LSY Drone Racing Project! This is a platform developed by the LSY Lab at the Technical University of Munich for testing and developing autonomous drone racing algorithms in simulation and deploy the same controller without any modification on real drones. You are not restricted to any specific algorithm, as long as your interfaces are compatible with our predefined controller interface.
-
 The Drone
 ~~~~~~~~~
 We use the Crazyflie nano quadcopter for our challenge. It is a small, low-cost drone that is easy to program and control. You can find more information about the drone at https://www.bitcraze.io/. Crazyflies have the advantage of being fully open-source and having a large community, which makes it easy to find libraries and tools for programming and controlling the drone. Furthermore, their low price reduces the barrier to entry for participants, and the loss of a drone during the competition is less painful.

@@ -25,7 +25,6 @@ def test_controllers(controller_file: str):
         track=config.env.track,
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),
-        random_resets=config.env.random_resets,
         seed=config.env.seed,
     )
     env = JaxToNumpy(env)
@@ -59,7 +58,6 @@ def test_attitude_controller(physics: str):
         track=config.env.track,
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),
-        random_resets=config.env.random_resets,
         seed=config.env.seed,
     )
     env = JaxToNumpy(env)
@@ -99,7 +97,6 @@ def test_trajectory_controller_finish(yaw: float, physics: str):
         track=config.env.track,
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),
-        random_resets=config.env.random_resets,
         seed=config.env.seed,
     )
     env = JaxToNumpy(env)

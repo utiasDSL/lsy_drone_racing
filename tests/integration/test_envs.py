@@ -8,7 +8,7 @@ import lsy_drone_racing  # noqa: F401, environment registrations
 from lsy_drone_racing.utils import load_config
 
 CONFIG_FILES = {
-    "DroneRacing-v0": ["level0.toml", "level1.toml", "level2.toml", "level3.toml"],
+    "DroneRacing-v0": ["level0.toml", "level1.toml", "level2.toml"],
     "MultiDroneRacing-v0": ["multi_level0.toml", "multi_level3.toml"],
 }
 DEVICES = ["cpu", "gpu"]
@@ -51,7 +51,6 @@ def test_single_drone_envs(config_file: str, physics: str, device: str):
         "track": config.env.track,
         "disturbances": config.env.get("disturbances"),
         "randomizations": config.env.get("randomizations"),
-        "random_resets": config.env.random_resets,
         "seed": config.env.seed,
         "device": device,
     }
@@ -94,7 +93,6 @@ def test_multi_drone_envs(config_file: str, physics: str, device: str):
         "track": config.env.track,
         "disturbances": config.env.get("disturbances"),
         "randomizations": config.env.get("randomizations"),
-        "random_resets": config.env.random_resets,
         "seed": config.env.seed,
         "device": device,
     }

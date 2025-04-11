@@ -33,7 +33,6 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
-        random_resets: bool = False,
         seed: int = 1337,
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
@@ -48,7 +47,6 @@ class DroneRaceEnv(RaceCoreEnv, Env):
             control_mode: Control mode for the drones. See `build_action_space` for details.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
-            random_resets: Flag to reset the environment randomly.
             seed: Random seed.
             max_episode_steps: Maximum number of steps per episode.
             device: Device used for the environment and the simulation.
@@ -63,7 +61,6 @@ class DroneRaceEnv(RaceCoreEnv, Env):
             control_mode=control_mode,
             disturbances=disturbances,
             randomizations=randomizations,
-            random_resets=random_resets,
             seed=seed,
             max_episode_steps=max_episode_steps,
             device=device,
@@ -118,7 +115,6 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
         control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
-        random_resets: bool = False,
         seed: int = 1337,
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
@@ -134,7 +130,6 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
             control_mode: Control mode for the drones. See `build_action_space` for details.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
-            random_resets: Flag to reset the environment randomly.
             seed: Random seed.
             max_episode_steps: Maximum number of steps per episode.
             device: Device used for the environment and the simulation.
@@ -149,7 +144,6 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
             control_mode=control_mode,
             disturbances=disturbances,
             randomizations=randomizations,
-            random_resets=random_resets,
             seed=seed,
             max_episode_steps=max_episode_steps,
             device=device,

@@ -270,22 +270,21 @@ The complete problem is specified by a TOML file, e.g. [`level0.toml`](config/le
 
 The config folder contains settings for progressively harder scenarios:
 
-|      Evaluation Scenario      | Constraints | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes |         Notes         |
-| :---------------------------: | :---------: | :-----------------------: | :-------------------------: | :--------------------: | :-------------------: |
-| [Level 0](config/level0.toml) |   **Yes**   |           *No*            |            *No*             |          *No*          |   Perfect knowledge   |
-| [Level 1](config/level1.toml) |   **Yes**   |          **Yes**          |            *No*             |          *No*          |       Adaptive        |
-| [Level 2](config/level2.toml) |   **Yes**   |          **Yes**          |           **Yes**           |          *No*          | Learning, re-planning |
-| [Level 3](config/level3.toml) |   **Yes**   |          **Yes**          |           **Yes**           |        **Yes**         |      Robustness       |
-|                               |             |                           |                             |                        |                       |
-|           sim2real            |   **Yes**   |    Real-life hardware     |           **Yes**           |          *No*          |   Sim2real transfer   |
+|        Evaluation Scenario        | Rand. Inertial Properties | Randomized Obstacles, Gates |       Notes        |
+| :-------------------------------: | :-----------------------: | :-------------------------: | :----------------: |
+|   [Level 0](config/level0.toml)   |           *No*            |            *No*             | Perfect knowledge  |
+|   [Level 1](config/level1.toml)   |          **Yes**          |            *No*             |      Adaptive      |
+|   [Level 2](config/level2.toml)   |          **Yes**          |           **Yes**           |    Re-planning     |
+|           **sim2real**            |  **Real-life hardware**   |           **Yes**           | Sim2real transfer  |
+| [Bonus](config/multi_level3.toml) |          **Yes**          |           **Yes**           | Multi-agent racing |
 
-> **Note:** "Rand. Between Episodes" (governed by argument `reseed_on_reset`) states whether randomized properties and positions vary or are kept constant (by re-seeding the random number generator on each `env.reset()`) across episodes
+> **Warning**: The bonus level has not yet been tested with students. You are **not** expected to solve this level. **Only** touch this if you have a solid solution already and want to take the challenge one level further.
 
 ### Switching between configurations
-You can choose which configuration to use by changing the `--config` command line option. To e.g. run the example controller on the hardest scenario, you can use the following command
+You can choose which configuration to use by changing the `--config` command line option. To e.g. run the example controller on the hardest simulation scenario, you can use the following command
 
 ```bash
-python scripts/sim.py --config config/level3.toml
+python scripts/sim.py --config config/level2.toml
 ```
 
 ## The online competition
@@ -370,7 +369,7 @@ You will have to modify wo config files before liftoff:
 
 Please modify `~/repos/estimators/ros_nodes/estimators.toml` in the estimators repository to include the up-to-date drone id (in decimal). 
 
-Please modify either `~/repos/lsy_drone_racing/config/level3.toml` or create your own custom config file to include the correct drone id.
+Please modify either `~/repos/lsy_drone_racing/config/level2.toml` or create your own custom config file to include the correct drone id.
 
 #### Launch
 >**Note:** The following should be run within your teams mamba environment.
@@ -394,7 +393,7 @@ Terminal 3 starts the deployment of the controller:
 ```
 mamba activate ros_env
 cd ~/repos/lsy_drone_racing/scripts
-python scripts/deploy.py --controller <your_controller.py> --config level3.toml
+python scripts/deploy.py --controller <your_controller.py> --config level2.toml
 ```
 
 where `<your_controller.py>` implements a controller that inherits from `lsy_drone_racing.control.BaseController`

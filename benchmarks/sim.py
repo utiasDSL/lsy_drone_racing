@@ -14,7 +14,7 @@ from pathlib import Path
 
 from lsy_drone_racing.utils import load_config
 
-config = load_config(Path('{Path(__file__).parents[1] / "config/level3.toml"}'))
+config = load_config(Path('{Path(__file__).parents[1] / "config/level2.toml"}'))
 """
 
 env_setup_code = """
@@ -32,7 +32,6 @@ env = gymnasium.make_vec(
     track=config.env.track,
     disturbances=config.env.get("disturbances"),
     randomizations=config.env.get("randomizations"),
-    random_resets=config.env.random_resets,
     seed=config.env.seed,
     device='{device}',
 )
@@ -63,7 +62,6 @@ env = gymnasium.make_vec('DroneRacingAttitude-v0',
     track=config.env.track,
     disturbances=config.env.get("disturbances"),
     randomizations=config.env.get("randomizations"),
-    random_resets=config.env.random_resets,
     seed=config.env.seed,
     device='{device}',
 )
@@ -105,7 +103,6 @@ env = gymnasium.make_vec('MultiDroneRacing-v0',
     track=config.env.track,
     disturbances=config.env.get("disturbances"),
     randomizations=config.env.get("randomizations"),
-    random_resets=config.env.random_resets,
     seed=config.env.seed,
     device='{device}',
 )

@@ -1,8 +1,8 @@
 # Level 0
 
-# | Evaluation Scenario | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes | Notes             |
-# | :-----------------: | :-----------------------: | :-------------------------: | :--------------------: | :---------------: |
-# | `level0.toml`       | *No*                      | *No*                        | *No*                   | Perfect knowledge |
+# | Evaluation Scenario | Rand. Inertial Properties | Randomized Obstacles, Gates | Notes             |
+# | :-----------------: | :-----------------------: | :-------------------------: | :---------------: |
+# | `level0.toml`       | *No*                      | *No*                        | Perfect knowledge |
 [controller]
 file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 
@@ -14,6 +14,7 @@ check_race_track = true
 check_drone_start_pos = true
 # Lets you practice your controller without putting up gates & obstacles, assumes nominal positions given below.
 practice_without_track_objects = false
+
 [[deploy.drones]]
 id = 91
 channel = 100
@@ -32,7 +33,6 @@ gui = false                                       # Enable/disable PyBullet's GU
 
 [env]
 id = "DroneRacing-v0"   # "DroneRacing-v0" for single races, "MultiDroneRacing-v0" for multi-drone races. Each environment also implements a vector-environment for faster training
-random_resets = false   # Whether to re-seed the random number generator between episodes
 seed = 1337             # Random seed
 freq = 50               # Frequency of the environment's step function, in Hz
 sensor_range = 0.5      # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.

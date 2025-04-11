@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def main(config: str = "level3.toml", controller: str | None = None):
+def main(config: str = "level2.toml", controller: str | None = None):
     """Deployment script to run the controller on the real drone.
 
     Args:

@@ -8,26 +8,30 @@ The idea for the deployment is to have an environment that exactly matches the i
 
 Motion Tracking
 ~~~~~~~~~~~~~~~
-We use a Vicon motion tracking system to track the motion of the drone. The Vicon system consists of several cameras that are placed around the track, and a base station that calculates object poses by triangulation. Gates, obstacles and the drone are all equipped with reflective markers, which can be tracked by the cameras. We use the Vicon bridge from ETH's ASL to send the poses into ROS.
+We use a Vicon motion tracking system to track the motion of the drone. The Vicon system consists of several cameras that are placed around the track, and a base station that calculates object poses by triangulation. Gates, obstacles and the drone are all equipped with reflective markers, which can be tracked by the cameras. Since we'd need to resort to numerical differentiation to get velocity information, we're running state estimators that filter the noisy Vicon measurements and provide smoother estimates of the drone's state.
 
 Deploying Your Controller
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 To deploy your controller on the real drone, use the deployment script in the ``lsy_drone_racing/scripts`` folder. Place the drone on its start position, power it on, and launch the estimators.
 
-.. todo::
-
-    Instructions for launching the estimators
-
 .. note::
     Make sure the drone has enough battery to complete the track. If a red LED is constantly turned on, the drone is low on battery. A blinking red LED indicates that the battery is sufficiently charged.
 
-.. note::
-    You should restart the drone after every flight to reset the internal state estimators and its command mode.
+The estimators require two packages to run. First, you need to launch the ``motion_capture_tracking`` package to publish the Vicon poses to ROS2.
+
+.. code-block:: bash
+
+    mamba activate race
+    ros2 launch motion_capture_tracking launch.py
+
+Next, you also need to launch the estimator for the drone. Note that you need to modify the ``estimators.toml`` file in the ``estimators`` repository to include the correct drone id.
+
+This should open up an RViz window with the drone frame and the world frame.
 
 .. warning::
-    Only turn on the drone once you placed it on the start position. The internal sensors of the drone are reset on power-on, and turning it on while you are still moving it around may cause internal estimators to drift.
+    If you cannot see the drone in RVIZ, it is likely that Vicon is not turned on, or the drone is not selected for tracking in the Vicon system.
 
-This should open up an RViz window with the drone frame and the world frame. You can now launch your controller by running
+Once everything is running, you can launch your controller by executing
 
 .. code-block:: bash
 

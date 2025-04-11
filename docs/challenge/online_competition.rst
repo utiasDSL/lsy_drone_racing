@@ -1,7 +1,7 @@
 Online Competition
 ==================
 
-The online competition takes place every semester for the students of the "Autonomous Drone Racing" class at TUM. Students compete against each other in the level 3 scenario. 
+The online competition takes place every semester for the students of the "Autonomous Drone Racing" class at TUM. Students compete against each other in the hardest simulation scenario. 
 
 .. note::
     The competition is useful to get an idea of how fast your controller is compared to other teams. It is **not** part of your grade or used to evaluate your final project submission.
@@ -9,9 +9,6 @@ The online competition takes place every semester for the students of the "Auton
 Leaderboard
 ~~~~~~~~~~~
 We use Kaggle to host the online competition. Students can submit their controllers to the competition by forking the repository and pushing their changes to the main branch. The best submission will be used for the team ranking in the online leaderboard.
-
-.. note::
-    Link to the current leaderboard.
 
 .. note::
     The leaderboard is reset every semester. Participation is by invitation only. If you have not received the invite link, please contact the instructors.
