@@ -1,9 +1,8 @@
-#!/usr/bin/env python
 """Launch script for the real race.
 
 Usage:
 
-python deploy.py <path/to/controller.py> <path/to/config.yaml>
+python deploy.py <path/to/controller.py> <path/to/config.toml>
 
 """
 
@@ -16,23 +15,17 @@ from typing import TYPE_CHECKING
 
 import fire
 import gymnasium
-import rospy
+import rclpy
 
 from lsy_drone_racing.utils import load_config, load_controller
 
 if TYPE_CHECKING:
-    from lsy_drone_racing.envs.drone_racing_deploy_env import (
-        DroneRacingDeployEnv,
-        DroneRacingThrustDeployEnv,
-    )
+    from lsy_drone_racing.envs.real_race_env import RealDroneRaceEnv
 
-# rospy.init_node changes the default logging configuration of Python, which is bad practice at
-# best. As a workaround, we can create loggers under the ROS root logger `rosout`.
-# Also see https://github.com/ros/ros_comm/issues/1384
-logger = logging.getLogger("rosout." + __name__)
+logger = logging.getLogger(__name__)
 
 
-def main(config: str = "level3.toml", controller: str | None = None):
+def main(config: str = "level2.toml", controller: str | None = None):
     """Deployment script to run the controller on the real drone.
 
     Args:
@@ -40,24 +33,38 @@ def main(config: str = "level3.toml", controller: str | None = None):
         controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
             the controller specified in the config file is used.
     """
+    rclpy.init()
     config = load_config(Path(__file__).parents[1] / "config" / config)
-    env_id = "DroneRacingThrustDeploy-v0" if "Thrust" in config.env.id else "DroneRacingDeploy-v0"
-    env: DroneRacingDeployEnv | DroneRacingThrustDeployEnv = gymnasium.make(env_id, config=config)
-    obs, info = env.reset()
-
-    control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
-    controller_path = control_path / (controller or config.controller.file)
-    controller_cls = load_controller(controller_path)
-    controller = controller_cls(obs, info)
+    env: RealDroneRaceEnv = gymnasium.make(
+        "RealDroneRacing-v0",
+        drones=config.deploy.drones,
+        freq=config.env.freq,
+        track=config.env.track,
+        randomizations=config.env.randomizations,
+        sensor_range=config.env.sensor_range,
+        control_mode=config.env.control_mode,
+    )
     try:
+        options = {
+            "check_drone_start_pos": config.deploy.check_drone_start_pos,
+            "check_race_track": config.deploy.check_race_track,
+            "practice_without_track_objects": config.deploy.practice_without_track_objects,
+        }
+        obs, info = env.reset(options=options)
+        next_obs = obs  # Set next_obs to avoid errors when the loop never enters
+
+        control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
+        controller_path = control_path / (controller or config.controller.file)
+        controller_cls = load_controller(controller_path)
+        controller = controller_cls(obs, info, config)
         start_time = time.perf_counter()
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             t_loop = time.perf_counter()
-            obs, info = env.unwrapped.obs, env.unwrapped.info
+            obs, info = env.unwrapped.obs(), env.unwrapped.info()
+            obs = {k: v[0] for k, v in obs.items()}
             action = controller.compute_control(obs, info)
             next_obs, reward, terminated, truncated, info = env.step(action)
             controller.step_callback(action, next_obs, reward, terminated, truncated, info)
-            obs = next_obs
             if terminated or truncated:
                 break
             if (dt := (time.perf_counter() - t_loop)) < (1 / config.env.freq):
@@ -66,14 +73,15 @@ def main(config: str = "level3.toml", controller: str | None = None):
                 exc = dt - 1 / config.env.freq
                 logger.warning(f"Controller execution time exceeded loop frequency by {exc:.3f}s.")
         ep_time = time.perf_counter() - start_time
-        controller.episode_callback()
-        logger.info(
-            f"Track time: {ep_time:.3f}s" if obs["target_gate"] == -1 else "Task not completed"
-        )
+        finished_track = next_obs["target_gate"] == -1
+        logger.info(f"Track time: {ep_time:.3f}s" if finished_track else "Task not completed")
     finally:
         env.close()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.WARNING)
+    logging.getLogger("jax").setLevel(logging.ERROR)
+    logger.setLevel(logging.INFO)
+    logging.getLogger("lsy_drone_racing").setLevel(logging.INFO)
     fire.Fire(main)

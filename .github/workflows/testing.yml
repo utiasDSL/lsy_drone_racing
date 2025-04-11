@@ -12,17 +12,10 @@ jobs:
           micromamba-version: '2.0.2-1' # any version from https://github.com/mamba-org/micromamba-releases
           environment-name: test-env
           init-shell: bash
-          create-args: python=3.8
+          create-args: python=3.10
           cache-environment: true
       - name: Install dependencies and package
         run: pip install .
-        shell: micromamba-shell {0}
-      - name: Install cffirmware
-        run: |
-          git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
-          cd pycffirmware
-          git submodule update --init --recursive
-          ./wrapper/build_linux.sh
         shell: micromamba-shell {0}
       - name: Test with pytest
         run: |

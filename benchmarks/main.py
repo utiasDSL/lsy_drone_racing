@@ -1,33 +1,52 @@
 from __future__ import annotations
 
+import fire
 import numpy as np
-from sim import time_sim_attitude_step, time_sim_reset, time_sim_step
+from sim import time_multi_drone_reset, time_multi_drone_step, time_sim_reset, time_sim_step
 
 
-def print_benchmark_results(name: str, timings: list[float]):
-    print(f"\nResults for {name}:")
+def print_benchmark_results(name: str, timings: list[float], n_envs: int, device: str):
+    print(f"\nResults for {name} ({n_envs} envs, {device}):")
     print(f"Mean/std: {np.mean(timings):.2e}s +- {np.std(timings):.2e}s")
     print(f"Min time: {np.min(timings):.2e}s")
     print(f"Max time: {np.max(timings):.2e}s")
-    print(f"FPS: {1 / np.mean(timings):.2f}")
+    print(f"FPS: {n_envs / np.mean(timings):.2f}")
+
+
+def main(
+    n_tests: int = 2,
+    number: int = 100,
+    multi_drone: bool = False,
+    reset: bool = True,
+    step: bool = True,
+    vec_size: int = 1,
+    device: str = "cpu",
+):
+    reset_fn, step_fn = time_sim_reset, time_sim_step
+    if multi_drone:
+        reset_fn, step_fn = time_multi_drone_reset, time_multi_drone_step
+    if reset:
+        timings = reset_fn(n_tests=n_tests, number=number, n_envs=vec_size, device=device)
+        print_benchmark_results(
+            name="Racing env reset", timings=timings / number, n_envs=vec_size, device=device
+        )
+    if step:
+        timings = step_fn(n_tests=n_tests, number=number, n_envs=vec_size, device=device)
+        print_benchmark_results(
+            name="Racing env steps", timings=timings / number, n_envs=vec_size, device=device
+        )
+        timings = step_fn(
+            n_tests=n_tests, number=number, physics_mode="sys_id", n_envs=vec_size, device=device
+        )
+        print_benchmark_results(
+            name="Racing env steps (sys_id backend)",
+            timings=timings / number,
+            n_envs=vec_size,
+            device=device,
+        )
+        # timings = step_fn(n_tests=n_tests, number=number, physics_mode="mujoco")
+        # print_benchmark_results(name="Sim steps (mujoco backend)", timings=timings / number)
 
 
 if __name__ == "__main__":
-    n_tests = 10
-    sim_steps = 10
-    timings = time_sim_reset(n_tests=n_tests)
-    print_benchmark_results(name="Sim reset", timings=timings)
-    timings = time_sim_step(n_tests=n_tests, sim_steps=sim_steps)
-    print_benchmark_results(name="Sim steps", timings=timings / sim_steps)
-    timings = time_sim_step(n_tests=n_tests, sim_steps=sim_steps, physics_mode="dyn")
-    print_benchmark_results(name="Sim steps (dyn backend)", timings=timings / sim_steps)
-    timings = time_sim_step(n_tests=n_tests, sim_steps=sim_steps, physics_mode="pyb_gnd")
-    print_benchmark_results(name="Sim steps (pyb_gnd backend)", timings=timings / sim_steps)
-    timings = time_sim_step(n_tests=n_tests, sim_steps=sim_steps, physics_mode="pyb_drag")
-    print_benchmark_results(name="Sim steps (pyb_drag backend)", timings=timings / sim_steps)
-    timings = time_sim_step(n_tests=n_tests, sim_steps=sim_steps, physics_mode="pyb_dw")
-    print_benchmark_results(name="Sim steps (pyb_dw backend)", timings=timings / sim_steps)
-    timings = time_sim_step(n_tests=n_tests, sim_steps=sim_steps, physics_mode="pyb_gnd_drag_dw")
-    print_benchmark_results(name="Sim steps (pyb_gnd_drag_dw backend)", timings=timings / sim_steps)
-    timings = time_sim_attitude_step(n_tests=n_tests, sim_steps=sim_steps)
-    print_benchmark_results(name="Sim steps (sys_id backend)", timings=timings / sim_steps)
+    fire.Fire(main)

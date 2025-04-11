@@ -5,8 +5,8 @@ implementation. You have to use the same function signatures as defined by the b
 from that, you are free to add any additional methods, attributes, or classes to your controller.
 
 As an example, you could load the weights of a neural network in the constructor and use it to
-compute the control commands in the :meth:`compute_control <.BaseController.compute_control>`
-method. You could also use the :meth:`step_callback <.BaseController.step_callback>` method to
+compute the control commands in the :meth:`compute_control <.Controller.compute_control>`
+method. You could also use the :meth:`step_callback <.Controller.step_callback>` method to
 update the controller state at runtime.
 
 Note:
@@ -24,21 +24,23 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-class BaseController(ABC):
+class Controller(ABC):
     """Base class for controller implementations."""
 
-    def __init__(self, initial_obs: dict[str, NDArray[np.floating]], initial_info: dict):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialization of the controller.
 
         Instructions:
-            The controller's constructor has access the initial state `initial_obs` and the a priori
-            infromation contained in dictionary `initial_info`. Use this method to initialize
-            constants, counters, pre-plan trajectories, etc.
+            The controller's constructor has access the initial observation `obs`, the a priori
+            information contained in dictionary `info`, and the config of the race track. Use this
+            method to initialize constants, counters, pre-plan trajectories, etc.
 
         Args:
-            initial_obs: The initial observation of the environment's state. See the environment's
+            obs: The initial observation of the environment's state. See the environment's
                 observation space for details.
-            initial_info: Additional environment information from the reset.
+            info: The initial environment information from the reset.
+            config: The race configuration. See the config files for details. Contains additional
+                information such as disturbance configurations, randomizations, etc.
         """
 
     @abstractmethod
@@ -48,8 +50,7 @@ class BaseController(ABC):
         """Compute the next desired state of the drone.
 
         Instructions:
-            Implement this method to return the target state to be sent from Crazyswarm to the
-            Crazyflie using the `cmdFullState` call.
+            Implement this method to return the target state to be sent to the Crazyflie.
 
         Args:
             obs: The current observation of the environment. See the environment's observation space
@@ -57,8 +58,8 @@ class BaseController(ABC):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] in absolute
-            coordinates as a numpy array.
+            A drone state command [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] in
+            absolute coordinates or an attitude command [thrust, roll, pitch, yaw] as a numpy array.
         """
 
     def step_callback(

@@ -8,10 +8,12 @@ version = "0.0.1"
 description = "LSY Autonomous Drone Racing Project Course"
 readme = "README.md"
 license = { file = "LICENSE" }
+requires-python = ">=3.10"
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
@@ -19,23 +21,18 @@ classifiers = [
 
 dependencies = [
     "fire >= 0.6.0",
-    "munch >= 4.0.0",
-    "numpy >= 1.24.1, < 2.0.0",
-    "pandas >= 2.0.3",
-    "pybullet >= 3.2.6",
-    "PyYAML >= 6.0.1",
-    "rospkg >= 1.5.1",
+    "numpy >= 2.0.0",
     "scipy >= 1.10.1",
-    "gymnasium == 0.29.1",
+    "gymnasium >= 1.1.0",
     "toml >= 0.10.2",
-    "casadi >= 3.6.5",
-    "swig >= 4.2.1",            # Required for pycffirmware
+    "ml-collections >= 1.0",
+    "packaging >= 24.0",
+    "crazyflow >= 0.0.1",
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0.0"]
-rl = ["stable-baselines3"]
-
+online_submission = ["pandas", "kaggle"]
 
 [tool.setuptools.packages]
 find = {}
@@ -69,11 +66,11 @@ exclude = [
 
 line-length = 100
 indent-width = 4
-target-version = "py38"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "D", "TCH", "ANN"]
-ignore = ["ANN101", "ANN401"]
+ignore = ["ANN401"]
 fixable = ["ALL"]
 unfixable = []
 

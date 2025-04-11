@@ -10,19 +10,20 @@ Before you begin, ensure you have the following:
 
 - Git installed on your system
 - A GitHub account
-- Either `conda <https://conda.io/projects/conda/en/latest/index.html>`_ or `mamba <https://mamba.readthedocs.io/en/latest/>`_ installed
+- Either `conda <https://conda.io/projects/conda/en/latest/index.html>`_ or `mamba <https://mamba.readthedocs.io/en/latest/>`_ or one of their flavors installed. We recommend `micromamba <https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html>`_.
 - Optional: `Docker <https://docs.docker.com/>`_ installed on your system
 
 .. note::
-    You can also use `venv` or other dependency management tools, but the instructions to install swig on your system may be different.
+    You can also use `venv` or other dependency management tools, but we won't cover them here.
 
 Required Repositories
 ---------------------
 
-The LSY Autonomous Drone Racing project requires two repositories:
+The LSY Autonomous Drone Racing project requires you to fork the drone racing repository:
 
-1. `pycffirmware <https://github.com/utiasDSL/pycffirmware/tree/drone_racing>`_ (drone_racing branch): A simulator for the on-board controller response of the drones we are using to accurately model their behavior.
-2. `lsy_drone_racing <https://github.com/utiasDSL/lsy_drone_racing>`_ (main branch): This repository contains the drone simulation, environments, and scripts to simulate and deploy the drones in the racing challenge.
+`lsy_drone_racing <https://github.com/utiasDSL/lsy_drone_racing>`_ (main branch)
+
+This repository contains the drone simulation, environments, and scripts to simulate and deploy the drones in the racing challenge.
 
 Forking the Repository
 ----------------------
@@ -46,15 +47,20 @@ Follow these steps to set up the project:
       mkdir -p ~/repos && cd ~/repos
       git clone https://github.com/<YOUR-USERNAME>/lsy_drone_racing.git
 
-#. Create and activate a new conda environment:
+#. Create and activate a new mamba environment:
+
+You need a working installation of ROS2 Jazzy and Python 3.11 in order to deploy your controller on the real drone. 
+
+We recommend `RoboStack <https://robostack.github.io>`_ and `micromamba <https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html>`_ for this. Robostack lets you install ROS versions independent of you OS. It builds on top of conda/mamba to do this.
+
+Please follow the `Robostack Getting Started <https://robostack.github.io/GettingStarted.html>`_ in order to create a ROS2 Jazzy Environment on Python 3.11 using micromamba or another package manager of your choice.
+
+If you just want to use the simulation for local development, you can also install a Python environment without ROS2:
 
    .. code-block:: bash
 
-      conda create -n race python=3.8
-      conda activate race
-
-   .. note::
-      It is crucial to use Python 3.8 due to compatibility issues with the real drones when using other versions.
+      mamba create -n race python=3.11
+      mamba activate race
 
 #. Install the lsy_drone_racing package:
 
@@ -63,18 +69,6 @@ Follow these steps to set up the project:
       cd ~/repos/lsy_drone_racing
       pip install --upgrade pip
       pip install -e .
-
-#. Install the pycffirmware package:
-
-   .. code-block:: bash
-
-      cd ~/repos
-      git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
-      cd pycffirmware
-      git submodule update --init --recursive
-      sudo apt update
-      sudo apt install build-essential
-      ./wrapper/build_linux.sh
 
 Testing the Installation
 ------------------------
@@ -91,13 +85,13 @@ If everything is installed correctly, this will open the simulator and simulate 
 Extended Dependencies
 ---------------------
 
-To install extended dependencies for reinforcement learning and testing:
+To install extended dependencies for testing:
 
 .. code-block:: bash
 
-   conda activate race
+   mamba activate race
    cd ~/repos/lsy_drone_racing
-   pip install -e .[rl, test]
+   pip install -e .[test]
 
 You can then run the tests to ensure everything is working:
 
@@ -154,19 +148,19 @@ If you encounter errors related to `LIBGL` and `GLIBCXX_3.4.30` when running the
 
       strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX_3.4.30
 
-   Or check in your conda environment:
+   Or check in your mamba environment:
 
    .. code-block:: bash
 
-      strings /path-to-your-conda/envs/your-env-name/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
+      strings /<PATH-TP-YOUR-MAMBA>/envs/<ENV-NAME>/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
 
 #. If the library is missing, install it:
 
    .. code-block:: bash
 
-      conda install -c conda-forge gcc=12.1.0
+      mamba install -c conda-forge gcc=12.1.0
 
-#. If the error persists, update your `LD_LIBRARY_PATH` to include your conda environment's lib folder.
+#. If the error persists, update your `LD_LIBRARY_PATH` to include your mamba environment's lib folder.
 
 libNatNet Error (deployment only)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

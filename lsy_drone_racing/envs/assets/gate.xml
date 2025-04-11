@@ -1,0 +1,12 @@
+<mujoco>
+  <compiler angle="degree"/>
+  <worldbody>
+    <body name="gate">
+      <geom name="red_edge" type="box" size=".29 .0125 .045" pos="-0.245 0 0" euler="0 90 0" rgba="0.059 0.161 0.42 1"/>
+      <geom name="blue_edge" type="box" size=".29 .0125 .045" pos="0 0 0.245" rgba="0.059 0.161 0.42 1"/>
+      <geom name="green_edge" type="box" size=".29 .0125 .045" pos="0.245 0 0" euler="0 90 0" rgba="0.059 0.161 0.42 1"/>
+      <geom name="grey_edge" type="box" size=".29 .0125 .045" pos="0 0 -0.245" rgba="0.059 0.161 0.42 1"/>
+      <geom name="gate_stand" type="box" size="0.05 0.05 0.5" pos="0 0 -0.79" rgba="0.7 0.68 0.55 1"/>
+    </body>
+  </worldbody>
+</mujoco>

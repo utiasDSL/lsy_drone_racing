@@ -7,5 +7,3 @@ lsy_drone_racing.utils
     :hidden:
 
     utils
-    ros_utils
-    import_utils

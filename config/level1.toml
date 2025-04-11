@@ -1,8 +1,8 @@
 # Level 1
 
-# | Evaluation Scenario | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes | Notes    |
-# | :-----------------: | :-----------------------: | :-------------------------: | :--------------------: | :------: |
-# | `level1.toml`       | **Yes**                   | **Yes**                     | *No*                   | Adaptive |
+# | Evaluation Scenario | Rand. Inertial Properties | Randomized Obstacles, Gates | Notes    |
+# | :-----------------: | :-----------------------: | :-------------------------: | :------: |
+# | `level1.toml`       | **Yes**                   | **No**                     | Adaptive |
 [controller]
 file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 
@@ -14,37 +14,24 @@ check_race_track = true
 check_drone_start_pos = true
 # Lets you practice your controller without putting up gates & obstacles, assumes nominal positions given below.
 practice_without_track_objects = false
+[[deploy.drones]]
+id = 91
+channel = 100
 
 [sim]
-# Physics options:
-# "pyb": PyBullet
-# "dyn": Mathematical dynamics model 
-# "pyb_gnd" PyBullet with ground effect
-# "pyb_drag": PyBullet with drag
-# "pyb_dw": PyBullet with downwash
-# "pyb_gnd_drag_dw": PyBullet with ground effect, drag, and downwash.
-physics = "pyb"
+# Physics options: analytical, sys_id, mujoco
+physics = "analytical"
 camera_view = [5.0, -40.0, -40.0, 0.5, -1.0, 0.5]
-sim_freq = 500                                    # Simulation frequency, in Hz
-ctrl_freq = 500                                   # Controller frequency, in Hz. This frequency is used to simulate the onboard controller, NOT for the environment's step function
+freq = 500                                        # Simulation frequency, in Hz
+attitude_freq = 500                               # Controller frequency, in Hz. This frequency is used to simulate the onboard controller, NOT for the environment's step function
 gui = false                                       # Enable/disable PyBullet's GUI
 
-[sim.disturbances.action]
-type = "GaussianNoise"
-std = 0.001
-
-[sim.disturbances.dynamics]
-type = "UniformNoise"
-low = [-0.1, -0.1, -0.1]
-high = [0.1, 0.1, 0.1]
-
 [env]
-id = "DroneRacing-v0" # Either "DroneRacing-v0" or "DroneRacingThrust-v0". If using "DroneRacingThrust-v0", the drone will use the thrust controller instead of the position controller.
-reseed = true         # Whether to re-seed the random number generator between episodes
-seed = 1337           # Random seed
-freq = 60             # Frequency of the environment's step function, in Hz
-symbolic = false      # Whether to include symbolic expressions in the info dict. Note: This can interfere with multiprocessing! If you want to parallelize your training, set this to false.
-sensor_range = 0.45   # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
+id = "DroneRacing-v0"   # "DroneRacing-v0" for single races, "MultiDroneRacing-v0" for multi-drone races. Each environment also implements a vector-environment for faster training
+seed = 1337             # Random seed
+freq = 50               # Frequency of the environment's step function, in Hz
+sensor_range = 0.5     # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
+control_mode = "state"  # Control mode of the environment. Can be either "state" or "attitude"
 
 [env.track]
 # Tall gates: 1.0m height. Short gates: 0.525m height. Height is measured from the ground to the
@@ -72,29 +59,42 @@ pos = [-0.5, 0.0, 1.4]
 [[env.track.obstacles]]
 pos = [0.0, 1.0, 1.4]
 
-[env.track.drone]
+[[env.track.drones]]
 pos = [1.0, 1.0, 0.05]
 rpy = [0, 0, 0]
 vel = [0, 0, 0]
 ang_vel = [0, 0, 0]
 
-[env.randomization.drone_pos]
-type = "uniform" # Everything that can be used as a distribution in numpy.random
-# Kwargs that are permissable in the np random function
-low = [-0.1, -0.1, 0.0]
-high = [0.1, 0.1, 0.02]
+[env.disturbances.action]
+fn = "normal"
+scale = 0.001
 
-[env.randomization.drone_rpy]
-type = "uniform"
-low = [-0.1, -0.1, -0.1]
-high = [0.1, 0.1, 0.1]
+[env.disturbances.dynamics]
+fn = "uniform"
+[env.disturbances.dynamics.kwargs]
+minval = [-0.1, -0.1, -0.1]
+maxval = [0.1, 0.1, 0.1]
 
-[env.randomization.drone_mass]
-type = "uniform"
-low = -0.01
-high = 0.01
+[env.randomizations.drone_pos]
+fn = "uniform"
+[env.randomizations.drone_pos.kwargs]
+minval = [-0.1, -0.1, 0.0]
+maxval = [0.1, 0.1, 0.02]
 
-[env.randomization.drone_inertia]
-type = "uniform"
-low = [-0.000001, -0.000001, -0.000001]
-high = [0.000001, 0.000001, 0.000001]
+[env.randomizations.drone_rpy]
+fn = "uniform"
+[env.randomizations.drone_rpy.kwargs]
+minval = [-0.1, -0.1, -0.1]
+maxval = [0.1, 0.1, 0.1]
+
+[env.randomizations.drone_mass]
+fn = "uniform"
+[env.randomizations.drone_mass.kwargs]
+minval = -0.01
+maxval = 0.01
+
+[env.randomizations.drone_inertia]
+fn = "uniform"
+[env.randomizations.drone_inertia.kwargs]
+minval = [-0.000001, -0.000001, -0.000001]
+maxval = [0.000001, 0.000001, 0.000001]

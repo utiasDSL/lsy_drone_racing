@@ -6,7 +6,7 @@
 
 [![Python Version]][Python Version URL] [![Ruff Check]][Ruff Check URL] [![Documentation Status]][Documentation Status URL] [![Tests]][Tests URL]
 
-[Python Version]: https://img.shields.io/badge/python-3.8-blue.svg
+[Python Version]: https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue
 [Python Version URL]: https://www.python.org
 
 [Ruff Check]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml/badge.svg?style=flat-square
@@ -22,9 +22,23 @@
 - [Autonomous Drone Racing Project Course](#autonomous-drone-racing-project-course)
   - [Table of Contents](#table-of-contents)
   - [Documentation](#documentation)
-  - [Installation](#installation)
+  - [Required Packages - Overview](#required-packages---overview)
+      - [In Simulation](#in-simulation)
+      - [On Hardware](#on-hardware)
+  - [Step-by-Step Installation](#step-by-step-installation)
     - [Fork lsy\_drone\_racing](#fork-lsy_drone_racing)
-    - [Using conda/mamba](#using-condamamba)
+    - [Setting up your environment](#setting-up-your-environment)
+      - [Simulation \& on Hardware (Recommended)](#simulation--on-hardware-recommended)
+      - [Simulation \& Hardware on our Lab PC (If Necessary)](#simulation--hardware-on-our-lab-pc-if-necessary)
+      - [Simulation only (Not Recommended)](#simulation-only-not-recommended)
+    - [Package Installation](#package-installation)
+      - [Installation of you lsy\_drone\_racing fork (necessary for sim \& real)](#installation-of-you-lsy_drone_racing-fork-necessary-for-sim--real)
+      - [Installation of crazyflow (necessary for sim \& real)](#installation-of-crazyflow-necessary-for-sim--real)
+      - [Install Motion Capture Tracking (necessary for real only)](#install-motion-capture-tracking-necessary-for-real-only)
+      - [Install Models Repository (necessary for real only)](#install-models-repository-necessary-for-real-only)
+      - [Install Estimators Repository (necessary for real only)](#install-estimators-repository-necessary-for-real-only)
+      - [USB Preparation for crazyradio (real only)](#usb-preparation-for-crazyradio-real-only)
+      - [cfclient (real only/ optional)](#cfclient-real-only-optional)
     - [Using Docker](#using-docker)
   - [Difficulty levels](#difficulty-levels)
     - [Switching between configurations](#switching-between-configurations)
@@ -36,24 +50,34 @@
   - [Common errors](#common-errors)
     - [GLIBCXX](#glibcxx)
   - [Deployment](#deployment)
-    - [Hardware setup](#hardware-setup)
     - [Common errors](#common-errors-1)
-      - [libNatNet](#libnatnet)
       - [LIBUSB\_ERROR\_ACCESS](#libusb_error_access)
-    - [Deployment on our lab PC](#deployment-on-our-lab-pc)
     - [Fly with the drones](#fly-with-the-drones)
       - [Settings](#settings)
       - [Launch](#launch)
 
 
 ## Documentation
+
 To get you started with the drone racing project, you can head over to our [documentation page](https://lsy-drone-racing.readthedocs.io/en/latest/getting_started/general.html).
 
-## Installation
 
-To run the LSY Autonomous Drone Racing project, you will need 2 repositories:
-- [pycffirmware](https://github.com/utiasDSL/pycffirmware/tree/drone_racing) - `drone_racing` branch: A simulator for the on-board controller response of the drones we are using to accurately model their behavior.
-- [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the drone simulation, environments, and scripts to simulate and deploy the drones in the racing challenge
+## Required Packages - Overview
+
+#### In Simulation
+
+To run the LSY Autonomous Drone Racing project in simulation, you will need 2 repositories:
+- [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the environments and scripts to simulate and deploy the drones in the racing challenge.
+- [crazyflow](https://github.com/utiasDSL/crazyflow) - `main` branch: This repository constains the drone simulation.
+
+#### On Hardware
+
+To run the LSY Autonomous Drone Racing project in the lab on real hardware, you need three additional repositories to the ones required for the simulation:
+- [motion_capture_tracking](https://github.com/utiasDSL/motion_capture_tracking) - `ros2` branch: This repository is a ROS 2 package that receives data from our VICON motion capture system and publishes it under the `\tf` topic via ROS2. 
+- [estimators](https://github.com/utiasDSL/estimators) - `main` branch: Estimators to accurately predict the drone state based on the vicon measurements.
+- [models](https://github.com/utiasDSL/models) - `main` branch: Dynamics Models of the crazyflie quadrotor.
+
+## Step-by-Step Installation
 
 ### Fork lsy_drone_racing
 
@@ -61,20 +85,45 @@ The first step is to fork the [lsy_drone_racing](https://github.com/utiasDSL/lsy
 
 If you have never worked with GitHub before, see the [docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) on forking.
 
-### Using conda/mamba
+### Setting up your environment
 
-The following assumes that you have a functional installation of either [conda](https://conda.io/projects/conda/en/latest/index.html) or [mamba](https://mamba.readthedocs.io/en/latest/).
+#### Simulation & on Hardware (Recommended)
 
-First, clone the new fork from your own account and create a new environment with Python 3.8 by running
+You need a working installation of ROS2 Jazzy and Python 3.11 in order to deploy your controller on the real drone in the end. 
+
+We recommend [RoboStack](https://robostack.github.io) and [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html) for this. Robostack lets you install your favorite ROS version independent of you OS. It builds on top of conda/mamba to do this.
+
+Please follow the [Robostack Getting Started](https://robostack.github.io/GettingStarted.html) in order to create a ROS2 Jazzy Environment on Python3.11 using micromamba or another package manager of your choice.
+
+#### Simulation & Hardware on our Lab PC (If Necessary)
+
+We provide a PC in the Lab on which you are allowed to run your controllers during deployment. Please follow the instructions regarding robostack as provided, but with the following changes: 
+
+Please choose descriptive environment names such as ```Team1```.
+
+Create your own project folder and install the provided packages only in the given folder instead of the `~/repos` folder:
+```bash
+mkdir ~/repos/student_forks/<TEAM_NAME>
+cd ~/repos/student_forks/<TEAM_NAME>
+```
+
+#### Simulation only (Not Recommended)
+
+If you only want to run the simulation, you can use your favorite conda/mamba/venv to install the packages. However, you will need a working installation of ROS2 if you want to deploy your controller on the real drone.
+
+
+### Package Installation
+
+> **Note:** Make sure you have activated your environment before installing the packages
+
+#### Installation of you lsy_drone_racing fork (necessary for sim & real)
+
+First, clone the new fork from your own account and create a new environment by running
 
 ```bash
 mkdir -p ~/repos && cd repos
 git clone https://github.com/<YOUR-USERNAME>/lsy_drone_racing.git
-conda create -n race python=3.8
-conda activate race
 ```
-
-> **Note:** It is important you stick with **Python 3.8**. Yes, it is outdated. Yes, we'd also like to upgrade. However, there are serious issues beyond our control when deploying the code on the real drones with any other version.
 
 Now you can install the lsy_drone_racing package in editable mode from the repository root
 
@@ -83,16 +132,16 @@ cd ~/repos/lsy_drone_racing
 pip install --upgrade pip
 pip install -e .
 ```
-In addition, you also need to install the pycffirmware package from source with
+
+#### Installation of crazyflow (necessary for sim & real)
+
+In addition, you also need to install the crazyflow package
 
 ```bash
 cd ~/repos
-git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
-cd pycffirmware
-git submodule update --init --recursive
-sudo apt update
-sudo apt install build-essential
-./wrapper/build_linux.sh
+git clone https://github.com/utiasDSL/crazyflow.git
+cd ~/repos/crazyflow
+pip install -e .
 ```
 
 Finally, you can test if the installation was successful by running 
@@ -106,14 +155,98 @@ If everything is installed correctly, this opens the simulator and simulates a d
 
 You can also install the extended dependencies with 
 ```bash
-conda activate race
 cd ~/repos/lsy_drone_racing
-pip install -e .[rl, test]
+pip install -e .[rl,test]
 ```
 and check if all tests complete with 
 ```bash
 cd ~/repos/lsy_drone_racing
 pytest tests
+```
+
+#### Install Motion Capture Tracking (necessary for real only)
+
+Create a ros2 workspace in which the package will be located:
+```
+mkdir -p ~/ros_ws/src
+```
+
+Clone the repository and build it using colcon. Make sure your robostack environment is activated.
+```
+cd ~/ros_ws/src
+git clone --recurse-submodules https://github.com/utiasDSL/motion_capture_tracking
+cd ../
+colcon build --cmake-args -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+```
+
+Test your installation: For this to work you have to be in the lab and be connected to our local network. 
+```
+# Check connection to the vicon PC
+ping 10.157.136.191
+```
+
+If this works, source the workspace and run the motiontracking node
+```
+source ~/ros_ws/install/setup.sh
+ros2 launch motion_capture_tracking launch.py
+```
+Optional: Sourcing your workspace automatically
+Every time you run the motion_capture_tracking node, you have to source the workspace first. You can either do this manually or automate this. In order to automate this, you have to modify the ```activate.d``` directory of your package manager. The files within this directory are run when the environment is activated. Because the files are run in alphabetic order, we start our file name with "x".
+
+For micromamba this would be:
+```
+echo "source $HOME/ros_ws/install/setup.sh" > ~/.mamba/envs/ros_env/etc/conda/activate.d/xcustom_activate.sh
+```
+
+#### Install Models Repository (necessary for real only)
+
+```
+cd ~/repos
+# Download and install our models repository
+git clone git@github.com:utiasDSL/models.git
+cd models
+pip install -e . 
+```
+
+#### Install Estimators Repository (necessary for real only)
+
+```
+cd ~/repos
+git clone git@github.com:utiasDSL/estimators.git
+cd estimators
+pip install -e .
+```
+
+#### USB Preparation for crazyradio (real only)
+
+Next, paste the following block into your terminal
+```bash
+cat <<EOF | sudo tee /etc/udev/rules.d/99-bitcraze.rules > /dev/null
+# Crazyradio (normal operation)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1915", ATTRS{idProduct}=="7777", MODE="0664", GROUP="plugdev"
+# Bootloader
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1915", ATTRS{idProduct}=="0101", MODE="0664", GROUP="plugdev"
+# Crazyflie (over USB)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", MODE="0664", GROUP="plugdev"
+EOF
+
+# USB preparation for crazyradio
+sudo groupadd plugdev
+sudo usermod -a -G plugdev $USER
+
+# Apply changes
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+#### cfclient (real only/ optional)
+
+Optionally, you can also install cfclient to debug issues with the drones and configure IDs etc.
+```bash
+# (optional) Install cfclient
+sudo apt install libxcb-xinerama0
+pip install --upgrade pip
+pip install cfclient
 ```
 
 ### Using Docker
@@ -137,22 +270,21 @@ The complete problem is specified by a TOML file, e.g. [`level0.toml`](config/le
 
 The config folder contains settings for progressively harder scenarios:
 
-|      Evaluation Scenario      | Constraints | Rand. Inertial Properties | Randomized Obstacles, Gates | Rand. Between Episodes |         Notes         |
-| :---------------------------: | :---------: | :-----------------------: | :-------------------------: | :--------------------: | :-------------------: |
-| [Level 0](config/level0.toml) |   **Yes**   |           *No*            |            *No*             |          *No*          |   Perfect knowledge   |
-| [Level 1](config/level1.toml) |   **Yes**   |          **Yes**          |            *No*             |          *No*          |       Adaptive        |
-| [Level 2](config/level2.toml) |   **Yes**   |          **Yes**          |           **Yes**           |          *No*          | Learning, re-planning |
-| [Level 3](config/level3.toml) |   **Yes**   |          **Yes**          |           **Yes**           |        **Yes**         |      Robustness       |
-|                               |             |                           |                             |                        |                       |
-|           sim2real            |   **Yes**   |    Real-life hardware     |           **Yes**           |          *No*          |   Sim2real transfer   |
+|        Evaluation Scenario        | Rand. Inertial Properties | Randomized Obstacles, Gates |       Notes        |
+| :-------------------------------: | :-----------------------: | :-------------------------: | :----------------: |
+|   [Level 0](config/level0.toml)   |           *No*            |            *No*             | Perfect knowledge  |
+|   [Level 1](config/level1.toml)   |          **Yes**          |            *No*             |      Adaptive      |
+|   [Level 2](config/level2.toml)   |          **Yes**          |           **Yes**           |    Re-planning     |
+|           **sim2real**            |  **Real-life hardware**   |           **Yes**           | Sim2real transfer  |
+| [Bonus](config/multi_level3.toml) |          **Yes**          |           **Yes**           | Multi-agent racing |
 
-> **Note:** "Rand. Between Episodes" (governed by argument `reseed_on_reset`) states whether randomized properties and positions vary or are kept constant (by re-seeding the random number generator on each `env.reset()`) across episodes
+> **Warning**: The bonus level has not yet been tested with students. You are **not** expected to solve this level. **Only** touch this if you have a solid solution already and want to take the challenge one level further.
 
 ### Switching between configurations
-You can choose which configuration to use by changing the `--config` command line option. To e.g. run the example controller on the hardest scenario, you can use the following command
+You can choose which configuration to use by changing the `--config` command line option. To e.g. run the example controller on the hardest simulation scenario, you can use the following command
 
 ```bash
-python scripts/sim.py --config config/level3.toml
+python scripts/sim.py --config config/level2.toml
 ```
 
 ## The online competition
@@ -205,217 +337,63 @@ Next, you should check if your system has the required library installed
 strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX_3.4.30
 ```
 
-or if it is installed in your conda environment
+or if it is installed in your mamba environment
 
 ```bash
-strings /path-to-your-conda/envs/your-env-name/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
+strings /<PATH-TO-YOUR-MAMBA-ENV>/lib/libstdc++.so.6 | grep GLIBCXX_3.4.30
 ```
 
 If neither of those yield any results, you are missing this library and can install it with
 
 ```bash
-conda install -c conda-forge gcc=12.1.0
+mamba install -c conda-forge gcc=12.1.0
 ```
 
-If the program still crashes and complains about not finding `GLIBCXX_3.4.30`, please update your `LD_LIBRARY_PATH` variable to point to your conda environment's lib folder.
+If the program still crashes and complains about not finding `GLIBCXX_3.4.30`, please update your `LD_LIBRARY_PATH` variable to point to your mamba environment's lib folder.
 
 ## Deployment
 
-### Hardware setup
-
-To deploy the controllers on real drones you must install ROS Noetic and the crazyswarm package.
-
-Clone the [crazyswarm repository](https://github.com/USC-ACTLab/crazyswarm) and follow its [build steps](https://crazyswarm.readthedocs.io/en/latest/installation.html).
-
-```bash
-cd ~/repos
-git clone https://github.com/USC-ACTLab/crazyswarm
-...
-```
-
-Next, paste the following block into your terminal
-```bash
-cat <<EOF | sudo tee /etc/udev/rules.d/99-bitcraze.rules > /dev/null
-# Crazyradio (normal operation)
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1915", ATTRS{idProduct}=="7777", MODE="0664", GROUP="plugdev"
-# Bootloader
-SUBSYSTEM=="usb", ATTRS{idVendor}=="1915", ATTRS{idProduct}=="0101", MODE="0664", GROUP="plugdev"
-# Crazyflie (over USB)
-SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", MODE="0664", GROUP="plugdev"
-EOF
-
-# USB preparation for crazyradio
-sudo groupadd plugdev
-sudo usermod -a -G plugdev $USER
-
-# Apply changes
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
-
-We also need to install the Vicon bridge package to get access to the Vicon positions etc in ROS.
-```bash
-# Install Vicon bridge nodelet
-cd <path/to/catkin_ws>/src/
-git clone https://github.com/ethz-asl/vicon_bridge
-cd ..
-catkin_make
-source <path/to/catkin_ws>/devel/setup.bash
-```
-
-To start the Vicon bridge by default, you may want to include it in the crazyswarm launchfile.
-
-Optionally, you can also install cfclient to debug issues with the drones and configure IDs etc.
-```bash
-# (optional) Install cfclient
-sudo apt install libxcb-xinerama0
-conda create -n cfclient python=3.7
-conda activate cfclient
-pip install --upgrade pip # note: we are using a conda python3.7 env
-pip install cfclient
-conda deactivate
-```
-
 ### Common errors
-
-#### libNatNet
-If libNatNet is missing either during compiling crazyswarm or launching hover_swarm.launch, one option is to manually install it. Download the library from its [github repo](https://github.com/whoenig/NatNetSDKCrossplatform), follow the build instructions, and then add the library to your `LIBRARY_PATH` and `LD_LIBRARY_PATH` variables.
 
 #### LIBUSB_ERROR_ACCESS
 Change the USB access permissions with
 
 ```sudo chmod -R 777 /dev/bus/usb/```
 
-### Deployment on our lab PC
-In order to simplify deployment each team should create their own Robostack environment. 
-Please choose descriptive environment names such as ```Team1```.
-
-#### Setting Up Your Python Environment with RoboStack
-
-Follow these steps to set up a Python environment for drone racing projects using RoboStack.
-
-#### Prerequisites
-- Ensure ROS is NOT sourced, e.g. in your .bashrc file. Remove any ROS-related sourcing commands temporarily during setup.
-
-- Required Repositories:
-  Ensure the following repositories are installed in ```~/repos```: 
-    - lsy_drone_racing
-    - pycffirmware
-    - crazyswarm-import-py11
-
-#### Step-by-Step Setup
-##### Create and Activate Python Environment
-
-Run the following commands to create a new environment using mamba (part of the Conda ecosystem):
-
-```bash
-export ENV_NAME="<your-group-name>"
-mamba create -n $ENV_NAME -c conda-forge -c robostack-staging ros-noetic-desktop python=3.11
-mamba activate $ENV_NAME
-```
-
-Make sure your environments libraries can be found:
-
-```bash
-cd ~/.mamba/envs/$ENV_NAME/etc/conda/activate.d
-echo "export LIBRARY_PATH=$LIBRARY_PATH:/home/adr/.mamba/envs/$ENV_NAME/lib" > xlibrary_path.sh
-echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/adr/.mamba/envs/$ENV_NAME/lib" > xldlibrary_path.sh 
-mamba activate $ENV_NAME
-```
-
-
-##### Create your own project folder
-```bash
-mkdir ~/repos/student_forks/$ENV_NAME
-cd ~/repos/student_forks/$ENV_NAME
-```
-
-##### Install Dependencies
-
-Navigate to your project directory and install dependencies:
-
-- Clone your fork of the lsy_drone_racing repository and install it:
-
-```bash
-cd ~/repos/student_forks/$ENV_NAME
-git clone https://github.com/<your-github-username>/lsy_drone_racing.git
-cd lsy_drone_racing
-pip install -e .
-```
-- Clone and install the pycffirmare package:
-
-```bash
-cd ~/repos/student_forks/$ENV_NAME
-git clone -b drone_racing https://github.com/utiasDSL/pycffirmware.git
-cd pycffirmware
-git submodule update --init --recursive
-./wrapper/build_linux.sh
-```
-
-- Copy & Install the crazyswarm-import package:
-
-```bash
-cp -r ~/repos/crazyswarm-import ~/repos/student_forks/$ENV_NAME
-cd ~/repos/student_forks/$ENV_NAME/crazyswarm-import
-export CSW_PYTHON=python3
-cd ros_ws
-rm -rf build devel
-cd ..
-./build.sh
-```
-
-- Copy & build the extras workspace:
-
-```bash
-cp -r ~/repos/catkin_ws ~/repos/student_forks/$ENV_NAME
-cd ~/repos/student_forks/$ENV_NAME/catkin_ws
-rm -rf build devel
-catkin_make
-```
-
-##### Configure Environment 
-
-Set up environment scripts:
-
-```bash
-cd ~/.mamba/envs/$ENV_NAME/etc/conda/activate.d
-echo "source $HOME/repos/student_forks/$ENV_NAME/crazyswarm-import/ros_ws/devel/setup.bash" > xsource-crazyswarm.sh
-echo "source $HOME/repos/student_forks/$ENV_NAME/catkin_ws/devel/setup.bash --extend" > xsource-extras.sh
-```
-
-##### Finalizing Setup
-Close all open terminals to ensure that no prior ROS setups interfere with your environment.
-
-Reopen terminals and activate your environment in each terminal:
-
-```bash
-mamba activate <your-env-name>
-```
-
 ### Fly with the drones 
 
 #### Settings
-Make sure you are familiar with the configuration files. Not all options are relevant depending on the motion capture setup. For more info, see the [official documentation](https://crazyswarm.readthedocs.io/en/latest/configuration.html#adjust-configuration-files).
+Make sure your drone is selected on the vicon system, otherwise it will not be tracked.
 
-The important config files are located in the crazyswarm ROS package:
+You will have to modify wo config files before liftoff:
 
-- [Crazyflies types](https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/launch/crazyflieTypes.yaml) — includes controller properties and marker configurations, etc.
-- [In-use Crazyflies](https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/launch/crazyflies.yaml) — includes ID, radio channel, types, etc.
+Please modify `~/repos/estimators/ros_nodes/estimators.toml` in the estimators repository to include the up-to-date drone id (in decimal). 
 
-As well as the main launch file [hover_swarm.launch](https://github.com/USC-ACTLab/crazyswarm/blob/master/ros_ws/src/crazyswarm/launch/hover_swarm.launch).
+Please modify either `~/repos/lsy_drone_racing/config/level2.toml` or create your own custom config file to include the correct drone id.
 
 #### Launch
->**Note:** The following should be run within your teams conda environment.
+>**Note:** The following should be run within your teams mamba environment.
 
-In a terminal, launch the ROS node for the crazyflies. Change the settings in _<path/to/crazyswarm-import/package>/ros_ws/src/crazyswarm/launch/crazyflies.yaml_ as necessary.
-```bash
-roslaunch crazyswarm hover_swarm.launch
+You will need a total of three terminal windows for deploying your controller on the real drone:
+
+Terminal 1 launches the motion_capture_tracking an ensures that the position of all vicon objects are published via ros2:
+```
+mamba activate ros_env
+ros2 launch motion_capture_tracking launch.py
 ```
 
-In a second terminal:
+Terminal 2 starts the estimator: 
+```
+mamba activate ros_env
+cd ~/repos/estimators
+python3 ros_nodes/ros2node.py --settings ros_nodes/estimators.toml
+```
 
-```bash
-python scripts/deploy.py --controller <your_controller.py> --config level3.toml
+Terminal 3 starts the deployment of the controller: 
+```
+mamba activate ros_env
+cd ~/repos/lsy_drone_racing/scripts
+python scripts/deploy.py --controller <your_controller.py> --config level2.toml
 ```
 
 where `<your_controller.py>` implements a controller that inherits from `lsy_drone_racing.control.BaseController`
