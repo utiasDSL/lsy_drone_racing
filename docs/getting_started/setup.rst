@@ -49,18 +49,18 @@ Follow these steps to set up the project:
 
 #. Create and activate a new mamba environment:
 
-You need a working installation of ROS2 Jazzy and Python 3.11 in order to deploy your controller on the real drone. 
+   You need a working installation of ROS2 Jazzy and Python 3.11 in order to deploy your controller on the real drone. 
 
-We recommend `RoboStack <https://robostack.github.io>`_ and `micromamba <https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html>`_ for this. Robostack lets you install ROS versions independent of you OS. It builds on top of conda/mamba to do this.
+   We recommend `RoboStack <https://robostack.github.io>`_ and `micromamba <https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html>`_ for this. Robostack lets you install ROS versions independent of you OS. It builds on top of conda/mamba to do this.
 
-Please follow the `Robostack Getting Started <https://robostack.github.io/GettingStarted.html>`_ in order to create a ROS2 Jazzy Environment on Python 3.11 using micromamba or another package manager of your choice.
+   Please follow the `Robostack Getting Started <https://robostack.github.io/GettingStarted.html>`_ in order to create a ROS2 Jazzy Environment on Python 3.11 using micromamba or another package manager of your choice.
 
-If you just want to use the simulation for local development, you can also install a Python environment without ROS2:
+   If you just want to use the simulation for local development, you can also install a Python environment without ROS2:
 
-   .. code-block:: bash
+      .. code-block:: bash
 
-      mamba create -n race python=3.11
-      mamba activate race
+         mamba create -n race python=3.11
+         mamba activate race
 
 #. Install the lsy_drone_racing package:
 
@@ -69,6 +69,11 @@ If you just want to use the simulation for local development, you can also insta
       cd ~/repos/lsy_drone_racing
       pip install --upgrade pip
       pip install -e .
+
+   If you want to use GPU acceleration, you can install the optional dependencies:
+
+   .. code-block:: bash
+      pip install -e .[gpu]
 
 Testing the Installation
 ------------------------
