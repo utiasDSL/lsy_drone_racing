@@ -320,7 +320,7 @@ class RealRaceCoreEnv:
         self.drone.param.set_value("kalman.initialY", pos[1])
         self.drone.param.set_value("kalman.initialZ", pos[2])
         quat = self._ros_connector.quat[self.drone_name]
-        yaw = R.from_quat(quat).as_euler("xyz", degrees=False)[0]
+        yaw = R.from_quat(quat).as_euler("xyz", degrees=False)[2]
         self.drone.param.set_value("kalman.initialYaw", yaw)
         self.drone.param.set_value("kalman.resetEstimation", "1")
         time.sleep(0.1)
