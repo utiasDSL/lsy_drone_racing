@@ -297,7 +297,9 @@ class RealRaceCoreEnv:
         drone.open_link(uri)
 
         logger.info(f"Waiting for drone {drone_id} to connect...")
-        event.wait(5.0)
+        connected = event.wait(5.0)
+        if not connected:
+            raise TimeoutError("Timed out while waiting for the drone.")
         logger.info(f"Drone {drone_id} connected to {uri}")
 
         return drone

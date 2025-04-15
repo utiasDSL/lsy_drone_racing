@@ -115,8 +115,8 @@ Alternatively, you can run the simulation using Docker, although currently witho
 
    .. code-block:: bash
 
-      docker compose build
-      docker compose up
+      docker compose --profile sim build
+      docker compose --profile sim up
 
    After building, running the container should produce output similar to:
 
