@@ -28,11 +28,11 @@ dependencies = [
     "ml-collections >= 1.0",
     "packaging >= 24.0",
     "crazyflow >= 0.0.1",
-    "jax>=0.5"
+    "jax>=0.5",
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8.0.0"]
+test = ["pytest>=8.0.0", "pyinstrument"]
 online_submission = ["pandas", "kaggle"]
 gpu = ["crazyflow[gpu]"]
 deploy = ["cflib"]
