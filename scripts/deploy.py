@@ -64,8 +64,10 @@ def main(config: str = "level2.toml", controller: str | None = None):
             obs = {k: v[0] for k, v in obs.items()}
             action = controller.compute_control(obs, info)
             next_obs, reward, terminated, truncated, info = env.step(action)
-            controller.step_callback(action, next_obs, reward, terminated, truncated, info)
-            if terminated or truncated:
+            controller_finished = controller.step_callback(
+                action, next_obs, reward, terminated, truncated, info
+            )
+            if terminated or truncated or controller_finished:
                 break
             if (dt := (time.perf_counter() - t_loop)) < (1 / config.env.freq):
                 time.sleep(1 / config.env.freq - dt)

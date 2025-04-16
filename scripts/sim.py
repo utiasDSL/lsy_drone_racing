@@ -83,9 +83,11 @@ def simulate(
             action = controller.compute_control(obs, info)
             obs, reward, terminated, truncated, info = env.step(action)
             # Update the controller internal state and models.
-            controller.step_callback(action, obs, reward, terminated, truncated, info)
+            controller_finished = controller.step_callback(
+                action, obs, reward, terminated, truncated, info
+            )
             # Add up reward, collisions
-            if terminated or truncated:
+            if terminated or truncated or controller_finished:
                 break
             # Synchronize the GUI.
             if config.sim.gui:
