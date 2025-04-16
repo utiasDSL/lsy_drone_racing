@@ -141,7 +141,11 @@ class AttitudeController(Controller):
         truncated: bool,
         info: dict,
     ) -> bool:
-        """Increment the tick counter."""
+        """Increment the tick counter.
+
+        Returns:
+            True if the controller is finished, False otherwise.
+        """
         self._tick += 1
         return self._finished
 
