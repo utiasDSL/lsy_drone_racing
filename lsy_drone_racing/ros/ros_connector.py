@@ -25,8 +25,8 @@ from uuid import uuid4
 
 import numpy as np
 import rclpy
-from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped
+from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import Float64MultiArray
 from tf2_msgs.msg import TFMessage
 
@@ -95,17 +95,13 @@ class ROSConnector:
             TimeoutError: If updates for all tracked objects aren't received within the specified
                 timeout period.
         """
-        assert rclpy.ok(), (
-            "ROS must be initialized before creating a ROSConnector instance."
-        )
+        assert rclpy.ok(), "ROS must be initialized before creating a ROSConnector instance."
         self.tf_names = [] if tf_names is None else tf_names
         self.estimator_names = [] if estimator_names is None else estimator_names
         assert not set(self.tf_names).intersection(set(self.estimator_names)), (
             "Duplicate names in tf and estimator"
         )
-        assert len(self.tf_names) == len(set(self.tf_names)), (
-            "Duplicate items in tf_names"
-        )
+        assert len(self.tf_names) == len(set(self.tf_names)), "Duplicate items in tf_names"
         assert len(self.estimator_names) == len(set(self.estimator_names)), (
             "Duplicate items in estimator_names"
         )
@@ -116,16 +112,12 @@ class ROSConnector:
         self._quat = ctx.Array("f", [float("nan")] * len(self.names) * 4)
         self._vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._ang_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
-        self._disturbance = ctx.Array(
-            "f", [float("nan")] * len(self.estimator_names) * 6
-        )
+        self._disturbance = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 6)
         self._forces = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
         self._times = ctx.Array("f", [float("nan")] * len(self.names))
 
         self.shutdown = ctx.Event()
-        atexit.register(
-            lambda: self.shutdown.set()
-        )  # Ensure processes are killed on exit
+        atexit.register(lambda: self.shutdown.set())  # Ensure processes are killed on exit
         self.processes = []
         if self.tf_names:  # Create a process for the /tf callback
             tf_process = ctx.Process(
@@ -156,8 +148,7 @@ class ROSConnector:
         if cmd_topic is not None:  # Create a process for the command publisher
             self.cmd_queue = ctx.Queue(maxsize=10)
             self.cmd_pub = ctx.Process(
-                target=command_publisher,
-                args=(self.cmd_queue, cmd_topic, self.shutdown),
+                target=command_publisher, args=(self.cmd_queue, cmd_topic, self.shutdown)
             )
             self.cmd_pub.start()
 
@@ -174,9 +165,7 @@ class ROSConnector:
                 time.sleep(0.01)  # Processes are spinning, so we can sleep here
             else:
                 self.shutdown.set()
-                missing_objects = [
-                    name for name, pos in self.pos.items() if np.any(np.isnan(pos))
-                ]
+                missing_objects = [name for name, pos in self.pos.items() if np.any(np.isnan(pos))]
                 raise TimeoutError(
                     "Timeout while fetching initial position updates for all tracked objects. "
                     f"Missing objects: {missing_objects}"
@@ -306,17 +295,13 @@ def estimate_update(
     node = rclpy.create_node("estimate_updater_" + uuid4().hex)
 
     qos_profile = QoSProfile(
-        reliability=QoSReliabilityPolicy.BEST_EFFORT,
-        history=QoSHistoryPolicy.KEEP_LAST,
-        depth=1,
+        reliability=QoSReliabilityPolicy.BEST_EFFORT, history=QoSHistoryPolicy.KEEP_LAST, depth=1
     )
 
     subs = []
     for name in names:
         # Pose (pos and quat) are shared with all_names, so the index changes!
-        fn = partial(
-            pose_callback, idx=all_names.index(name), pos=pos, quat=quat, times=times
-        )
+        fn = partial(pose_callback, idx=all_names.index(name), pos=pos, quat=quat, times=times)
         sub = node.create_subscription(
             PoseStamped, f"/drones/{name}/estimate/pose", fn, qos_profile
         )
@@ -326,9 +311,7 @@ def estimate_update(
             TwistStamped, f"/drones/{name}/estimate/twist", fn, qos_profile
         )
         subs.append(sub)
-        fn = partial(
-            disturbance_callback, idx=names.index(name), disturbance=disturbance
-        )
+        fn = partial(disturbance_callback, idx=names.index(name), disturbance=disturbance)
         sub = node.create_subscription(
             WrenchStamped, f"/drones/{name}/estimate/wrench", fn, qos_profile
         )
@@ -361,9 +344,7 @@ def command_publisher(queue: mp.Queue, cmd_topic: str, shutdown: Event):
     while not shutdown.is_set():
         try:
             cmd = None
-            cmd = queue.get(
-                timeout=0.1
-            )  # Get the latest message from the queue. Block if empty
+            cmd = queue.get(timeout=0.1)  # Get the latest message from the queue. Block if empty
             while True:  # Get the latest message if queue holds more
                 cmd = queue.get_nowait()
         except Empty:  # We have cleared the queue or timed out, either is fine
@@ -448,14 +429,7 @@ def disturbance_callback(data: WrenchStamped, idx: int, disturbance: Synchronize
         disturbance: The shared memory array for the disturbances.
     """
     force, torque = data.wrench.force, data.wrench.torque
-    disturbance[idx * 6 : (idx + 1) * 6] = [
-        force.x,
-        force.y,
-        force.z,
-        torque.x,
-        torque.y,
-        torque.z,
-    ]
+    disturbance[idx * 6 : (idx + 1) * 6] = [force.x, force.y, force.z, torque.x, torque.y, torque.z]
 
 
 def forces_callback(data: Float64MultiArray, idx: int, forces: SynchronizedArray):
