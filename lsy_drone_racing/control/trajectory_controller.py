@@ -86,10 +86,12 @@ class TrajectoryController(Controller):
         truncated: bool,
         info: dict,
     ) -> bool:
-        """Increment the time step counter."""
+        """Increment the time step counter.
+
+        Returns:
+            True if the controller is finished, False otherwise.
+        """
         self._tick += 1
         return self._finished
-
-    def episode_reset(self):
         """Reset the time step counter."""
         self._tick = 0
