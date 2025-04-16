@@ -74,6 +74,7 @@ class AttitudeController(Controller):
         self.x_des = cs_x(ts)
         self.y_des = cs_y(ts)
         self.z_des = cs_z(ts)
+        self._finished = False
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
@@ -89,6 +90,9 @@ class AttitudeController(Controller):
             The collective thrust and orientation [t_des, r_des, p_des, y_des] as a numpy array.
         """
         i = min(self._tick, len(self.x_des) - 1)
+        if i == len(self.x_des) - 1:  # Maximum duration reached
+            self._finished = True
+
         des_pos = np.array([self.x_des[i], self.y_des[i], self.z_des[i]])
         des_vel = np.zeros(3)
         des_yaw = 0.0
@@ -136,9 +140,14 @@ class AttitudeController(Controller):
         terminated: bool,
         truncated: bool,
         info: dict,
-    ):
-        """Increment the tick counter."""
+    ) -> bool:
+        """Increment the tick counter.
+
+        Returns:
+            True if the controller is finished, False otherwise.
+        """
         self._tick += 1
+        return self._finished
 
     def episode_callback(self):
         """Reset the integral error."""

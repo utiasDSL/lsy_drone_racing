@@ -252,8 +252,8 @@ pip install cfclient
 ### Using Docker
 You can also run the simulation with Docker, albeit without the GUI at the moment. To test this, install docker with docker compose on your system, and then run
 ```bash
-docker compose build
-docker compose up
+docker compose --profile sim build
+docker compose --profile sim up
 ```
 After building, running the container should produce the following output:
 

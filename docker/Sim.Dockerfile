@@ -1,4 +1,4 @@
-FROM python:3.8.10
+FROM python:3.11.12
 RUN pip install --upgrade pip
 RUN apt update
 WORKDIR /home
@@ -9,9 +9,9 @@ WORKDIR /home/lsy_drone_racing
 COPY pyproject.toml ./
 # Install dependencies and cache the build step (only rebuilds when pyproject.toml changes) 
 RUN pip install build
-RUN pip install --no-cache-dir .[test]
+RUN pip install --no-cache-dir .[test,gpu]
 # Copy the rest of the application
 COPY . .
-RUN pip install -e .[test]
+RUN pip install -e .[test,gpu]
 
 ENTRYPOINT ["python", "/home/lsy_drone_racing/scripts/sim.py", "--gui", "False"]

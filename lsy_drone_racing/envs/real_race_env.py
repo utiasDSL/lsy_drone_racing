@@ -122,7 +122,7 @@ class RealRaceCoreEnv:
         self._ros_connector = ROSConnector(
             estimator_names=self.drone_names,
             cmd_topic=f"/estimator/{self.drone_name}/cmd",
-            timeout=5.0,
+            timeout=10.0,
         )
         self._jit()
 
@@ -297,7 +297,9 @@ class RealRaceCoreEnv:
         drone.open_link(uri)
 
         logger.info(f"Waiting for drone {drone_id} to connect...")
-        event.wait(5.0)
+        connected = event.wait(10.0)
+        if not connected:
+            raise TimeoutError("Timed out while waiting for the drone.")
         logger.info(f"Drone {drone_id} connected to {uri}")
 
         return drone
@@ -318,7 +320,7 @@ class RealRaceCoreEnv:
         self.drone.param.set_value("kalman.initialY", pos[1])
         self.drone.param.set_value("kalman.initialZ", pos[2])
         quat = self._ros_connector.quat[self.drone_name]
-        yaw = R.from_quat(quat).as_euler("xyz", degrees=False)[0]
+        yaw = R.from_quat(quat).as_euler("xyz", degrees=False)[2]
         self.drone.param.set_value("kalman.initialYaw", yaw)
         self.drone.param.set_value("kalman.resetEstimation", "1")
         time.sleep(0.1)
@@ -376,7 +378,7 @@ class RealRaceCoreEnv:
         return_pos[2] = RETURN_HEIGHT
         self.drone.high_level_commander.go_to(*return_pos, 0, RETURN_DURATION)
         wait_for_action(RETURN_DURATION)
-        return_pos[2] = 0.0
+        return_pos[2] = 0.05
         self.drone.high_level_commander.go_to(*return_pos, 0, LAND_DURATION)
         wait_for_action(LAND_DURATION)
 
@@ -401,9 +403,8 @@ class RealRaceCoreEnv:
         Irrespective of succeeding or not, the drone will be stopped immediately afterwards or in
         case of errors, and close the connections to the ROSConnector.
         """
-        try:  # Check if drone has successfully completed the track and return home
-            if self.data.target_gate[self.rank] == -1:
-                self._return_to_start()
+        try:
+            self._return_to_start()
         finally:  # Kill the drone
             try:
                 pk = CRTPPacket()

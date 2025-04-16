@@ -3,6 +3,8 @@ services:
     build:
       dockerfile: ./docker/Sim.Dockerfile
       context: .
+    profiles:
+      - sim
     volumes:
       - ./:/home/lsy_drone_racing
 
@@ -13,5 +15,9 @@ services:
     build:
       dockerfile: ./docker/Deploy.Dockerfile
       context: .
-    volumes:
+    volumes:  
       - ./:/home/lsy_drone_racing
+    # Adapt this based off your crazyradio. Run lsusb to check your Crazyradio mount point
+    devices:
+      - /dev/bus/usb/003/003:/dev/bus/usb/003/003
+    network_mode: "host"

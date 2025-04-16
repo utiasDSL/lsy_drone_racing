@@ -97,6 +97,13 @@ class ROSConnector:
         assert rclpy.ok(), "ROS must be initialized before creating a ROSConnector instance."
         self.tf_names = [] if tf_names is None else tf_names
         self.estimator_names = [] if estimator_names is None else estimator_names
+        assert not set(self.tf_names).intersection(set(self.estimator_names)), (
+            "Duplicate names in tf and estimator"
+        )
+        assert len(self.tf_names) == len(set(self.tf_names)), "Duplicate items in tf_names"
+        assert len(self.estimator_names) == len(set(self.estimator_names)), (
+            "Duplicate items in estimator_names"
+        )
         self.names = self.tf_names + self.estimator_names
         # Create synchronized, shared arrays for all quantities
         ctx = mp.get_context("spawn")

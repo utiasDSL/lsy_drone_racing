@@ -70,11 +70,11 @@ class Controller(ABC):
         terminated: bool,
         truncated: bool,
         info: dict,
-    ):
+    ) -> bool:
         """Callback function called once after the control step.
 
         You can use this function to update your controller's internal state, save training data,
-        update your models, etc.
+        update your models, and to terminate the episode.
 
         Instructions:
             Use any collected information to learn, adapt, and/or re-plan.
@@ -86,7 +86,11 @@ class Controller(ABC):
             terminated: Latest terminated flag.
             truncated: Latest truncated flag.
             info: Latest information dictionary.
+
+        Returns:
+            A flag to signal if the controller has finished.
         """
+        return True  # Does not finish by default
 
     def episode_callback(self):
         """Callback function called once after each episode.

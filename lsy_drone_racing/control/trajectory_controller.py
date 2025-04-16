@@ -55,6 +55,7 @@ class TrajectoryController(Controller):
         self.trajectory = CubicSpline(t, waypoints)
         self._tick = 0
         self._freq = config.env.freq
+        self._finished = False
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
@@ -70,7 +71,10 @@ class TrajectoryController(Controller):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
-        target_pos = self.trajectory(min(self._tick / self._freq, self.t_total))
+        tau = min(self._tick / self._freq, self.t_total)
+        target_pos = self.trajectory(tau)
+        if tau == self.t_total:  # Maximum duration reached
+            self._finished = True
         return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
 
     def step_callback(
@@ -81,10 +85,13 @@ class TrajectoryController(Controller):
         terminated: bool,
         truncated: bool,
         info: dict,
-    ):
-        """Increment the time step counter."""
-        self._tick += 1
+    ) -> bool:
+        """Increment the time step counter.
 
-    def episode_reset(self):
+        Returns:
+            True if the controller is finished, False otherwise.
+        """
+        self._tick += 1
+        return self._finished
         """Reset the time step counter."""
         self._tick = 0

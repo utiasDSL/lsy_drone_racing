@@ -54,24 +54,34 @@ def simulate(
         gui = config.sim.gui
     else:
         config.sim.gui = gui
+    logger.warning(
+        "The simulation currently only supports running with one controller type and one set of "
+        "environment parameters (i.e. frequencies, control mode etc.). Only using the settings for "
+        "the first drone."
+    )
     # Load the controller module
-    control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
-    controller_path = control_path / (controller or config.controller.file)
+    if controller is None:
+        controller = config.controller[0]["file"]
+    controller_path = Path(__file__).parents[1] / "lsy_drone_racing/control" / controller
     controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
     env: MultiDroneRacingEnv = gymnasium.make(
-        config.env.id,
-        n_drones=config.env.n_drones,
-        freq=config.env.freq,
+        "MultiDroneRacing-v0",
+        freq=config.env.kwargs[0]["freq"],
         sim_config=config.sim,
-        sensor_range=config.env.sensor_range,
         track=config.env.track,
+        sensor_range=config.env.kwargs[0]["sensor_range"],
+        control_mode=config.env.kwargs[0]["control_mode"],
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),
         seed=config.env.seed,
-        control_mode=config.env.control_mode,
     )
+    # We use the same example controllers for this script as for the single-drone case. These expect
+    # the config to have env.freq set, so we copy it here. Actual multi-drone controllers should not
+    # rely on this.
+    config.env.freq = config.env.kwargs[0]["freq"]
     env = JaxToNumpy(env)
+    n_drones, n_worlds = env.unwrapped.sim.n_drones, env.unwrapped.sim.n_worlds
 
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         obs, info = env.reset()
@@ -83,9 +93,7 @@ def simulate(
             curr_time = i / config.env.freq
 
             action = controller.compute_control(obs, info)
-            action = np.array(
-                [action] * config.env.n_drones * env.unwrapped.sim.n_worlds, dtype=np.float32
-            )
+            action = np.array([action] * n_drones * n_worlds, dtype=np.float32)
             action[1, 0] += 0.2
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated | truncated

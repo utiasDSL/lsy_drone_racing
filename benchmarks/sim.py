@@ -96,10 +96,9 @@ from lsy_drone_racing.envs.multi_drone_race import VecMultiDroneRaceEnv
 
 env = gymnasium.make_vec('MultiDroneRacing-v0',
     num_envs={num_envs},
-    n_drones=config.env.n_drones,
-    freq=config.env.freq,
+    freq=config.env.kwargs[0]["freq"],
     sim_config=config.sim,
-    sensor_range=config.env.sensor_range,
+    sensor_range=config.env.kwargs[0]["sensor_range"],
     track=config.env.track,
     disturbances=config.env.get("disturbances"),
     randomizations=config.env.get("randomizations"),
