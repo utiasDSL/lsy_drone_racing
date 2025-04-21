@@ -36,18 +36,19 @@ class TrajectoryController(Controller):
                 information such as disturbance configurations, randomizations, etc.
         """
         super().__init__(obs, info, config)
+        # Same waypoints as in the trajectory controller. Determined by trial and error.
         waypoints = np.array(
             [
-                [1.0, 1.0, 0.05],
-                [0.8, 0.5, 0.2],
-                [0.55, -0.8, 0.5],
-                [0.2, -1.8, 0.65],
-                [1.1, -1.35, 1.1],
-                [0.2, 0.0, 0.65],
-                [0.0, 0.7, 0.525],
-                [0.0, 0.7, 1.1],
+                [1.0, 1.5, 0.05],
+                [0.8, 1.0, 0.2],
+                [0.55, -0.3, 0.5],
+                [0.2, -1.3, 0.65],
+                [1.1, -0.85, 1.1],
+                [0.2, 0.5, 0.65],
+                [0.0, 1.2, 0.525],
+                [0.0, 1.2, 1.1],
+                [-0.5, 0.0, 1.1],
                 [-0.5, -0.5, 1.1],
-                [-0.5, -1.0, 1.1],
             ]
         )
         self.t_total = 11
