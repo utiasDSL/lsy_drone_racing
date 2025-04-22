@@ -488,7 +488,7 @@ class RaceCoreEnv:
         gates_pos = mocap_pos[:, data.gate_mj_ids]
         obstacles_pos = mocap_pos[:, data.obstacle_mj_ids]
         # We need to convert the mocap quat from MuJoCo order to scipy order
-        gates_quat = mocap_quat[:, data.gate_mj_ids][..., [3, 0, 1, 2]]
+        gates_quat = mocap_quat[:, data.gate_mj_ids][..., [1, 2, 3, 0]]
         # Extract the gate poses of the current target gates and check if the drones have passed
         # them between the last and current position
         gate_ids = data.gate_mj_ids[data.target_gate % n_gates]

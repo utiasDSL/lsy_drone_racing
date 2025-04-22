@@ -63,6 +63,7 @@ def simulate(
         freq=config.env.freq,
         sim_config=config.sim,
         sensor_range=config.env.sensor_range,
+        control_mode=config.env.control_mode,
         track=config.env.track,
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),

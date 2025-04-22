@@ -26,6 +26,7 @@ from uuid import uuid4
 import numpy as np
 import rclpy
 from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped
+from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import Float64MultiArray
 from tf2_msgs.msg import TFMessage
 
@@ -293,22 +294,32 @@ def estimate_update(
     rclpy.init()
     node = rclpy.create_node("estimate_updater_" + uuid4().hex)
 
+    qos_profile = QoSProfile(
+        reliability=QoSReliabilityPolicy.BEST_EFFORT, history=QoSHistoryPolicy.KEEP_LAST, depth=1
+    )
+
     subs = []
     for name in names:
         # Pose (pos and quat) are shared with all_names, so the index changes!
         fn = partial(pose_callback, idx=all_names.index(name), pos=pos, quat=quat, times=times)
-        sub = node.create_subscription(PoseStamped, f"/estimated_state_pose_{name}", fn, 10)
+        sub = node.create_subscription(
+            PoseStamped, f"/drones/{name}/estimate/pose", fn, qos_profile
+        )
         subs.append(sub)
         fn = partial(twist_callback, idx=names.index(name), vel=vel, ang_vel=ang_vel)
-        sub = node.create_subscription(TwistStamped, f"/estimated_state_twist_{name}", fn, 10)
+        sub = node.create_subscription(
+            TwistStamped, f"/drones/{name}/estimate/twist", fn, qos_profile
+        )
         subs.append(sub)
         fn = partial(disturbance_callback, idx=names.index(name), disturbance=disturbance)
         sub = node.create_subscription(
-            WrenchStamped, f"/estimated_state_disturbance_{name}", fn, 10
+            WrenchStamped, f"/drones/{name}/estimate/wrench", fn, qos_profile
         )
         subs.append(sub)
         fn = partial(forces_callback, idx=names.index(name), forces=forces)
-        sub = node.create_subscription(Float64MultiArray, f"/estimated_state_forces_{name}", fn, 10)
+        sub = node.create_subscription(
+            Float64MultiArray, f"/drones/{name}/estimate/forces", fn, qos_profile
+        )
         subs.append(sub)
 
     while not shutdown.is_set():
@@ -418,7 +429,7 @@ def disturbance_callback(data: WrenchStamped, idx: int, disturbance: Synchronize
         disturbance: The shared memory array for the disturbances.
     """
     force, torque = data.wrench.force, data.wrench.torque
-    disturbance[idx * 6 + (idx + 1) * 6] = [force.x, force.y, force.z, torque.x, torque.y, torque.z]
+    disturbance[idx * 6 : (idx + 1) * 6] = [force.x, force.y, force.z, torque.x, torque.y, torque.z]
 
 
 def forces_callback(data: Float64MultiArray, idx: int, forces: SynchronizedArray):
