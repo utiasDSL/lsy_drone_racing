@@ -33,5 +33,5 @@ jobs:
         run: python scripts/kaggle.py
         shell: micromamba-shell {0}
       - name: Export with kaggle
-        run: kaggle competitions submit lsy-drone-racing-ss25 -f submission.csv -m "Automated submission"
+        run: kaggle competitions submit -c lsy-drone-racing-ss-25 -f submission.csv -m "Automated submission"
         shell: micromamba-shell {0}
