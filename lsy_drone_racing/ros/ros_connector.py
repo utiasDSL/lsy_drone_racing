@@ -166,9 +166,20 @@ class ROSConnector:
             else:
                 self.shutdown.set()
                 missing_objects = [name for name, pos in self.pos.items() if np.any(np.isnan(pos))]
+                tf_objects = [n for n in missing_objects if n in self.tf_names]
+                estimator_objects = [n for n in missing_objects if n in self.estimator_names]
+                missing_msg = ""
+                if any(tf_objects):
+                    missing_msg += (
+                        f"\nTF data is missing for {tf_objects}. Is ros2 publishing tf poses?"
+                    )
+                if any(estimator_objects):
+                    missing_msg += (
+                        f"\nEstimator data is missing for {estimator_objects} objects. Is the "
+                        "estimator node running?"
+                    )
                 raise TimeoutError(
-                    "Timeout while fetching initial position updates for all tracked objects. "
-                    f"Missing objects: {missing_objects}"
+                    f"Timeout while fetching initial positions for tracked objects. {missing_msg}"
                 )
 
     @property
