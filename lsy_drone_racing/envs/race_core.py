@@ -227,6 +227,8 @@ class RaceCoreEnv:
     gate_spec_path = Path(__file__).parent / "assets/gate.xml"
     obstacle_spec_path = Path(__file__).parent / "assets/obstacle.xml"
 
+    
+
     def __init__(
         self,
         n_envs: int,
@@ -567,8 +569,35 @@ class RaceCoreEnv:
 
     def _setup_sim(self):
         """Setup the simulation data and build the reset and step functions with custom hooks."""
-        gate_spec = mujoco.MjSpec.from_file(str(self.gate_spec_path))
-        obstacle_spec = mujoco.MjSpec.from_file(str(self.obstacle_spec_path))
+        # Loading models
+        # gate_spec = mujoco.MjSpec.from_file(str(self.gate_spec_path))
+        # obstacle_spec = mujoco.MjSpec.from_file(str(self.obstacle_spec_path))
+
+        gate_spec_str = r"""<mujoco>
+        <compiler angle="degree"/>
+        <worldbody>
+            <body name="gate">
+            <geom name="red_edge" type="box" size=".29 .0125 .045" pos="-0.245 0 0" euler="0 90 0" rgba="0.059 0.161 0.42 1"/>
+            <geom name="blue_edge" type="box" size=".29 .0125 .045" pos="0 0 0.245" rgba="0.059 0.161 0.42 1"/>
+            <geom name="green_edge" type="box" size=".29 .0125 .045" pos="0.245 0 0" euler="0 90 0" rgba="0.059 0.161 0.42 1"/>
+            <geom name="grey_edge" type="box" size=".29 .0125 .045" pos="0 0 -0.245" rgba="0.059 0.161 0.42 1"/>
+            <geom name="gate_stand" type="box" size="0.05 0.05 0.5" pos="0 0 -0.79" rgba="0.7 0.68 0.55 1"/>
+            </body>
+        </worldbody>
+        </mujoco>
+        """
+
+        obstactle_spec_str = r"""<mujoco>  
+        <compiler angle="degree"/>
+        <worldbody>
+            <body name="obstacle">
+            <geom name="obstacle" type="box" size="0.05 0.05 1" pos="0 0 -1" rgba="0.7 0.68 0.55 1"/>
+            </body>
+        </worldbody>
+        </mujoco>
+        """
+        gate_spec = mujoco.MjSpec.from_string(gate_spec_str)
+        obstacle_spec = mujoco.MjSpec.from_string(obstactle_spec_str)
         self._load_track_into_sim(gate_spec, obstacle_spec)
         self._register_object_ids()
         # Set the initial drone states
