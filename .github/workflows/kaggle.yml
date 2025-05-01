@@ -20,20 +20,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: mamba-org/setup-micromamba@v1
+      - uses: conda-incubator/setup-miniconda@v3
         with:
-          micromamba-version: '2.0.2-1' # any version from https://github.com/mamba-org/micromamba-releases
-          environment-name: test-env
-          init-shell: bash
-          create-args: python=3.11
-          cache-environment: true
+          auto-update-conda: true
+          activate-environment: race
+          python-version: 3.11
       - run: pip install .[online_submission,test]
-        shell: micromamba-shell {0}
+        shell: bash -el {0}
       - name: Run simulation tests
         run: python scripts/kaggle.py
-        shell: micromamba-shell {0}
+        shell: bash -el {0}
       - name: Export with kaggle
         run: kaggle competitions submit lsy-drone-racing-ws24 -f submission.csv -m "Automated submission"
-        shell: micromamba-shell {0}
+        shell: bash -el {0}
 
       
