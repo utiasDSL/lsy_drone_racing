@@ -227,8 +227,6 @@ class RaceCoreEnv:
     gate_spec_path = Path(__file__).parent / "assets/gate.xml"
     obstacle_spec_path = Path(__file__).parent / "assets/obstacle.xml"
 
-    
-
     def __init__(
         self,
         n_envs: int,
@@ -572,7 +570,6 @@ class RaceCoreEnv:
         # Loading models
         # gate_spec = mujoco.MjSpec.from_file(str(self.gate_spec_path))
         # obstacle_spec = mujoco.MjSpec.from_file(str(self.obstacle_spec_path))
-
         gate_spec_str = r"""<mujoco>
         <compiler angle="degree"/>
         <worldbody>
