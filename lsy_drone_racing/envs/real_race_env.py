@@ -370,6 +370,9 @@ class RealRaceCoreEnv:
 
         pos = self._ros_connector.pos[self.drone_name]
         vel = self._ros_connector.vel[self.drone_name]
+        if pos[2] < 0.1:
+            # If the drone is on the ground, just turn it off
+            return
         break_pos = pos + vel / np.linalg.norm(vel) * BREAKING_DISTANCE
         break_pos[2] = RETURN_HEIGHT
         self.drone.high_level_commander.go_to(*break_pos, 0, BREAKING_DURATION)
