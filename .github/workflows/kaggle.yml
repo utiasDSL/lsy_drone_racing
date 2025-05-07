@@ -22,10 +22,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mamba-org/setup-micromamba@v1
         with:
-          micromamba-version: '2.0.2-1' # any version from https://github.com/mamba-org/micromamba-releases
+          micromamba-version: '2.1.0-0' # any version from https://github.com/mamba-org/micromamba-releases
           environment-name: test-env
           init-shell: bash
-          create-args: python=3.8
+          create-args: python=3.12
           cache-environment: true
       - run: pip install .[online_submission,test]
         shell: micromamba-shell {0}
@@ -33,7 +33,5 @@ jobs:
         run: python scripts/kaggle.py
         shell: micromamba-shell {0}
       - name: Export with kaggle
-        run: kaggle competitions submit lsy-drone-racing-ws24 -f submission.csv -m "Automated submission"
+        run: kaggle competitions submit -c lsy-drone-racing-ss-25 -f submission.csv -m "Automated submission"
         shell: micromamba-shell {0}
-
-      
