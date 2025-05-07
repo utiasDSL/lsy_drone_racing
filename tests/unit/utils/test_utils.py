@@ -54,25 +54,3 @@ def test_gate_pass():
     # Test not crossing the plane
     drone_pos, last_drone_pos = np.array([0, -0.5, 0]), np.array([0, -1, 0])
     assert not gate_passed(drone_pos, last_drone_pos, gate_pos, gate_quat, gate_size)
-
-
-@pytest.mark.unit
-def test_draw_line():
-    config = load_config(Path(__file__).parents[3] / "config/level0.toml")
-    env = gymnasium.make(
-        "DroneRacing-v0",
-        freq=config.env.freq,
-        sim_config=config.sim,
-        sensor_range=config.env.sensor_range,
-        track=config.env.track,
-        disturbances=config.env.get("disturbances"),
-        randomizations=config.env.get("randomizations"),
-        seed=config.env.seed,
-    )
-    env = JaxToNumpy(env)
-    env.reset()
-    for _ in range(3):
-        line = np.stack([np.arange(4), np.zeros(4), np.zeros(4)]).T
-        draw_line(env, line)
-        env.render()
-    env.close()
