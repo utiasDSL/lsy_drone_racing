@@ -11,3 +11,4 @@ saves
 **/*.csv
 plots/
 c_generated_code/
+scripts/visualization.py

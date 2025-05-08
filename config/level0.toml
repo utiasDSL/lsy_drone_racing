@@ -4,7 +4,7 @@
 # | :-----------------: | :-----------------------: | :-------------------------: | :---------------: |
 # | `level0.toml`       | *No*                      | *No*                        | Perfect knowledge |
 [controller]
-file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+file = "easy_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 
 [deploy]
 ### Settings only relevant for deployment
@@ -44,6 +44,7 @@ control_mode = "state"  # Control mode of the environment. Can be either "state"
 [[env.track.gates]]
 pos = [0.45, -0.5, 0.56]
 rpy = [0.0, 0.0, 2.35]
+#rpy = [0.0, 0.0, 0.0]
 [[env.track.gates]]
 pos = [1.0, -1.05, 1.11]
 rpy = [0.0, 0.0, -0.78]
