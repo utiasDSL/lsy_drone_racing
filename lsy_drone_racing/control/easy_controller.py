@@ -57,7 +57,7 @@ class TrajectoryController(Controller):
             ]
         )
 
-        self.t_total = 25
+        self.t_total = 12
         self._tick = 0
         self._freq = config.env.freq
         self._finished = False
@@ -65,79 +65,73 @@ class TrajectoryController(Controller):
         rot_matrices = np.array(gates_rotates.as_matrix())
         self.gates_norm = np.array(rot_matrices[:,:,1])
         self.gates_pos = obs['gates_pos']
+        self.init_pos = obs['pos']
 
-
-        def calc_waypoints(drone_init_pos, gates_pos, gates_norm, distance = 0.5, num_int_pnts = 5):
-            num_gates = gates_pos.shape[0]
-            gates_pos[2][0] += 0.2
-            wp = np.concatenate([gates_pos - distance * gates_norm + i/(num_int_pnts-1) * 2 * distance * gates_norm for i in range(num_int_pnts)], axis=1).reshape(num_gates, num_int_pnts, 3).reshape(-1,3)
-            wp = np.concatenate([np.array([drone_init_pos]), wp], axis=0)
-
-            return wp
-        
-        def trajectory_generate(t_total, waypoints):
-            diffs = np.diff(waypoints, axis=0)
-            segment_length = np.linalg.norm(diffs, axis=1)
-            arc_cum_length = np.concatenate([[0], np.cumsum(segment_length)])
-            t = arc_cum_length / arc_cum_length[-1] * t_total
-            return CubicSpline(t, waypoints)
-        
-
-        def avoid_collision(waypoints, obstacles_pos, safe_dist):
-            trajectory = trajectory_generate(self.t_total, waypoints)
-            t_axis = np.linspace(0, self.t_total, self._freq * self.t_total)
-            wp = trajectory(t_axis)
-
-            for obst_idx, obst in enumerate(obstacles_pos):
-                flag = False
-                t_results = []
-                wp_results = []
-                if obst_idx == 0:
-                    safe_dist = 0.45
-                if obst_idx == 1:
-                    safe_dist = 0.3
-                if obst_idx == 2:
-                    safe_dist = 0.3
-                if obst_idx == 3:
-                    safe_dist = 0.37
-                for i in range(wp.shape[0]):
-                    point = wp[i]
-                    if np.linalg.norm(obst[:2] - point[:2]) < safe_dist and not flag: # first time visit
-                        flag = True
-                        in_idx = i
-                    elif np.linalg.norm(obst[:2] - point[:2]) >= safe_dist and flag:    # visited and out
-                        out_idx = i
-                        flag = False
-                        # map it to new point
-                        direction = wp[in_idx][:2] - obst[:2] + wp[out_idx][:2] - obst[:2]
-                        direction = direction / np.linalg.norm(direction)
-                        new_point_xy = obst[:2] + direction * safe_dist
-                        new_point_z = (wp[in_idx][2] + wp[out_idx][2])/2
-                        new_point = np.concatenate([new_point_xy, [new_point_z]])
-                        t_results.append((t_axis[in_idx] + t_axis[out_idx])/2)
-                        wp_results.append(new_point)
-                    elif np.linalg.norm(obst[:2] - point[:2]) >= safe_dist:   # out
-                        t_results.append(t_axis[i])
-                        wp_results.append(point)
-                t_axis = np.array(t_results)
-                wp = np.array(wp_results)
-
-            return t_axis, wp
-        
-        
-
-        waypoints = calc_waypoints(obs['pos'], self.gates_pos, self.gates_norm)
+        waypoints = self.calc_waypoints(self.init_pos, self.gates_pos, self.gates_norm)
         # t = np.linspace(0, self.t_total, len(waypoints))
-        t, waypoints = avoid_collision(waypoints, obs['obstacles_pos'], 0.3)
-        self.trajectory = trajectory_generate(self.t_total, waypoints)
+        t, waypoints = self.avoid_collision(waypoints, obs['obstacles_pos'], 0.3)
+        self.trajectory = self.trajectory_generate(self.t_total, waypoints)
 
         # self.visualize_traj(self.gates_pos, self.gates_norm, obst_positions=obs['obstacles_pos'], trajectory=self.trajectory, waypoints=waypoints, drone_pos=obs['pos'])
+    def calc_waypoints(self, drone_init_pos, gates_pos, gates_norm, distance = 0.5, num_int_pnts = 5):
+        num_gates = gates_pos.shape[0]
+        wp = np.concatenate([gates_pos - distance * gates_norm + i/(num_int_pnts-1) * 2 * distance * gates_norm for i in range(num_int_pnts)], axis=1).reshape(num_gates, num_int_pnts, 3).reshape(-1,3)
+        wp = np.concatenate([np.array([drone_init_pos]), wp], axis=0)
 
+        return wp
+    
+    def trajectory_generate(self, t_total, waypoints):
+        diffs = np.diff(waypoints, axis=0)
+        segment_length = np.linalg.norm(diffs, axis=1)
+        arc_cum_length = np.concatenate([[0], np.cumsum(segment_length)])
+        t = arc_cum_length / arc_cum_length[-1] * t_total
+        return CubicSpline(t, waypoints)
+    
+    def avoid_collision(self, waypoints, obstacles_pos, safe_dist):
+        trajectory = self.trajectory_generate(self.t_total, waypoints)
+        t_axis = np.linspace(0, self.t_total, self._freq * self.t_total)
+        wp = trajectory(t_axis)
+
+        for obst_idx, obst in enumerate(obstacles_pos):
+            flag = False
+            t_results = []
+            wp_results = []
+            # if obst_idx == 0:
+            #     safe_dist = 0.45
+            # if obst_idx == 1:
+            #     safe_dist = 0.3
+            # if obst_idx == 2:
+            #     safe_dist = 0.3
+            # if obst_idx == 3:
+            #     safe_dist = 0.37
+            for i in range(wp.shape[0]):
+                point = wp[i]
+                if np.linalg.norm(obst[:2] - point[:2]) < safe_dist and not flag: # first time visit
+                    flag = True
+                    in_idx = i
+                elif np.linalg.norm(obst[:2] - point[:2]) >= safe_dist and flag:    # visited and out
+                    out_idx = i
+                    flag = False
+                    # map it to new point
+                    direction = wp[in_idx][:2] - obst[:2] + wp[out_idx][:2] - obst[:2]
+                    direction = direction / np.linalg.norm(direction)
+                    new_point_xy = obst[:2] + direction * safe_dist
+                    new_point_z = (wp[in_idx][2] + wp[out_idx][2])/2
+                    new_point = np.concatenate([new_point_xy, [new_point_z]])
+                    t_results.append((t_axis[in_idx] + t_axis[out_idx])/2)
+                    wp_results.append(new_point)
+                elif np.linalg.norm(obst[:2] - point[:2]) >= safe_dist:   # out
+                    t_results.append(t_axis[i])
+                    wp_results.append(point)
+            t_axis = np.array(t_results)
+            wp = np.array(wp_results)
+
+        return t_axis, wp
     # visualize trajectory
     def visualize_traj(self, gate_positions, gate_normals, obst_positions=None, trajectory=None, waypoints=None, drone_pos=None):
         if not hasattr(self, 'fig') or self.fig is None:
             plt.ion()
-            self.fig = plt.figure(figsize=(10,10))
+            self.fig = plt.figure(num=1, figsize=(10,10))
             self.ax = self.fig.add_subplot(111, projection='3d')
         ax = self.ax
         ax.cla()
@@ -181,7 +175,22 @@ class TrajectoryController(Controller):
         plt.draw()
         # plt.show()
 
+    def pos_change_detect(self, obs):
+        if not hasattr(self, 'last_gate_flags'):
+            self.last_gate_flags = np.array(obs['gates_visited'], dtype=bool)
+            self.last_obst_flags = np.array(obs['obstacles_visited'], dtype=bool)
+            return False
 
+        curr_gate_flags = np.array(obs['gates_visited'], dtype=bool)
+        curr_obst_flags = np.array(obs['obstacles_visited'], dtype=bool)
+
+        gate_triggered = np.any((~self.last_gate_flags) & curr_gate_flags)
+        obst_triggered = np.any((~self.last_obst_flags) & curr_obst_flags)
+
+        self.last_gate_flags = curr_gate_flags
+        self.last_obst_flags = curr_obst_flags
+
+        return gate_triggered or obst_triggered
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
@@ -199,15 +208,20 @@ class TrajectoryController(Controller):
         """
         tau = min(self._tick / self._freq, self.t_total)
         target_pos = self.trajectory(tau)
-        gates_rotates = R.from_quat(obs['gates_quat'])
-        rot_matrices = np.array(gates_rotates.as_matrix())
-        self.gates_norm = np.array(rot_matrices[:,:,1])
-        self.gates_pos = obs['gates_pos']
-        # self.visualize_traj(self.gates_pos, self.gates_norm, obst_positions=obs['obstacles_pos'], trajectory=self.trajectory, drone_pos=obs['pos'])
+        if self.pos_change_detect(obs):
+            gates_rotates = R.from_quat(obs['gates_quat'])
+            rot_matrices = np.array(gates_rotates.as_matrix())
+            self.gates_norm = np.array(rot_matrices[:,:,1])
+            self.gates_pos = obs['gates_pos']
+            # replan trajectory
+            waypoints = self.calc_waypoints(self.init_pos, self.gates_pos, self.gates_norm)
+            t, waypoints = self.avoid_collision(waypoints, obs['obstacles_pos'], 0.3)
+            self.trajectory = self.trajectory_generate(self.t_total, waypoints)
+            # self.visualize_traj(self.gates_pos, self.gates_norm, obst_positions=obs['obstacles_pos'], trajectory=self.trajectory, drone_pos=obs['pos'])
         if tau == self.t_total:  # Maximum duration reached
             self._finished = True
-            plt.ioff()
-            plt.show()
+            # plt.ioff()
+            # plt.show()
         return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
 
     def step_callback(
