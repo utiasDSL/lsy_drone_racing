@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.interpolate import CubicSpline
-from scipy.interpolate import CubicHermiteSpline
 
 from lsy_drone_racing.control import Controller
 
@@ -24,7 +23,10 @@ from scipy.spatial.transform import Rotation as R
 if TYPE_CHECKING:
     from numpy.typing import NDArray
     
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    plt = None
 
 
 class TrajectoryController(Controller):
@@ -42,20 +44,20 @@ class TrajectoryController(Controller):
         """
         super().__init__(obs, info, config)
         # Same waypoints as in the trajectory controller. Determined by trial and error.
-        waypoints = np.array(
-            [
-                [1.0, 1.5, 0.05],
-                [0.8, 1.0, 0.2],
-                [0.55, -0.3, 0.5],
-                [0.2, -1.3, 0.65],
-                [1.1, -0.85, 1.1],
-                [0.2, 0.5, 0.65],
-                [0.0, 1.2, 0.525],
-                [0.0, 1.2, 1.1],
-                [-0.5, 0.0, 1.1],
-                [-0.5, -0.5, 1.1],
-            ]
-        )
+        # waypoints = np.array(
+        #     [
+        #         [1.0, 1.5, 0.05],
+        #         [0.8, 1.0, 0.2],
+        #         [0.55, -0.3, 0.5],
+        #         [0.2, -1.3, 0.65],
+        #         [1.1, -0.85, 1.1],
+        #         [0.2, 0.5, 0.65],
+        #         [0.0, 1.2, 0.525],
+        #         [0.0, 1.2, 1.1],
+        #         [-0.5, 0.0, 1.1],
+        #         [-0.5, -0.5, 1.1],
+        #     ]
+        # )
 
         self.t_total = 12
         self._tick = 0
@@ -73,21 +75,31 @@ class TrajectoryController(Controller):
         self.trajectory = self.trajectory_generate(self.t_total, waypoints)
 
         # self.visualize_traj(self.gates_pos, self.gates_norm, obst_positions=obs['obstacles_pos'], trajectory=self.trajectory, waypoints=waypoints, drone_pos=obs['pos'])
-    def calc_waypoints(self, drone_init_pos, gates_pos, gates_norm, distance = 0.5, num_int_pnts = 5):
+    
+    def calc_waypoints(
+            self, drone_init_pos: NDArray[np.floating], gates_pos: NDArray[np.floating], gates_norm: NDArray[np.floating], distance: float = 0.5, num_int_pnts: int = 5,
+    ) -> NDArray[np.floating]:
+        """Compute waypoints interpolated between gates."""
         num_gates = gates_pos.shape[0]
         wp = np.concatenate([gates_pos - distance * gates_norm + i/(num_int_pnts-1) * 2 * distance * gates_norm for i in range(num_int_pnts)], axis=1).reshape(num_gates, num_int_pnts, 3).reshape(-1,3)
         wp = np.concatenate([np.array([drone_init_pos]), wp], axis=0)
 
         return wp
     
-    def trajectory_generate(self, t_total, waypoints):
+    def trajectory_generate(
+        self, t_total: float, waypoints: NDArray[np.floating],
+    ) -> CubicSpline:
+        """Generate a cubic spline trajectory from waypoints."""
         diffs = np.diff(waypoints, axis=0)
         segment_length = np.linalg.norm(diffs, axis=1)
         arc_cum_length = np.concatenate([[0], np.cumsum(segment_length)])
         t = arc_cum_length / arc_cum_length[-1] * t_total
         return CubicSpline(t, waypoints)
     
-    def avoid_collision(self, waypoints, obstacles_pos, safe_dist):
+    def avoid_collision(
+        self, waypoints: NDArray[np.floating], obstacles_pos: NDArray[np.floating], safe_dist: float,
+    ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
+        """Modify waypoints to avoid collision with obstacles."""
         trajectory = self.trajectory_generate(self.t_total, waypoints)
         t_axis = np.linspace(0, self.t_total, self._freq * self.t_total)
         wp = trajectory(t_axis)
@@ -96,14 +108,6 @@ class TrajectoryController(Controller):
             flag = False
             t_results = []
             wp_results = []
-            # if obst_idx == 0:
-            #     safe_dist = 0.45
-            # if obst_idx == 1:
-            #     safe_dist = 0.3
-            # if obst_idx == 2:
-            #     safe_dist = 0.3
-            # if obst_idx == 3:
-            #     safe_dist = 0.37
             for i in range(wp.shape[0]):
                 point = wp[i]
                 if np.linalg.norm(obst[:2] - point[:2]) < safe_dist and not flag: # first time visit
@@ -128,16 +132,17 @@ class TrajectoryController(Controller):
 
         return t_axis, wp
     # visualize trajectory
-    def visualize_traj(self, gate_positions, gate_normals, obst_positions=None, trajectory=None, waypoints=None, drone_pos=None):
+    def visualize_traj(
+        self, gate_positions: NDArray[np.floating], gate_normals: NDArray[np.floating], obst_positions: NDArray[np.floating] = None,
+        trajectory: CubicSpline = None, waypoints: NDArray[np.floating] = None, drone_pos: NDArray[np.floating] = None,
+    ) -> None:
+        """Visualize trajectory, gates, obstacles and drone position."""
         if not hasattr(self, 'fig') or self.fig is None:
             plt.ion()
             self.fig = plt.figure(num=1, figsize=(10,10))
             self.ax = self.fig.add_subplot(111, projection='3d')
         ax = self.ax
         ax.cla()
-
-        # fig = plt.figure(figsize=(10,10))
-        # ax = fig.add_subplot(111, projection='3d')
 
         # Draw path
         if waypoints is not None:
@@ -175,7 +180,8 @@ class TrajectoryController(Controller):
         plt.draw()
         # plt.show()
 
-    def pos_change_detect(self, obs):
+    def pos_change_detect(self, obs: dict[str, NDArray[np.bool_]]) -> bool:
+        """Detect if position of any gate or obstacle was changed."""
         if not hasattr(self, 'last_gate_flags'):
             self.last_gate_flags = np.array(obs['gates_visited'], dtype=bool)
             self.last_obst_flags = np.array(obs['obstacles_visited'], dtype=bool)
@@ -220,8 +226,6 @@ class TrajectoryController(Controller):
             # self.visualize_traj(self.gates_pos, self.gates_norm, obst_positions=obs['obstacles_pos'], trajectory=self.trajectory, drone_pos=obs['pos'])
         if tau == self.t_total:  # Maximum duration reached
             self._finished = True
-            # plt.ioff()
-            # plt.show()
         return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
 
     def step_callback(
