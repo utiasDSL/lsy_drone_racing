@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.interpolate import CubicSpline
-from scipy.interpolate import interp1d
+from scipy.interpolate import CubicHermiteSpline
 
 from lsy_drone_racing.control import Controller
 
@@ -23,6 +23,8 @@ from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
+    
+import matplotlib.pyplot as plt
 
 
 class TrajectoryController(Controller):
@@ -55,49 +57,58 @@ class TrajectoryController(Controller):
             ]
         )
 
-        
-        def calc_waypoints(drone_init_pos, gates_pos, gates_quat, distance = 0.5, num_int_pnts = 5):
-            gates_rotates = R.from_quat(gates_quat)
-            rot_matrices = np.array(gates_rotates.as_matrix())
-            gates_norm = np.array(rot_matrices[:,:,1])
-            num_gates = gates_pos.shape[0]
-
-            front = gates_pos - distance * gates_norm
-            middle = gates_pos
-            back = gates_pos + distance * gates_norm
-            # wp = np.concatenate([front, middle, back], axis=1).reshape(num_gates, 3, 3).reshape(-1,3)
-            wp = np.concatenate([gates_pos - distance * gates_norm + i/num_int_pnts * 2 * distance * gates_norm for i in range(num_int_pnts)], axis=1).reshape(num_gates, num_int_pnts, 3).reshape(-1,3)
-            wp = np.concatenate([np.array([drone_init_pos]), wp], axis=0)
-            # print(gates_pos)
-            # print(gates_norm)
-            # print(np.concatenate([front, back], axis=1).reshape(num_gates, 2, 3).reshape(-1,3))
-
-            return wp
-        
-        self.t_total = 30
+        self.t_total = 25
         self._tick = 0
         self._freq = config.env.freq
         self._finished = False
+        gates_rotates = R.from_quat(obs['gates_quat'])
+        rot_matrices = np.array(gates_rotates.as_matrix())
+        self.gates_norm = np.array(rot_matrices[:,:,1])
+        self.gates_pos = obs['gates_pos']
+
+
+        def calc_waypoints(drone_init_pos, gates_pos, gates_norm, distance = 0.5, num_int_pnts = 5):
+            num_gates = gates_pos.shape[0]
+            gates_pos[2][0] += 0.2
+            wp = np.concatenate([gates_pos - distance * gates_norm + i/(num_int_pnts-1) * 2 * distance * gates_norm for i in range(num_int_pnts)], axis=1).reshape(num_gates, num_int_pnts, 3).reshape(-1,3)
+            wp = np.concatenate([np.array([drone_init_pos]), wp], axis=0)
+
+            return wp
+        
+        def trajectory_generate(t_total, waypoints):
+            diffs = np.diff(waypoints, axis=0)
+            segment_length = np.linalg.norm(diffs, axis=1)
+            arc_cum_length = np.concatenate([[0], np.cumsum(segment_length)])
+            t = arc_cum_length / arc_cum_length[-1] * t_total
+            return CubicSpline(t, waypoints)
+        
 
         def avoid_collision(waypoints, obstacles_pos, safe_dist):
-            t = np.linspace(0, self.t_total, len(waypoints))
-            trajectory = CubicSpline(t, waypoints)
+            trajectory = trajectory_generate(self.t_total, waypoints)
             t_axis = np.linspace(0, self.t_total, self._freq * self.t_total)
             wp = trajectory(t_axis)
 
-            for obst in obstacles_pos:
+            for obst_idx, obst in enumerate(obstacles_pos):
                 flag = False
                 t_results = []
                 wp_results = []
+                if obst_idx == 0:
+                    safe_dist = 0.45
+                if obst_idx == 1:
+                    safe_dist = 0.3
+                if obst_idx == 2:
+                    safe_dist = 0.3
+                if obst_idx == 3:
+                    safe_dist = 0.37
                 for i in range(wp.shape[0]):
                     point = wp[i]
                     if np.linalg.norm(obst[:2] - point[:2]) < safe_dist and not flag: # first time visit
-                        # map it to new point
                         flag = True
                         in_idx = i
                     elif np.linalg.norm(obst[:2] - point[:2]) >= safe_dist and flag:    # visited and out
                         out_idx = i
                         flag = False
+                        # map it to new point
                         direction = wp[in_idx][:2] - obst[:2] + wp[out_idx][:2] - obst[:2]
                         direction = direction / np.linalg.norm(direction)
                         new_point_xy = obst[:2] + direction * safe_dist
@@ -111,39 +122,67 @@ class TrajectoryController(Controller):
                 t_axis = np.array(t_results)
                 wp = np.array(wp_results)
 
-
             return t_axis, wp
         
+        
 
-        waypoints = calc_waypoints(obs['pos'], obs['gates_pos'], obs['gates_quat'])
-        t, waypoints = avoid_collision(waypoints, obs['obstacles_pos'], 0.2)
-        self.trajectory = CubicSpline(t, waypoints)
-
-
-        dt = np.linspace(0, self.t_total, 50 * len(waypoints))
-        waypoints = np.array([self.trajectory(tau) for tau in dt])
-
-        import matplotlib.pyplot as plt
-
+        waypoints = calc_waypoints(obs['pos'], self.gates_pos, self.gates_norm)
         # t = np.linspace(0, self.t_total, len(waypoints))
-        
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        x, y, z = waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]
-        # Create 3D graph!
-        
+        t, waypoints = avoid_collision(waypoints, obs['obstacles_pos'], 0.3)
+        self.trajectory = trajectory_generate(self.t_total, waypoints)
+
+        # self.visualize_traj(self.gates_pos, self.gates_norm, obst_positions=obs['obstacles_pos'], trajectory=self.trajectory, waypoints=waypoints, drone_pos=obs['pos'])
+
+    # visualize trajectory
+    def visualize_traj(self, gate_positions, gate_normals, obst_positions=None, trajectory=None, waypoints=None, drone_pos=None):
+        if not hasattr(self, 'fig') or self.fig is None:
+            plt.ion()
+            self.fig = plt.figure(figsize=(10,10))
+            self.ax = self.fig.add_subplot(111, projection='3d')
+        ax = self.ax
+        ax.cla()
+
+        # fig = plt.figure(figsize=(10,10))
+        # ax = fig.add_subplot(111, projection='3d')
+
         # Draw path
-        ax.plot(x, y, z, marker='o', linestyle='-', color='b')
+        if waypoints is not None:
+            x, y, z = waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]
+            ax.plot(x, y, z, marker='.', linestyle='--', color='b')
+        if trajectory is not None:
+            dt = np.linspace(0, self.t_total, 100)
+            traj = trajectory(dt)
+            x, y, z = traj[:, 0], traj[:, 1], traj[:, 2]
+            ax.plot(x, y, z, marker='x', linestyle='-', color='orange')
+
+        # Draw gates
+        for pos, normal in zip(gate_positions, gate_normals):
+            ax.quiver(pos[0], pos[1], pos[2],
+                normal[0], normal[1], normal[2],
+                length=0.5, color='green', linewidth=1)
+            
+        # Draw obstacles
+        if obst_positions is not None:
+            for obst in obst_positions:
+                x,y,z = obst
+                ax.plot([x, x], [y, y], [0, 1.4], color='grey', linewidth=4)
+
+        # Draw drone
+        if drone_pos is not None:
+            ax.plot([drone_pos[0]], [drone_pos[1]], [drone_pos[2]], marker='x', markersize=20, color='black')
 
         # Set axes
-        ax.set_title("3D Waypoints Path")
+        ax.set_title("Planned Trajectory")
         ax.set_xlabel("X")
         ax.set_ylabel("Y")
         ax.set_zlabel("Z")
-
         ax.grid(True)
         plt.tight_layout()
-        plt.show()
+        plt.draw()
+        # plt.show()
+
+
+
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
     ) -> NDArray[np.floating]:
@@ -160,8 +199,15 @@ class TrajectoryController(Controller):
         """
         tau = min(self._tick / self._freq, self.t_total)
         target_pos = self.trajectory(tau)
+        gates_rotates = R.from_quat(obs['gates_quat'])
+        rot_matrices = np.array(gates_rotates.as_matrix())
+        self.gates_norm = np.array(rot_matrices[:,:,1])
+        self.gates_pos = obs['gates_pos']
+        # self.visualize_traj(self.gates_pos, self.gates_norm, obst_positions=obs['obstacles_pos'], trajectory=self.trajectory, drone_pos=obs['pos'])
         if tau == self.t_total:  # Maximum duration reached
             self._finished = True
+            plt.ioff()
+            plt.show()
         return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
 
     def step_callback(
