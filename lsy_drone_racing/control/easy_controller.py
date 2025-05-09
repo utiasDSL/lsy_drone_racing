@@ -15,19 +15,17 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.interpolate import CubicSpline
-
-from lsy_drone_racing.control import Controller
-
 from scipy.spatial.transform import Rotation as R
-
-if TYPE_CHECKING:
-    from numpy.typing import NDArray
-    
 try:
     import matplotlib.pyplot as plt
 except ImportError:
     plt = None
 
+from lsy_drone_racing.control import Controller
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+    
 
 class TrajectoryController(Controller):
     """Trajectory controller following a pre-defined trajectory."""
