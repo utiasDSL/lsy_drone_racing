@@ -12,3 +12,6 @@ saves
 plots/
 c_generated_code/
 scripts/visualization.py
+scripts/sim.py
+/config
+/scripts
