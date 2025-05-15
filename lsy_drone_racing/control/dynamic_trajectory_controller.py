@@ -59,7 +59,6 @@ class DynamicTrajectoryController(Controller):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
-        
         # Generate the trajectory based on the new waypoints
         trajectory = self.create_trajectory(obs)
 
