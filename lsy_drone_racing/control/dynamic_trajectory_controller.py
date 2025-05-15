@@ -37,24 +37,9 @@ class DynamicTrajectoryController(Controller):
         """
         super().__init__(obs, info, config)
 
-        # Set waypoints
-        waypoints = np.expand_dims(obs["pos"], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), [1.5, 0.5, 1.0], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), obs["gates_pos"][0], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), [0.1, -1, 1.0], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), [0.8, -1.2, 1.0], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), obs["gates_pos"][1], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), [1.0, -0.7, 1.2], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), obs["gates_pos"][2] + [0.2, -0.5, 0], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), obs["gates_pos"][2], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), obs["gates_pos"][2] + [0, 0.1, 0], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), obs["gates_pos"][2] + [0, 0.1, 1], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), [-0.2, 0.5, 1.2], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), obs["gates_pos"][3], axis=0)
-        waypoints = np.insert(waypoints, len(waypoints), obs["gates_pos"][3] + [0, -0.5, 0], axis=0)
-        self.waypoints = waypoints
+        self.start_pos = obs["pos"]
 
-        self.t_total = 10
+        self.t_total = 12
         self._tick = 0
         self._freq = config.env.freq
         self._finished = False
@@ -74,22 +59,43 @@ class DynamicTrajectoryController(Controller):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
-        # Update waypoints with the current gate positions
-        self.waypoints[2,:] = obs["gates_pos"][0]
-        self.waypoints[5,:] = obs["gates_pos"][1]
-        self.waypoints[8,:] = obs["gates_pos"][2]
-        self.waypoints[12,:] = obs["gates_pos"][3]
-
+        
         # Generate the trajectory based on the new waypoints
-        t = np.linspace(0, self.t_total, len(self.waypoints))
-        self.trajectory = CubicSpline(t, self.waypoints)
+        trajectory = self.create_trajectory(obs)
 
         tau = min(self._tick / self._freq, self.t_total)
-        target_pos = self.trajectory(tau)
+        target_pos = trajectory(tau)
         if tau == self.t_total:  # Maximum duration reached
             self._finished = True
         
         return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
+    
+    def create_trajectory(self, obs: NDArray[np.floating]):
+        waypoints = np.array([
+            self.start_pos,
+            obs["obstacles_pos"][0] + [0.2, 0.5, -0.7],
+            obs["obstacles_pos"][0] + [0.2, -0.3, -0.7],
+            obs["gates_pos"][0] + 0.5 * (obs["obstacles_pos"][0] - [0, 0, 0.6] - obs["gates_pos"][0]),
+            obs["gates_pos"][0] + [-0.1, 0.1, 0],
+            obs["gates_pos"][0] + [-0.6, -0.2, 0],
+            obs["obstacles_pos"][1] + [-0.3, -0.3, -0.7],
+            obs["gates_pos"][1] + [-0.1, -0.2, 0],
+            obs["gates_pos"][1],
+            obs["gates_pos"][1] + [0.2, 0.5, 0],
+            obs["obstacles_pos"][0] + [-0.3, 0, -0.7],
+            obs["gates_pos"][2] + [0.2, -0.5, 0],
+            obs["gates_pos"][2] + [0.1, 0, 0],
+            obs["gates_pos"][2] + [0.1, 0.15, 0],
+            obs["gates_pos"][2] + [0.1, 0.15, 1],
+            obs["obstacles_pos"][3] + [0.4, 0.3, -0.2],
+            obs["obstacles_pos"][3] + [0.4, 0, -0.2],
+            obs["gates_pos"][3],
+            obs["gates_pos"][3] + [0, -0.5, 0],
+        ])
+
+        t = np.linspace(0, self.t_total, len(waypoints))
+        return CubicSpline(t, waypoints)
+
 
     def step_callback(
         self,
