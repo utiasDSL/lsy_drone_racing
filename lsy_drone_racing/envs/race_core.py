@@ -474,6 +474,7 @@ class RaceCoreEnv:
             gates_visited=gates_visited,
             obstacles_visited=obstacles_visited,
             steps=steps,
+            marked_for_reset=jp.where(mask, 0, data.marked_for_reset),  # Unmark after env reset
         )
         return data
 
