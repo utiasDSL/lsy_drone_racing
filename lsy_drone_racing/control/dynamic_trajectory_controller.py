@@ -70,7 +70,16 @@ class DynamicTrajectoryController(Controller):
         
         return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
     
-    def create_trajectory(self, obs: NDArray[np.floating]):
+    def create_trajectory(self, obs: NDArray[np.floating]) -> CubicSpline:
+        """Create a cubic spline trajectory based on the current observation.
+
+        Args:
+            obs (NDArray[np.floating]): The current observation of the environment
+                observation space for details.
+
+        Returns:
+            CubicSpline: A cubic spline object representing the trajectory.
+        """
         waypoints = np.array([
             self.start_pos,
             obs["obstacles_pos"][0] + [0.2, 0.5, -0.7],
