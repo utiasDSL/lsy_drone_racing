@@ -548,7 +548,7 @@ class RaceCoreEnv:
     @staticmethod
     @partial(jax.jit, static_argnames="n_drones")
     def _truncated(steps: Array, max_episode_steps: Array, n_drones: int) -> Array:
-        return jp.tile(steps >= max_episode_steps, (n_drones, 1))
+        return jp.tile((steps >= max_episode_steps)[..., None], (1, n_drones))
 
     @staticmethod
     def _disabled_drones(pos: Array, contacts: Array, data: EnvData) -> Array:
