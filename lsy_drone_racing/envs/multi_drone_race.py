@@ -167,7 +167,7 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
         self.single_observation_space = batch_space(
             build_observation_space(n_gates, n_obstacles), n_drones
         )
-        self.observation_space = batch_space(batch_space(self.single_observation_space), num_envs)
+        self.observation_space = batch_space(self.single_observation_space, num_envs)
 
     def reset(self, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment for all drones.
