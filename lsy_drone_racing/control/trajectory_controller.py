@@ -36,24 +36,10 @@ class TrajectoryController(Controller):
                 information such as disturbance configurations, randomizations, etc.
         """
         super().__init__(obs, info, config)
+        self._start_point = obs["pos"]
         # Same waypoints as in the trajectory controller. Determined by trial and error.
-        waypoints = np.array(
-            [
-                [1.0, 1.5, 0.05],
-                [0.8, 1.0, 0.2],
-                [0.55, -0.3, 0.5],
-                [0.2, -1.3, 0.65],
-                [1.1, -0.85, 1.1],
-                [0.2, 0.5, 0.65],
-                [0.0, 1.2, 0.525],
-                [0.0, 1.2, 1.1],
-                [-0.5, 0.0, 1.1],
-                [-0.5, -0.5, 1.1],
-            ]
-        )
+        self._waypoints = np.array([self._start_point])
         self.t_total = 11
-        t = np.linspace(0, self.t_total, len(waypoints))
-        self.trajectory = CubicSpline(t, waypoints)
         self._tick = 0
         self._freq = config.env.freq
         self._finished = False
@@ -72,6 +58,21 @@ class TrajectoryController(Controller):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
+        self._waypoints = np.array(
+            [
+                self._start_point,
+                obs["obstacles_pos"][0] + [-0.1, -0.3, -0.6],
+                obs["obstacles_pos"][0] + [0.05, -0.2, -0.7],
+                obs["gates_pos"][0] + [0.1, 0.1, 0.1],
+                obs["gates_pos"][0] + [-0.5, -0.3, 0],
+                obs["obstacles_pos"][1] + [-0.3, -0.4, -0.5],
+                obs["gates_pos"][1] + [-0.1, -0.3, 0],
+                obs["gates_pos"][1],
+                obs["obstacles_pos"][0] + [-0.2, 0.1, -0.2],
+            ]
+        )
+        t = np.linspace(0, self.t_total, len(self._waypoints))
+        self.trajectory = CubicSpline(t, self._waypoints)
         tau = min(self._tick / self._freq, self.t_total)
         target_pos = self.trajectory(tau)
         if tau == self.t_total:  # Maximum duration reached
