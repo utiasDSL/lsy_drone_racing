@@ -37,6 +37,7 @@
       - [Install Motion Capture Tracking (necessary for real only)](#install-motion-capture-tracking-necessary-for-real-only)
       - [Install Models Repository (necessary for real only)](#install-models-repository-necessary-for-real-only)
       - [Install Estimators Repository (necessary for real only)](#install-estimators-repository-necessary-for-real-only)
+      - [Install Acados (necessary for MPC approaches in sim \& real)](#install-acados-necessary-for-mpc-approaches-in-sim--real)
       - [USB Preparation for crazyradio (real only)](#usb-preparation-for-crazyradio-real-only)
       - [cfclient (real only/ optional)](#cfclient-real-only-optional)
     - [Using Docker](#using-docker)
@@ -215,6 +216,39 @@ cd ~/repos
 git clone git@github.com:utiasDSL/estimators.git
 cd estimators
 pip install -e .
+```
+
+#### Install Acados (necessary for MPC approaches in sim & real)
+[Acados](https://docs.acados.org/index.html) is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller.
+Even though the installation instructions can also be found on the wepage, we summarized the installation for our recommended setup:
+
+```
+# Clone the repo and check out the correct branch, initialize submodules.
+cd ~/repos
+git clone https://github.com/acados/acados.git
+cd acados
+git checkout tags/v0.5.0
+git submodule update --recursive --init
+
+# Build the application
+mkdir -p build
+cd build
+cmake -DACADOS_WITH_QPOASES=ON ..
+# add more optional arguments e.g. -DACADOS_WITH_DAQP=ON, a list of CMake options is provided below
+make install -j4
+
+# In your environment, make sure you install the acados python interface:
+cd ~/repos/acados
+pip install -e interfaces/acados_template
+
+# Make sure acados can be found by adding its location to the path. For robostack and micromamba, this would be:
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:"$HOME/repos/acados/lib"' > ~/.mamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_ld_library.sh
+echo 'export ACADOS_SOURCE_DIR="$HOME/repos/acados"' > ~/.mamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_source.sh
+
+# Run a simple example from the acados example to make sure it works.
+# If he asks you whether you want to get the t_renderer package installed automatically, press yes.
+python3 ~/repos/acados/examples/acados_python/getting_started/minimal_example_ocp.py
+
 ```
 
 #### USB Preparation for crazyradio (real only)

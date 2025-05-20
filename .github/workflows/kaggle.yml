@@ -31,7 +31,5 @@ jobs:
         run: python scripts/kaggle.py
         shell: bash -el {0}
       - name: Export with kaggle
-        run: kaggle competitions submit lsy-drone-racing-ws24 -f submission.csv -m "Automated submission"
+        run: kaggle competitions submit -c lsy-drone-racing-ss-25 -f submission.csv -m "Automated submission"
         shell: bash -el {0}
-
-      

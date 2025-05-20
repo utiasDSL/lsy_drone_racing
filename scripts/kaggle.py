@@ -18,19 +18,20 @@ logger = logging.getLogger(__name__)
 def main():
     """Run the simulation N times and save the results as 'submission.csv'."""
     n_runs = 10
-    config = load_config(Path(__file__).parents[1] / "config/level2.toml")
+    config_file = "level2.toml"
+    config = load_config(Path(__file__).parents[1] / "config" / config_file)
     ep_times = simulate(
-        config="level2.toml", controller=config.controller.file, n_runs=n_runs, gui=False
+        config=config_file, controller=config.controller.file, n_runs=n_runs, gui=False
     )
 
     # Log the number of failed runs if any
-    if failed := [x for x in ep_times if x is None]:
-        logger.warning(f"{len(failed)} runs failed out of {n_runs}!")
+    if n_failed := len([x for x in ep_times if x is None]):
+        logger.warning(f"{n_failed} run{'' if n_failed == 1 else 's'} failed out of {n_runs}!")
     else:
         logger.info("All runs completed successfully!")
 
     # Abort if more than half of the runs failed
-    if len(failed) > n_runs / 2:
+    if n_failed > n_runs / 2:
         logger.error("More than 50% of all runs failed! Aborting submission.")
         raise RuntimeError("Too many runs failed!")
 
