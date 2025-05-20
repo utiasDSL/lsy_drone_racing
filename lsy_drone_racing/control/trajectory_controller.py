@@ -39,7 +39,7 @@ class TrajectoryController(Controller):
         self._start_point = obs["pos"]
         # Same waypoints as in the trajectory controller. Determined by trial and error.
         self._waypoints = np.array([self._start_point])
-        self.t_total = 11
+        self.t_total = 22
         self._tick = 0
         self._freq = config.env.freq
         self._finished = False
@@ -62,13 +62,21 @@ class TrajectoryController(Controller):
             [
                 self._start_point,
                 obs["obstacles_pos"][0] + [-0.1, -0.3, -0.6],
-                obs["obstacles_pos"][0] + [0.05, -0.2, -0.7],
+                obs["obstacles_pos"][0] + [0.1, -0.3, -0.5],
                 obs["gates_pos"][0] + [0.1, 0.1, 0.1],
                 obs["gates_pos"][0] + [-0.5, -0.3, 0],
                 obs["obstacles_pos"][1] + [-0.3, -0.4, -0.5],
-                obs["gates_pos"][1] + [-0.1, -0.3, 0],
+                # TODO(npesc): finetune the approach angle here for gate 2
+                # possibly add way point to traverse straight through rather than
+                # cutting in towards next gate
+                obs["gates_pos"][1] + [0, -0.3, 0],
                 obs["gates_pos"][1],
-                obs["obstacles_pos"][0] + [-0.2, 0.1, -0.2],
+                obs["obstacles_pos"][0] + [-0.4, -0.1, -0.2],
+                obs["gates_pos"][2],
+                obs["gates_pos"][2] + [0.1, 0, 0],
+                # TODO(npesc): Add better 3rd obstacle avoidance
+                obs["gates_pos"][3],
+                obs["gates_pos"][3] + [0.2, 0, 0],
             ]
         )
         t = np.linspace(0, self.t_total, len(self._waypoints))
@@ -95,5 +103,8 @@ class TrajectoryController(Controller):
         """
         self._tick += 1
         return self._finished
+
+    def reset(self) -> None:
         """Reset the time step counter."""
         self._tick = 0
+        self._finished = False
