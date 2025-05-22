@@ -23,9 +23,9 @@ from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.control import Controller
 
-from lsy_drone_racing.tools.geometric_tools import TransformTool, LinAlgTool
+from lsy_drone_racing.tools.ext_tools import TransformTool, LinAlgTool
 from lsy_drone_racing.tools.race_objects import Gate, Obstacle
-from lsy_drone_racing.tools.occupancy_map import OccupancyMap3D
+from lsy_drone_racing.tools.planners.occupancy_map import OccupancyMap3D
 
 
 
@@ -81,7 +81,8 @@ class FresssackController(Controller):
                     gate_safe_radius : Union[List[np.floating], np.floating, NDArray[np.floating], None] = None,
                     entry_offset : Union[List[np.floating], np.floating, NDArray[np.floating], None] = None,
                     exit_offset: Union[List[np.floating], np.floating, NDArray[np.floating], None] = None,
-                    thickness: Union[List[np.floating], np.floating, NDArray[np.floating], None] = None) -> None:
+                    thickness: Union[List[np.floating], np.floating, NDArray[np.floating], None] = None,
+                    vel_limit : Union[List[np.floating], NDArray[np.floating], np.floating, None] = None) -> None:
         
         self.gates : List[Gate] = []
         self.gates_visited : List[bool] = None
@@ -126,6 +127,12 @@ class FresssackController(Controller):
             thickness = [0.2 for i in range(gates_num)]
         self.gate_thickness = thickness
 
+        if np.isscalar(vel_limit):
+            vel_limit = [vel_limit for i in range(gates_num)]
+        elif vel_limit is None or len(vel_limit) != gates_num:
+            vel_limit = [0.2 for i in range(gates_num)]
+        self.gate_vel_limit = vel_limit
+
         for i in range(gates_num):
             self.gates.append(Gate(pos = gates_pos_init[i],
                                 quat = gates_rot_init[i],
@@ -136,7 +143,8 @@ class FresssackController(Controller):
                                 safe_radius = self.gate_safe_radius[i],
                                 entry_offset = self.gate_exit_offset[i],
                                 exit_offset = self.gate_exit_offset[i],
-                                thickness = self.gate_thickness[i]
+                                thickness = self.gate_thickness[i],
+                                vel_limit = self.gate_vel_limit[i]
                                 ))
         self.gates_visited = obs['gates_visited']
 
@@ -315,3 +323,57 @@ class FresssackController(Controller):
             return True
         else:
             return False
+        
+    def save_trajectory(trajectory: Union[List[NDArray], NDArray], dt : np.floating, path : str, extend_last_step : float = 0.3) -> None:
+        if isinstance(trajectory, list):
+            trajectory = np.vstack(trajectory)
+
+        N, D = trajectory.shape
+        assert D in [3, 6], f"trajectory must have 3 or 6 columns, got {D}"
+        
+        t = np.arange(N).reshape(-1, 1) * dt
+        data = np.hstack([t, trajectory])  # shape = (N, D+1)
+        
+        if extend_last_step != 0 and D == 6:
+            last_pos = trajectory[-1, 0:3]
+            last_vel = trajectory[-1, 3:6]
+            num_extend = int(extend_last_step / dt)
+
+            extended = []
+            for i in range(1, num_extend + 1):
+                t_ext = (N + i - 1) * dt
+                pos_ext = last_pos + i * dt * last_vel
+                row = np.hstack([[t_ext], pos_ext, last_vel])
+                extended.append(row)
+
+            data = np.vstack([data, np.array(extended)])
+            
+        if D == 3:
+            header = 't,x,y,z'
+        else:
+            header = 't,x,y,z,vx,vy,vz'
+
+        np.savetxt(path, data, delimiter=',', header=header, comments='', fmt='%.6f')
+    
+    def read_trajectory(path : str) -> Tuple[List[np.floating], List[NDArray], List[NDArray]]:
+        with open(path, 'r') as f:
+            header = f.readline().strip().split(',')
+
+        data = np.loadtxt(path, delimiter=',', skiprows=1)
+
+        t_idx = header.index('t')
+        x_idx = header.index('x')
+        y_idx = header.index('y')
+        z_idx = header.index('z')
+
+        has_velocity = all(col in header for col in ['vx', 'vy', 'vz'])
+        if has_velocity:
+            vx_idx = header.index('vx')
+            vy_idx = header.index('vy')
+            vz_idx = header.index('vz')
+
+        t_list = data[:, t_idx].tolist()
+        pos_list = [data[i, [x_idx, y_idx, z_idx]] for i in range(data.shape[0])]
+        vel_list = [data[i, [vx_idx, vy_idx, vz_idx]] for i in range(data.shape[0])] if has_velocity else []
+
+        return t_list, pos_list, vel_list
