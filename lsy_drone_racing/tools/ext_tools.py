@@ -1,6 +1,7 @@
 from scipy.spatial.transform import Rotation as R
 import numpy as np
 from numpy.typing import NDArray
+from typing import List
 class TransformTool:
     def quad_to_norm(quad: NDArray[np.floating], axis : int= 1) -> NDArray[np.floating]:
         '''
@@ -24,3 +25,15 @@ class  LinAlgTool:
     
     def dot_safe(a: NDArray[np.floating], b: NDArray[np.floating]) -> float:
         return float(np.clip(np.dot(a, b), -1.0, 1.0))
+
+class PolynomialTool:
+    def cubic_solve_real(a : np.floating, b : np.floating, c : np.floating, d: np.floating) -> List[np.float64]:
+        roots = np.roots(np.array([a,b,c,d], dtype = np.float64))
+        return [r.real for r in roots if np.isclose(r.imag, 0)]
+    
+    def quartic_solve_real(a : np.floating, b : np.floating, c : np.floating, d: np.floating, e : np.floating) -> List[np.float64]:
+        roots = np.roots(np.array([a,b,c,d,e], dtype = np.float64))
+        return [r.real for r in roots if np.isclose(r.imag, 0)]
+    
+if __name__ == "__main__":
+    pass

@@ -145,7 +145,7 @@ class OccupancyMap3D:
         else:
             return 0.0
 
-    def is_free(self, idx, range_check = True) -> bool:
+    def is_free(self, idx : NDArray[np.integer], range_check = True) -> bool:
         x, y, z = idx
         if range_check:
             return 0 <= x < self.size[0] and 0 <= y < self.size[1] and 0 <= z < self.size[2] and self.oc_map[x, y, z] == 0
