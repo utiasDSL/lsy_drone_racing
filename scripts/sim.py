@@ -82,6 +82,7 @@ def simulate(
             curr_time = i / config.env.freq
 
             action = controller.compute_control(obs, info)
+            controller.draw(env)
             obs, reward, terminated, truncated, info = env.step(action)
             # Update the controller internal state and models.
             controller_finished = controller.step_callback(
