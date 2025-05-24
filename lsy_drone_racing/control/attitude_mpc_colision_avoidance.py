@@ -105,12 +105,10 @@ def export_quadrotor_ode_model() -> AcadosModel:
 
     # Define nonlinear constraint expressions:
     p = vertcat(px, py)
-    center1 = vertcat(1.0, 0.0)
-    center2 = vertcat(0.3, 0.5)
+    center_obs1 = MX.sym("p_obs1", 2)  # Obstacle 1 position
     radius = 0.45
     # Define the distance constraint
-    con_h_expr1 = (p - center1).T @ (p - center1) - radius**2
-    con_h_expr2 = (p - center2).T @ (p - center2) - radius**2
+    con_h_expr1 = (p - center_obs1).T @ (p - center_obs1) - radius**2
 
     # Initialize the nonlinear model for NMPC formulation
     model = AcadosModel()
@@ -119,7 +117,8 @@ def export_quadrotor_ode_model() -> AcadosModel:
     model.f_impl_expr = None
     model.x = states
     model.u = inputs
-    model.con_h_expr = vertcat(con_h_expr1, con_h_expr2)
+    model.p = vertcat(center_obs1)  # Add obstacle position as parameter
+    model.con_h_expr = vertcat(con_h_expr1)
 
     return model
 
@@ -211,16 +210,17 @@ def create_ocp_solver(
     # ocp.constraints.idxbu = np.array([0, 1, 2, 3])
 
     # Set nonlinear constraints
-    ocp.dims.nsh = 2
-    ocp.constraints.lh = np.array([0, 0])
-    ocp.constraints.uh = np.array([1e10, 1e10])
-    ocp.constraints.idxsh = np.array([0, 1])     # associate slack with the nonlinear constraint
-    ocp.constraints.lsh = np.array([0, 0])
-    ocp.constraints.ush = np.array([1e10, 1e10])
-    ocp.cost.Zl = np.array([100, 100])  # penalty on slack (lower side)
-    ocp.cost.Zu = np.array([0, 0])  # penalty on slack (upper side)
-    ocp.cost.zl = np.array([50, 50])     # desired slack is zero
-    ocp.cost.zu = np.array([0, 0])
+    ocp.dims.nsh = 1
+    ocp.constraints.lh = np.array([0])
+    ocp.constraints.uh = np.array([1e10])
+    ocp.constraints.idxsh = np.array([0])     # associate slack with the nonlinear constraint
+    ocp.constraints.lsh = np.array([0])
+    ocp.constraints.ush = np.array([1e10])
+    ocp.cost.Zl = np.array([100])  # penalty on slack (lower side)
+    ocp.cost.Zu = np.array([0])  # penalty on slack (upper side)
+    ocp.cost.zl = np.array([50])     # desired slack is zero
+    ocp.cost.zu = np.array([0])
+    ocp.parameter_values = np.array([0.0, 0.0])
 
     # We have to set x0 even though we will overwrite it later on.
     ocp.constraints.x0 = np.zeros((nx))
@@ -363,6 +363,8 @@ class MPController(Controller):
                 ]
             )
             self.acados_ocp_solver.set(j, "yref", yref)
+
+            self.acados_ocp_solver.set(j, "p", np.array([obs["obstacles_pos"][0][0], obs["obstacles_pos"][0][1]]))
         yref_N = np.array(
             [
                 self.x_des[i + self.N],
