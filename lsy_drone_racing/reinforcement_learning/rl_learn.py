@@ -7,16 +7,14 @@ from datetime import datetime
 import os
 from pathlib import Path
 
-from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 from docs import conf
-from lsy_drone_racing.utils import load_config, load_controller
-from lsy_drone_racing.envs.drone_race import DroneRaceEnv
-from rl_env import RLDroneRacingWrapper, RenderCallback
+from lsy_drone_racing.utils import load_config
+from lsy_drone_racing.reinforcement_learning.rl_drone_race import RLDroneRaceEnv, RenderCallback
 
 # === 1. 创建训练环境 ===
 config = load_config(Path(__file__).parents[2] / "config" / "levelrl.toml")
-def make_env():
-    base_env: DroneRaceEnv = gymnasium.make(
+
+env = RLDroneRaceEnv = gymnasium.make(
         config.env.id,
         freq=config.env.freq,
         sim_config=config.sim,
@@ -27,18 +25,14 @@ def make_env():
         randomizations=config.env.get("randomizations"),
         seed=config.env.seed,
     )
-    base_env = JaxToNumpy(base_env)
-    wrapped_env = RLDroneRacingWrapper(base_env)
-    return wrapped_env
-
-env = DummyVecEnv([make_env])  # SB3 要求使用 VecEnv（即使只有1个）
+# env = JaxToNumpy(env)
 
 # === 2. 设置训练保存目录和回调 ===
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_dir = Path(__file__).parent / f"ppo_logs_{timestamp}"
+log_dir = Path(__file__).parent / f"log"
 os.makedirs(log_dir, exist_ok=True)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-checkpoint_callback = CheckpointCallback(save_freq=10000, save_path=log_dir, name_prefix="ppo_checkpoint")
+checkpoint_callback = CheckpointCallback(save_freq=10000, save_path=log_dir, name_prefix=f"model_{timestamp}")
 eval_callback = EvalCallback(env, best_model_save_path=log_dir, eval_freq=5000, n_eval_episodes=5)
 
 # === 3. 初始化 PPO 模型 ===
@@ -58,10 +52,13 @@ model = PPO(
     gamma=0.99,
     learning_rate=3e-4,
     ent_coef=0.0,
+    device="cpu",
 )
+# 加载模型
+# model = PPO.load("log/ppo_final_model", env=env, device="cpu")
 
 # === 4. 启动训练 ===
-render_callback = RenderCallback(render_freq=100)
+render_callback = RenderCallback(render_freq=1)
 model.learn(total_timesteps=200000, callback=[checkpoint_callback, eval_callback, render_callback])
 
 # === 5. 保存最终模型 ===

@@ -15,3 +15,5 @@ scripts/visualization.py
 scripts/sim.py
 /config
 /scripts
+lsy_drone_racing/reinforcement_learning/ppo*
+lsy_drone_racing/reinforcement_learning/log/
