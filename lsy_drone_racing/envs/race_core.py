@@ -474,6 +474,7 @@ class RaceCoreEnv:
             gates_visited=gates_visited,
             obstacles_visited=obstacles_visited,
             steps=steps,
+            marked_for_reset=jp.where(mask, 0, data.marked_for_reset),  # Unmark after env reset
         )
         return data
 
@@ -547,7 +548,7 @@ class RaceCoreEnv:
     @staticmethod
     @partial(jax.jit, static_argnames="n_drones")
     def _truncated(steps: Array, max_episode_steps: Array, n_drones: int) -> Array:
-        return jp.tile(steps >= max_episode_steps, (n_drones, 1))
+        return jp.tile((steps >= max_episode_steps)[..., None], (1, n_drones))
 
     @staticmethod
     def _disabled_drones(pos: Array, contacts: Array, data: EnvData) -> Array:
