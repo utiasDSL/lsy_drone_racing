@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from readline import read_init_file
 from typing import TYPE_CHECKING, Literal
 
+from networkx import generate_random_paths
 import numpy as np
 from numpy.typing import NDArray
 import gymnasium
@@ -17,6 +19,7 @@ from lsy_drone_racing.envs.race_core import RaceCoreEnv, build_action_space, bui
 from crazyflow.constants import GRAVITY, MASS
 from crazyflow.sim.physics import ang_vel2rpy_rates
 from lsy_drone_racing.utils import draw_line
+from lsy_drone_racing.control.attitude_controller import AttitudeController
 
 if TYPE_CHECKING:
     from jax import Array
@@ -25,6 +28,10 @@ AutoresetMode = None
 if Version(gymnasium.__version__) >= Version("1.1"):
     from gymnasium.vector import AutoresetMode
 
+IMMITATION_LEARNING = True
+if IMMITATION_LEARNING:
+    from pathlib import Path
+    from lsy_drone_racing.utils import load_config
 
 class RLDroneRaceEnv(RaceCoreEnv, Env):
     def __init__(
@@ -61,6 +68,7 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
 
         self.act_bias = np.array([MASS * GRAVITY, 0.0, 0.0, 0.0], dtype=np.float32)
         # record previous states for reward calculation
+        self.prev_gate = 0
         self.prev_gate_pos = None
         self.prev_drone_pos = None
         self.prev_act = self.act_bias
@@ -68,30 +76,44 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         self.gates_size = [0.4, 0.4] # [width, height]
         # parameters setting
         self.k_gates = 1.0
+        self.k_center = 0.1
         self.k_act = 2e-4
         self.k_act_d = 1e-4
-        self.k_crash = 10
+        self.k_yaw = 0.02
+        self.k_crash = 20
+        self.k_success = 15
+        self.k_imit = 0.2
+        # public variables
+        self.obs_env = None
+        self.obs_rl = None
 
     def reset(self, seed=None, options=None):
-        obs, info = self._reset(seed=seed, options=options)
-        obs = {k: v[0, 0] for k, v in obs.items()}
+        self.obs_env, info = self._reset(seed=seed, options=options)
+        self.obs_env = {k: np.array(v[0, 0]) for k, v in self.obs_env.items()}
         info = {k: v[0, 0] for k, v in info.items()}
-        self.prev_gate_pos = obs['gates_pos'][0]
-        self.prev_drone_pos = obs['pos']
+        self.prev_gate = 0
+        self.prev_gate_pos = self.obs_env['gates_pos'][0]
+        self.prev_drone_pos = self.obs_env['pos']
         self.prev_act = self.act_bias
-        obs_rl = self._obs_to_state(obs, self.act_bias)
-        return obs_rl, info
+        self.obs_rl = self._obs_to_state(self.obs_env, self.act_bias)
+        if IMMITATION_LEARNING:
+            config = load_config(Path(__file__).parents[2] / "config/level0.toml")
+            self.teacher_controller = AttitudeController(self.obs_env, info, config)
+        return self.obs_rl, info
 
     def step(self, action):
+        # if IMMITATION_LEARNING:
+        #     action = self.teacher_controller.compute_control(self.obs_env, None) - self.act_bias
+        #     self.teacher_controller._tick += 1
         action_exec = action + self.act_bias
-        obs, _, terminated, truncated, info = self._step(action_exec)
-        obs = {k: v[0, 0] for k, v in obs.items()}
+        self.obs_env, _, terminated, truncated, info = self._step(action_exec)
+        self.obs_env = {k: np.array(v[0, 0]) for k, v in self.obs_env.items()}
         info = {k: v[0, 0] for k, v in info.items()}
-        obs_rl = self._obs_to_state(obs, action)
-        reward = self._reward(obs, action)
-        if (terminated or truncated) and obs['target_gate'] >= 0:
+        self.obs_rl = self._obs_to_state(self.obs_env, action)
+        reward = self._reward(self.obs_env, action)
+        if (terminated or truncated) and self.obs_env['target_gate'] >= 0:
             reward -= self.k_crash
-        return obs_rl, reward, bool(terminated[0, 0]), bool(truncated[0, 0]), info
+        return self.obs_rl, reward, bool(terminated[0, 0]), bool(truncated[0, 0]), info
 
     def _obs_to_state(self, obs: dict[str, NDArray], action: Array) -> NDArray:
         # define rl input states: [pos(3), vel(3), rot_mat(9), rpy_rates(3), rel_pos_gate(4*3), prev_act(4)]
@@ -112,9 +134,13 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
             [ half_w, 0.0, -half_h],
         ])
         gate_corners_pos = (self.gate_rot_mat @ corners_local.T).T + obs['gates_pos'][curr_gate]  # shape: (4, 3)
-        rel_pos_gate = pos[None, :] - gate_corners_pos  # shape: (4, 3)
-        rel_pos_gate = rel_pos_gate / np.linalg.norm(rel_pos_gate, axis=1, keepdims=True) # normalize
-        rel_pos_gate = rel_pos_gate.reshape(-1)         # shape: (12,)
+        # draw_line(self, np.stack([gate_corners_pos[0], pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+        # draw_line(self, np.stack([gate_corners_pos[1], pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+        # draw_line(self, np.stack([gate_corners_pos[2], pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+        # draw_line(self, np.stack([gate_corners_pos[3], pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+        
+        self.rel_pos_gate = gate_corners_pos - pos[None, :]  # shape: (4, 3)
+        self.rel_pos_gate = self.rel_pos_gate / np.linalg.norm(self.rel_pos_gate, axis=1, keepdims=True) # normalize
         
         # calc euler
         rot_mat = R.from_quat(quat).as_matrix().reshape(-1)
@@ -122,20 +148,32 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         # ang_vel to rpy_rates
         rpy_rates = ang_vel2rpy_rates(ang_vel, quat)
         
-        state = np.concatenate([pos, vel, rot_mat, rpy_rates, rel_pos_gate, action])
+        state = np.concatenate([pos, vel, rot_mat, rpy_rates, self.rel_pos_gate.reshape(-1) , action])
         return state
 
     def _reward(self, obs, act):
         curr_gate = obs['target_gate']
-        curr_gate = min(curr_gate, len(obs['gates_pos']) - 1)
         gate_pos = obs['gates_pos'][curr_gate]
         drone_pos = obs['pos']
+        r = 0.15
+        if curr_gate != self.prev_gate: # handle gate switching
+            self.prev_gate_pos = gate_pos
+            r += self.k_success
         r_gates = self.k_gates * (np.linalg.norm(self.prev_gate_pos - self.prev_drone_pos) - np.linalg.norm(gate_pos - drone_pos))
+        r_center = -self.k_center * np.var(np.linalg.norm(self.rel_pos_gate, axis=1))
         r_act = -self.k_act * np.linalg.norm(act) - self.k_act_d * np.linalg.norm(act - self.prev_act)
+        r_yaw = -self.k_yaw * np.fabs(R.from_quat(obs['quat']).as_euler('zyx', degrees=False)[0])
         self.prev_act = act
+        self.prev_gate = curr_gate
         self.prev_gate_pos = gate_pos
         self.prev_drone_pos = drone_pos
-        return r_gates + r_act
+        if IMMITATION_LEARNING:
+            demo_action = self.teacher_controller.compute_control(obs, None) - self.act_bias
+            r_imit = -self.k_imit * np.linalg.norm(demo_action - act)
+            r += r_imit
+        r += r_gates + r_center + r_act + r_yaw
+        return r
+    
 
 class VecRLDroneRaceEnv(RaceCoreEnv, VectorEnv):
     """Vectorized single-agent drone racing environment."""
@@ -206,23 +244,23 @@ class VecRLDroneRaceEnv(RaceCoreEnv, VectorEnv):
         self.k_crash = 10
 
     def reset(self, seed=None, options=None):
-        obs, info = self._reset(seed=seed, options=options)
-        self.prev_gate_pos = obs['gates_pos'][:, 0, :]
-        self.prev_drone_pos = obs['pos'][:, 0, :]
+        self.obs_env, info = self._reset(seed=seed, options=options)
+        self.prev_gate_pos = self.obs_env['gates_pos'][:, 0, :]
+        self.prev_drone_pos = self.obs_env['pos'][:, 0, :]
         self.prev_act = np.tile(self.act_bias, (self.num_envs, 1))
-        obs_rl = self._obs_to_state(obs, self.prev_act)
-        return obs_rl, info
+        self.obs_rl = self._obs_to_state(self.obs_env, self.prev_act)
+        return self.obs_rl, info
 
     def step(self, action):
         action_exec = action + self.act_bias
-        obs, _, terminated, truncated, info = self._step(action_exec)
-        obs = {k: v[:, 0] for k, v in obs.items()}
+        self.obs_env, _, terminated, truncated, info = self._step(action_exec)
+        self.obs_env = {k: v[:, 0] for k, v in self.obs_env.items()}
         info = {k: v[:, 0] for k, v in info.items()}
-        obs_rl = self._obs_to_state(obs, action)
-        reward = self._reward(obs, action)
-        done = (terminated | truncated) & (obs['target_gate'] >= 0)
+        self.obs_rl = self._obs_to_state(self.obs_env, action)
+        reward = self._reward(self.obs_env, action)
+        done = (terminated | truncated) & (self.obs_env['target_gate'] >= 0)
         reward -= self.k_crash * done.astype(float)
-        return obs_rl, reward, terminated, truncated, info
+        return self.obs_rl, reward, terminated, truncated, info
 
     def _obs_to_state(self, obs, action): # handel vec env obs
         pos = obs["pos"]
@@ -242,7 +280,7 @@ class VecRLDroneRaceEnv(RaceCoreEnv, VectorEnv):
                 [ half_w, 0.0, -half_h],
             ])
             gate_corners_pos = (gate_rot_mat @ corners_local.T).T + obs['gates_pos'][i, curr_gate]
-            rel_pos_gate = (pos[i] - gate_corners_pos) 
+            rel_pos_gate = (gate_corners_pos - pos[i]) 
             rel_pos_gate = rel_pos_gate / np.linalg.norm(rel_pos_gate, axis=1, keepdims=True)
             rel_pos_gate = rel_pos_gate.reshape(-1)
 
@@ -310,32 +348,34 @@ class RLDroneHoverEnv(RaceCoreEnv, Env):
         # parameters setting
         self.dt = 1/50.0
         self.k_pos = 1.0
+        self.k_yaw = 0.05
         self.k_gates = 0.1
+        self.k_center = 0.5
         self.k_act = 2e-4
-        self.k_act_d = 1e-4
+        self.k_act_d = 4e-4
         self.k_crash = 10
 
     def reset(self, seed=None, options=None):
-        obs, info = self._reset(seed=seed, options=options)
-        obs = {k: v[0, 0] for k, v in obs.items()}
+        self.obs_env, info = self._reset(seed=seed, options=options)
+        self.obs_env = {k: v[0, 0] for k, v in self.obs_env.items()}
         info = {k: v[0, 0] for k, v in info.items()}
-        self.hover_position = obs['pos'] + np.array([0,0,0.5])
+        self.hover_position = self.obs_env['pos'] + np.array([-0.2,-1,0.5])
         self.prev_gate_pos = self.hover_position
-        self.prev_drone_pos = obs['pos']
+        self.prev_drone_pos = self.obs_env['pos']
         self.prev_act = self.act_bias
-        obs_rl = self._obs_to_state(obs, self.act_bias)
-        return obs_rl, info
+        self.obs_rl = self._obs_to_state(self.obs_env, self.act_bias)
+        return self.obs_rl, info
 
     def step(self, action):
         action_exec = action + self.act_bias
-        obs, _, terminated, truncated, info = self._step(action_exec)
-        obs = {k: v[0, 0] for k, v in obs.items()}
+        self.obs_env, _, terminated, truncated, info = self._step(action_exec)
+        self.obs_env = {k: v[0, 0] for k, v in self.obs_env.items()}
         info = {k: v[0, 0] for k, v in info.items()}
-        obs_rl = self._obs_to_state(obs, action)
-        reward = self._reward(obs, action)
-        if (terminated or truncated) and obs['target_gate'] >= 0:
+        self.obs_rl = self._obs_to_state(self.obs_env, action)
+        reward = self._reward(self.obs_env, action)
+        if (terminated or truncated) and self.obs_env['target_gate'] >= 0:
             reward -= self.k_crash
-        return obs_rl, reward, bool(terminated[0, 0]), bool(truncated[0, 0]), info
+        return self.obs_rl, reward, bool(terminated[0, 0]), bool(truncated[0, 0]), info
 
     def _obs_to_state(self, obs: dict[str, NDArray], action: Array) -> NDArray:
         # define rl input states: [pos(3), vel(3), rot_mat(9), rpy_rates(3), rel_pos_gate(4*3), prev_act(4)]
@@ -345,13 +385,16 @@ class RLDroneHoverEnv(RaceCoreEnv, Env):
         ang_vel = obs["ang_vel"].squeeze()
 
         # calc vectors pointing to four gate corners
-        # fake gate corners - replaced with hover goal
+        curr_gate = obs['target_gate']
         self.gates_size = [0.4, 0.4] # [width, height]
-        self.gate_rot_mat = np.array([
-                                    [1, 0, 0],
-                                    [0, 0, 1],
-                                    [0, 1, 0]
-                                ])
+        self.gate_rot_mat = np.array(R.from_quat(obs['gates_quat'][curr_gate]).as_matrix())
+        # # step 1: fake gate corners - replaced with hover goal
+        # self.gates_size = [0.4, 0.4] # [width, height]
+        # self.gate_rot_mat = np.array([
+        #                             [-1, 0, 0],
+        #                             [0, -1, 0],
+        #                             [0, 0, 1]
+        #                         ])
         half_w, half_h = self.gates_size[0] / 2, self.gates_size[1] / 2
         corners_local = np.array([
             [-half_w, 0.0,  half_h],
@@ -359,33 +402,41 @@ class RLDroneHoverEnv(RaceCoreEnv, Env):
             [-half_w, 0.0, -half_h],
             [ half_w, 0.0, -half_h],
         ])
-        gate_corners_pos = (self.gate_rot_mat @ corners_local.T).T + self.hover_position # shape: (4, 3)
-        rel_pos_gate = gate_corners_pos - pos[None, :]  # shape: (4, 3)
-        rel_pos_gate = rel_pos_gate / np.linalg.norm(rel_pos_gate, axis=1, keepdims=True) # normalize
-        rel_pos_gate = rel_pos_gate.reshape(-1)         # shape: (12,)
-        draw_line(self, gate_corners_pos)
+        gate_corners_pos = (self.gate_rot_mat @ corners_local.T).T + obs['gates_pos'][curr_gate]  # shape: (4, 3)
+        draw_line(self, np.stack([gate_corners_pos[0], pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+        draw_line(self, np.stack([gate_corners_pos[1], pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+        draw_line(self, np.stack([gate_corners_pos[2], pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+        draw_line(self, np.stack([gate_corners_pos[3], pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+        self.rel_pos_gate = gate_corners_pos - pos[None, :]  # shape: (4, 3)
+        self.rel_pos_gate = self.rel_pos_gate / np.linalg.norm(self.rel_pos_gate, axis=1, keepdims=True) # normalize
+
         # calc euler
         rot_mat = R.from_quat(quat).as_matrix().reshape(-1)
         
         # ang_vel to rpy_rates
         rpy_rates = ang_vel2rpy_rates(ang_vel, quat)
         
-        state = np.concatenate([pos, vel, rot_mat, rpy_rates, rel_pos_gate, action])
+        state = np.concatenate([pos, vel, rot_mat, rpy_rates, self.rel_pos_gate.reshape(-1) , action])
         return state
 
     def _reward(self, obs, act):
         curr_gate = obs['target_gate']
         curr_gate = min(curr_gate, len(obs['gates_pos']) - 1)
-        gate_pos = self.hover_position # fake gate
+        # gate_pos = self.hover_position # step 1: fake gate
+        gate_pos = obs['gates_pos'][curr_gate]
         drone_pos = obs['pos']
-        r_pos = -self.k_pos * np.linalg.norm(drone_pos - gate_pos)
-        r_gates = self.k_gates * (np.linalg.norm(self.prev_gate_pos - self.prev_drone_pos) - np.linalg.norm(gate_pos - drone_pos)) / self.dt
+        pos_err = np.linalg.norm(drone_pos - gate_pos)
+        r_pos = 0.1-self.k_pos * pos_err
+        r_gates = self.k_gates * pos_err * (np.linalg.norm(self.prev_gate_pos - self.prev_drone_pos) - np.linalg.norm(gate_pos - drone_pos)) / self.dt
         r_act = -self.k_act * np.linalg.norm(act) - self.k_act_d * np.linalg.norm(act - self.prev_act)
+        r_center = -self.k_center * np.var(np.linalg.norm(self.rel_pos_gate, axis=1))
+        r_yaw = -self.k_yaw * np.fabs(R.from_quat(obs['quat']).as_euler('zyx', degrees=False)[0])
+
         self.prev_act = act
         self.prev_gate_pos = gate_pos
         self.prev_drone_pos = drone_pos
-        print(r_pos, r_gates, r_act)
-        return r_pos + r_gates + r_act
+        
+        return r_pos + r_gates + r_act + r_center + r_yaw
 
 
 from stable_baselines3.common.callbacks import BaseCallback
@@ -398,6 +449,10 @@ class RenderCallback(BaseCallback):
     def _on_step(self) -> bool:
         if self.n_calls % self.render_freq == 0:
             try:
+                # draw_line(self.training_env.envs[0].env, np.stack([self.training_env.gate_corners_pos[0], self.training_env.pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+                # draw_line(self.training_env.envs[0].env, np.stack([self.training_env.gate_corners_pos[1], self.training_env.pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+                # draw_line(self.training_env.envs[0].env, np.stack([self.training_env.gate_corners_pos[2], self.training_env.pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
+                # draw_line(self.training_env.envs[0].env, np.stack([self.training_env.gate_corners_pos[3], self.training_env.pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
                 self.training_env.envs[0].env.render()
             except Exception as e:
                 print(f"Render error: {e}")
