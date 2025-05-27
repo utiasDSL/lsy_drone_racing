@@ -86,7 +86,7 @@ class PrescriptedController(FresssackController):
             self.occ_map.visualize_occupancy_map(fig = self.fig, ax = self.ax, adjust = True, new_window = False)
         # Plan a local path
 
-        t, pos, vel = FresssackController.read_trajectory(r"repo/lsy_drone_racing/planned_trajectories/test_run.csv")     
+        t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/test_run.csv")     
         initial_B_spline = UniformBSpline()
         initial_B_spline.parameter_2_bspline_uniform(pos,v_start = vel[0], v_end = vel[-1], dt = t[1] - t[0])
         if LOCAL_MODE:
@@ -102,7 +102,7 @@ class PrescriptedController(FresssackController):
         #     FresssackController.draw_drone(fig = self.fig, ax = self.ax, pos = self.pos)
         
         
-        return np.concatenate((self.trajectory(self.current_t * 1.2), np.zeros(10)), dtype=np.float32)
+        return np.concatenate((self.trajectory(self.current_t * 0.8), np.zeros(10)), dtype=np.float32)
     
     def compensate_gate_pos(self):
         # return

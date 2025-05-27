@@ -5,6 +5,7 @@ from __future__ import annotations
 from readline import read_init_file
 from typing import TYPE_CHECKING, Literal
 
+from matplotlib.pyplot import ticklabel_format
 from networkx import generate_random_paths
 import numpy as np
 from numpy.typing import NDArray
@@ -20,6 +21,7 @@ from crazyflow.constants import GRAVITY, MASS
 from crazyflow.sim.physics import ang_vel2rpy_rates
 from lsy_drone_racing.utils import draw_line
 from lsy_drone_racing.control.attitude_controller import AttitudeController
+from lsy_drone_racing.control.easy_controller import TrajectoryController
 
 if TYPE_CHECKING:
     from jax import Array
@@ -74,6 +76,7 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         self.prev_act = self.act_bias
         self.num_gates = 4
         self.gates_size = [0.4, 0.4] # [width, height]
+        self._tick = 0
         # parameters setting
         self.k_gates = 1.0
         self.k_center = 0.1
@@ -82,7 +85,7 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         self.k_yaw = 0.02
         self.k_crash = 20
         self.k_success = 15
-        self.k_imit = 0.2
+        self.k_imit = 2.0
         # public variables
         self.obs_env = None
         self.obs_rl = None
@@ -91,6 +94,7 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         self.obs_env, info = self._reset(seed=seed, options=options)
         self.obs_env = {k: np.array(v[0, 0]) for k, v in self.obs_env.items()}
         info = {k: v[0, 0] for k, v in info.items()}
+        self._tick = 0
         self.prev_gate = 0
         self.prev_gate_pos = self.obs_env['gates_pos'][0]
         self.prev_drone_pos = self.obs_env['pos']
@@ -98,13 +102,16 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         self.obs_rl = self._obs_to_state(self.obs_env, self.act_bias)
         if IMMITATION_LEARNING:
             config = load_config(Path(__file__).parents[2] / "config/level0.toml")
-            self.teacher_controller = AttitudeController(self.obs_env, info, config)
+            # self.teacher_controller = AttitudeController(self.obs_env, info, config)
+            self.teacher_controller = TrajectoryController(self.obs_env, info, config)
+            self.prev_ref_waypoint = self.teacher_controller.get_trajectory_waypoints()[0]
         return self.obs_rl, info
 
     def step(self, action):
-        # if IMMITATION_LEARNING:
+        # if IMMITATION_LEARNING: # test
         #     action = self.teacher_controller.compute_control(self.obs_env, None) - self.act_bias
         #     self.teacher_controller._tick += 1
+        self._tick += 1
         action_exec = action + self.act_bias
         self.obs_env, _, terminated, truncated, info = self._step(action_exec)
         self.obs_env = {k: np.array(v[0, 0]) for k, v in self.obs_env.items()}
@@ -163,16 +170,37 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         r_center = -self.k_center * np.var(np.linalg.norm(self.rel_pos_gate, axis=1))
         r_act = -self.k_act * np.linalg.norm(act) - self.k_act_d * np.linalg.norm(act - self.prev_act)
         r_yaw = -self.k_yaw * np.fabs(R.from_quat(obs['quat']).as_euler('zyx', degrees=False)[0])
+        if IMMITATION_LEARNING:
+            k_imit_p, k_imit_d = 1.0, 1.0
+            # tracking the waypoint a bit ahead current position
+            waypoints = self.teacher_controller.get_trajectory_waypoints()
+            ref_tick, ref_waypoint = self._find_leading_waypoint(waypoints, drone_pos, 0.2)
+            draw_line(self, waypoints, rgba=np.array([1.0, 1.0, 1.0, 0.4]))
+            r_imit_p = -k_imit_p * np.linalg.norm(ref_waypoint - drone_pos)
+            r_imit_d = k_imit_d * (np.linalg.norm(self.prev_ref_waypoint - self.prev_drone_pos) - np.linalg.norm(ref_waypoint - drone_pos))
+            r_imit = self.k_imit * (r_imit_p + r_imit_d)
+            draw_line(self, np.stack([ref_waypoint, drone_pos]), rgba=np.array([int(r_imit<0), int(r_imit>0), 0.0, 1.0]))
+            self.prev_ref_waypoint = ref_waypoint
+            # # action diff from teacher action (incompatible with state controller)
+            self.teacher_controller.set_tick(ref_tick)
+            self.teacher_controller.compute_control(obs, None) # only to update trajectory
+            # demo_action = self.teacher_controller.compute_control(obs, None) - self.act_bias
+            # r_imit = -self.k_imit * np.linalg.norm(demo_action - act)
+            r += r_imit
         self.prev_act = act
         self.prev_gate = curr_gate
         self.prev_gate_pos = gate_pos
         self.prev_drone_pos = drone_pos
-        if IMMITATION_LEARNING:
-            demo_action = self.teacher_controller.compute_control(obs, None) - self.act_bias
-            r_imit = -self.k_imit * np.linalg.norm(demo_action - act)
-            r += r_imit
         r += r_gates + r_center + r_act + r_yaw
         return r
+    
+    def _find_leading_waypoint(self, waypoints, pos, t_ahead):
+        # find nearest waypoint
+        distances = np.linalg.norm(waypoints[:int(self._tick + 1.0 * self.freq)] - pos, axis=1)
+        tick_nearest = np.argmin(distances)
+        # find leading waypoint
+        tick_leading = min(tick_nearest + int(t_ahead * self.freq), len(waypoints) - 1)
+        return tick_leading, waypoints[tick_leading]
     
 
 class VecRLDroneRaceEnv(RaceCoreEnv, VectorEnv):
@@ -449,11 +477,8 @@ class RenderCallback(BaseCallback):
     def _on_step(self) -> bool:
         if self.n_calls % self.render_freq == 0:
             try:
-                # draw_line(self.training_env.envs[0].env, np.stack([self.training_env.gate_corners_pos[0], self.training_env.pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
-                # draw_line(self.training_env.envs[0].env, np.stack([self.training_env.gate_corners_pos[1], self.training_env.pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
-                # draw_line(self.training_env.envs[0].env, np.stack([self.training_env.gate_corners_pos[2], self.training_env.pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
-                # draw_line(self.training_env.envs[0].env, np.stack([self.training_env.gate_corners_pos[3], self.training_env.pos]), rgba=np.array([1.0, 1.0, 1.0, 0.5]))
-                self.training_env.envs[0].env.render()
+                self.training_env.env_method("render", indices=0)
+                # self.training_env.env_method("render", indices=1)
             except Exception as e:
                 print(f"Render error: {e}")
         return True

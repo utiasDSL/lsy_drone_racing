@@ -210,7 +210,6 @@ class TrajectoryController(Controller):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
-        print(obs['target_gate'])
         tau = min(self._tick / self._freq, self.t_total)
         target_pos = self.trajectory(tau)
         if self.pos_change_detect(obs):
@@ -226,6 +225,15 @@ class TrajectoryController(Controller):
         if tau == self.t_total:  # Maximum duration reached
             self._finished = True
         return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
+
+    def get_trajectory_function(self):
+        return self.trajectory
+    def get_trajectory_waypoints(self): # list of waypoint sync to self._tick
+        t_axis = np.linspace(0, self.t_total, self._freq * self.t_total)
+        wp = self.trajectory(t_axis)
+        return wp
+    def set_tick(self, tick):
+        self._tick = tick
 
     def step_callback(
         self,

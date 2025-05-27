@@ -74,7 +74,7 @@ class TestController(FresssackController):
                          gate_inner_size = [0.2,0.2,0.2,0.3],
                          gate_outer_size = [1.0,1.0,1.0,0.8],
                          gate_safe_radius = [0.4,0.4,0.4,0.4],
-                         entry_offset = [0.3,0.3,0.1,0.1],
+                         entry_offset = [0.3,0.3,0.1,0.05],
                          exit_offset = [0.4,0.2,0.3,0.3],
                         #  entry_offset = [0.3,0.7,0.3,0.2],
                         #  exit_offset = [0.5,0.1,0.1,0.3],
@@ -157,7 +157,7 @@ class TestController(FresssackController):
                 lower_bound = 0
                 very_close = 0.1
                 return ((self.gates[i].in_gate_cylinder(current_pos)) and
-                            (-0.5 * self.gates[i].entry_offset  < np.dot(self.gates[i].norm_vec, dx) < self.gates[i].entry_offset * 0.5)) or (np.linalg.norm(dx, ord = np.inf) < very_close)
+                            (-0.2 < np.dot(self.gates[i].norm_vec, dx) < 0.2)) or (np.linalg.norm(dx, ord = np.inf) < very_close)
                 return (np.linalg.norm(dx, ord = np.inf) < very_close) or (lower_bound <= np.linalg.norm(dx) <= upper_bound) and (np.dot(self.gates[i].norm_vec, dx) > 0)
             plan_success = self.planner.search(start_pt = start_pos,
                             start_v = start_vel,
