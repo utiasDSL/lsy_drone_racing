@@ -6,7 +6,7 @@ from torch import nn
 from datetime import datetime
 import os
 from pathlib import Path
-
+import time
 from docs import conf
 from lsy_drone_racing.utils import load_config
 from lsy_drone_racing.reinforcement_learning.rl_drone_race import RLDroneRaceEnv, RenderCallback
@@ -43,7 +43,8 @@ def make_env(seed):
     return _init
 
 def main():
-    num_envs = 20
+    num_envs = 1
+    start_time = time.time()
     env_fns = [make_env(seed=i) for i in range(num_envs)]
     vec_env = SubprocVecEnv(env_fns)
 
@@ -79,14 +80,15 @@ def main():
 
     # === 4. 启动训练 ===
     if num_envs > 1:
-        model.learn(total_timesteps=100000, callback=[checkpoint_callback, eval_callback])
+        model.learn(total_timesteps=600000, callback=[checkpoint_callback, eval_callback])
     else: # for visualization
         render_callback = RenderCallback(render_freq=1)
         model.learn(total_timesteps=20000, callback=[render_callback])
 
     # === 5. 保存最终模型 ===
     model.save(f"{log_dir}/ppo_final_model")
-    print(f"✅ 训练完成，模型已保存至 {log_dir}")
+    end_time = time.time()
+    print(f"✅ 训练完成，耗时{end_time - start_time}s ，模型已保存至 {log_dir}")
 
 
 if __name__ == "__main__":

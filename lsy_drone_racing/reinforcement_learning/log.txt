@@ -9,4 +9,10 @@
 27.05 15:42 change imitation strategy to follow ref_waypoint | 100000 step = 8min
 27.05 16:31 parallelize 10 envs | 100000 step = 4min | fly in inverse direction reset to last model
 27.05 16:52 add tracking pos reward parallelize 20 envs| 100000 step = 3min | wrong sign, reset
-27.05 16:52 add tracking pos reward fixed sign | 100000 step = 3min | 
+27.05 17:05 add tracking pos reward fixed sign | 100000 step = 3min | getting better
+27.05 17:15 tracking pos imitation, try 30 envs | 200000 step = 3min | bypassing gate
+27.05 18:38 -k_gate -k_imit +k_center, 32 envs | 400000 step = 9min 
+27.05 19:11 cut_idx find ref_waypoint only on not visited waypoints, 32 envs | 400000 step = 8min 
+27.05 19:25 -k_imit +k_center +k_gate, 20 envs | 300000 step = 6min 
+27.05 19:40 -k_imit -k_imit_p, 32 envs | 300000 step = 6min 
+27.05 19:50 -k_success, 20 envs | 600000 step = 11min | agent scares of gate 

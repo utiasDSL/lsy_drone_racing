@@ -79,13 +79,13 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         self._tick = 0
         # parameters setting
         self.k_gates = 1.0
-        self.k_center = 0.1
+        self.k_center = 0.3
         self.k_act = 2e-4
         self.k_act_d = 1e-4
         self.k_yaw = 0.02
         self.k_crash = 20
-        self.k_success = 15
-        self.k_imit = 2.0
+        self.k_success = 25
+        self.k_imit = 0.1
         # public variables
         self.obs_env = None
         self.obs_rl = None
@@ -99,6 +99,7 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         self.prev_gate_pos = self.obs_env['gates_pos'][0]
         self.prev_drone_pos = self.obs_env['pos']
         self.prev_act = self.act_bias
+        self.tick_nearest = 0
         self.obs_rl = self._obs_to_state(self.obs_env, self.act_bias)
         if IMMITATION_LEARNING:
             config = load_config(Path(__file__).parents[2] / "config/level0.toml")
@@ -171,15 +172,15 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         r_act = -self.k_act * np.linalg.norm(act) - self.k_act_d * np.linalg.norm(act - self.prev_act)
         r_yaw = -self.k_yaw * np.fabs(R.from_quat(obs['quat']).as_euler('zyx', degrees=False)[0])
         if IMMITATION_LEARNING:
-            k_imit_p, k_imit_d = 1.0, 1.0
+            k_imit_p, k_imit_d = 0.3, 1.0
             # tracking the waypoint a bit ahead current position
             waypoints = self.teacher_controller.get_trajectory_waypoints()
-            ref_tick, ref_waypoint = self._find_leading_waypoint(waypoints, drone_pos, 0.2)
-            draw_line(self, waypoints, rgba=np.array([1.0, 1.0, 1.0, 0.4]))
+            ref_tick, ref_waypoint = self._find_leading_waypoint(waypoints, drone_pos, 0.2, curr_gate)
+            # draw_line(self, waypoints, rgba=np.array([1.0, 1.0, 1.0, 0.4]))
             r_imit_p = -k_imit_p * np.linalg.norm(ref_waypoint - drone_pos)
             r_imit_d = k_imit_d * (np.linalg.norm(self.prev_ref_waypoint - self.prev_drone_pos) - np.linalg.norm(ref_waypoint - drone_pos))
             r_imit = self.k_imit * (r_imit_p + r_imit_d)
-            draw_line(self, np.stack([ref_waypoint, drone_pos]), rgba=np.array([int(r_imit<0), int(r_imit>0), 0.0, 1.0]))
+            draw_line(self, np.stack([ref_waypoint, drone_pos]), rgba=np.array([int(r_imit_d<0), int(r_imit_d>0), 0.0, 1.0]))
             self.prev_ref_waypoint = ref_waypoint
             # # action diff from teacher action (incompatible with state controller)
             self.teacher_controller.set_tick(ref_tick)
@@ -194,12 +195,14 @@ class RLDroneRaceEnv(RaceCoreEnv, Env):
         r += r_gates + r_center + r_act + r_yaw
         return r
     
-    def _find_leading_waypoint(self, waypoints, pos, t_ahead):
+    def _find_leading_waypoint(self, waypoints, pos, t_ahead, curr_gate):
+        cut_idx = [0, 170, 300, 410, -1]
         # find nearest waypoint
-        distances = np.linalg.norm(waypoints[:int(self._tick + 1.0 * self.freq)] - pos, axis=1)
-        tick_nearest = np.argmin(distances)
+        distances = np.linalg.norm(waypoints[self.tick_nearest:cut_idx[curr_gate+1]] - pos, axis=1)
+        draw_line(self, waypoints[self.tick_nearest:cut_idx[curr_gate+1]], rgba=np.array([1.0, 1.0, 1.0, 0.4]))
+        self.tick_nearest = np.argmin(distances) + self.tick_nearest
         # find leading waypoint
-        tick_leading = min(tick_nearest + int(t_ahead * self.freq), len(waypoints) - 1)
+        tick_leading = min(self.tick_nearest + int(t_ahead * self.freq), len(waypoints) - 1)
         return tick_leading, waypoints[tick_leading]
     
 
