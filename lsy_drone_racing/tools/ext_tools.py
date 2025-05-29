@@ -58,7 +58,7 @@ class TrajectoryTool:
     
     def arclength_reparameterize(
             self, t_total: float, trajectory: CubicSpline
-        ) -> CubicSpline:
+        ):
         """reparameterize trajectory by arc length
         return a CubicSpline object with parameter t in [0, total_length] and is uniform in arc_length
 
@@ -83,7 +83,46 @@ class TrajectoryTool:
             trajectory = CubicSpline(t_reallocate, wp_sample)
             # terminal condition
             if np.std(segment_length) <= epsilon:
-                return trajectory
+                return total_length, trajectory
+            
+    def find_nearest_waypoint(
+            self, total_length: float, trajectory: CubicSpline, pos: NDArray[np.floating]
+            ):
+        """find nearest waypoint to given position on a trajectory
+        return index and 3D waypoint
+
+        Args:
+            total_length: total length of spline
+            trajectory: CubicSpline object (function)
+            pos: current drone position
+        """
+        # sample interval 0.05m
+        t_sample = np.linspace(0, total_length, int(total_length / 0.05))
+        wp_sample = trajectory(t_sample)
+        # find nearest waypoint
+        distances = np.linalg.norm(wp_sample - pos, axis=1)
+        t_nearest = np.argmin(distances)
+        return t_nearest, wp_sample[t_nearest]
+    
+    def find_gate_waypoint(
+            self, total_length: float, trajectory: CubicSpline, gates_pos: NDArray[np.floating]
+        ):
+        """find waypoints of gates center, mainly corresponding indices
+
+        Args:
+            total_length: total length of spline
+            trajectory: CubicSpline object (function)
+            gates_pos: current gates position
+        """
+        indices = []
+        gates_wp = []
+        for pos in gates_pos:
+            idx, wp = self.find_nearest_waypoint(total_length, trajectory, pos)
+            indices.append(idx)
+            gates_wp.append(wp)
+        return np.array(indices), np.array(gates_wp)
+
+
 
     
 if __name__ == "__main__":
