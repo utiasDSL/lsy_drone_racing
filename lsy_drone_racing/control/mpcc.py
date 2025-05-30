@@ -9,17 +9,22 @@ Note that the trajectory uses pre-defined waypoints instead of dynamically gener
 
 from __future__ import annotations  # Python 3.10 type hints
 
+from statistics import pvariance
 from typing import TYPE_CHECKING
 
 import numpy as np
 import scipy
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
-from casadi import MX, cos, sin, vertcat, dot, DM, norm_2
+from casadi import MX, cos, sin, vertcat, dot, DM, norm_2, floor, if_else
+from scipy.fft import prev_fast_len
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 from casadi import interpolant
+from sympy import true
+from traitlets import TraitError
 
 from lsy_drone_racing.control.fresssack_controller import FresssackController
+from lsy_drone_racing.control.easy_controller import TrajectoryController
 from lsy_drone_racing.control import Controller
 from lsy_drone_racing.tools.ext_tools import TrajectoryTool
 from lsy_drone_racing.utils.utils import draw_line
@@ -29,7 +34,7 @@ if TYPE_CHECKING:
 
 
 
-class MPCController(FresssackController):
+class MPCController(TrajectoryController):
     """Implementation of MPCC using the collective thrust and attitude interface."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env):
@@ -57,7 +62,7 @@ class MPCController(FresssackController):
                          thickness = [0.2, 0.2, 0.2, 0.05],
                          vel_limit = [1.0, 1.0, 0.2, 1.0])
 
-        # Same waypoints as in the trajectory controller. Determined by trial and error.
+        # # Same waypoints as in the trajectory controller. Determined by trial and error.
         # waypoints = np.array(
         #     [
         #         [1.0, 1.5, 0.05],
@@ -77,22 +82,35 @@ class MPCController(FresssackController):
         # )
         # t_total = 11
         # t = np.linspace(0, t_total, len(waypoints))
-        # # arclength param trajectory
         # trajectory = CubicSpline(t, waypoints)
 
-        # pre-planned trajectory
-        t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/vel_5_acc_10_better_end_criterion_sub_5_14.csv")     
-        t.append(t[-1] + 1)
-        pos.append(pos[-1] + (pos[-1] - pos[-2]) / 0.1)
+        # # pre-planned trajectory
+        # t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/vel_5_acc_10_better_end_criterion_sub_5_14.csv")     
+        # t.append(t[-1] + 1)
+        # pos.append(pos[-1] + (pos[-1] - pos[-2]) / 0.1)
         
-        trajectory = CubicSpline(t, pos)
+        # trajectory = CubicSpline(t, pos)
 
+        # easy controller trajectory
+        gates_rotates = R.from_quat(obs['gates_quat'])
+        rot_matrices = np.array(gates_rotates.as_matrix())
+        self.gates_norm = np.array(rot_matrices[:,:,1])
+        self.gates_pos = obs['gates_pos']
+        # replan trajectory
+        waypoints = self.calc_waypoints(self.init_pos, self.gates_pos, self.gates_norm)
+        t, waypoints = self.avoid_collision(waypoints, obs['obstacles_pos'], 0.3)
+        trajectory = self.trajectory_generate(self.t_total, waypoints)
+
+        # global params
         self.N = 50
-        self.T_HORIZON = 2.0
+        self.T_HORIZON = 1.0
         self.dt = self.T_HORIZON / self.N
+        self.model_arc_length = 0.05 # the segment interval for trajectory to be input to the model
+        self.model_traj_length = 12 # maximum trajectory length the param can take
 
-        # trajectory process
+        # trajectory reparameterization
         self.traj_tool = TrajectoryTool()
+        trajectory = self.traj_tool.extend_trajectory(trajectory)
         self.arc_trajectory = self.traj_tool.arclength_reparameterize(trajectory)
         
         # build model & create solver
@@ -198,6 +216,16 @@ class MPCController(FresssackController):
             self.dv_theta_cmd,
         )
 
+        # define dynamic trajectory input
+        self.pd_list = MX.sym("pd_list", 3*int(self.model_traj_length/self.model_arc_length))
+        self.tp_list = MX.sym("tp_list", 3*int(self.model_traj_length/self.model_arc_length))
+        self.qc_dyn = MX.sym("qc_dyn", 1*int(self.model_traj_length/self.model_arc_length))
+        params = vertcat(
+            self.pd_list, 
+            self.tp_list,
+            self.qc_dyn
+        )
+
         # Initialize the nonlinear model for NMPC formulation
         model = AcadosModel()
         model.name = model_name
@@ -205,24 +233,84 @@ class MPCController(FresssackController):
         model.f_impl_expr = None
         model.x = states
         model.u = inputs
+        model.p = params
 
         return model
     
+    
+    def casadi_linear_interp(self, theta, theta_list, p_flat, dim=3):
+        """Manually interpolate a 3D path using CasADi symbolic expressions.
+        
+        Args:
+            theta: CasADi symbol, scalar progress variable (0 ~ model_traj_length)
+            theta_list: list or array, thetas of path points [0, 0.1, 0.2, ...]
+            p_flat: CasADi symbol, 1D flattened path points [x0,y0,z0, x1,y1,z1, ...]
+            dim: int, dimension of a single point (default=3)
+        Returns:
+            p_interp: CasADi 3x1 vector, interpolated path point at given theta
+        """
+        M = len(theta_list)
+        
+        # Find index interval
+        # Normalize theta to index scale
+        idx_float = (theta - theta_list[0]) / (theta_list[-1] - theta_list[0]) * (M - 1)
+
+        idx_lower = floor(idx_float)
+        idx_upper = idx_lower + 1
+        alpha = idx_float - idx_lower
+
+        # Handle boundary cases (clamping)
+        idx_lower = if_else(idx_lower < 0, 0, idx_lower)
+        idx_upper = if_else(idx_upper >= M, M-1, idx_upper)
+
+        # Gather points
+        p_lower = vertcat(*[p_flat[dim * idx_lower + d] for d in range(dim)])
+        p_upper = vertcat(*[p_flat[dim * idx_upper + d] for d in range(dim)])
+
+        # Interpolated point
+        p_interp = (1 - alpha) * p_lower + alpha * p_upper
+
+        return p_interp
+    
+    def get_updated_traj_param(self, trajectory: CubicSpline):
+        """get updated trajectory parameters upon replaning"""
+        # construct pd/tp lists from current trajectory
+        theta_list = np.arange(0, self.model_traj_length, self.model_arc_length)
+        pd_list = trajectory(theta_list)
+        tp_list = trajectory.derivative(1)(theta_list)
+        qc_dyn_list = np.zeros_like(theta_list)
+        for gate in self.gates:
+            distances = np.linalg.norm(pd_list - gate.pos, axis=-1)
+            qc_dyn_gate = np.exp(-5 * distances**2) # gaussian
+            qc_dyn_list = np.maximum(qc_dyn_gate, qc_dyn_list)
+        p_vals = np.concatenate([pd_list.flatten(), tp_list.flatten(), qc_dyn_list])
+        return p_vals
+
     def mpcc_cost(self):
         """calculate mpcc cost function"""
         pos = vertcat(self.px, self.py, self.pz)
         ang = vertcat(self.roll, self.pitch, self.yaw)
         control_input = vertcat(self.f_collective_cmd, self.dr_cmd, self.dp_cmd, self.dy_cmd)
 
-        pd_theta = vertcat(*[s(self.theta) for s in self.pd_spline])  # [x, y, z]
-        dpd_theta = vertcat(*[s(self.theta) for s in self.tp_spline])  # [vx, vy, vz]
-        dpd_theta_norm = dpd_theta / norm_2(dpd_theta)
+        # pd_theta = vertcat(*[s(self.theta) for s in self.pd_spline])  # [x, y, z]
+        # dpd_theta = vertcat(*[s(self.theta) for s in self.tp_spline])  # [vx, vy, vz]
+        # dpd_theta_norm = dpd_theta / norm_2(dpd_theta)
+        # e_theta = pos - pd_theta
+        # e_l = dot(dpd_theta_norm, e_theta) * dpd_theta_norm
+        # e_c = e_theta - e_l
+        
+        # interpolate spline dynamically
+        theta_list = np.arange(0, self.model_traj_length, self.model_arc_length)
+        pd_theta = self.casadi_linear_interp(self.theta, theta_list, self.pd_list)
+        tp_theta = self.casadi_linear_interp(self.theta, theta_list, self.tp_list)
+        qc_dyn_theta = self.casadi_linear_interp(self.theta, theta_list, self.qc_dyn, dim=1)
+        tp_theta_norm = tp_theta / norm_2(tp_theta)
         e_theta = pos - pd_theta
-        e_l = dot(dpd_theta_norm, e_theta) * dpd_theta_norm
+        e_l = dot(tp_theta_norm, e_theta) * tp_theta_norm
         e_c = e_theta - e_l
 
-        mpcc_cost = (self.q_l + self.q_l_peak * self.qc_dyn_spline(self.theta)) * dot(e_l, e_l) + \
-                    (self.q_c  + self.q_c_peak * self.qc_dyn_spline(self.theta)) * dot(e_c, e_c) + \
+        mpcc_cost = (self.q_l + self.q_l_peak * qc_dyn_theta) * dot(e_l, e_l) + \
+                    (self.q_c  + self.q_c_peak * qc_dyn_theta) * dot(e_c, e_c) + \
                     (ang.T @ self.Q_w @ ang)+ \
                     self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
                     (control_input.T @ self.R_df @ control_input) + \
@@ -252,30 +340,31 @@ class MPCController(FresssackController):
         # Cost Type
         ocp.cost.cost_type = "EXTERNAL"
 
-        # interpolate spline using casadi
-        theta_list = trajectory.x
-        pd_list = trajectory(theta_list)
-        tp_list = trajectory.derivative(1)(theta_list)
-        qc_dyn = np.zeros_like(theta_list)
-        for gate in self.gates:
-            distances = np.linalg.norm(pd_list - gate.pos, axis=-1)
-            qc_dyn_gate = np.exp(-5 * distances**2)
-            qc_dyn = np.maximum(qc_dyn_gate, qc_dyn)
+        # # prepare interpolated trajectories beforehead
+        # # interpolate spline using casadi
+        # theta_list = trajectory.x
+        # pd_list = trajectory(theta_list)
+        # tp_list = trajectory.derivative(1)(theta_list)
+        # self.qc_dyn = np.zeros_like(theta_list)
+        # for gate in self.gates:
+        #     distances = np.linalg.norm(pd_list - gate.pos, axis=-1)
+        #     qc_dyn_gate = np.exp(-5 * distances**2)
+        #     self.qc_dyn = np.maximum(qc_dyn_gate, self.qc_dyn)
 
-        self.pd_spline = []
-        self.tp_spline = []
+        # self.pd_spline = []
+        # self.tp_spline = []
 
-        for i in range(pd_list.shape[1]):
-            pd_column = pd_list[:, i].tolist()
-            tp_column = tp_list[:, i].tolist()
+        # for i in range(pd_list.shape[1]):
+        #     pd_column = pd_list[:, i].tolist()
+        #     tp_column = tp_list[:, i].tolist()
             
-            pd_spline = interpolant(f"pd_{i}", "linear", [theta_list.tolist()], pd_column, {}) # cannot use bspline
-            tp_spline = interpolant(f"tp_{i}", "linear", [theta_list.tolist()], tp_column, {})
+        #     pd_spline = interpolant(f"pd_{i}", "linear", [theta_list.tolist()], pd_column, {}) # cannot use bspline
+        #     tp_spline = interpolant(f"tp_{i}", "linear", [theta_list.tolist()], tp_column, {})
             
-            self.pd_spline.append(pd_spline)
-            self.tp_spline.append(tp_spline)
+        #     self.pd_spline.append(pd_spline)
+        #     self.tp_spline.append(tp_spline)
         
-        self.qc_dyn_spline = interpolant(f"qc_dyn_spline", "linear", [theta_list.tolist()], qc_dyn, {})
+        # self.qc_dyn_spline = interpolant(f"qc_dyn_spline", "linear", [theta_list.tolist()], self.qc_dyn, {})
 
         # Weights
         self.q_l = 160
@@ -288,6 +377,16 @@ class MPCController(FresssackController):
         self.R_df = DM(np.eye(4))
         self.miu = 1.2 
         # param A: works and works well
+        # Weights for easy planner
+        self.q_l = 120
+        self.q_l_peak = 100
+        self.q_c = 50
+        self.q_c_peak = 100
+        
+        self.Q_w = DM(np.eye(3))
+        self.r_dv = 1
+        self.R_df = DM(np.eye(4))
+        self.miu = 0.3
 
         
         ocp.model.cost_expr_ext_cost = self.mpcc_cost()
@@ -304,6 +403,9 @@ class MPCController(FresssackController):
 
         # We have to set x0 even though we will overwrite it later on.
         ocp.constraints.x0 = np.zeros((self.nx))
+        # Set initial reference trajectory
+        p_vals = self.get_updated_traj_param(self.arc_trajectory)
+        ocp.parameter_values = p_vals
 
         # Solver Options
         ocp.solver_options.qp_solver = "FULL_CONDENSING_HPIPM"  # FULL_CONDENSING_QPOASES
@@ -357,8 +459,8 @@ class MPCController(FresssackController):
                 np.array([self.last_theta, self.last_v_theta])
             )
         )
-
-        ## provide initial guess to guarantee stable convergence
+        xcurrent[-2], _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], self.last_theta+1) # correct theta
+        ## warm-start - provide initial guess to guarantee stable convergence
         if not hasattr(self, "x_guess"):
             self.x_guess = [xcurrent for _ in range(self.N + 1)]
             self.u_guess = [np.zeros(self.nu) for _ in range(self.N)]
@@ -370,6 +472,30 @@ class MPCController(FresssackController):
             self.acados_ocp_solver.set(i, "x", self.x_guess[i])
             self.acados_ocp_solver.set(i, "u", self.u_guess[i])
         self.acados_ocp_solver.set(self.N, "x", self.x_guess[self.N])
+        
+        ## replan trajectory
+        # TODO: Gate changes when already getting close to it, but this causes a large jump of trajectory, e_c suddenly goes up, and it fails to track
+        # TODO: Must we plan from current position?
+        if self.pos_change_detect(obs):
+            gates_rotates = R.from_quat(obs['gates_quat'])
+            rot_matrices = np.array(gates_rotates.as_matrix())
+            self.gates_norm = np.array(rot_matrices[:,:,1])
+            self.gates_pos = obs['gates_pos']
+            # replan trajectory
+            waypoints = self.calc_waypoints(self.init_pos, self.gates_pos, self.gates_norm)
+            t, waypoints = self.avoid_collision(waypoints, obs['obstacles_pos'], 0.3)
+            t, waypoints = self.add_drone_to_waypoints(waypoints, obs['pos'], 0.3, curr_theta=self.last_theta+1)
+            trajectory = self.trajectory_generate(self.t_total, waypoints)
+            trajectory = self.traj_tool.extend_trajectory(trajectory)
+            self.arc_trajectory = self.traj_tool.arclength_reparameterize(trajectory, epsilon=1e-3)
+            # write trajectory as parameter to solver
+            p_vals = self.get_updated_traj_param(self.arc_trajectory)
+            # xcurrent[-2], _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"]) # correct theta
+            for i in range(self.N): 
+                self.acados_ocp_solver.set(i, "p", p_vals)
+                # TODO: maybe it needs to be initialized differently? uniform guess: solver failure; original warmup: unable to track new traj
+                # self.acados_ocp_solver.set(i, "x", xcurrent) 
+                # self.acados_ocp_solver.set(i, "u", np.zeros(self.nu))
 
         # set initial state
         self.acados_ocp_solver.set(0, "lbx", xcurrent)
@@ -394,7 +520,12 @@ class MPCController(FresssackController):
 
 
         ## visualization
-        draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x[600:800]), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
+        # test true theta and guess theta
+        guess_theta = self.last_theta
+        true_theta, _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], guess_theta + 1.5)
+        # draw_line(self.env, np.stack([self.arc_trajectory(guess_theta), self.arc_trajectory(true_theta)]), rgba=np.array([8*max(true_theta-guess_theta, 0), 8*max(guess_theta-true_theta, 0), 0.0, 1.0]))
+
+        draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
         draw_line(self.env, np.stack([self.arc_trajectory(self.last_theta), obs["pos"]]), rgba=np.array([0.0, 0.0, 1.0, 1.0]))
 
         return cmd

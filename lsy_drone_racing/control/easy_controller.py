@@ -16,6 +16,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
+from traitlets import TraitType
+
+from lsy_drone_racing.control.fresssack_controller import FresssackController
+from lsy_drone_racing.tools.ext_tools import TrajectoryTool
+
 try:
     import matplotlib.pyplot as plt
 except ImportError:
@@ -27,7 +32,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     
 
-class TrajectoryController(Controller):
+class TrajectoryController(FresssackController):
     """Trajectory controller following a pre-defined trajectory."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
@@ -75,7 +80,7 @@ class TrajectoryController(Controller):
         # self.visualize_traj(self.gates_pos, self.gates_norm, obst_positions=obs['obstacles_pos'], trajectory=self.trajectory, waypoints=waypoints, drone_pos=obs['pos'])
     
     def calc_waypoints(
-            self, drone_init_pos: NDArray[np.floating], gates_pos: NDArray[np.floating], gates_norm: NDArray[np.floating], distance: float = 0.5, num_int_pnts: int = 5,
+            self, drone_init_pos: NDArray[np.floating], gates_pos: NDArray[np.floating], gates_norm: NDArray[np.floating], distance: float = 0.5 , num_int_pnts: int = 5,
     ) -> NDArray[np.floating]:
         """Compute waypoints interpolated between gates."""
         num_gates = gates_pos.shape[0]
@@ -127,6 +132,38 @@ class TrajectoryController(Controller):
                     wp_results.append(point)
             t_axis = np.array(t_results)
             wp = np.array(wp_results)
+
+        return t_axis, wp
+    
+    def add_drone_to_waypoints(
+        self, waypoints: NDArray[np.floating], drone_pos: NDArray[np.floating], safe_dist: float, curr_theta: float = None
+    ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
+        """Force new trajectory to pass through drone position."""
+        trajectory = self.trajectory_generate(self.t_total, waypoints)
+        trajectory = TrajectoryTool().arclength_reparameterize(trajectory)
+        t_axis = trajectory.x
+        wp = trajectory(t_axis)
+        theta, obst = TrajectoryTool().find_nearest_waypoint(trajectory, drone_pos, curr_theta)
+        flag = False
+        t_results = []
+        wp_results = []
+        for i in range(wp.shape[0]):
+            point = wp[i]
+            if np.fabs(i*0.05 - theta) < safe_dist and not flag: # first time visit
+                flag = True
+                in_idx = i
+            elif np.fabs(i*0.05 - theta) >= safe_dist and flag:    # visited and out
+                out_idx = i
+                flag = False
+                # map it to new point
+                new_point = drone_pos
+                t_results.append((t_axis[in_idx] + t_axis[out_idx])/2)
+                wp_results.append(new_point)
+            elif np.fabs(i*0.05 - theta) >= safe_dist:   # out
+                t_results.append(t_axis[i])
+                wp_results.append(point)
+        t_axis = np.array(t_results)
+        wp = np.array(wp_results)
 
         return t_axis, wp
     # visualize trajectory
