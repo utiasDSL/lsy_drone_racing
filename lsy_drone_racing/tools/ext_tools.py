@@ -57,7 +57,7 @@ class TrajectoryTool:
         return CubicSpline(t, waypoints)
     
     def arclength_reparameterize(
-            self, t_total: float, trajectory: CubicSpline
+            self, trajectory: CubicSpline
         ):
         """reparameterize trajectory by arc length
         return a CubicSpline object with parameter t in [0, total_length] and is uniform in arc_length
@@ -68,10 +68,10 @@ class TrajectoryTool:
         """
         epsilon = 1e-5
         # initialize total_length by t_total
-        total_length = t_total
+        total_length = trajectory.x[-1]
         for _ in range(99):
             # sample total_length/0.1 waypoints
-            t_sample = np.linspace(0, total_length, int(total_length * 10))
+            t_sample = np.linspace(0, total_length, int(total_length / 0.1))
             wp_sample = trajectory(t_sample)
             # measure linear distances
             diffs = np.diff(wp_sample, axis=0)
@@ -83,7 +83,7 @@ class TrajectoryTool:
             trajectory = CubicSpline(t_reallocate, wp_sample)
             # terminal condition
             if np.std(segment_length) <= epsilon:
-                return total_length, trajectory
+                return trajectory
             
     def find_nearest_waypoint(
             self, total_length: float, trajectory: CubicSpline, pos: NDArray[np.floating]

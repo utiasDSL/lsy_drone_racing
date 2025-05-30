@@ -19,21 +19,20 @@ from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 from casadi import interpolant
 
+from lsy_drone_racing.control.fresssack_controller import FresssackController
 from lsy_drone_racing.control import Controller
 from lsy_drone_racing.tools.ext_tools import TrajectoryTool
+from lsy_drone_racing.utils.utils import draw_line
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
 
-
-
-
-class MPCController(Controller):
+class MPCController(FresssackController):
     """Implementation of MPCC using the collective thrust and attitude interface."""
 
-    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env):
         """Initialize the attitude controller.
 
         Args:
@@ -46,35 +45,58 @@ class MPCController(Controller):
         self.freq = config.env.freq
         self._tick = 0
 
-        # Same waypoints as in the trajectory controller. Determined by trial and error.
-        waypoints = np.array(
-            [
-                [1.0, 1.5, 0.05],
-                [0.8, 1.0, 0.2],
-                [0.55, -0.3, 0.5],
-                [0.2, -1.3, 0.65],
-                [1.1, -0.85, 1.1],
-                [0.2, 0.5, 0.65],
-                [0.0, 1.2, 0.525],
-                [0.0, 1.2, 1.1],
-                [-0.5, 0.0, 1.1],
-                [-0.5, -0.5, 1.1],
-            ]
-        )
-        t_total = 11
-        t = np.linspace(0, t_total, len(waypoints))
-        # arclength param trajectory
-        trajectory = CubicSpline(t, waypoints)
+        self.env = env
+        self.init_gates(obs = obs,
+                         gate_inner_size = [0.2,0.2,0.2,0.3],
+                         gate_outer_size = [1.0,1.0,1.0,0.8],
+                         gate_safe_radius = [0.4,0.4,0.4,0.4],
+                         entry_offset = [0.3,0.3,0.1,0.05],
+                         exit_offset = [0.4,0.2,0.3,0.3],
+                        #  entry_offset = [0.3,0.7,0.3,0.2],
+                        #  exit_offset = [0.5,0.1,0.1,0.3],
+                         thickness = [0.2, 0.2, 0.2, 0.05],
+                         vel_limit = [1.0, 1.0, 0.2, 1.0])
 
-        self.N = 30
-        self.T_HORIZON = 1.5
+        # Same waypoints as in the trajectory controller. Determined by trial and error.
+        # waypoints = np.array(
+        #     [
+        #         [1.0, 1.5, 0.05],
+        #         [0.8, 1.0, 0.2],
+        #         [0.55, -0.3, 0.5],
+        #         [0.2, -1.3, 0.65],
+        #         [1.1, -0.85, 1.1],
+        #         [0.2, 0.5, 0.65],
+        #         [0.0, 1.2, 0.525],
+        #         [0.0, 1.2, 1.1],
+        #         [-0.5, 0.0, 1.1],
+        #         [-0.5, -0.5, 1.1],
+        #         [-0.5, -1, 1.1],
+        #         [-0.5, -1.5, 1.1]
+
+        #     ]
+        # )
+        # t_total = 11
+        # t = np.linspace(0, t_total, len(waypoints))
+        # # arclength param trajectory
+        # trajectory = CubicSpline(t, waypoints)
+
+        # pre-planned trajectory
+        t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/vel_5_acc_10_better_end_criterion_sub_5_14.csv")     
+        t.append(t[-1] + 1)
+        pos.append(pos[-1] + (pos[-1] - pos[-2]) / 0.1)
+        
+        trajectory = CubicSpline(t, pos)
+
+        self.N = 50
+        self.T_HORIZON = 2.0
         self.dt = self.T_HORIZON / self.N
 
         # trajectory process
         self.traj_tool = TrajectoryTool()
+        self.arc_trajectory = self.traj_tool.arclength_reparameterize(trajectory)
         
         # build model & create solver
-        self.acados_ocp_solver, self.ocp = self.create_ocp_solver(self.T_HORIZON, self.N, trajectory)
+        self.acados_ocp_solver, self.ocp = self.create_ocp_solver(self.T_HORIZON, self.N, self.arc_trajectory)
 
         # initialize
         self.last_theta = 0.0
@@ -192,14 +214,14 @@ class MPCController(Controller):
         ang = vertcat(self.roll, self.pitch, self.yaw)
         control_input = vertcat(self.f_collective_cmd, self.dr_cmd, self.dp_cmd, self.dy_cmd)
 
-        pd_theta = self.pd_spline(self.theta)
-        dpd_theta = self.tp_spline(self.theta)
+        pd_theta = vertcat(*[s(self.theta) for s in self.pd_spline])  # [x, y, z]
+        dpd_theta = vertcat(*[s(self.theta) for s in self.tp_spline])  # [vx, vy, vz]
         e_theta = pos - pd_theta
         e_l = dot(dpd_theta, e_theta) * dpd_theta
         e_c = e_theta - e_l
 
-        mpcc_cost = self.q_l * dot(e_l, e_l) + \
-                    self.q_c * dot(e_c, e_c) + \
+        mpcc_cost = (self.q_l + self.q_l_peak * self.qc_dyn_spline(self.theta)) * dot(e_l, e_l) + \
+                    (self.q_c  + self.q_c_peak * self.qc_dyn_spline(self.theta)) * dot(e_c, e_c) + \
                     (ang.T @ self.Q_w @ ang)+ \
                     self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
                     (control_input.T @ self.R_df @ control_input) + \
@@ -217,10 +239,8 @@ class MPCController(Controller):
         ocp.model = model
 
         # Get Dimensions
-        nx = model.x.rows()
-        nu = model.u.rows()
-        ny = nx + nu
-        ny_e = nx
+        self.nx = model.x.rows()
+        self.nu = model.u.rows()
 
         # Set dimensions
         ocp.solver_options.N_horizon = N
@@ -230,46 +250,65 @@ class MPCController(Controller):
 
         # Cost Type
         ocp.cost.cost_type = "EXTERNAL"
-        ocp.cost.cost_type_e = "EXTERNAL"
 
         # interpolate spline using casadi
         theta_list = trajectory.x
         pd_list = trajectory(theta_list)
         tp_list = trajectory.derivative(1)(theta_list)
-        self.pd_spline = interpolant("pd", "bspline", [theta_list], pd_list)
-        self.tp_spline = interpolant("tp", "bspline", [theta_list], tp_list)
+        qc_dyn = np.zeros_like(theta_list)
+        for gate in self.gates:
+            distances = np.linalg.norm(pd_list - gate.pos, axis=-1)
+            qc_dyn_gate = np.exp(-5 * distances**2)
+            qc_dyn = np.maximum(qc_dyn_gate, qc_dyn)
+
+        self.pd_spline = []
+        self.tp_spline = []
+
+        for i in range(pd_list.shape[1]):  # 对每个维度 (x, y, z) 分别拟合
+            pd_column = pd_list[:, i].tolist()
+            tp_column = tp_list[:, i].tolist()
+            
+            pd_spline = interpolant(f"pd_{i}", "linear", [theta_list.tolist()], pd_column, {})
+            tp_spline = interpolant(f"tp_{i}", "linear", [theta_list.tolist()], tp_column, {})
+            
+            self.pd_spline.append(pd_spline)
+            self.tp_spline.append(tp_spline)
+        
+        self.qc_dyn_spline = interpolant(f"qc_dyn_spline", "linear", [theta_list.tolist()], qc_dyn, {})
+
+        # Weights
+        self.q_l = 160
+        self.q_l_peak = 320
+        self.q_c =  80
+        self.q_c_peak = 400
+        
+        self.Q_w = DM(np.eye(3))
+        self.r_dv = 1
+        self.R_df = DM(np.eye(4))
+        self.miu = 1.2 
+        # param A: works and works well
+
         
         ocp.model.cost_expr_ext_cost = self.mpcc_cost()
 
-        # Weights
-        self.q_l = 1
-        self.q_c = 1
-        self.Q_w = 1 * DM(np.eye(3))
-        self.r_dv = 1
-        self.R_df = 1 * DM(np.eye(4))
-        self.miu = 1
-
         # Set State Constraints
         ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57, 0])
-        ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57, 3])
+        ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57, 10])
         ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13, 15])
 
         # Set Input Constraints
-        # ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0. -10.0])
-        # ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0])
-        # ocp.constraints.idxbu = np.array([0, 1, 2, 3])
-        ocp.constraints.lbu = np.array([-10])
-        ocp.constraints.ubu = np.array([10])
-        ocp.constraints.idxbu = np.array([4])
+        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, -10.0])
+        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 10.0])
+        ocp.constraints.idxbu = np.array([0, 1, 2, 3, 4])
 
         # We have to set x0 even though we will overwrite it later on.
-        ocp.constraints.x0 = np.zeros((nx))
+        ocp.constraints.x0 = np.zeros((self.nx))
 
         # Solver Options
         ocp.solver_options.qp_solver = "FULL_CONDENSING_HPIPM"  # FULL_CONDENSING_QPOASES
         ocp.solver_options.hessian_approx = "GAUSS_NEWTON"
         ocp.solver_options.integrator_type = "ERK"
-        ocp.solver_options.nlp_solver_type = "SQP"  # SQP_RTI
+        ocp.solver_options.nlp_solver_type = "SQP_RTI"  # SQP_RTI
         ocp.solver_options.tol = 1e-5
 
         ocp.solver_options.qp_solver_cond_N = N
@@ -298,9 +337,9 @@ class MPCController(Controller):
         Returns:
             The collective thrust and orientation [t_des, r_des, p_des, y_des] as a numpy array.
         """
-        i = min(self._tick, len(self.x_des) - 1)
-        if self._tick > i:
-            self.finished = True
+        # i = min(self._tick, len(self.x_des) - 1)
+        # if self._tick > i:
+        #     self.finished = True
 
         q = obs["quat"]
         r = R.from_quat(q)
@@ -314,14 +353,34 @@ class MPCController(Controller):
                 rpy,
                 np.array([self.last_f_collective, self.last_f_cmd]),
                 self.last_rpy_cmd,
-                self.last_theta,
-                self.last_v_theta
+                np.array([self.last_theta, self.last_v_theta])
             )
         )
+
+        ## provide initial guess to guarantee stable convergence
+        if not hasattr(self, "x_guess"):
+            self.x_guess = [xcurrent for _ in range(self.N + 1)]
+            self.u_guess = [np.zeros(self.nu) for _ in range(self.N)]
+        else:
+            self.x_guess = self.x_guess[1:] + [self.x_guess[-1]]
+            self.u_guess = self.u_guess[1:] + [self.u_guess[-1]]
+
+        for i in range(self.N):
+            self.acados_ocp_solver.set(i, "x", self.x_guess[i])
+            self.acados_ocp_solver.set(i, "u", self.u_guess[i])
+        self.acados_ocp_solver.set(self.N, "x", self.x_guess[self.N])
+
+        # set initial state
         self.acados_ocp_solver.set(0, "lbx", xcurrent)
         self.acados_ocp_solver.set(0, "ubx", xcurrent)
 
-        self.acados_ocp_solver.solve()
+        if self.acados_ocp_solver.solve() == 4:
+            pass
+
+        ## update initial guess
+        self.x_guess = [self.acados_ocp_solver.get(i, "x") for i in range(self.N + 1)]
+        self.u_guess = [self.acados_ocp_solver.get(i, "u") for i in range(self.N)]
+
         x1 = self.acados_ocp_solver.get(1, "x")
         w = 1 / self.config.env.freq / self.dt
         self.last_f_collective = self.last_f_collective * (1 - w) + x1[9] * w
@@ -331,6 +390,11 @@ class MPCController(Controller):
         self.last_rpy_cmd = x1[11:14]
 
         cmd = x1[10:14]
+
+
+        ## visualization
+        draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
+        draw_line(self.env, np.stack([self.arc_trajectory(self.last_theta), obs["pos"]]), rgba=np.array([0.0, 0.0, 1.0, 1.0]))
 
         return cmd
 
