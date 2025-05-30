@@ -57,7 +57,7 @@ class TrajectoryTool:
         return CubicSpline(t, waypoints)
     
     def arclength_reparameterize(
-            self, trajectory: CubicSpline
+            self, trajectory: CubicSpline, arc_length:float = 0.05
         ):
         """reparameterize trajectory by arc length
         return a CubicSpline object with parameter t in [0, total_length] and is uniform in arc_length
@@ -71,7 +71,7 @@ class TrajectoryTool:
         total_length = trajectory.x[-1]
         for _ in range(99):
             # sample total_length/0.1 waypoints
-            t_sample = np.linspace(0, total_length, int(total_length / 0.1))
+            t_sample = np.linspace(0, total_length, int(total_length / arc_length))
             wp_sample = trajectory(t_sample)
             # measure linear distances
             diffs = np.diff(wp_sample, axis=0)

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import scipy
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
-from casadi import MX, cos, sin, vertcat, dot, DM
+from casadi import MX, cos, sin, vertcat, dot, DM, norm_2
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 from casadi import interpolant
@@ -216,8 +216,9 @@ class MPCController(FresssackController):
 
         pd_theta = vertcat(*[s(self.theta) for s in self.pd_spline])  # [x, y, z]
         dpd_theta = vertcat(*[s(self.theta) for s in self.tp_spline])  # [vx, vy, vz]
+        dpd_theta_norm = dpd_theta / norm_2(dpd_theta)
         e_theta = pos - pd_theta
-        e_l = dot(dpd_theta, e_theta) * dpd_theta
+        e_l = dot(dpd_theta_norm, e_theta) * dpd_theta_norm
         e_c = e_theta - e_l
 
         mpcc_cost = (self.q_l + self.q_l_peak * self.qc_dyn_spline(self.theta)) * dot(e_l, e_l) + \
@@ -264,11 +265,11 @@ class MPCController(FresssackController):
         self.pd_spline = []
         self.tp_spline = []
 
-        for i in range(pd_list.shape[1]):  # 对每个维度 (x, y, z) 分别拟合
+        for i in range(pd_list.shape[1]):
             pd_column = pd_list[:, i].tolist()
             tp_column = tp_list[:, i].tolist()
             
-            pd_spline = interpolant(f"pd_{i}", "linear", [theta_list.tolist()], pd_column, {})
+            pd_spline = interpolant(f"pd_{i}", "linear", [theta_list.tolist()], pd_column, {}) # cannot use bspline
             tp_spline = interpolant(f"tp_{i}", "linear", [theta_list.tolist()], tp_column, {})
             
             self.pd_spline.append(pd_spline)
@@ -393,7 +394,7 @@ class MPCController(FresssackController):
 
 
         ## visualization
-        draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
+        draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x[600:800]), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
         draw_line(self.env, np.stack([self.arc_trajectory(self.last_theta), obs["pos"]]), rgba=np.array([0.0, 0.0, 1.0, 1.0]))
 
         return cmd
