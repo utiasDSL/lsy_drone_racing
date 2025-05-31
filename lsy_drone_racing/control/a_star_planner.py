@@ -33,9 +33,9 @@ from scipy.spatial.transform import Rotation as R
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-from lsy_drone_racing.tools.geometric_tools import TransformTool, LinAlgTool
+from lsy_drone_racing.tools.ext_tools import TransformTool, LinAlgTool
 from lsy_drone_racing.tools.race_objects import Gate, Obstacle
-from lsy_drone_racing.tools.occupancy_map import OccupancyMap3D
+from lsy_drone_racing.tools.planners.occupancy_map import OccupancyMap3D
 
 from heapq import heappush, heappop
 class AStarPlanner3D:

@@ -32,7 +32,8 @@ class UniformBSpline:
         waypoints: List[NDArray[np.floating]],
         v_start: NDArray[np.floating],
         v_end: NDArray[np.floating],
-        dt: float = 0.1
+        dt: float = 0.1,
+        offset : float = 0.0
     ) -> Tuple[BSpline, NDArray[np.floating], NDArray[np.floating]]:
 
         waypoints = np.array(waypoints)  # shape = (K, 3)
@@ -66,7 +67,7 @@ class UniformBSpline:
             np.arange(N - self.k + 1),
             np.full(self.k, N - self.k)
         ]) * dt
-
+        self.t += offset
         self.b_spline = BSpline(self.t, self.ctrl_pts, self.k)
 
         return self.b_spline, self.t, self.ctrl_pts

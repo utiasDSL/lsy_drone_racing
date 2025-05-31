@@ -194,8 +194,9 @@ class KinoDynamicAStarPlanner():
     max_search_size : int = 500000,
     fig : figure.Figure = None,
     ax : axes.Axes = None,
-    close_enough : Callable[[NDArray[np.floating], NDArray[np.floating]], bool] = None
-    ):
+    close_enough : Callable[[NDArray[np.floating], NDArray[np.floating]], bool] = None,
+    soft_collision_constraint : bool = False
+    ) -> Tuple[bool, float]:
         self.print_message(f'Current posisition: {start_pt}')
         self.print_message(f'Current target posisition: {end_pt}')
         node_infos : List[List[List[NodeInfo]]] = []
@@ -290,7 +291,7 @@ class KinoDynamicAStarPlanner():
                 break
             if time.time() - start_time_stamp > time_out:
                 self.print_message(f'The planner has reached max planning time {time_out} sec.')
-                return False
+                return False, time.time() - start_time_stamp
             if len(open_set) > stop_expanding_threshold:
                 stop_expanding = True
                 self.print_message(f'The planner has reached the max open set size {stop_expanding_threshold}. Stop expanding')
@@ -320,15 +321,19 @@ class KinoDynamicAStarPlanner():
                         continue
 
                     no_collision = True
+                    collision_cost = 0.0
                     for t_sample in np.arange(tau * self._safety_check_resolution, tau + 1e-6, tau * self._safety_check_resolution):
                         check_pos, _ = self._state_transit(node.info.pos, node.info.vel, u, t_sample)
                         if not self._get_grid_occ(check_pos):
-                            no_collision = False
-                            break
+                            if not soft_collision_constraint:
+                                no_collision = False
+                                break
+                            else:
+                                collision_cost += 5000.0
                     if not no_collision:
                         continue
                     
-                    g_cost = node.g_cost + (np.dot(u, u) + self._w_time) * tau
+                    g_cost = node.g_cost + (np.dot(u, u) + self._w_time) * tau + collision_cost
                     f_cost, optimal_time = self._estimate_heuristic(new_pos, new_vel, end_pt, end_v)
                     f_cost += self._lambda_heu * f_cost
 
@@ -383,11 +388,11 @@ class KinoDynamicAStarPlanner():
             # self.print_message("# Expanded nodes in this loop:" + str(len(expanded_node_infos)))
             if count > max_search_size:
                 self.print_message(f'The planner has reached the max search size {max_search_size}.')
-                return False
+                return False, time.time() - start_time_stamp
             count += 1
         if end_node is None:
             self.print_message(f'The planner failed to find a path.')
-            return False
+            return False, time.time() - start_time_stamp
         
         # Backtrack the path
         self._path = []
@@ -396,7 +401,7 @@ class KinoDynamicAStarPlanner():
             self._path.append(current)
             current = current.parent
         self._path.reverse()
-        return True
+        return True, time.time() - start_time_stamp
 
 
 

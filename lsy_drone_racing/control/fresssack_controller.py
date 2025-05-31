@@ -141,7 +141,7 @@ class FresssackController(Controller):
                                 outer_width = self.gate_outer_size[i],
                                 outer_height = self.gate_outer_size[i],
                                 safe_radius = self.gate_safe_radius[i],
-                                entry_offset = self.gate_exit_offset[i],
+                                entry_offset = self.gate_entry_offset[i],
                                 exit_offset = self.gate_exit_offset[i],
                                 thickness = self.gate_thickness[i],
                                 vel_limit = self.gate_vel_limit[i]
@@ -188,8 +188,28 @@ class FresssackController(Controller):
             plt.pause(0.001)
         return fig, ax
 
+    def visualize_spline_trajectory(self, fig: figure.Figure, ax: axes.Axes, trajectory: CubicSpline, t_start : np.float32, t_end :np.float32, color='red') -> Tuple[figure.Figure, axes.Axes]:
+        if hasattr(self, '_last_traj_plot') and self._last_traj_plot is not None:
+            try:
+                self._last_traj_plot.remove()
+            except:
+                pass
+
+        if fig is None or ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+
+        t_samples = np.linspace(t_start, t_end, int((t_end - t_start)/ 0.05))
+        xyz = trajectory(t_samples)
+
+        self._last_traj_plot = ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2], color=color, linewidth=2, label='Trajectory')[0]
+
+        ax.legend()
+        plt.pause(0.001)
+        return fig, ax
 
     def visualize_trajectory(fig: figure.Figure, ax: axes.Axes, trajectory: CubicSpline, t_start : np.float32, t_end :np.float32, color='red') -> Tuple[figure.Figure, axes.Axes]:
+        
         if fig is None or ax is None:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')

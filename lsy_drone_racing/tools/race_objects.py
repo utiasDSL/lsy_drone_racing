@@ -2,7 +2,7 @@ import numpy as np
 from numpy.typing import NDArray
 from typing import Set, Tuple, List
 from lsy_drone_racing.tools.ext_tools import TransformTool
-from lsy_drone_racing.tools.planners.occupancy_map import OccupancyMap3D
+# from lsy_drone_racing.tools.planners.occupancy_map import OccupancyMap3D
 
 LOCAL_MODE = False
 try:
@@ -73,34 +73,34 @@ class Gate:
         r = np.linalg.norm(perp_vec)
         return r < (self.outer_width / 2) if not inner else r < (self.inner_width / 2)
 
-    def gate_goal_region_voxels(self,
-                             omap : OccupancyMap3D,
-                             offset : np.float32 = 0,
-                             voxel_margin: float = 0.05) -> Set[Tuple[int, int, int]]:
-        norm_vec = self.norm_vec / np.linalg.norm(self.norm_vec)
+    # def gate_goal_region_voxels(self,
+    #                          omap : OccupancyMap3D,
+    #                          offset : np.float32 = 0,
+    #                          voxel_margin: float = 0.05) -> Set[Tuple[int, int, int]]:
+    #     norm_vec = self.norm_vec / np.linalg.norm(self.norm_vec)
 
-        if np.allclose(norm_vec, [0, 0, 1]) or np.allclose(norm_vec, [0, 0, -1]):
-            u = np.array([1.0, 0.0, 0.0])
-        else:
-            u = np.cross(norm_vec, [0, 0, 1])
-            u /= np.linalg.norm(u)
-        v = np.cross(norm_vec, u)
+    #     if np.allclose(norm_vec, [0, 0, 1]) or np.allclose(norm_vec, [0, 0, -1]):
+    #         u = np.array([1.0, 0.0, 0.0])
+    #     else:
+    #         u = np.cross(norm_vec, [0, 0, 1])
+    #         u /= np.linalg.norm(u)
+    #     v = np.cross(norm_vec, u)
 
-        half_w = self.inner_width / 2.0 - voxel_margin
-        half_h = self.inner_height / 2.0 - voxel_margin
+    #     half_w = self.inner_width / 2.0 - voxel_margin
+    #     half_h = self.inner_height / 2.0 - voxel_margin
 
-        d = omap.resolution
-        us = np.arange(-half_w, half_w + d, d)
-        vs = np.arange(-half_h, half_h + d, d)
+    #     d = omap.resolution
+    #     us = np.arange(-half_w, half_w + d, d)
+    #     vs = np.arange(-half_h, half_h + d, d)
 
-        voxels = set()
-        for u_ in us:
-            for v_ in vs:
-                pos = self.pos + u_ * u + v_ * v + offset * norm_vec
-                idx = tuple(omap.world_to_map(pos))
-                if not omap.out_of_range(idx):
-                    voxels.add(idx)
-        return voxels
+    #     voxels = set()
+    #     for u_ in us:
+    #         for v_ in vs:
+    #             pos = self.pos + u_ * u + v_ * v + offset * norm_vec
+    #             idx = tuple(omap.world_to_map(pos))
+    #             if not omap.out_of_range(idx):
+    #                 voxels.add(idx)
+    #     return voxels
     
 
 class SceneSDF:
