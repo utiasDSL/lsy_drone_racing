@@ -19,6 +19,7 @@ from casadi import MX, cos, sin, vertcat, dot, DM, norm_2, floor, if_else
 from scipy.fft import prev_fast_len
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
+from scipy.signal import savgol_filter
 from casadi import interpolant
 from sympy import true
 from traitlets import TraitError
@@ -28,13 +29,22 @@ from lsy_drone_racing.control.easy_controller import TrajectoryController
 from lsy_drone_racing.control import Controller
 from lsy_drone_racing.tools.ext_tools import TrajectoryTool
 from lsy_drone_racing.utils.utils import draw_line
-
+LOCAL_MODE = False
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.figure as figure
+    import matplotlib.axes as axes
+    import matplotlib.collections
+    LOCAL_MODE = True
+except ModuleNotFoundError:
+    LOCAL_MODE = False
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
 
 class MPCCPrescriptedController(TrajectoryController):
+
     """Implementation of MPCC using the collective thrust and attitude interface."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env):
@@ -185,10 +195,13 @@ class MPCCPrescriptedController(TrajectoryController):
         self.pd_list = MX.sym("pd_list", 3*int(self.model_traj_length/self.model_arc_length))
         self.tp_list = MX.sym("tp_list", 3*int(self.model_traj_length/self.model_arc_length))
         self.qc_dyn = MX.sym("qc_dyn", 1*int(self.model_traj_length/self.model_arc_length))
+        self.qc_curv_dyn = MX.sym("qc_curv_dyn", 1*int(self.model_traj_length/self.model_arc_length))
+
         params = vertcat(
             self.pd_list, 
             self.tp_list,
-            self.qc_dyn
+            self.qc_dyn,
+            self.qc_curv_dyn
         )
 
         # Initialize the nonlinear model for NMPC formulation
@@ -240,15 +253,26 @@ class MPCCPrescriptedController(TrajectoryController):
     def get_updated_traj_param(self, trajectory: CubicSpline):
         """get updated trajectory parameters upon replaning"""
         # construct pd/tp lists from current trajectory
+
         theta_list = np.arange(0, self.model_traj_length, self.model_arc_length)
         pd_list = trajectory(theta_list)
         tp_list = trajectory.derivative(1)(theta_list)
         qc_dyn_list = np.zeros_like(theta_list)
+        
+        radius_list =TrajectoryTool.compute_3d_turning_radius_from_vector_spline(trajectory, theta_list)
+        radius_list[:40] = 10.0
+        radius_list = np.clip(radius_list, 0.1, 10)
+        radius_list_filtered = savgol_filter(radius_list, window_length=100, polyorder=5)
+        radius_list_gaussian = 8 * np.exp(-50 * radius_list_filtered ** 2) # gaussian
+        qc_curv_dyn_list = savgol_filter(radius_list_gaussian, window_length=100, polyorder=5)
+        self.radius_filtered = CubicSpline(theta_list,qc_curv_dyn_list)
+         
+        
         for gate in self.gates:
             distances = np.linalg.norm(pd_list - gate.pos, axis=-1)
-            qc_dyn_gate = np.exp(-5 * distances**2) # gaussian
+            qc_dyn_gate = np.exp(-5 * distances ** 2) # gaussian
             qc_dyn_list = np.maximum(qc_dyn_gate, qc_dyn_list)
-        p_vals = np.concatenate([pd_list.flatten(), tp_list.flatten(), qc_dyn_list])
+        p_vals = np.concatenate([pd_list.flatten(), tp_list.flatten(), qc_dyn_list, qc_curv_dyn_list])
         return p_vals
 
     def mpcc_cost(self):
@@ -269,13 +293,14 @@ class MPCCPrescriptedController(TrajectoryController):
         pd_theta = self.casadi_linear_interp(self.theta, theta_list, self.pd_list)
         tp_theta = self.casadi_linear_interp(self.theta, theta_list, self.tp_list)
         qc_dyn_theta = self.casadi_linear_interp(self.theta, theta_list, self.qc_dyn, dim=1)
+        qc_curv_theta = self.casadi_linear_interp(self.theta, theta_list, self.qc_curv_dyn, dim=1)
         tp_theta_norm = tp_theta / norm_2(tp_theta)
         e_theta = pos - pd_theta
         e_l = dot(tp_theta_norm, e_theta) * tp_theta_norm
         e_c = e_theta - e_l
 
-        mpcc_cost = (self.q_l + self.q_l_peak * qc_dyn_theta) * dot(e_l, e_l) + \
-                    (self.q_c  + self.q_c_peak * qc_dyn_theta) * dot(e_c, e_c) + \
+        mpcc_cost = (self.q_l + self.q_l_peak * qc_dyn_theta + self.q_l_curv_peak * qc_curv_theta) * dot(e_l, e_l) + \
+                    (self.q_c  + self.q_c_peak * qc_dyn_theta + self.q_c_curv_peak * qc_curv_theta) * dot(e_c, e_c) + \
                     (ang.T @ self.Q_w @ ang)+ \
                     self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
                     (control_input.T @ self.R_df @ control_input) + \
@@ -334,8 +359,11 @@ class MPCCPrescriptedController(TrajectoryController):
         # Weights
         self.q_l = 160
         self.q_l_peak = 640
+        self.q_l_curv_peak = 200
+
         self.q_c =  80
         self.q_c_peak = 800
+        self.q_c_curv_peak = 200
         
         self.Q_w = 1 * DM(np.eye(3))
         self.r_dv = 1
@@ -346,8 +374,11 @@ class MPCCPrescriptedController(TrajectoryController):
         # Weights for easy planner
         # self.q_l = 120
         # self.q_l_peak = 100
+        # self.q_l_curv_peak = 0
         # self.q_c = 50
         # self.q_c_peak = 100
+        # self.q_c_curv_peak = 0
+
         
         # self.Q_w = DM(np.eye(3))
         # self.r_dv = 1
@@ -500,6 +531,10 @@ class MPCCPrescriptedController(TrajectoryController):
 
         ## visualization
         # test true theta and guess theta
+        # print(self.radius_filtered(self.last_theta))
+        # plt.plot(self.arc_trajectory.x, self.radius_filtered(self.arc_trajectory.x))
+        # plt.show()
+        # input()
         try:
 
             draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
