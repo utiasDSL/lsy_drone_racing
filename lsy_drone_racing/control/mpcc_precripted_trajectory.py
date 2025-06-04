@@ -24,7 +24,7 @@ from sympy import true
 from traitlets import TraitError
 
 from lsy_drone_racing.control.fresssack_controller import FresssackController
-from lsy_drone_racing.control.easy_controller import TrajectoryController
+from lsy_drone_racing.control.easy_controller import EasyController
 from lsy_drone_racing.control import Controller
 from lsy_drone_racing.tools.ext_tools import TrajectoryTool
 from lsy_drone_racing.utils.utils import draw_line
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 
-class MPCCPrescriptedController(TrajectoryController):
+class MPCCPrescriptedController(EasyController):
     """Implementation of MPCC using the collective thrust and attitude interface."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env):
@@ -254,13 +254,6 @@ class MPCCPrescriptedController(TrajectoryController):
         pos = vertcat(self.px, self.py, self.pz)
         ang = vertcat(self.roll, self.pitch, self.yaw)
         control_input = vertcat(self.f_collective_cmd, self.dr_cmd, self.dp_cmd, self.dy_cmd)
-
-        # pd_theta = vertcat(*[s(self.theta) for s in self.pd_spline])  # [x, y, z]
-        # dpd_theta = vertcat(*[s(self.theta) for s in self.tp_spline])  # [vx, vy, vz]
-        # dpd_theta_norm = dpd_theta / norm_2(dpd_theta)
-        # e_theta = pos - pd_theta
-        # e_l = dot(dpd_theta_norm, e_theta) * dpd_theta_norm
-        # e_c = e_theta - e_l
         
         # interpolate spline dynamically
         theta_list = np.arange(0, self.model_traj_length, self.model_arc_length)
@@ -302,32 +295,6 @@ class MPCCPrescriptedController(TrajectoryController):
 
         # Cost Type
         ocp.cost.cost_type = "EXTERNAL"
-
-        # # prepare interpolated trajectories beforehead
-        # # interpolate spline using casadi
-        # theta_list = trajectory.x
-        # pd_list = trajectory(theta_list)
-        # tp_list = trajectory.derivative(1)(theta_list)
-        # self.qc_dyn = np.zeros_like(theta_list)
-        # for gate in self.gates:
-        #     distances = np.linalg.norm(pd_list - gate.pos, axis=-1)
-        #     qc_dyn_gate = np.exp(-5 * distances**2)
-        #     self.qc_dyn = np.maximum(qc_dyn_gate, self.qc_dyn)
-
-        # self.pd_spline = []
-        # self.tp_spline = []
-
-        # for i in range(pd_list.shape[1]):
-        #     pd_column = pd_list[:, i].tolist()
-        #     tp_column = tp_list[:, i].tolist()
-            
-        #     pd_spline = interpolant(f"pd_{i}", "linear", [theta_list.tolist()], pd_column, {}) # cannot use bspline
-        #     tp_spline = interpolant(f"tp_{i}", "linear", [theta_list.tolist()], tp_column, {})
-            
-        #     self.pd_spline.append(pd_spline)
-        #     self.tp_spline.append(tp_spline)
-        
-        # self.qc_dyn_spline = interpolant(f"qc_dyn_spline", "linear", [theta_list.tolist()], self.qc_dyn, {})
 
         # Weights
         self.q_l = 160
@@ -505,7 +472,7 @@ class MPCCPrescriptedController(TrajectoryController):
             pos_traj = np.array([self.acados_ocp_solver.get(i, "x")[:3] for i in range(self.N+1)])
             draw_line(self.env, pos_traj[0:-1:5],rgba=np.array([1.0, 1.0, 0.0, 0.2]) )
         except:
-            print("SB")
+            pass
 
         return cmd
 

@@ -24,7 +24,7 @@ from sympy import true
 from traitlets import TraitError
 
 from lsy_drone_racing.control.fresssack_controller import FresssackController
-from lsy_drone_racing.control.easy_controller import TrajectoryController
+from lsy_drone_racing.control.easy_controller import EasyController
 from lsy_drone_racing.control import Controller
 from lsy_drone_racing.tools.ext_tools import TrajectoryTool
 from lsy_drone_racing.utils.utils import draw_line
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 
-class MPCController(TrajectoryController):
+class MPCCPrescriptedController(EasyController):
     """Implementation of MPCC using the collective thrust and attitude interface."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env):
@@ -62,35 +62,9 @@ class MPCController(TrajectoryController):
                          thickness = [0.2, 0.2, 0.2, 0.05],
                          vel_limit = [1.0, 1.0, 0.2, 1.0])
 
-        # # Same waypoints as in the trajectory controller. Determined by trial and error.
-        # waypoints = np.array(
-        #     [
-        #         [1.0, 1.5, 0.05],
-        #         [0.8, 1.0, 0.2],
-        #         [0.55, -0.3, 0.5],
-        #         [0.2, -1.3, 0.65],
-        #         [1.1, -0.85, 1.1],
-        #         [0.2, 0.5, 0.65],
-        #         [0.0, 1.2, 0.525],
-        #         [0.0, 1.2, 1.1],
-        #         [-0.5, 0.0, 1.1],
-        #         [-0.5, -0.5, 1.1],
-        #         [-0.5, -1, 1.1],
-        #         [-0.5, -1.5, 1.1]
-
-        #     ]
-        # )
-        # t_total = 11
-        # t = np.linspace(0, t_total, len(waypoints))
-        # trajectory = CubicSpline(t, waypoints)
-
-        # # pre-planned trajectory
-        # t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/vel_5_acc_10_better_end_criterion_sub_5_14.csv")     
-        # t.append(t[-1] + 1)
-        # pos.append(pos[-1] + (pos[-1] - pos[-2]) / 0.1)
-        
+        # # # pre-planned trajectory
+        # t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/param_a_5_sec_offsets.csv")     
         # trajectory = CubicSpline(t, pos)
-
         # easy controller trajectory
         gates_rotates = R.from_quat(obs['gates_quat'])
         rot_matrices = np.array(gates_rotates.as_matrix())
@@ -101,9 +75,10 @@ class MPCController(TrajectoryController):
         t, waypoints = self.avoid_collision(waypoints, obs['obstacles_pos'], 0.3)
         trajectory = self.trajectory_generate(self.t_total, waypoints)
 
+
         # global params
         self.N = 50
-        self.T_HORIZON = 1.0
+        self.T_HORIZON = 0.7
         self.dt = self.T_HORIZON / self.N
         self.model_arc_length = 0.05 # the segment interval for trajectory to be input to the model
         self.model_traj_length = 12 # maximum trajectory length the param can take
@@ -164,8 +139,8 @@ class MPCController(TrajectoryController):
 
         # expanded observation state
         self.theta = MX.sym("theta")
-        self.v_theta = MX.sym("v_theta")
-        self.dv_theta_cmd = MX.sym("dv_theta_cmd")
+        # self.v_theta = MX.sym("v_theta")
+        self.v_theta_cmd = MX.sym("v_theta_cmd")
 
         # define state and input vector
         states = vertcat(
@@ -183,15 +158,14 @@ class MPCController(TrajectoryController):
             self.r_cmd,
             self.p_cmd,
             self.y_cmd,
-            self.theta,
-            self.v_theta,
+            self.theta
         )
         inputs = vertcat(
             self.df_cmd, 
             self.dr_cmd, 
             self.dp_cmd, 
             self.dy_cmd, 
-            self.dv_theta_cmd
+            self.v_theta_cmd
         )
 
         # Define nonlinear system dynamics
@@ -212,8 +186,7 @@ class MPCController(TrajectoryController):
             self.dr_cmd,
             self.dp_cmd,
             self.dy_cmd,
-            self.v_theta,
-            self.dv_theta_cmd,
+            self.v_theta_cmd,
         )
 
         # define dynamic trajectory input
@@ -291,13 +264,6 @@ class MPCController(TrajectoryController):
         pos = vertcat(self.px, self.py, self.pz)
         ang = vertcat(self.roll, self.pitch, self.yaw)
         control_input = vertcat(self.f_collective_cmd, self.dr_cmd, self.dp_cmd, self.dy_cmd)
-
-        # pd_theta = vertcat(*[s(self.theta) for s in self.pd_spline])  # [x, y, z]
-        # dpd_theta = vertcat(*[s(self.theta) for s in self.tp_spline])  # [vx, vy, vz]
-        # dpd_theta_norm = dpd_theta / norm_2(dpd_theta)
-        # e_theta = pos - pd_theta
-        # e_l = dot(dpd_theta_norm, e_theta) * dpd_theta_norm
-        # e_c = e_theta - e_l
         
         # interpolate spline dynamically
         theta_list = np.arange(0, self.model_traj_length, self.model_arc_length)
@@ -311,10 +277,10 @@ class MPCController(TrajectoryController):
 
         mpcc_cost = (self.q_l + self.q_l_peak * qc_dyn_theta) * dot(e_l, e_l) + \
                     (self.q_c  + self.q_c_peak * qc_dyn_theta) * dot(e_c, e_c) + \
-                    (ang.T @ self.Q_w @ ang)+ \
-                    self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
+                    (ang.T @ self.Q_w @ ang) + \
                     (control_input.T @ self.R_df @ control_input) + \
-                    (-self.miu) * self.v_theta
+                    (-self.miu) * self.v_theta_cmd
+                    # self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
         return mpcc_cost
 
     def create_ocp_solver(
@@ -340,65 +306,40 @@ class MPCController(TrajectoryController):
         # Cost Type
         ocp.cost.cost_type = "EXTERNAL"
 
-        # # prepare interpolated trajectories beforehead
-        # # interpolate spline using casadi
-        # theta_list = trajectory.x
-        # pd_list = trajectory(theta_list)
-        # tp_list = trajectory.derivative(1)(theta_list)
-        # self.qc_dyn = np.zeros_like(theta_list)
-        # for gate in self.gates:
-        #     distances = np.linalg.norm(pd_list - gate.pos, axis=-1)
-        #     qc_dyn_gate = np.exp(-5 * distances**2)
-        #     self.qc_dyn = np.maximum(qc_dyn_gate, self.qc_dyn)
-
-        # self.pd_spline = []
-        # self.tp_spline = []
-
-        # for i in range(pd_list.shape[1]):
-        #     pd_column = pd_list[:, i].tolist()
-        #     tp_column = tp_list[:, i].tolist()
-            
-        #     pd_spline = interpolant(f"pd_{i}", "linear", [theta_list.tolist()], pd_column, {}) # cannot use bspline
-        #     tp_spline = interpolant(f"tp_{i}", "linear", [theta_list.tolist()], tp_column, {})
-            
-        #     self.pd_spline.append(pd_spline)
-        #     self.tp_spline.append(tp_spline)
-        
-        # self.qc_dyn_spline = interpolant(f"qc_dyn_spline", "linear", [theta_list.tolist()], self.qc_dyn, {})
-
         # Weights
         self.q_l = 160
-        self.q_l_peak = 320
+        self.q_l_peak = 640
         self.q_c =  80
-        self.q_c_peak = 400
+        self.q_c_peak = 800
         
-        self.Q_w = DM(np.eye(3))
+        self.Q_w = 1 * DM(np.eye(3))
         self.r_dv = 1
         self.R_df = DM(np.eye(4))
-        self.miu = 1.2 
+        self.miu = 0.5
         # param A: works and works well
+
         # Weights for easy planner
-        self.q_l = 120
-        self.q_l_peak = 100
-        self.q_c = 50
-        self.q_c_peak = 100
+        # self.q_l = 120
+        # self.q_l_peak = 100
+        # self.q_c = 50
+        # self.q_c_peak = 100
         
-        self.Q_w = DM(np.eye(3))
-        self.r_dv = 1
-        self.R_df = DM(np.eye(4))
-        self.miu = 0.3
+        # self.Q_w = DM(np.eye(3))
+        # self.r_dv = 1
+        # self.R_df = DM(np.eye(4))
+        # self.miu = 1
 
         
         ocp.model.cost_expr_ext_cost = self.mpcc_cost()
 
         # Set State Constraints
-        ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57, 0])
-        ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57, 10])
-        ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13, 15])
+        ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57])
+        ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57])
+        ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13])
 
         # Set Input Constraints
-        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, -10.0])
-        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 10.0])
+        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, 0]) # last term is v_theta should be positive
+        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 3.0])
         ocp.constraints.idxbu = np.array([0, 1, 2, 3, 4])
 
         # We have to set x0 even though we will overwrite it later on.
@@ -423,7 +364,7 @@ class MPCController(TrajectoryController):
         # set prediction horizon
         ocp.solver_options.tf = Tf
 
-        acados_ocp_solver = AcadosOcpSolver(ocp, json_file="lsy_example_mpc.json", verbose=verbose)
+        acados_ocp_solver = AcadosOcpSolver(ocp, json_file="mpcc_prescripted.json", verbose=verbose)
 
         return acados_ocp_solver, ocp
 
@@ -456,10 +397,10 @@ class MPCController(TrajectoryController):
                 rpy,
                 np.array([self.last_f_collective, self.last_f_cmd]),
                 self.last_rpy_cmd,
-                np.array([self.last_theta, self.last_v_theta])
+                np.array([self.last_theta])
             )
         )
-        xcurrent[-2], _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], self.last_theta+1) # correct theta
+        # xcurrent[-2], _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], self.last_theta+1) # correct theta
         ## warm-start - provide initial guess to guarantee stable convergence
         if not hasattr(self, "x_guess"):
             self.x_guess = [xcurrent for _ in range(self.N + 1)]
@@ -473,7 +414,7 @@ class MPCController(TrajectoryController):
             self.acados_ocp_solver.set(i, "u", self.u_guess[i])
         self.acados_ocp_solver.set(self.N, "x", self.x_guess[self.N])
         
-        ## replan trajectory
+        ## replan trajectory: not needed now!
         # TODO: Gate changes when already getting close to it, but this causes a large jump of trajectory, e_c suddenly goes up, and it fails to track
         # TODO: Must we plan from current position?
         if self.pos_change_detect(obs):
@@ -512,21 +453,36 @@ class MPCController(TrajectoryController):
         w = 1 / self.config.env.freq / self.dt
         self.last_f_collective = self.last_f_collective * (1 - w) + x1[9] * w
         self.last_theta = self.last_theta * (1 - w) + x1[14] * w
-        self.last_v_theta = self.last_v_theta * (1 - w) + x1[15] * w
-        self.last_f_cmd = x1[10]
-        self.last_rpy_cmd = x1[11:14]
+        # self.last_v_theta = self.last_v_theta * (1 - w) + x1[15] * w
+        self.last_f_cmd = self.last_f_cmd * (1-w) + x1[10] * w
+        self.last_rpy_cmd = self.last_rpy_cmd * (1-w) + x1[11:14] * w
 
-        cmd = x1[10:14]
+
+        cmd = np.concatenate(
+            (
+                np.array([self.last_f_cmd]),
+                self.last_rpy_cmd
+            )
+
+        )
+        # cmd = x1[10:14]
+
+
+        # guess_theta = self.last_theta
+        # true_theta, _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], guess_theta + 1.5)
+        # draw_line(self.env, np.stack([self.arc_trajectory(guess_theta), self.arc_trajectory(true_theta)]), rgba=np.array([8*max(true_theta-guess_theta, 0), 8*max(guess_theta-true_theta, 0), 0.0, 1.0]))
 
 
         ## visualization
         # test true theta and guess theta
-        guess_theta = self.last_theta
-        true_theta, _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], guess_theta + 1.5)
-        # draw_line(self.env, np.stack([self.arc_trajectory(guess_theta), self.arc_trajectory(true_theta)]), rgba=np.array([8*max(true_theta-guess_theta, 0), 8*max(guess_theta-true_theta, 0), 0.0, 1.0]))
+        try:
 
-        draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
-        draw_line(self.env, np.stack([self.arc_trajectory(self.last_theta), obs["pos"]]), rgba=np.array([0.0, 0.0, 1.0, 1.0]))
+            draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
+            draw_line(self.env, np.stack([self.arc_trajectory(self.last_theta), obs["pos"]]), rgba=np.array([0.0, 0.0, 1.0, 1.0]))
+            pos_traj = np.array([self.acados_ocp_solver.get(i, "x")[:3] for i in range(self.N+1)])
+            draw_line(self.env, pos_traj[0:-1:5],rgba=np.array([1.0, 1.0, 0.0, 0.2]) )
+        except:
+            pass
 
         return cmd
 
@@ -540,7 +496,8 @@ class MPCController(TrajectoryController):
         info: dict,
     ) -> bool:
         """Increment the tick counter."""
-        self._tick += 1
+        self.step_update(obs = obs)
+        self.update_next_gate()
 
         return self.finished
 

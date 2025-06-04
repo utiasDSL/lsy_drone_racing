@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     
 
-class TrajectoryController(FresssackController):
+class EasyController(FresssackController):
     """Trajectory controller following a pre-defined trajectory."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
