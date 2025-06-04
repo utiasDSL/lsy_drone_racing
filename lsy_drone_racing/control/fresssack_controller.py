@@ -32,8 +32,12 @@ from lsy_drone_racing.tools.planners.occupancy_map import OccupancyMap3D
 
 class FresssackController(Controller):
     """Controller base class with predifined functions for further development! """
-
-
+    pos : NDArray[np.floating]
+    vel : NDArray[np.floating]
+    gates : List[Gate]
+    obstacles : List[Obstacle]
+    gates_visited : List[bool]
+    obstacles_visited : List[bool]
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialization of the controller.
 
@@ -52,17 +56,10 @@ class FresssackController(Controller):
         self._tick = 0
         self._freq = config.env.freq
         self._finished = False
-
-        # self.init_gates(obs = obs,
-        #                  gate_inner_size = [0.4,0.4,0.4,0.4],
-        #                  gate_outer_size = [0.6,0.6,0.6,0.6],
-        #                  gate_safe_radius = [0.4,0.4,0.4,0.4],
-        #                  entry_offset = [0.3,0.7,0.4,0.1],
-        #                  exit_offset = [0.8,1.0,0.1,0.2],
-        #                  thickness = [0.4, 0.4, 0.1, 0.1])
-        # self.init_obstacles(obs = obs,
-        #                     obs_safe_radius = [0.2,0.2,0.2,0.2])
-        # self.init_states(obs = obs)
+        self.gates = []
+        self.obstacles = []
+        self.init_states(obs = obs)
+        
 
         
         
@@ -73,6 +70,8 @@ class FresssackController(Controller):
         self.last_pos = self.pos
         self.current_t = 0.0
         self.next_gate = 0
+        self.gates_visited = obs['gates_visited']
+        self.obstacles_visited = obs['obstacles_visited']
 
     def init_gates(self, obs : Dict[str, np.ndarray],
                     
@@ -338,7 +337,7 @@ class FresssackController(Controller):
         dot_0 = np.dot(v_0, self.gates[self.next_gate].norm_vec)
         dot_1 = np.dot(v_1, self.gates[self.next_gate].norm_vec)
         if(dot_0 * dot_1 < 0):
-            self.next_gate += 1
+            self.next_gate = self.next_gate + 1 if self.next_gate < len(self.gates) - 1 else self.next_gate
             print('Next Gate:' + str(self.next_gate))
             return True
         else:
