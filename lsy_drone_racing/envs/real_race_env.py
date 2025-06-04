@@ -131,7 +131,7 @@ class RealRaceCoreEnv:
         options = {} if options is None else options
         # Update the position of gates and obstacles with the real positions measured from Mocap. If
         # disabled, they are equal to the nominal positions defined in the track config.
-        if not options.get("practice_without_track_objects", False):
+        if options.get("practice_without_track_objects", True):
             # Update the ground truth position and orientation of the gates and obstacles
             tf_names = [f"gate{i}" for i in range(1, self.n_gates + 1)]
             tf_names += [f"obstacle{i}" for i in range(1, self.n_obstacles + 1)]
@@ -147,8 +147,9 @@ class RealRaceCoreEnv:
                 self.obstacles.pos[i, ...] = pos[f"obstacle{i + 1}"]
             ros_connector.close()
 
-            if options.get("check_race_track", True):  # If no track objects are used, skip this
-                check_race_track(self.gates, self.obstacles, self.randomizations)
+        if options.get("check_race_track", True):  # If no track objects are used, skip this
+            check_race_track(self.gates, self.obstacles, self.randomizations)
+
         if options.get("check_drone_start_pos", True):
             pos = self.drones.pos[self.rank, ...]
             check_drone_start_pos(pos, self.randomizations, self.drone_name)
@@ -355,7 +356,7 @@ class RealRaceCoreEnv:
         RETURN_HEIGHT = 1.75  # m
         BREAKING_DISTANCE = 1.0  # m
         BREAKING_DURATION = 3.0  # s
-        RETURN_DURATION = 5.0  # s
+        RETURN_DURATION = 7.0  # s
         LAND_DURATION = 3.0  # s
 
         def wait_for_action(dt: float):
@@ -370,8 +371,8 @@ class RealRaceCoreEnv:
 
         pos = self._ros_connector.pos[self.drone_name]
         vel = self._ros_connector.vel[self.drone_name]
-        if pos[2] < 0.1:
-            # If the drone is on the ground, just turn it off
+        # This quick check prevents us from engaging the return controller if we havent even started yet.
+        if pos[2] < 0.2:
             return
         break_pos = pos + vel / np.linalg.norm(vel) * BREAKING_DISTANCE
         break_pos[2] = RETURN_HEIGHT
