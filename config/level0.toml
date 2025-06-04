@@ -4,7 +4,7 @@
 # | :-----------------: | :-----------------------: | :-------------------------: | :---------------: |
 # | `level0.toml`       | *No*                      | *No*                        | Perfect knowledge |
 [controller]
-file = "mpcc.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+file = "mpcc_precripted_trajectory.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 
 [deploy]
 ### Settings only relevant for deployment

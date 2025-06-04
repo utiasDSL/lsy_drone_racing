@@ -68,7 +68,7 @@ class MPCCPrescriptedController(TrajectoryController):
 
         # global params
         self.N = 50
-        self.T_HORIZON = 1.0
+        self.T_HORIZON = 0.7
         self.dt = self.T_HORIZON / self.N
         self.model_arc_length = 0.05 # the segment interval for trajectory to be input to the model
         self.model_traj_length = 12 # maximum trajectory length the param can take
@@ -129,8 +129,8 @@ class MPCCPrescriptedController(TrajectoryController):
 
         # expanded observation state
         self.theta = MX.sym("theta")
-        self.v_theta = MX.sym("v_theta")
-        self.dv_theta_cmd = MX.sym("dv_theta_cmd")
+        # self.v_theta = MX.sym("v_theta")
+        self.v_theta_cmd = MX.sym("v_theta_cmd")
 
         # define state and input vector
         states = vertcat(
@@ -148,15 +148,14 @@ class MPCCPrescriptedController(TrajectoryController):
             self.r_cmd,
             self.p_cmd,
             self.y_cmd,
-            self.theta,
-            self.v_theta,
+            self.theta
         )
         inputs = vertcat(
             self.df_cmd, 
             self.dr_cmd, 
             self.dp_cmd, 
             self.dy_cmd, 
-            self.dv_theta_cmd
+            self.v_theta_cmd
         )
 
         # Define nonlinear system dynamics
@@ -177,8 +176,7 @@ class MPCCPrescriptedController(TrajectoryController):
             self.dr_cmd,
             self.dp_cmd,
             self.dy_cmd,
-            self.v_theta,
-            self.dv_theta_cmd,
+            self.v_theta_cmd,
         )
 
         # define dynamic trajectory input
@@ -276,10 +274,10 @@ class MPCCPrescriptedController(TrajectoryController):
 
         mpcc_cost = (self.q_l + self.q_l_peak * qc_dyn_theta) * dot(e_l, e_l) + \
                     (self.q_c  + self.q_c_peak * qc_dyn_theta) * dot(e_c, e_c) + \
-                    (ang.T @ self.Q_w @ ang)+ \
-                    self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
+                    (ang.T @ self.Q_w @ ang) + \
                     (control_input.T @ self.R_df @ control_input) + \
-                    (-self.miu) * self.v_theta
+                    (-self.miu) * self.v_theta_cmd
+                    # self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
         return mpcc_cost
 
     def create_ocp_solver(
@@ -340,7 +338,7 @@ class MPCCPrescriptedController(TrajectoryController):
         self.Q_w = 1 * DM(np.eye(3))
         self.r_dv = 1
         self.R_df = DM(np.eye(4))
-        self.miu = 4.8
+        self.miu = 0.5
         # param A: works and works well
 
         # Weights for easy planner
@@ -358,13 +356,13 @@ class MPCCPrescriptedController(TrajectoryController):
         ocp.model.cost_expr_ext_cost = self.mpcc_cost()
 
         # Set State Constraints
-        ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57, 0])
-        ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57, 10])
-        ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13, 15])
+        ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57])
+        ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57])
+        ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13])
 
         # Set Input Constraints
-        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, -10.0])
-        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 10.0])
+        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, 0]) # last term is v_theta should be positive
+        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 3.0])
         ocp.constraints.idxbu = np.array([0, 1, 2, 3, 4])
 
         # We have to set x0 even though we will overwrite it later on.
@@ -422,7 +420,7 @@ class MPCCPrescriptedController(TrajectoryController):
                 rpy,
                 np.array([self.last_f_collective, self.last_f_cmd]),
                 self.last_rpy_cmd,
-                np.array([self.last_theta, self.last_v_theta])
+                np.array([self.last_theta])
             )
         )
         # xcurrent[-2], _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], self.last_theta+1) # correct theta
@@ -478,7 +476,7 @@ class MPCCPrescriptedController(TrajectoryController):
         w = 1 / self.config.env.freq / self.dt
         self.last_f_collective = self.last_f_collective * (1 - w) + x1[9] * w
         self.last_theta = self.last_theta * (1 - w) + x1[14] * w
-        self.last_v_theta = self.last_v_theta * (1 - w) + x1[15] * w
+        # self.last_v_theta = self.last_v_theta * (1 - w) + x1[15] * w
         self.last_f_cmd = self.last_f_cmd * (1-w) + x1[10] * w
         self.last_rpy_cmd = self.last_rpy_cmd * (1-w) + x1[11:14] * w
 
