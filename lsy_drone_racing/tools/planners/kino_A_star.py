@@ -24,6 +24,40 @@ from lsy_drone_racing.tools.planners.occupancy_map import OccupancyMap3D
 from lsy_drone_racing.tools.ext_tools import PolynomialTool as poly
 from lsy_drone_racing.tools.race_objects import Gate
 
+class KinoAStarPlannerConfig:
+    w_time : np.floating
+    lambda_heu: np.floating
+
+    max_vel : np.floating
+    max_acc : np.floating
+    tie_breaker : np.floating
+    acc_resolution : np.floating
+    time_resolution : np.floating
+    max_duration: np.floating
+    safety_check_res: np.floating
+
+    def __init__(
+        self,
+        w_time : np.floating,
+        lambda_heu: np.floating,
+        max_vel : np.floating,
+        max_acc : np.floating,
+        tie_breaker : np.floating,
+        acc_resolution : np.floating,
+        time_resolution : np.floating,
+        max_duration: np.floating,
+        safety_check_res: np.floating,
+    ) -> None:
+        self.w_time = w_time 
+        self.lambda_heu= lambda_heu
+        self.max_vel = max_vel 
+        self.max_acc = max_acc 
+        self.tie_breaker = tie_breaker 
+        self.acc_resolution = acc_resolution 
+        self.time_resolution = time_resolution 
+        self.max_duration = max_duration
+        self.safety_check_res = safety_check_res
+
 class NodeInfo():
     g_cost : np.floating
     f_cost : np.floating
@@ -168,8 +202,7 @@ class KinoDynamicAStarPlanner():
                   time_resolution: np.floating,
                   max_duration: np.floating,
                   safety_check_res: np.floating,
-                  lambda_heu: np.floating,   
-
+                  lambda_heu: np.floating,  
     )->None:
         self._w_time = w_time
         self._max_vel = max_vel
@@ -182,7 +215,19 @@ class KinoDynamicAStarPlanner():
         self._lambda_heu = lambda_heu
         return
     
-    
+    def setup_param(self,
+                  params : KinoAStarPlannerConfig  
+    )->None:
+        self._w_time = params.w_time
+        self._max_vel = params.max_vel
+        self._max_acc = params.max_acc
+        self._tie_breaker = params.tie_breaker
+        self._acc_resolution = params.acc_resolution
+        self._time_resolution = params.time_resolution
+        self._max_duration = params.max_duration
+        self._safety_check_resolution = params.safety_check_res
+        self._lambda_heu = params.lambda_heu
+        return
     
 
     def search(self,
@@ -581,6 +626,15 @@ class KinoDynamicAStarPlanner():
                         ) -> Tuple[NDArray[np.floating], NDArray[np.floating]]:
         return p_0 + 0.5 * tau * tau * um + v_0 * tau, v_0 + tau * um
     
+    def remove_plot(self) -> bool:
+        if hasattr(self,'_open_set_plot') and self._open_set_plot is not None:
+            try:
+                self._open_set_plot.remove()
+                self._open_set_plot = None
+                return True
+            except:
+                return False
+
     def plot_open_set(self, open_set: List[Tuple[float,float, SearchNode]],
                     fig : figure.Figure,
                       ax : axes.Axes,
