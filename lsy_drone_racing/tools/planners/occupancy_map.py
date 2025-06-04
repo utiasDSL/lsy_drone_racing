@@ -1,6 +1,6 @@
 from __future__ import annotations
 import numpy as np
-from typing import Tuple, Union, Optional
+from typing import Tuple, Union, Optional, List
 from numpy.typing import NDArray
 from scipy.interpolate import CubicSpline, BSpline
 import itertools
@@ -16,6 +16,7 @@ try:
     OC_MAP_LOCAL_MODE = True
 except:
     OC_MAP_LOCAL_MODE = False
+
 
 class OccupancyMap3D:
     resolution : np.float32
@@ -137,6 +138,20 @@ class OccupancyMap3D:
                     self.oc_map[tuple(idx)] = free_val
 
         return
+    def add_sphere(self, pos : NDArray[np.floating], radius: float = 0.3, free_val: int = 0):
+        center_idx = self.world_to_map(pos)
+        bound = int(radius / self.resolution) + 1
+        for dx, dy, dz in itertools.product(range(-bound, bound+1),
+                                            range(-bound, bound+1),
+                                            range(-bound, bound+1)):
+            offset = np.array([dx, dy, dz])
+            idx = center_idx + offset
+            if self.out_of_range(idx):
+                continue
+            world_pos = self.limit[:, 0] + idx * self.resolution
+            if np.linalg.norm(world_pos - pos) <= radius:
+                self.oc_map[tuple(idx)] = free_val
+
     def add_gate(self,
                 center: NDArray[np.floating],
                 inner_size: np.floating,
@@ -198,7 +213,32 @@ class OccupancyMap3D:
 
 
 
+    @classmethod
+    def merge(cls, maps: List[OccupancyMap3D], mode: str = "intersection") -> OccupancyMap3D:
+       
+        assert len(maps) > 0, "merge need at least occupancy map"
 
+        base = maps[0]
+        for m in maps[1:]:
+            assert np.allclose(m.limit, base.limit), "Different limit"
+            assert m.resolution == base.resolution, "Different resolution"
+            assert np.all(m.size == base.size), "Different size"
+
+        if mode == "union":
+            merged_oc_map = np.maximum.reduce([m.oc_map for m in maps])
+        elif mode == "intersection":
+            merged_oc_map = np.minimum.reduce([m.oc_map for m in maps])
+        else:
+            raise ValueError(f"Unsupported mode: {mode}")
+
+        merged = cls(
+            xlim=tuple(base.limit[0]),
+            ylim=tuple(base.limit[1]),
+            zlim=tuple(base.limit[2]),
+            resolution=base.resolution
+        )
+        merged.oc_map = merged_oc_map
+        return merged
 
 
 
@@ -254,13 +294,28 @@ class OccupancyMap3D:
         else:
             return self.oc_map[x, y, z] == 0
         
-    def clear_visualization(self) -> None:
+    def clear_visualization(self) -> bool:
         if hasattr(self, "_occupied_artist"):
             if self._occupied_artist is not None:
-                self._occupied_artist.remove()
+                try:
+                    self._occupied_artist.remove()
+                except:
+                    return False
+            else:
+                return False
+        else:
+            return False
         if hasattr(self, '_free_artist'):
             if self._free_artist is not None:
-                self._free_artist.remove()
+                try:
+                    self._free_artist.remove()
+                except:
+                    return False
+            else:
+                return False
+        else:
+            return False
+        return True
         
     def save_to_file(self, path: str) -> None:
         np.savez_compressed(

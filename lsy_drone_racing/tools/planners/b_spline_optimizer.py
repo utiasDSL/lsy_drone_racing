@@ -27,6 +27,12 @@ class UniformBSpline:
         self.b_spline = None
         self._last_plot = None
 
+    def __call__(self, t: float | NDArray[np.floating]) -> NDArray[np.floating]:
+        return self.b_spline(t)
+
+    def derivative(self, nu: int = 1) -> Callable[[float | NDArray[np.floating]], NDArray[np.floating]]:
+        return self.b_spline.derivative(nu)
+
     def parameter_2_bspline_uniform(
         self,
         waypoints: List[NDArray[np.floating]],
@@ -72,6 +78,13 @@ class UniformBSpline:
 
         return self.b_spline, self.t, self.ctrl_pts
     
+    def remove_plot(self) -> bool:
+         if hasattr(self, "_last_plot") and self._last_plot is not None:
+            try:
+                self._last_plot.remove()
+                return True
+            except:
+                return False
     def visualize_B_spline(self, fig : figure.Figure, ax : axes.Axes, color = 'red') -> Tuple[figure.Figure, axes.Axes]:
         if hasattr(self, "_last_plot") and self._last_plot is not None:
             self._last_plot.remove()
