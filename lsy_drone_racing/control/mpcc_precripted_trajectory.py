@@ -67,7 +67,7 @@ class MPCCPrescriptedController(TrajectoryController):
         trajectory = CubicSpline(t, pos)
 
         # global params
-        self.N = 50
+        self.N = 25
         self.T_HORIZON = 0.7
         self.dt = self.T_HORIZON / self.N
         self.model_arc_length = 0.05 # the segment interval for trajectory to be input to the model
@@ -144,14 +144,13 @@ class MPCCPrescriptedController(TrajectoryController):
             self.pitch,
             self.yaw,
             self.f_collective,
-            self.f_collective_cmd,
             self.r_cmd,
             self.p_cmd,
             self.y_cmd,
             self.theta
         )
         inputs = vertcat(
-            self.df_cmd, 
+            self.f_collective_cmd, 
             self.dr_cmd, 
             self.dp_cmd, 
             self.dy_cmd, 
@@ -172,7 +171,6 @@ class MPCCPrescriptedController(TrajectoryController):
             params_pitch_rate[0] * self.pitch + params_pitch_rate[1] * self.p_cmd,
             params_yaw_rate[0] * self.yaw + params_yaw_rate[1] * self.y_cmd,
             10.0 * (self.f_collective_cmd - self.f_collective),
-            self.df_cmd,
             self.dr_cmd,
             self.dp_cmd,
             self.dy_cmd,
@@ -254,13 +252,6 @@ class MPCCPrescriptedController(TrajectoryController):
         pos = vertcat(self.px, self.py, self.pz)
         ang = vertcat(self.roll, self.pitch, self.yaw)
         control_input = vertcat(self.f_collective_cmd, self.dr_cmd, self.dp_cmd, self.dy_cmd)
-
-        # pd_theta = vertcat(*[s(self.theta) for s in self.pd_spline])  # [x, y, z]
-        # dpd_theta = vertcat(*[s(self.theta) for s in self.tp_spline])  # [vx, vy, vz]
-        # dpd_theta_norm = dpd_theta / norm_2(dpd_theta)
-        # e_theta = pos - pd_theta
-        # e_l = dot(dpd_theta_norm, e_theta) * dpd_theta_norm
-        # e_c = e_theta - e_l
         
         # interpolate spline dynamically
         theta_list = np.arange(0, self.model_traj_length, self.model_arc_length)
@@ -277,7 +268,6 @@ class MPCCPrescriptedController(TrajectoryController):
                     (ang.T @ self.Q_w @ ang) + \
                     (control_input.T @ self.R_df @ control_input) + \
                     (-self.miu) * self.v_theta_cmd
-                    # self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
         return mpcc_cost
 
     def create_ocp_solver(
@@ -303,32 +293,6 @@ class MPCCPrescriptedController(TrajectoryController):
         # Cost Type
         ocp.cost.cost_type = "EXTERNAL"
 
-        # # prepare interpolated trajectories beforehead
-        # # interpolate spline using casadi
-        # theta_list = trajectory.x
-        # pd_list = trajectory(theta_list)
-        # tp_list = trajectory.derivative(1)(theta_list)
-        # self.qc_dyn = np.zeros_like(theta_list)
-        # for gate in self.gates:
-        #     distances = np.linalg.norm(pd_list - gate.pos, axis=-1)
-        #     qc_dyn_gate = np.exp(-5 * distances**2)
-        #     self.qc_dyn = np.maximum(qc_dyn_gate, self.qc_dyn)
-
-        # self.pd_spline = []
-        # self.tp_spline = []
-
-        # for i in range(pd_list.shape[1]):
-        #     pd_column = pd_list[:, i].tolist()
-        #     tp_column = tp_list[:, i].tolist()
-            
-        #     pd_spline = interpolant(f"pd_{i}", "linear", [theta_list.tolist()], pd_column, {}) # cannot use bspline
-        #     tp_spline = interpolant(f"tp_{i}", "linear", [theta_list.tolist()], tp_column, {})
-            
-        #     self.pd_spline.append(pd_spline)
-        #     self.tp_spline.append(tp_spline)
-        
-        # self.qc_dyn_spline = interpolant(f"qc_dyn_spline", "linear", [theta_list.tolist()], self.qc_dyn, {})
-
         # Weights
         self.q_l = 160
         self.q_l_peak = 640
@@ -337,7 +301,7 @@ class MPCCPrescriptedController(TrajectoryController):
         
         self.Q_w = 1 * DM(np.eye(3))
         self.r_dv = 1
-        self.R_df = DM(np.eye(4))
+        self.R_df = DM(np.diag([0,1,1,1])) # cannot punish collective thrust
         self.miu = 0.5
         # param A: works and works well
 
@@ -356,13 +320,13 @@ class MPCCPrescriptedController(TrajectoryController):
         ocp.model.cost_expr_ext_cost = self.mpcc_cost()
 
         # Set State Constraints
-        ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57])
-        ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57])
-        ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13])
+        ocp.constraints.lbx = np.array([0.1, -1.57, -1.57, -1.57])
+        ocp.constraints.ubx = np.array([0.55, 1.57, 1.57, 1.57])
+        ocp.constraints.idxbx = np.array([9, 10, 11, 12])
 
         # Set Input Constraints
-        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, 0]) # last term is v_theta should be positive
-        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 3.0])
+        ocp.constraints.lbu = np.array([0.1, -10.0, -10.0, -10.0, 0]) # last term is v_theta should be positive
+        ocp.constraints.ubu = np.array([0.55, 10.0, 10.0, 10.0, 3.0]) # contraint f_collective_thrust
         ocp.constraints.idxbu = np.array([0, 1, 2, 3, 4])
 
         # We have to set x0 even though we will overwrite it later on.
@@ -418,7 +382,7 @@ class MPCCPrescriptedController(TrajectoryController):
                 obs["pos"],
                 obs["vel"],
                 rpy,
-                np.array([self.last_f_collective, self.last_f_cmd]),
+                np.array([self.last_f_collective]),
                 self.last_rpy_cmd,
                 np.array([self.last_theta])
             )
@@ -473,12 +437,12 @@ class MPCCPrescriptedController(TrajectoryController):
         self.u_guess = [self.acados_ocp_solver.get(i, "u") for i in range(self.N)]
 
         x1 = self.acados_ocp_solver.get(1, "x")
+        u1 = self.acados_ocp_solver.get(1, "u")
         w = 1 / self.config.env.freq / self.dt
         self.last_f_collective = self.last_f_collective * (1 - w) + x1[9] * w
-        self.last_theta = self.last_theta * (1 - w) + x1[14] * w
-        # self.last_v_theta = self.last_v_theta * (1 - w) + x1[15] * w
-        self.last_f_cmd = self.last_f_cmd * (1-w) + x1[10] * w
-        self.last_rpy_cmd = self.last_rpy_cmd * (1-w) + x1[11:14] * w
+        self.last_theta = self.last_theta * (1 - w) + x1[13] * w
+        self.last_f_cmd = self.last_f_cmd * (1-w) + u1[0] * w
+        self.last_rpy_cmd = self.last_rpy_cmd * (1-w) + x1[10:13] * w
 
 
         cmd = np.concatenate(
@@ -486,9 +450,7 @@ class MPCCPrescriptedController(TrajectoryController):
                 np.array([self.last_f_cmd]),
                 self.last_rpy_cmd
             )
-
         )
-        # cmd = x1[10:14]
 
 
         # guess_theta = self.last_theta
@@ -505,7 +467,7 @@ class MPCCPrescriptedController(TrajectoryController):
             pos_traj = np.array([self.acados_ocp_solver.get(i, "x")[:3] for i in range(self.N+1)])
             draw_line(self.env, pos_traj[0:-1:5],rgba=np.array([1.0, 1.0, 0.0, 0.2]) )
         except:
-            print("SB")
+            pass
 
         return cmd
 
