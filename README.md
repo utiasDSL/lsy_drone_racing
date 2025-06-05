@@ -98,15 +98,7 @@ Please follow the [Robostack Getting Started](https://robostack.github.io/Gettin
 
 #### Simulation & Hardware on our Lab PC (If Necessary)
 
-We provide a PC in the Lab on which you are allowed to run your controllers during deployment. Please follow the instructions regarding robostack as provided, but with the following changes: 
-
-Please choose descriptive environment names such as ```Team1```.
-
-Create your own project folder and install the provided packages only in the given folder instead of the `~/repos` folder:
-```bash
-mkdir ~/repos/student_forks/<TEAM_NAME>
-cd ~/repos/student_forks/<TEAM_NAME>
-```
+We provide a PC in the Lab on which you are allowed to run your controllers during deployment. Please create a new user for each team and follow the instructions regarding micromamba & robostack as noted above. Then, proceed with the Package Installation instructions.
 
 #### Simulation only (Not Recommended)
 
@@ -183,7 +175,7 @@ colcon build --cmake-args -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 Test your installation: For this to work you have to be in the lab and be connected to our local network. 
 ```
 # Check connection to the vicon PC
-ping 10.157.136.191
+ping 10.157.163.191
 ```
 
 If this works, source the workspace and run the motiontracking node
@@ -196,7 +188,7 @@ Every time you run the motion_capture_tracking node, you have to source the work
 
 For micromamba this would be:
 ```
-echo "source $HOME/ros_ws/install/setup.sh" > ~/.mamba/envs/ros_env/etc/conda/activate.d/xcustom_activate.sh
+echo "source $HOME/ros_ws/install/setup.sh" > ~/micromamba/envs/ros_env/etc/conda/activate.d/xcustom_activate.sh
 ```
 
 #### Install Models Repository (necessary for real only)
@@ -231,6 +223,7 @@ git checkout tags/v0.5.0
 git submodule update --recursive --init
 
 # Build the application
+# Note: If you use Robostack, this might lead to issues. Try to build acados outside your environment if this is the case.
 mkdir -p build
 cd build
 cmake -DACADOS_WITH_QPOASES=ON ..
@@ -238,12 +231,13 @@ cmake -DACADOS_WITH_QPOASES=ON ..
 make install -j4
 
 # In your environment, make sure you install the acados python interface:
+# Note: If you build acados outside your environment previously, activate it again before executing the following commands.
 cd ~/repos/acados
 pip install -e interfaces/acados_template
 
 # Make sure acados can be found by adding its location to the path. For robostack and micromamba, this would be:
-echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:"$HOME/repos/acados/lib"' > ~/.mamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_ld_library.sh
-echo 'export ACADOS_SOURCE_DIR="$HOME/repos/acados"' > ~/.mamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_source.sh
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:"$HOME/repos/acados/lib"' > ~/micromamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_ld_library.sh
+echo 'export ACADOS_SOURCE_DIR="$HOME/repos/acados"' > ~/micromamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_source.sh
 
 # Run a simple example from the acados example to make sure it works.
 # If he asks you whether you want to get the t_renderer package installed automatically, press yes.
@@ -420,14 +414,14 @@ Terminal 2 starts the estimator:
 ```
 mamba activate ros_env
 cd ~/repos/estimators
-python3 ros_nodes/ros2node.py --settings ros_nodes/estimators.toml
+python3 lsy_estimators/ros_nodes/ros2_node.py --settings ros_nodes/estimators.toml
 ```
 
 Terminal 3 starts the deployment of the controller: 
 ```
 mamba activate ros_env
 cd ~/repos/lsy_drone_racing/scripts
-python scripts/deploy.py --controller <your_controller.py> --config level2.toml
+python deploy.py --controller <your_controller.py> --config level2.toml
 ```
 
 where `<your_controller.py>` implements a controller that inherits from `lsy_drone_racing.control.BaseController`
