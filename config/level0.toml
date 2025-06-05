@@ -13,7 +13,7 @@ check_race_track = true
 # Whether to check if the drone start position is within the limits specified down below.
 check_drone_start_pos = true
 # Lets you practice your controller without putting up gates & obstacles, assumes nominal positions given below.
-practice_without_track_objects = false
+real_track_objects = true
 
 [[deploy.drones]]
 id = 91
@@ -29,7 +29,7 @@ physics = "analytical"
 camera_view = [5.0, -40.0, -40.0, 0.5, -1.0, 0.5]
 freq = 500                                        # Simulation frequency, in Hz
 attitude_freq = 500                               # Controller frequency, in Hz. This frequency is used to simulate the onboard controller, NOT for the environment's step function
-gui = false                                       # Enable/disable PyBullet's GUI
+gui = true                                       # Enable/disable PyBullet's GUI
 
 [env]
 id = "DroneRacing-v0"   # "DroneRacing-v0" for single races, "MultiDroneRacing-v0" for multi-drone races. Each environment also implements a vector-environment for faster training

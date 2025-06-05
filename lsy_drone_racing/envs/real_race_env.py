@@ -131,7 +131,7 @@ class RealRaceCoreEnv:
         options = {} if options is None else options
         # Update the position of gates and obstacles with the real positions measured from Mocap. If
         # disabled, they are equal to the nominal positions defined in the track config.
-        if options.get("practice_without_track_objects", True):
+        if options.get("real_track_objects", True):
             # Update the ground truth position and orientation of the gates and obstacles
             tf_names = [f"gate{i}" for i in range(1, self.n_gates + 1)]
             tf_names += [f"obstacle{i}" for i in range(1, self.n_obstacles + 1)]
@@ -147,9 +147,13 @@ class RealRaceCoreEnv:
                 self.obstacles.pos[i, ...] = pos[f"obstacle{i + 1}"]
             ros_connector.close()
 
-        if options.get("check_race_track", True):  # If no track objects are used, skip this
-            check_race_track(self.gates, self.obstacles, self.randomizations)
-
+            if options.get("check_race_track", True):  # If no track objects are used, skip this
+                check_race_track(
+                    self.gates.nominal_pos,
+                    self.gates.nominal_quat,
+                    self.obstacles.nominal_pos,
+                    self.randomizations,
+                )
         if options.get("check_drone_start_pos", True):
             pos = self.drones.pos[self.rank, ...]
             check_drone_start_pos(pos, self.randomizations, self.drone_name)
