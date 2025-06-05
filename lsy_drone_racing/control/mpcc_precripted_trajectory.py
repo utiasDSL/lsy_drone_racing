@@ -25,7 +25,7 @@ from sympy import true
 from traitlets import TraitError
 
 from lsy_drone_racing.control.fresssack_controller import FresssackController
-from lsy_drone_racing.control.easy_controller import TrajectoryController
+from lsy_drone_racing.control.easy_controller import EasyController
 from lsy_drone_racing.control import Controller
 from lsy_drone_racing.tools.ext_tools import TrajectoryTool
 from lsy_drone_racing.utils.utils import draw_line
@@ -43,8 +43,7 @@ if TYPE_CHECKING:
 
 
 
-class MPCCPrescriptedController(TrajectoryController):
-
+class MPCCPrescriptedController(EasyController):
     """Implementation of MPCC using the collective thrust and attitude interface."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env):
