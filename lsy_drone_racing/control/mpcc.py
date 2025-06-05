@@ -34,10 +34,10 @@ if TYPE_CHECKING:
 
 
 
-class MPCCPrescriptedController(EasyController):
+class MPCC(EasyController):
     """Implementation of MPCC using the collective thrust and attitude interface."""
 
-    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env=None):
         """Initialize the attitude controller.
 
         Args:
@@ -62,9 +62,9 @@ class MPCCPrescriptedController(EasyController):
                          thickness = [0.2, 0.2, 0.2, 0.05],
                          vel_limit = [1.0, 1.0, 0.2, 1.0])
 
-        # # # pre-planned trajectory
-        # t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/param_a_5_sec_offsets.csv")     
-        # trajectory = CubicSpline(t, pos)
+        # # # # pre-planned trajectory
+        # # t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/param_a_5_sec_offsets.csv")     
+        # # trajectory = CubicSpline(t, pos)
         # easy controller trajectory
         gates_rotates = R.from_quat(obs['gates_quat'])
         rot_matrices = np.array(gates_rotates.as_matrix())
@@ -75,6 +75,8 @@ class MPCCPrescriptedController(EasyController):
         t, waypoints = self.avoid_collision(waypoints, obs['obstacles_pos'], 0.3)
         trajectory = self.trajectory_generate(self.t_total, waypoints)
 
+        # t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/param_c_6_sec_bigger_pillar.csv")
+        # trajectory = CubicSpline(t, pos)
 
         # global params
         self.N = 50
@@ -315,8 +317,8 @@ class MPCCPrescriptedController(EasyController):
         self.Q_w = 1 * DM(np.eye(3))
         self.r_dv = 1
         self.R_df = DM(np.eye(4))
-        self.miu = 0.5
-        # param A: works and works well
+        self.miu = 1.5
+        # param A: wors and works well
 
         # Weights for easy planner
         # self.q_l = 120
