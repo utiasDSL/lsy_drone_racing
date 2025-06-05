@@ -4,7 +4,7 @@
 # | :-----------------: | :-----------------------: | :-------------------------: | :-------------------: |
 # | `level2.toml`       | **Yes**                   | **Yes**                     | Learning, re-planning |
 [controller]
-file = "attitude_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 
 [deploy]
 ### Settings only relevant for deployment
@@ -17,7 +17,7 @@ real_track_objects = true
 
 [[deploy.drones]]
 id = 91
-channel = 91
+channel = 100
 
 [sim]
 # Physics options: analytical, sys_id, mujoco
@@ -30,9 +30,9 @@ gui = false                                       # Enable/disable PyBullet's GU
 [env]
 id = "DroneRacing-v0"   # "DroneRacing-v0" for single races, "MultiDroneRacing-v0" for multi-drone races. Each environment also implements a vector-environment for faster training
 seed = 1337             # Random seed
-freq = 200            # Frequency of the environment's step function, in Hz
+freq = 50               # Frequency of the environment's step function, in Hz
 sensor_range = 0.7      # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
-control_mode = "attitude"  # Control mode of the environment. Can be either "state" or "attitude"
+control_mode = "state"  # Control mode of the environment. Can be either "state" or "attitude"
 
 [env.track]
 # Tall gates: 1.0m height. Short gates: 0.525m height. Height is measured from the ground to the
