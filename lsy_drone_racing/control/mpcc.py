@@ -21,6 +21,7 @@ from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 from casadi import interpolant
 from sympy import true
+from torch import has_spectral
 from traitlets import TraitError
 
 from lsy_drone_racing.control.fresssack_controller import FresssackController
@@ -282,7 +283,6 @@ class MPCC(EasyController):
                     (ang.T @ self.Q_w @ ang) + \
                     (control_input.T @ self.R_df @ control_input) + \
                     (-self.miu) * self.v_theta_cmd
-                    # self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
         return mpcc_cost
 
     def create_ocp_solver(
@@ -315,9 +315,8 @@ class MPCC(EasyController):
         self.q_c_peak = 800
         
         self.Q_w = 1 * DM(np.eye(3))
-        self.r_dv = 1
-        self.R_df = DM(np.eye(4))
-        self.miu = 1.5
+        self.R_df = DM(np.diag([1,0.5,0.5,0.5]))
+        self.miu = 0.5
         # param A: wors and works well
 
         # Weights for easy planner
@@ -340,7 +339,7 @@ class MPCC(EasyController):
         ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13])
 
         # Set Input Constraints
-        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, 0]) # last term is v_theta should be positive
+        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, 0.0]) # last term is v_theta should be positive
         ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 3.0])
         ocp.constraints.idxbu = np.array([0, 1, 2, 3, 4])
 
@@ -416,9 +415,7 @@ class MPCC(EasyController):
             self.acados_ocp_solver.set(i, "u", self.u_guess[i])
         self.acados_ocp_solver.set(self.N, "x", self.x_guess[self.N])
         
-        ## replan trajectory: not needed now!
-        # TODO: Gate changes when already getting close to it, but this causes a large jump of trajectory, e_c suddenly goes up, and it fails to track
-        # TODO: Must we plan from current position?
+        ## replan trajectory:
         if self.pos_change_detect(obs):
             gates_rotates = R.from_quat(obs['gates_quat'])
             rot_matrices = np.array(gates_rotates.as_matrix())
@@ -434,11 +431,31 @@ class MPCC(EasyController):
             # write trajectory as parameter to solver
             p_vals = self.get_updated_traj_param(self.arc_trajectory)
             # xcurrent[-2], _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"]) # correct theta
-            for i in range(self.N): 
+            for i in range(self.N): # write current trajectory to solver
                 self.acados_ocp_solver.set(i, "p", p_vals)
-                # TODO: maybe it needs to be initialized differently? uniform guess: solver failure; original warmup: unable to track new traj
-                # self.acados_ocp_solver.set(i, "x", xcurrent) 
-                # self.acados_ocp_solver.set(i, "u", np.zeros(self.nu))
+            # EXP: I do an extra solve here, with v_theta fixed, to provide a feasible solution
+                fixed_vel = self.u_guess[i][-1]
+                self.acados_ocp_solver.set(i, "lbu", np.array([-10.0, -10.0, -10.0, -10.0, fixed_vel-0.00]))
+                self.acados_ocp_solver.set(i, "ubu", np.array([10.0, 10.0, 10.0, 10.0, fixed_vel+0.00]))
+            # set initial state
+            self.acados_ocp_solver.set(0, "lbx", xcurrent)
+            self.acados_ocp_solver.set(0, "ubx", xcurrent)
+            # solve with v_theta frozen
+            self.acados_ocp_solver.solve()
+            # Restore constraints
+            for i in range(self.N):
+                self.acados_ocp_solver.set(i, "lbu", np.array([-10.0, -10.0, -10.0, -10.0, 0.0]))
+                self.acados_ocp_solver.set(i, "ubu", np.array([10.0, 10.0, 10.0, 10.0, 3.0]))
+            # Update warm start with solution just solved
+            self.x_guess = [self.acados_ocp_solver.get(i, "x") for i in range(self.N + 1)]
+            self.u_guess = [self.acados_ocp_solver.get(i, "u") for i in range(self.N)]
+            # Write new warm start
+            for i in range(self.N):
+                self.acados_ocp_solver.set(i, "x", self.x_guess[i])
+                self.acados_ocp_solver.set(i, "u", self.u_guess[i])
+            self.acados_ocp_solver.set(self.N, "x", self.x_guess[self.N])
+            self.x_warmup_traj = np.array([x[:3] for x in self.x_guess]) # for visualization
+
 
         # set initial state
         self.acados_ocp_solver.set(0, "lbx", xcurrent)
@@ -455,7 +472,6 @@ class MPCC(EasyController):
         w = 1 / self.config.env.freq / self.dt
         self.last_f_collective = self.last_f_collective * (1 - w) + x1[9] * w
         self.last_theta = self.last_theta * (1 - w) + x1[14] * w
-        # self.last_v_theta = self.last_v_theta * (1 - w) + x1[15] * w
         self.last_f_cmd = self.last_f_cmd * (1-w) + x1[10] * w
         self.last_rpy_cmd = self.last_rpy_cmd * (1-w) + x1[11:14] * w
 
@@ -465,24 +481,16 @@ class MPCC(EasyController):
                 np.array([self.last_f_cmd]),
                 self.last_rpy_cmd
             )
-
         )
-        # cmd = x1[10:14]
-
-
-        # guess_theta = self.last_theta
-        # true_theta, _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], guess_theta + 1.5)
-        # draw_line(self.env, np.stack([self.arc_trajectory(guess_theta), self.arc_trajectory(true_theta)]), rgba=np.array([8*max(true_theta-guess_theta, 0), 8*max(guess_theta-true_theta, 0), 0.0, 1.0]))
-
-
         ## visualization
         # test true theta and guess theta
         try:
-
             draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
             draw_line(self.env, np.stack([self.arc_trajectory(self.last_theta), obs["pos"]]), rgba=np.array([0.0, 0.0, 1.0, 1.0]))
             pos_traj = np.array([self.acados_ocp_solver.get(i, "x")[:3] for i in range(self.N+1)])
-            draw_line(self.env, pos_traj[0:-1:5],rgba=np.array([1.0, 1.0, 0.0, 0.2]) )
+            draw_line(self.env, pos_traj[0:-1:5],rgba=np.array([1.0, 1.0, 0.0, 0.2]))
+            if hasattr(self, "x_warmup_traj"):
+                draw_line(self.env, self.x_warmup_traj[0:-1:5],rgba=np.array([0.0, 1.0, 1.0, 0.2]))
         except:
             pass
 

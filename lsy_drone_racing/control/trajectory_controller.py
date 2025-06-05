@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 class TrajectoryController(Controller):
     """Trajectory controller following a pre-defined trajectory."""
 
-    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env=None):
         """Initialization of the controller.
 
         Args:
@@ -72,6 +72,7 @@ class TrajectoryController(Controller):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
+        print(obs['gates_pos'][0])
         tau = min(self._tick / self._freq, self.t_total)
         target_pos = self.trajectory(tau)
         if tau == self.t_total:  # Maximum duration reached
