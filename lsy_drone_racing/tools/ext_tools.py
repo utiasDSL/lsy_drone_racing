@@ -37,6 +37,30 @@ class PolynomialTool:
         return [r.real for r in roots if np.isclose(r.imag, 0)]
     
 class TrajectoryTool:
+
+    def compute_3d_curvature_from_vector_spline(spline: CubicSpline, t_vals: np.ndarray, eps : np.ndarray = 1e-8, positive : bool= True) -> np.ndarray:
+        r_dot = spline(t_vals, 1)   # shape: (len(t_vals), 3)
+        r_ddot = spline(t_vals, 2)  # shape: (len(t_vals), 3)
+
+        cross = np.cross(r_dot, r_ddot)
+        cross_norm = np.linalg.norm(cross, axis=1)
+        r_dot_norm = np.linalg.norm(r_dot, axis=1)
+
+        curvature = cross_norm / (r_dot_norm ** 3 + eps)
+        return np.abs(curvature) if positive else curvature
+    
+    def compute_3d_turning_radius_from_vector_spline(spline: CubicSpline, t_vals: np.ndarray, eps : np.ndarray = 1e-8, positive : bool = True) -> np.ndarray:
+        r_dot = spline(t_vals, 1)   # shape: (len(t_vals), 3)
+        r_ddot = spline(t_vals, 2)  # shape: (len(t_vals), 3)
+
+        cross = np.cross(r_dot, r_ddot)
+        cross_norm = np.linalg.norm(cross, axis=1)
+        r_dot_norm = np.linalg.norm(r_dot, axis=1)
+
+        radius = (r_dot_norm ** 3)/ (cross_norm + eps)
+        return np.abs(radius) if positive else radius
+
+
     def calc_waypoints(
             self, drone_init_pos: NDArray[np.floating], gates_pos: NDArray[np.floating], gates_norm: NDArray[np.floating], distance: float = 0.5, num_int_pnts: int = 5,
     ) -> NDArray[np.floating]:
