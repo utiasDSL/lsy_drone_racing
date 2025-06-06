@@ -247,6 +247,8 @@ class EasyController(FresssackController):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
+        print(obs["gates_visited"])
+
         tau = min(self._tick / self._freq, self.t_total)
         target_pos = self.trajectory(tau)
         if self.pos_change_detect(obs):

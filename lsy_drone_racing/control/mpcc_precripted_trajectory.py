@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 class MPCCPrescriptedController(EasyController):
     """Implementation of MPCC using the collective thrust and attitude interface."""
 
-    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env=None):
         """Initialize the attitude controller.
 
         Args:
@@ -72,11 +72,13 @@ class MPCCPrescriptedController(EasyController):
                          vel_limit = [1.0, 1.0, 0.2, 1.0])
 
         # # pre-planned trajectory
-        t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/param_a_5_sec_offsets.csv")     
+        # t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/param_a_5_sec_offsets.csv")
+        t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/param_c_6_sec_bigger_pillar.csv")     
+     
         trajectory = CubicSpline(t, pos)
 
         # global params
-        self.N = 25
+        self.N = 50
         self.T_HORIZON = 0.7
         self.dt = self.T_HORIZON / self.N
         self.model_arc_length = 0.05 # the segment interval for trajectory to be input to the model
@@ -320,16 +322,16 @@ class MPCCPrescriptedController(EasyController):
         # Weights
         self.q_l = 160
         self.q_l_peak = 640
-        self.q_l_curv_peak = 200
+        self.q_l_curv_peak = 0
 
         self.q_c =  80
         self.q_c_peak = 800
-        self.q_c_curv_peak = 200
+        self.q_c_curv_peak = 0
         
         self.Q_w = 1 * DM(np.eye(3))
         self.r_dv = 1
         self.R_df = DM(np.diag([0,1,1,1])) # cannot punish collective thrust
-        self.miu = 0.5
+        self.miu = 2
         # param A: works and works well
 
         # Weights for easy planner

@@ -183,7 +183,7 @@ colcon build --cmake-args -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 Test your installation: For this to work you have to be in the lab and be connected to our local network. 
 ```
 # Check connection to the vicon PC
-ping 10.157.136.191
+ping 10.157.163.191
 ```
 
 If this works, source the workspace and run the motiontracking node

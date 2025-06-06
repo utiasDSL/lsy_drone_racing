@@ -35,7 +35,7 @@ from lsy_drone_racing.tools.planners.tube_map import TubeMap, PathSegment
 
 from lsy_drone_racing.control.kino_A_star_with_replan_controller import KinoAStarWithReplanController,ReplanControllerConfig, obstacle_observation_func, gate_observation_func
 from lsy_drone_racing.control.fresssack_controller import FresssackController
-from lsy_drone_racing.control.easy_controller import TrajectoryController
+from lsy_drone_racing.control.easy_controller import EasyController
 from lsy_drone_racing.control import Controller
 from lsy_drone_racing.tools.planners.b_spline_optimizer import UniformBSpline, BsplineOptimizer
 
@@ -93,27 +93,27 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
 
         self.replan_controller_config.use_tube_map = True
 
-        self.replan_controller_config.generate_new_tube = False
-        self.replan_controller_config.tube_map_dir = [r'lsy_drone_racing/saved_map/tube_maps_medium.pkl']
-        self.tube_maps = TubeMap.read_from_file(r'lsy_drone_racing/saved_map/tube_maps_tight.pkl')
+        # self.replan_controller_config.generate_new_tube = False
+        # self.replan_controller_config.tube_map_dir = [r'lsy_drone_racing/saved_map/tube_maps_medium.pkl']
 
 
-        # self.replan_controller_config.generate_new_tube = True
-        # self.replan_controller_config.tube_map_dir =[
-        #         r"lsy_drone_racing/planned_trajectories/param_a_5_sec_offsets_segmented.csv",
-        #         r"lsy_drone_racing/planned_trajectories/param_b_6_sec_bigger_pillar_segmented.csv"]
-        # self.replan_controller_config.tube_radius = 0.3
-        # self.tube_maps = TubeMap()
-        # self.tube_maps.generate_tube_map(
-        #     paths=self.replan_controller_config.tube_map_dir,
-        #     num_gates = 4,
-        #     occ_map_xlim=self.occ_map_xlim,
-        #     occ_map_ylim= self.occ_map_ylim,
-        #     occ_map_zlim=self.occ_map_zlim,
-        #     occ_map_res=self.occ_map_res,
-        #     tube_radius=self.replan_controller_config.tube_radius,
-        #     save_to = r'lsy_drone_racing/saved_map/tube_maps_tight.pkl'
-        # )
+
+        self.replan_controller_config.generate_new_tube = True
+        self.replan_controller_config.tube_map_dir =[
+                r"lsy_drone_racing/planned_trajectories/param_a_5_sec_offsets_segmented.csv",
+                r"lsy_drone_racing/planned_trajectories/param_b_6_sec_bigger_pillar_segmented.csv"]
+        self.replan_controller_config.tube_radius = 0.5
+        self.tube_maps = TubeMap()
+        self.tube_maps.generate_tube_map(
+            paths=self.replan_controller_config.tube_map_dir,
+            num_gates = 4,
+            occ_map_xlim=self.occ_map_xlim,
+            occ_map_ylim= self.occ_map_ylim,
+            occ_map_zlim=self.occ_map_zlim,
+            occ_map_res=self.occ_map_res,
+            tube_radius=self.replan_controller_config.tube_radius,
+            save_to = r'lsy_drone_racing/saved_map/tube_maps_huge.pkl'
+        )
 
         self.replan_controller_config.fore_see_gates = 2
         self.replan_controller_config.b_spline_optimization = False
@@ -162,7 +162,7 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
 
         # global params
         self.N = 50
-        self.T_HORIZON = 2.0
+        self.T_HORIZON = 0.7
         self.dt = self.T_HORIZON / self.N
         self.model_arc_length = 0.05 # the segment interval for trajectory to be input to the model
         self.model_traj_length = 12 # maximum trajectory length the param can take
@@ -223,8 +223,8 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
 
         # expanded observation state
         self.theta = MX.sym("theta")
-        self.v_theta = MX.sym("v_theta")
-        self.dv_theta_cmd = MX.sym("dv_theta_cmd")
+        # self.v_theta = MX.sym("v_theta")
+        self.v_theta_cmd = MX.sym("v_theta_cmd")
 
         # define state and input vector
         states = vertcat(
@@ -242,15 +242,14 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
             self.r_cmd,
             self.p_cmd,
             self.y_cmd,
-            self.theta,
-            self.v_theta,
+            self.theta
         )
         inputs = vertcat(
             self.df_cmd, 
             self.dr_cmd, 
             self.dp_cmd, 
             self.dy_cmd, 
-            self.dv_theta_cmd
+            self.v_theta_cmd
         )
 
         # Define nonlinear system dynamics
@@ -271,8 +270,7 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
             self.dr_cmd,
             self.dp_cmd,
             self.dy_cmd,
-            self.v_theta,
-            self.dv_theta_cmd,
+            self.v_theta_cmd,
         )
 
         # define dynamic trajectory input
@@ -350,13 +348,6 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
         pos = vertcat(self.px, self.py, self.pz)
         ang = vertcat(self.roll, self.pitch, self.yaw)
         control_input = vertcat(self.f_collective_cmd, self.dr_cmd, self.dp_cmd, self.dy_cmd)
-
-        # pd_theta = vertcat(*[s(self.theta) for s in self.pd_spline])  # [x, y, z]
-        # dpd_theta = vertcat(*[s(self.theta) for s in self.tp_spline])  # [vx, vy, vz]
-        # dpd_theta_norm = dpd_theta / norm_2(dpd_theta)
-        # e_theta = pos - pd_theta
-        # e_l = dot(dpd_theta_norm, e_theta) * dpd_theta_norm
-        # e_c = e_theta - e_l
         
         # interpolate spline dynamically
         theta_list = np.arange(0, self.model_traj_length, self.model_arc_length)
@@ -370,10 +361,10 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
 
         mpcc_cost = (self.q_l + self.q_l_peak * qc_dyn_theta) * dot(e_l, e_l) + \
                     (self.q_c  + self.q_c_peak * qc_dyn_theta) * dot(e_c, e_c) + \
-                    (ang.T @ self.Q_w @ ang)+ \
-                    self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
+                    (ang.T @ self.Q_w @ ang) + \
                     (control_input.T @ self.R_df @ control_input) + \
-                    (-self.miu) * self.v_theta
+                    (-self.miu) * self.v_theta_cmd
+                    # self.r_dv * self.dv_theta_cmd * self.dv_theta_cmd + \
         return mpcc_cost
 
     def create_ocp_solver(
@@ -399,56 +390,19 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
         # Cost Type
         ocp.cost.cost_type = "EXTERNAL"
 
-        # # prepare interpolated trajectories beforehead
-        # # interpolate spline using casadi
-        # theta_list = trajectory.x
-        # pd_list = trajectory(theta_list)
-        # tp_list = trajectory.derivative(1)(theta_list)
-        # self.qc_dyn = np.zeros_like(theta_list)
-        # for gate in self.gates:
-        #     distances = np.linalg.norm(pd_list - gate.pos, axis=-1)
-        #     qc_dyn_gate = np.exp(-5 * distances**2)
-        #     self.qc_dyn = np.maximum(qc_dyn_gate, self.qc_dyn)
-
-        # self.pd_spline = []
-        # self.tp_spline = []
-
-        # for i in range(pd_list.shape[1]):
-        #     pd_column = pd_list[:, i].tolist()
-        #     tp_column = tp_list[:, i].tolist()
-            
-        #     pd_spline = interpolant(f"pd_{i}", "linear", [theta_list.tolist()], pd_column, {}) # cannot use bspline
-        #     tp_spline = interpolant(f"tp_{i}", "linear", [theta_list.tolist()], tp_column, {})
-            
-        #     self.pd_spline.append(pd_spline)
-        #     self.tp_spline.append(tp_spline)
-        
-        # self.qc_dyn_spline = interpolant(f"qc_dyn_spline", "linear", [theta_list.tolist()], self.qc_dyn, {})
-
         # Weights
         self.q_l = 160
-        self.q_l_peak = 320
+        self.q_l_peak = 640
         self.q_c =  80
-        self.q_c_peak = 400
+        self.q_c_peak = 800
         
-        self.Q_w = DM(np.eye(3))
+        self.Q_w = 1 * DM(np.eye(3))
         self.r_dv = 1
         self.R_df = DM(np.eye(4))
-        self.miu = 1.2
+        self.miu = 0.5
         # param A: works and works well
 
-
-        self.q_l = 160
-        self.q_l_peak = 320
-        self.q_c =  160
-        self.q_c_peak = 400
-        
-        self.Q_w = DM(np.eye(3))
-        self.r_dv = 1
-        self.R_df = DM(np.eye(4))
-        self.miu = 0.1
-        # param B: works and works well
-
+        # Weights for easy planner
         # self.q_l = 120
         # self.q_l_peak = 100
         # self.q_c = 50
@@ -458,20 +412,18 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
         # self.r_dv = 1
         # self.R_df = DM(np.eye(4))
         # self.miu = 1
-        # # Weights for easy planner
-
 
         
         ocp.model.cost_expr_ext_cost = self.mpcc_cost()
 
         # Set State Constraints
-        ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57, 0])
-        ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57, 10])
-        ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13, 15])
+        ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57])
+        ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57])
+        ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13])
 
         # Set Input Constraints
-        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, -10.0])
-        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 10.0])
+        ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, 0]) # last term is v_theta should be positive
+        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 3.0])
         ocp.constraints.idxbu = np.array([0, 1, 2, 3, 4])
 
         # We have to set x0 even though we will overwrite it later on.
@@ -496,7 +448,7 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
         # set prediction horizon
         ocp.solver_options.tf = Tf
 
-        acados_ocp_solver = AcadosOcpSolver(ocp, json_file="lsy_example_mpc.json", verbose=verbose)
+        acados_ocp_solver = AcadosOcpSolver(ocp, json_file="mpcc_prescripted.json", verbose=verbose)
 
         return acados_ocp_solver, ocp
 
@@ -561,6 +513,7 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
                 # self.acados_ocp_solver.set(i, "x", xcurrent) 
                 # self.acados_ocp_solver.set(i, "u", np.zeros(self.nu))
             self.last_v_theta = np.dot(self.vel, self.arc_trajectory.derivative(1)(0.05))
+            # self.last_theta = 0
 
 
         q = obs["quat"]
@@ -576,15 +529,21 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
                 rpy,
                 np.array([self.last_f_collective, self.last_f_cmd]),
                 self.last_rpy_cmd,
-                np.array([self.last_theta if not plan_success else 0.0, self.last_v_theta])
+                np.array([self.last_theta if not plan_success else 0.0])
             )
         )
         # xcurrent[-2], _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], self.last_theta+1) # correct theta
         
         ## warm-start - provide initial guess to guarantee stable convergence
-        if True or not hasattr(self, "x_guess"):
+        if not hasattr(self, "x_guess"):
             self.x_guess = [xcurrent for _ in range(self.N + 1)]
             self.u_guess = [np.zeros(self.nu) for _ in range(self.N)]
+        elif plan_success:
+            self.x_guess = self.x_guess[1:] + [self.x_guess[-1]]
+            # self.x_guess = [x - self.x_guess[0][-1] * np.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]) for x in self.x_guess]
+            self.x_guess = [x - self.last_theta * np.array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,1]) for x in self.x_guess]
+            self.u_guess = self.u_guess[1:] + [self.u_guess[-1]]
+            self.last_theta = 0.0
         else:
             self.x_guess = self.x_guess[1:] + [self.x_guess[-1]]
             self.u_guess = self.u_guess[1:] + [self.u_guess[-1]]
@@ -593,12 +552,6 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
             self.acados_ocp_solver.set(i, "x", self.x_guess[i])
             self.acados_ocp_solver.set(i, "u", self.u_guess[i])
         self.acados_ocp_solver.set(self.N, "x", self.x_guess[self.N])
-        
-        ## replan trajectory
-        # TODO: Gate changes when already getting close to it, but this causes a large jump of trajectory, e_c suddenly goes up, and it fails to track
-        # TODO: Must we plan from current position?
-
-       
 
         # set initial state
         self.acados_ocp_solver.set(0, "lbx", xcurrent)
@@ -615,22 +568,29 @@ class KinoDynamicAStarMPCCController(KinoAStarWithReplanController):
         w = 1 / self.config.env.freq / self.dt
         self.last_f_collective = self.last_f_collective * (1 - w) + x1[9] * w
         self.last_theta = self.last_theta * (1 - w) + x1[14] * w
-        self.last_v_theta = self.last_v_theta * (1 - w) + x1[15] * w
-        self.last_f_cmd = x1[10]
-        self.last_rpy_cmd = x1[11:14]
+        # self.last_v_theta = self.last_v_theta * (1 - w) + x1[15] * w
+        self.last_f_cmd = self.last_f_cmd * (1-w) + x1[10] * w
+        self.last_rpy_cmd = self.last_rpy_cmd * (1-w) + x1[11:14] * w
 
-        cmd = x1[10:14]
+
+        cmd = np.concatenate(
+            (
+                np.array([self.last_f_cmd]),
+                self.last_rpy_cmd
+            )
+
+        )
 
 
         ## visualization
-        # test true theta and guess theta
-        guess_theta = self.last_theta
-        true_theta, _ = self.traj_tool.find_nearest_waypoint(self.arc_trajectory, obs["pos"], guess_theta + 1.5)
-        # draw_line(self.env, np.stack([self.arc_trajectory(guess_theta), self.arc_trajectory(true_theta)]), rgba=np.array([8*max(true_theta-guess_theta, 0), 8*max(guess_theta-true_theta, 0), 0.0, 1.0]))
+        try:
 
-        draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
-        draw_line(self.env, np.stack([self.arc_trajectory(self.last_theta), obs["pos"]]), rgba=np.array([0.0, 0.0, 1.0, 1.0]))
-
+            draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
+            draw_line(self.env, np.stack([self.arc_trajectory(self.last_theta), obs["pos"]]), rgba=np.array([0.0, 0.0, 1.0, 1.0]))
+            pos_traj = np.array([self.acados_ocp_solver.get(i, "x")[:3] for i in range(self.N+1)])
+            draw_line(self.env, pos_traj[0:-1:5],rgba=np.array([1.0, 1.0, 0.0, 0.2]) )
+        except:
+            pass
         return cmd
 
     def step_callback(
