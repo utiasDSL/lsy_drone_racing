@@ -169,6 +169,36 @@ class TrajectoryTool:
             gates_wp.append(wp)
         return np.array(indices), np.array(gates_wp)
 
+class GeometryTool:
+    def trilinear_interpolation(grid: np.ndarray, idx_f: np.ndarray) -> float:
+        x, y, z = idx_f
+        x0, y0, z0 = np.floor([x, y, z]).astype(int)
+        dx, dy, dz = x - x0, y - y0, z - z0
+
+        def get(ix, iy, iz):
+            if 0 <= ix < grid.shape[0] and 0 <= iy < grid.shape[1] and 0 <= iz < grid.shape[2]:
+                return grid[ix, iy, iz]
+            else:
+                return 0.0
+
+        c000 = get(x0, y0, z0)
+        c001 = get(x0, y0, z0 + 1)
+        c010 = get(x0, y0 + 1, z0)
+        c011 = get(x0, y0 + 1, z0 + 1)
+        c100 = get(x0 + 1, y0, z0)
+        c101 = get(x0 + 1, y0, z0 + 1)
+        c110 = get(x0 + 1, y0 + 1, z0)
+        c111 = get(x0 + 1, y0 + 1, z0 + 1)
+
+        c00 = c000 * (1 - dx) + c100 * dx
+        c01 = c001 * (1 - dx) + c101 * dx
+        c10 = c010 * (1 - dx) + c110 * dx
+        c11 = c011 * (1 - dx) + c111 * dx
+
+        c0 = c00 * (1 - dy) + c10 * dy
+        c1 = c01 * (1 - dy) + c11 * dy
+
+        return c0 * (1 - dz) + c1 * dz
 
 
     

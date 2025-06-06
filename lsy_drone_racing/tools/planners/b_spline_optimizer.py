@@ -126,36 +126,34 @@ class UniformBSpline:
 from scipy.optimize import minimize
 
 class BsplineOptimizer:
-    def __init__(self, sdf_func: Optional[Callable[[np.ndarray], float]], dt: float, verbose : bool = True):
+    def __init__(self,
+                lam_smooth : np.floating = 1.0,
+                lam_vel : np.floating = 1.0,
+                lam_acc : np.floating = 1.0,
+                lam_sdf : np.floating = 1.0,
+                v_max : np.floating = 5.0, 
+                a_max : np.floating = 10.0,
+                sdf_func: Optional[Callable[[np.ndarray], float]] = None,
+                sdf_thres : Optional[np.floating] = None, 
+                dt: float = 0.1,
+                verbose : bool = True):
         self.sdf_func = sdf_func
         self.dt = dt
-        self.lam_smooth = 1.0
-        self.lam_vel = 0.0
-        self.lam_acc = 0.0
-        self.lam_sdf = 0.0
-        self.v_max = 2.0
-        self.a_max = 2.0
-        self.sdf_threshold = 0.3
-        self.verbose = verbose
-
-    def set_weights(self,
-                    lam_smooth : np.floating = 1.0,
-                    lam_vel: np.floating=0.0,
-                    lam_acc: np.floating=0.0,
-                    lam_sdf: np.floating=0.0,
-                    v_max: np.floating=2.0,
-                    a_max: np.floating=2.0,
-                    sdf_thresh=0.3) -> None:
         self.lam_smooth = lam_smooth
         self.lam_vel = lam_vel
         self.lam_acc = lam_acc
         self.lam_sdf = lam_sdf
         self.v_max = v_max
         self.a_max = a_max
-        self.sdf_threshold = sdf_thresh
+        self.sdf_threshold = sdf_thres
+        self.verbose = verbose
+
+    
     
 
-    def optimize(self, ctrl_pts_init: np.ndarray) -> np.ndarray:
+    def optimize(self, ctrl_pts_init: np.ndarray, fix_pnts : List[bool]) -> np.ndarray:
+        
+
         N = ctrl_pts_init.shape[0]
 
         def cost(x_flat : NDArray[np.floating]):
@@ -184,7 +182,7 @@ class BsplineOptimizer:
                 for i in range(3, N - 3):
                     dist = self.sdf_func(x[i])
                     if dist < self.sdf_threshold:
-                        total_cost += self.lam_sdf * (self.sdf_threshold - dist) ** 2
+                        total_cost += self.lam_sdf * 1 / ((dist) ** 2 + 1e-6)
 
             return total_cost
 

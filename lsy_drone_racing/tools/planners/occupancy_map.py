@@ -1,8 +1,12 @@
 from __future__ import annotations
 import numpy as np
-from typing import Tuple, Union, Optional, List
+from typing import Tuple, Union, Optional, List, Callable
+from scipy.ndimage import distance_transform_edt
+
 from numpy.typing import NDArray
 from scipy.interpolate import CubicSpline, BSpline
+from lsy_drone_racing.tools.ext_tools import GeometryTool
+
 import itertools
 from lsy_drone_racing.tools.race_objects import Gate
 
@@ -325,6 +329,31 @@ class OccupancyMap3D:
             size=self.size,
             oc_map=self.oc_map
         )
+
+
+    def compute_sdf(oc_map: OccupancyMap3D) -> Tuple[np.ndarray, Callable[[np.ndarray], float]]:
+        """
+        From OccupancyMap3D construct a SDF grid and a trilinear query function.
+        Returns:
+            sdf_grid: np.ndarray of shape = oc_map.size, values in meters (distance to obstacle)
+            sdf_query: function(pos_world: np.ndarray[3]) -> float (sdf at that world coordinate)
+        """
+        # Invert: occupied → 0, free → 1
+        free_mask = (oc_map.oc_map == 0).astype(np.uint8)
+
+        # Compute Euclidean Distance Transform
+        sdf_voxel = distance_transform_edt(free_mask)
+
+        # Convert voxel units to meters
+        sdf_grid = sdf_voxel * oc_map.resolution
+
+        def sdf_query(pos: np.ndarray) -> float:
+            idx_f = (pos - oc_map.limit[:, 0]) / oc_map.resolution
+            if np.any(idx_f < 0) or np.any(idx_f >= oc_map.size):
+                return 0.0
+            return GeometryTool.trilinear_interpolation(sdf_grid, idx_f)
+
+        return sdf_grid, sdf_query
 
     @classmethod
     def from_file(cls, path: str) -> OccupancyMap3D:
