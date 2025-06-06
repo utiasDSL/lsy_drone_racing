@@ -54,7 +54,7 @@ def control_loop(rank: int, config: ConfigDict, start_barrier: Barrier):
         options = {
             "check_drone_start_pos": config.deploy.check_drone_start_pos,
             "check_race_track": config.deploy.check_race_track,
-            "practice_without_track_objects": config.deploy.practice_without_track_objects,
+            "real_track_objects": config.deploy.real_track_objects,
         }
         obs, info = env.reset(options=options)
         next_obs = obs  # Set next_obs to avoid errors when the loop never enters
