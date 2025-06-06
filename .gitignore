@@ -16,3 +16,6 @@ scripts/sim.py
 /scripts
 lsy_drone_racing/reinforcement_learning/ppo*
 lsy_drone_racing/reinforcement_learning/log/
+lsy_drone_racing/tools/glfw_test.py
+lsy_drone_racing/control/test_controller.py
+lsy_drone_racing/control/kino_A_star_with_replan_controller_backup.py
