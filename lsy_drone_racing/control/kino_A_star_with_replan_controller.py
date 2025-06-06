@@ -178,7 +178,7 @@ class KinoAStarWithReplanController(FresssackController):
         self.replan_controller_config.gate_observation_function(self.gates, obs)
         self.replan_controller_config.obstacle_observation_function(self.obstacles, obs)
 
-    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env,  individual_node : bool = True):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env = None,  individual_node : bool = True):
         """Initialization of the controller.
 
         Args:

@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 class EasyController(FresssackController):
     """Trajectory controller following a pre-defined trajectory."""
 
-    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, ros_tx_freq : np.floating = None):
         """Initialization of the controller.
 
         Args:
@@ -45,7 +45,7 @@ class EasyController(FresssackController):
             config: The race configuration. See the config files for details. Contains additional
                 information such as disturbance configurations, randomizations, etc.
         """
-        super().__init__(obs, info, config)
+        super().__init__(obs, info, config, ros_tx_freq = ros_tx_freq)
         # Same waypoints as in the trajectory controller. Determined by trial and error.
         # waypoints = np.array(
         #     [

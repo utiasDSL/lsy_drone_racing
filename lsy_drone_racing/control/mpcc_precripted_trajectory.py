@@ -55,7 +55,7 @@ class MPCCPrescriptedController(EasyController):
             info: Additional environment information from the reset.
             config: The configuration of the environment.
         """
-        super().__init__(obs, info, config)
+        super().__init__(obs, info, config, ros_tx_freq = 50)
         self.freq = config.env.freq
         self._tick = 0
 
