@@ -16,8 +16,11 @@ from typing import TYPE_CHECKING
 import fire
 import gymnasium
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
+import numpy as np
 
-from lsy_drone_racing.utils import load_config, load_controller
+rgba = np.array([1.0, 0, 0, 1.0])  # Red, fully opaque
+
+from lsy_drone_racing.utils import load_config, load_controller,draw_line
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
@@ -83,6 +86,10 @@ def simulate(
             curr_time = i / config.env.freq
 
             action = controller.compute_control(obs, info)
+            y_ref = np.array([y[:3] for y in controller.y])
+            if np.mod(curr_time,2):
+                print('y_Ref')
+                print(y_ref)
             obs, reward, terminated, truncated, info = env.step(action)
             # Update the controller internal state and models.
             controller_finished = controller.step_callback(
@@ -94,6 +101,7 @@ def simulate(
             # Synchronize the GUI.
             if config.sim.gui:
                 if ((i * fps) % config.env.freq) < fps:
+                    draw_line(env=env,points=y_ref,rgba=rgba)
                     env.render()
             i += 1
 

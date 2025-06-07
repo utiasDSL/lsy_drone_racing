@@ -6,7 +6,7 @@ from scipy.interpolate import CubicSpline
 
 
 
-def plot_waypoints_and_environment(waypoints, obstacle_positions, gates_positions, gates_quat, show_spline=False):
+def plot_waypoints_and_environment(waypoints, obstacle_positions, gates_positions, gates_quat):
     def quaternion_to_rotation_matrix(q):
         x, y, z, w = q
         R = np.array([
@@ -76,56 +76,7 @@ def plot_waypoints_and_environment(waypoints, obstacle_positions, gates_position
     ax.set_title('3D Waypoints mit Stäben, rotierbaren Gates' +
                  (' und Spline-Trajektorie' if show_spline else ''))
     plt.show()
-
-
-
-waypoints = [
-    [1.0, 1.5, 0.2],
-    [0.625, 0.25, 0.38],
-    [0.45, -0.5, 0.56],
-    [0.425, -0.57, 0.56],
-    [0.325, -0.9, 0.605],
-    [0.2, -1.3, 0.65],
-    [0.6, -1.375, 0.78],
-    [0.8, -1.375, 0.88],
-    [1.0, -1.05, 1.11],
-    [1.05, -1.0, 1.11],
-    [0.7, -0.275, 0.88],
-    [0.2, 0.5, 0.65],
-    [0.0, 1.0, 0.56],
-    [0.0, 1.05, 0.56],
-    [0.0, 0.9, 0.63],
-    [-0.1, 0.7, 0.75],
-    [-0.25, 0.3, 0.95],
-    [-0.5, 0.0, 1.11],
-    [-0.5, -0.1, 1.11],
-]
-
-obstacles_positions = [
-    [1, 0, 1.4],
-    [0.5, -1, 1.4],
-    [0, 1.5, 1.4],
-    [-0.5, 0.5, 1.4],
-]
-
-gates_positions = [
-    [0.45, -0.5, 0.56],
-    [1.0, -1.05, 1.11],
-    [0.0, 1.0, 0.56],
-    [-0.5, 0.0, 1.11],
-]
-
-gates_quat = [
-    [0.0, 0.0, 0.92268986, 0.38554308],
-    [0.0, 0.0, -0.38018841, 0.92490906],
-    [0.0, 0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0, 0.0],
-]
-
-plot_waypoints_and_environment(waypoints, obstacles_positions, gates_positions, gates_quat,show_spline=False)
-
-
-''' Initial waypoints
+'''
 waypoints = [
     [1.0, 1.5, 0.2],
     [0.9, 1.25, 0.2],
@@ -148,15 +99,26 @@ waypoints = [
     [-0.5, -0.5, 1.1],
 ]
 
-init_mpc_waypoints=[1.0, 1.5, 0.05],
-                [0.8, 1.0, 0.2],
-                [0.55, -0.3, 0.5],
-                [0.2, -1.3, 0.65],
-                [1.1, -0.85, 1.1],
-                [0.2, 0.5, 0.65],
-                [0.0, 1.2, 0.525],
-                [0.0, 1.2, 1.1],
-                [-0.5, 0.0, 1.1],
-                [-0.5, -0.5, 1.1],
+obstacles_positions = [
+    [0.6, 0.1, 0.6],
+    [0.25, -0.65, 0.6],
+    [0.75, -1.15, 1.1],
+    [-0.3, 1.0, 0.55],
+]
 
+gates_positions = [
+    [0.45, -0.5, 0.56],
+    [1.0, -1.05, 1.11],
+    [0.0, 1.0, 0.56],
+    [-0.5, 0.0, 1.11],
+]
+
+gates_quat = [
+    [0.0, 0.0, 0.92388, 0.38268],
+    [0.0, 0.0, -0.38268, 0.92388],
+    [0.0, 0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0, 0.0],
+]
+
+plot_waypoints_and_environment(waypoints, obstacles_positions, gates_positions, gates_quat)
 '''

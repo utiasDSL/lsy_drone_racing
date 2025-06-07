@@ -236,7 +236,7 @@ class MPController(Controller):
         super().__init__(obs, info, config)
         self.freq = config.env.freq
         self._tick = 0
-
+        self.y=[]
         # Same waypoints as in the trajectory controller. Determined by trial and error.
         waypoints = np.array(
             [
@@ -314,7 +314,9 @@ class MPController(Controller):
         self.acados_ocp_solver.set(0, "lbx", xcurrent)
         self.acados_ocp_solver.set(0, "ubx", xcurrent)
 
+        self.y=[]
         for j in range(self.N):
+            
             yref = np.array(
                 [
                     self.x_des[i + j],
@@ -338,6 +340,7 @@ class MPController(Controller):
                 ]
             )
             self.acados_ocp_solver.set(j, "yref", yref)
+            self.y.append(yref)
         yref_N = np.array(
             [
                 self.x_des[i + self.N],
