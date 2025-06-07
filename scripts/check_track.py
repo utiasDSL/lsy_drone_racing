@@ -4,6 +4,8 @@ import logging
 from pathlib import Path
 
 import fire
+import rclpy
+from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.ros.ros_utils import check_race_track
 from lsy_drone_racing.utils import load_config
@@ -17,8 +19,12 @@ def main(config: str = "level2.toml"):
     Args:
         config: Path to the race configuration. Assumes the file is in `config/`.
     """
+    rclpy.init()
     config = load_config(Path(__file__).resolve().parents[1] / "config" / config)
-    check_race_track(config.env.track, config.env.randomizations)
+    gates_pos = [g["pos"] for g in config.env.track.gates]
+    gates_quat = [R.from_euler("xyz", g["rpy"]).as_quat() for g in config.env.track.gates]
+    obstacle_pos = [o["pos"] for o in config.env.track.obstacles]
+    check_race_track(gates_pos, gates_quat, obstacle_pos, rng_config=config.env.randomizations)
     logger.info("Race track check passed")
 
 
