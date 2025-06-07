@@ -151,7 +151,7 @@ class BsplineOptimizer:
     
     
 
-    def optimize(self, ctrl_pts_init: np.ndarray, fix_pnts : List[bool]) -> np.ndarray:
+    def optimize(self, ctrl_pts_init: np.ndarray, fix_pnts : List[bool] = None) -> np.ndarray:
         
 
         N = ctrl_pts_init.shape[0]
