@@ -15,6 +15,7 @@ import numpy as np
 import scipy
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 from casadi import MX, cos, sin, vertcat
+from lsy_models.utils.constants import Constants
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
@@ -23,82 +24,49 @@ from lsy_drone_racing.control import Controller
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+constants = Constants.from_config("cf2x_L250")
+
 
 def export_quadrotor_ode_model() -> AcadosModel:
     """Symbolic Quadrotor Model."""
     # Define name of solver to be used in script
     model_name = "lsy_example_mpc"
 
-    # Define Gravitational Acceleration
-    GRAVITY = 9.806
-
-    # Sys ID Params
-    params_pitch_rate = [-6.003842038081178, 6.213752925707588]
-    params_roll_rate = [-3.960889336015948, 4.078293254657104]
-    params_yaw_rate = [-0.005347588299390372, 0.0]
-    params_acc = [20.907574256269616, 3.653687545690674]
-
     """Model setting"""
     # define basic variables in state and input vector
-    px = MX.sym("px")  # 0
-    py = MX.sym("py")  # 1
-    pz = MX.sym("pz")  # 2
-    vx = MX.sym("vx")  # 3
-    vy = MX.sym("vy")  # 4
-    vz = MX.sym("vz")  # 5
-    roll = MX.sym("r")  # 6
-    pitch = MX.sym("p")  # 7
-    yaw = MX.sym("y")  # 8
-    f_collective = MX.sym("f_collective")
+    px = MX.sym("px")
+    py = MX.sym("py")
+    pz = MX.sym("pz")
+    pos = vertcat(px, py, pz)
+    vx = MX.sym("vx")
+    vy = MX.sym("vy")
+    vz = MX.sym("vz")
+    vel = vertcat(vx, vy, vz)
+    roll = MX.sym("r")
+    pitch = MX.sym("p")
+    yaw = MX.sym("y")
+    rpy = vertcat(roll, pitch, yaw)
 
-    f_collective_cmd = MX.sym("f_collective_cmd")
     r_cmd = MX.sym("r_cmd")
     p_cmd = MX.sym("p_cmd")
     y_cmd = MX.sym("y_cmd")
-
-    df_cmd = MX.sym("df_cmd")
-    dr_cmd = MX.sym("dr_cmd")
-    dp_cmd = MX.sym("dp_cmd")
-    dy_cmd = MX.sym("dy_cmd")
+    thrust_cmd = MX.sym("thrust_cmd")
 
     # define state and input vector
-    states = vertcat(
-        px,
-        py,
-        pz,
-        vx,
-        vy,
-        vz,
-        roll,
-        pitch,
-        yaw,
-        f_collective,
-        f_collective_cmd,
-        r_cmd,
-        p_cmd,
-        y_cmd,
-    )
-    inputs = vertcat(df_cmd, dr_cmd, dp_cmd, dy_cmd)
+    states = vertcat(pos, vel, rpy)
+    inputs = vertcat(r_cmd, p_cmd, y_cmd, thrust_cmd)
 
     # Define nonlinear system dynamics
-    f = vertcat(
-        vx,
-        vy,
-        vz,
-        (params_acc[0] * f_collective + params_acc[1])
-        * (cos(roll) * sin(pitch) * cos(yaw) + sin(roll) * sin(yaw)),
-        (params_acc[0] * f_collective + params_acc[1])
-        * (cos(roll) * sin(pitch) * sin(yaw) - sin(roll) * cos(yaw)),
-        (params_acc[0] * f_collective + params_acc[1]) * cos(roll) * cos(pitch) - GRAVITY,
-        params_roll_rate[0] * roll + params_roll_rate[1] * r_cmd,
-        params_pitch_rate[0] * pitch + params_pitch_rate[1] * p_cmd,
-        params_yaw_rate[0] * yaw + params_yaw_rate[1] * y_cmd,
-        10.0 * (f_collective_cmd - f_collective),
-        df_cmd,
-        dr_cmd,
-        dp_cmd,
-        dy_cmd,
+    pos_dot = vertcat(vx, vy, vz)
+    z_axis = vertcat(
+        cos(roll) * sin(pitch) * cos(yaw) + sin(roll) * sin(yaw),
+        cos(roll) * sin(pitch) * sin(yaw) - sin(roll) * cos(yaw),
+        cos(roll) * cos(pitch),
     )
+    thrust = constants.SI_ACC[0] + constants.SI_ACC[1] * inputs[3]
+    vel_dot = thrust * z_axis / constants.MASS + constants.GRAVITY_VEC
+    rpy_dot = constants.SI_PARAMS[:, 0] * rpy + constants.SI_PARAMS[:, 1] * inputs[:3]
+    f = vertcat(pos_dot, vel_dot, rpy_dot)
 
     # Initialize the nonlinear model for NMPC formulation
     model = AcadosModel()
@@ -131,41 +99,44 @@ def create_ocp_solver(
     ocp.solver_options.N_horizon = N
 
     ## Set Cost
-    # For more Information regarding Cost Function Definition in Acados: https://github.com/acados/acados/blob/main/docs/problem_formulation/problem_formulation_ocp_mex.pdf
+    # For more Information regarding Cost Function Definition in Acados:
+    # https://github.com/acados/acados/blob/main/docs/problem_formulation/problem_formulation_ocp_mex.pdf
+    #
 
     # Cost Type
     ocp.cost.cost_type = "LINEAR_LS"
     ocp.cost.cost_type_e = "LINEAR_LS"
 
-    # Weights
+    # Weights (we only give pos reference anyway)
     Q = np.diag(
         [
-            10.0,
-            10.0,
-            10.0,  # Position
-            0.01,
-            0.01,
-            0.01,  # Velocity
-            0.1,
-            0.1,
-            0.1,  # rpy
-            0.01,
-            0.01,  # f_collective, f_collective_cmd
-            0.01,
-            0.01,
-            0.01,
+            10.0,  # pos
+            10.0,  # pos
+            10.0,  # pos
+            0.0,  # vel
+            0.0,  # vel
+            0.0,  # vel
+            0.0,  # rpy
+            0.0,  # rpy
+            0.0,  # rpy
         ]
-    )  # rpy_cmd
+    )
 
-    R = np.diag([0.01, 0.01, 0.01, 0.01])
+    R = np.diag(
+        [
+            5.0,  # rpy
+            5.0,  # rpy
+            5.0,  # rpy
+            8.0,  # thrust
+        ]
+    )
 
     Q_e = Q.copy()
-
     ocp.cost.W = scipy.linalg.block_diag(Q, R)
     ocp.cost.W_e = Q_e
 
     Vx = np.zeros((ny, nx))
-    Vx[:nx, :] = np.eye(nx)  # Only select position states
+    Vx[:3, :3] = np.eye(3)  # Only select position states
     ocp.cost.Vx = Vx
 
     Vu = np.zeros((ny, nu))
@@ -173,29 +144,21 @@ def create_ocp_solver(
     ocp.cost.Vu = Vu
 
     Vx_e = np.zeros((ny_e, nx))
-    Vx_e[:nx, :nx] = np.eye(nx)  # Only select position states
+    Vx_e[:3, :3] = np.eye(3)  # Only select position states
     ocp.cost.Vx_e = Vx_e
 
     # Set initial references (we will overwrite these later on to make the controller track the traj.)
-    # ocp.cost.yref = np.zeros((ny, ))
-    # ocp.cost.yref_e = np.zeros((ny_e, ))
-    ocp.cost.yref = np.array(
-        [1.0, 1.0, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, 0.35, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    )
+    ocp.cost.yref, ocp.cost.yref_e = np.zeros((ny,)), np.zeros((ny_e,))
 
-    ocp.cost.yref_e = np.array(
-        [1.0, 1.0, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, 0.35, 0.0, 0.0, 0.0]
-    )
+    # Set State Constraints (rpy < 60°)
+    ocp.constraints.lbx = np.array([-1.0, -1.0, -1.0])
+    ocp.constraints.ubx = np.array([1.0, 1.0, 1.0])
+    ocp.constraints.idxbx = np.array([6, 7, 8])
 
-    # Set State Constraints
-    ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57])
-    ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57])
-    ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13])
-
-    # Set Input Constraints
-    # ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0. -10.0])
-    # ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0])
-    # ocp.constraints.idxbu = np.array([0, 1, 2, 3])
+    # Set Input Constraints (rpy < 60°)
+    ocp.constraints.lbu = np.array([-1.0, -1.0, -1.0, constants.THRUST_MIN * 4])
+    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, constants.THRUST_MAX * 4])
+    ocp.constraints.idxbu = np.array([0, 1, 2, 3])
 
     # We have to set x0 even though we will overwrite it later on.
     ocp.constraints.x0 = np.zeros((nx))
@@ -216,12 +179,14 @@ def create_ocp_solver(
     # set prediction horizon
     ocp.solver_options.tf = Tf
 
-    acados_ocp_solver = AcadosOcpSolver(ocp, json_file="lsy_example_mpc.json", verbose=verbose)
+    acados_ocp_solver = AcadosOcpSolver(
+        ocp, json_file="c_generated_code/lsy_example_mpc.json", verbose=verbose
+    )
 
     return acados_ocp_solver, ocp
 
 
-class MPController(Controller):
+class AttitudeMPC(Controller):
     """Example of a MPC using the collective thrust and attitude interface."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env=None):
@@ -234,8 +199,9 @@ class MPController(Controller):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
-        self.freq = config.env.freq
-        self._tick = 0
+        self._N = 30
+        self._dt = 1 / config.env.freq
+        self._T_HORIZON = self._N * self._dt
 
         # Same waypoints as in the trajectory controller. Determined by trial and error.
         waypoints = np.array(
@@ -252,33 +218,34 @@ class MPController(Controller):
                 [-0.5, -0.5, 1.1],
             ]
         )
-        # Scale trajectory between 0 and 1
-        ts = np.linspace(0, 1, np.shape(waypoints)[0])
+
+        des_completion_time = 8
+        ts = np.linspace(0, des_completion_time, np.shape(waypoints)[0])
         cs_x = CubicSpline(ts, waypoints[:, 0])
         cs_y = CubicSpline(ts, waypoints[:, 1])
         cs_z = CubicSpline(ts, waypoints[:, 2])
 
-        des_completion_time = 8
-        ts = np.linspace(0, 1, int(self.freq * des_completion_time))
+        ts = np.linspace(0, des_completion_time, int(config.env.freq * des_completion_time))
+        x_des = cs_x(ts)
+        y_des = cs_y(ts)
+        z_des = cs_z(ts)
 
-        self.x_des = cs_x(ts)
-        self.y_des = cs_y(ts)
-        self.z_des = cs_z(ts)
+        x_des = np.concatenate((x_des, [x_des[-1]] * self._N))
+        y_des = np.concatenate((y_des, [y_des[-1]] * self._N))
+        z_des = np.concatenate((z_des, [z_des[-1]] * self._N))
+        self._waypoints_pos = np.stack((x_des, y_des, z_des)).T
+        self._waypoints_yaw = x_des * 0
 
-        self.N = 30
-        self.T_HORIZON = 1.5
-        self.dt = self.T_HORIZON / self.N
-        self.x_des = np.concatenate((self.x_des, [self.x_des[-1]] * (2 * self.N + 1)))
-        self.y_des = np.concatenate((self.y_des, [self.y_des[-1]] * (2 * self.N + 1)))
-        self.z_des = np.concatenate((self.z_des, [self.z_des[-1]] * (2 * self.N + 1)))
+        self._acados_ocp_solver, self._ocp = create_ocp_solver(self._T_HORIZON, self._N)
+        self._nx = self._ocp.model.x.rows()
+        self._nu = self._ocp.model.u.rows()
+        self._ny = self._nx + self._nu
+        self._ny_e = self._nx
 
-        self.acados_ocp_solver, self.ocp = create_ocp_solver(self.T_HORIZON, self.N)
-
-        self.last_f_collective = 0.3
-        self.last_rpy_cmd = np.zeros(3)
-        self.last_f_cmd = 0.3
-        self.config = config
-        self.finished = False
+        self._tick = 0
+        self._tick_max = len(x_des) - 1 - self._N
+        self._config = config
+        self._finished = False
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
@@ -293,81 +260,40 @@ class MPController(Controller):
         Returns:
             The collective thrust and orientation [t_des, r_des, p_des, y_des] as a numpy array.
         """
-        i = min(self._tick, len(self.x_des) - 1)
-        if self._tick > i:
-            self.finished = True
+        i = min(self._tick, self._tick_max)
+        if self._tick >= self._tick_max:
+            self._finished = True
 
-        q = obs["quat"]
-        r = R.from_quat(q)
-        # Convert to Euler angles in XYZ order
-        rpy = r.as_euler("xyz", degrees=False)  # Set degrees=False for radians
+        # Setting initial state
+        obs["rpy"] = R.from_quat(obs["quat"]).as_euler("xyz")
+        x0 = np.concatenate((obs["pos"], obs["vel"], obs["rpy"]))
+        self._acados_ocp_solver.set(0, "lbx", x0)
+        self._acados_ocp_solver.set(0, "ubx", x0)
 
-        xcurrent = np.concatenate(
-            (
-                obs["pos"],
-                obs["vel"],
-                rpy,
-                np.array([self.last_f_collective, self.last_f_cmd]),
-                self.last_rpy_cmd,
-            )
-        )
-        self.acados_ocp_solver.set(0, "lbx", xcurrent)
-        self.acados_ocp_solver.set(0, "ubx", xcurrent)
+        # Setting reference
+        yref = np.zeros((self._N, self._ny))
+        yref[:, 0:3] = self._waypoints_pos[i + self._N]  # position
+        yref[:, 5] = self._waypoints_yaw[i + self._N]  # yaw
+        yref[:, 9] = constants.MASS * constants.GRAVITY  # hover thrust
+        for j in range(self._N):
+            self._acados_ocp_solver.set(j, "yref", yref[j])
 
-        for j in range(self.N):
-            yref = np.array(
-                [
-                    self.x_des[i + j],
-                    self.y_des[i + j],
-                    self.z_des[i + j],
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.35,
-                    0.35,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                ]
-            )
-            self.acados_ocp_solver.set(j, "yref", yref)
-        yref_N = np.array(
-            [
-                self.x_des[i + self.N],
-                self.y_des[i + self.N],
-                self.z_des[i + self.N],
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.35,
-                0.35,
-                0.0,
-                0.0,
-                0.0,
-            ]
-        )
-        self.acados_ocp_solver.set(self.N, "yref", yref_N)
+        yref_e = np.zeros((self._ny_e))
+        yref_e[0:3] = self._waypoints_pos[i + self._N]  # position
+        yref_e[5] = self._waypoints_yaw[i + self._N]  # yaw
+        self._acados_ocp_solver.set(self._N, "yref", yref_e)
 
-        self.acados_ocp_solver.solve()
-        x1 = self.acados_ocp_solver.get(1, "x")
-        w = 1 / self.config.env.freq / self.dt
-        self.last_f_collective = self.last_f_collective * (1 - w) + x1[9] * w
-        self.last_f_cmd = x1[10]
-        self.last_rpy_cmd = x1[11:14]
+        # Solving problem and getting first input
+        self._acados_ocp_solver.solve()
+        u0 = self._acados_ocp_solver.get(0, "u")
 
-        cmd = x1[10:14]
+        # WARNING: The following line is only for legacy reason!
+        # The Crazyflie uses the rpyt command format, the environment
+        # take trpy format. Remove this line as soon as the env
+        # also works with rpyt!
+        u0 = np.array([u0[3], *u0[:3]])
 
-        return cmd
+        return u0
 
     def step_callback(
         self,
@@ -381,7 +307,7 @@ class MPController(Controller):
         """Increment the tick counter."""
         self._tick += 1
 
-        return self.finished
+        return self._finished
 
     def episode_callback(self):
         """Reset the integral error."""

@@ -73,6 +73,7 @@ class ROSConnector:
         estimator_names: list[str] | None = None,
         cmd_topic: str | None = None,
         timeout: float = 1.0,
+        outdated_after: float = 0.1,
     ):
         """Initialize the ROSConnector with the specified tracking objects and command topic.
 
@@ -89,6 +90,8 @@ class ROSConnector:
             cmd_topic: Topic name for publishing commands. If None, command publishing is disabled.
             timeout: If greater than 0, wait for position updates of all tracked objects before
                 returning.
+            outdated_after: Time after which measurements are considered outdated and property
+                is_outdated will return true
 
         Raises:
             AssertionError: If ROS is not initialized before creating the connector.
@@ -106,6 +109,8 @@ class ROSConnector:
             "Duplicate items in estimator_names"
         )
         self.names = self.tf_names + self.estimator_names
+        assert outdated_after > 0, f"outdated_after needs to be > 0, was {outdated_after}"
+        self._outdated_after = outdated_after
         # Create synchronized, shared arrays for all quantities
         ctx = mp.get_context("spawn")
         self._pos = ctx.Array("f", [float("nan")] * len(self.names) * 3)
@@ -114,7 +119,8 @@ class ROSConnector:
         self._ang_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._disturbance = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 6)
         self._forces = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
-        self._times = ctx.Array("f", [float("nan")] * len(self.names))
+        self._times = ctx.Array("d", [float("nan")] * len(self.names))
+        # Note that times needs to be double, since time.time() might be a large number
 
         self.shutdown = ctx.Event()
         atexit.register(lambda: self.shutdown.set())  # Ensure processes are killed on exit
@@ -166,9 +172,20 @@ class ROSConnector:
             else:
                 self.shutdown.set()
                 missing_objects = [name for name, pos in self.pos.items() if np.any(np.isnan(pos))]
+                tf_objects = [n for n in missing_objects if n in self.tf_names]
+                estimator_objects = [n for n in missing_objects if n in self.estimator_names]
+                missing_msg = ""
+                if any(tf_objects):
+                    missing_msg += (
+                        f"\nTF data is missing for {tf_objects}. Is ros2 publishing tf poses?"
+                    )
+                if any(estimator_objects):
+                    missing_msg += (
+                        f"\nEstimator data is missing for {estimator_objects} objects. Is the "
+                        "estimator node running?"
+                    )
                 raise TimeoutError(
-                    "Timeout while fetching initial position updates for all tracked objects. "
-                    f"Missing objects: {missing_objects}"
+                    f"Timeout while fetching initial positions for tracked objects. {missing_msg}"
                 )
 
     @property
@@ -204,8 +221,21 @@ class ROSConnector:
     @property
     def forces(self) -> dict[str, np.ndarray]:
         """The latest estimated forces data for all tracked objects."""
-        forces = np.asarray(self._forces, dtype=np.float32).reshape(-1, 6)
+        forces = np.asarray(self._forces, dtype=np.float32).reshape(-1, 4)
         return {n: forces[i] for i, n in enumerate(self.estimator_names)}
+
+    @property
+    def times(self) -> dict[str, np.float32]:
+        """The times of the last received data for all tracked objects."""
+        times = np.asarray(self._times, dtype=np.float64).reshape(-1)
+        return {n: times[i] for i, n in enumerate(self.estimator_names)}
+
+    @property
+    def is_outdated(self) -> dict[str, np.bool]:
+        """The latest estimated forces data for all tracked objects."""
+        times = np.asarray(self._times, dtype=np.float64).reshape(-1)
+        is_outdated = times < time.time() - self._outdated_after
+        return {n: is_outdated[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def active(self) -> bool:
