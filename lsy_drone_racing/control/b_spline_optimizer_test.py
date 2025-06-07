@@ -82,10 +82,10 @@ class BSplineOptimizerTest(KinoAStarWithReplanController):
             trajectory.visualize_B_spline(self.fig, self.ax)
         start_time = time.time()
         optimizer = BsplineOptimizer(
-            lam_smooth = 100.0,
-            lam_vel = 100.0,
-            lam_acc = 10000.0,
-            lam_sdf = 100000.0,
+            lam_smooth = 1000.0,
+            lam_vel = 1000.0,
+            lam_acc = 1000.0,
+            lam_sdf = 100.0,
             v_max = 5.0,
             a_max = 10.0,
             sdf_func = sdf_func,
@@ -108,5 +108,9 @@ class BSplineOptimizerTest(KinoAStarWithReplanController):
 
         if LOCAL_MODE:
             optimized_bspline.visualize_B_spline(self.fig, self.ax, color = 'blue')
+        t_axis = np.arange(optimized_bspline.b_spline.t[0], optimized_bspline.b_spline.t[-1], 0.1)
+        spline = optimized_bspline.b_spline(optimized_bspline.b_spline.t)
+        FresssackController.save_trajectory(spline,0.1, r"lsy_drone_racing/planned_trajectories/test_run.csv",0.5)
+        
         input("stop here")
 
