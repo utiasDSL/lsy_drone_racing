@@ -20,8 +20,10 @@ try:
     from rclpy.publisher import Publisher
     from rclpy.publisher import MsgType
     from geometry_msgs.msg import PoseStamped, TransformStamped
+    from nav_msgs.msg import Path
     from tf2_ros import TransformBroadcaster
     from transformations import quaternion_from_euler, euler_from_quaternion
+    from visualization_msgs.msg import Marker
     ROS_AVAILABLE = True
 except:
     ROS_AVAILABLE = False
@@ -94,7 +96,38 @@ class TFTx(Node):
 
         self.br.sendTransform(t)
 
+class PathTx(ControllerROSTx):
+    def __init__(self,
+                 node_name : str,
+                 topic_name : str,
+                 queue_size : np.integer):
+        super().__init__(node_name, Path, topic_name, queue_size)
 
+    def process_data(self, raw_data : Dict[str, NDArray])-> MsgType:
+        traj = raw_data['traj']
+        quat = raw_data.get('quat', [[0,0,0,1] for i in range(len(traj))])
+        frame_id = str(raw_data.get('frame_id', 'map'))
+        msg = Path()
+        stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = str(frame_id)
+        msg.header.stamp = stamp
+        for idx, pos in enumerate(traj):
+            pose_msg = PoseStamped()
+            pose_msg.header.stamp = stamp
+            pose_msg.header.frame_id = str(frame_id)
+
+            pose_msg.pose.position.x = float(pos[0])
+            pose_msg.pose.position.y = float(pos[1])
+            pose_msg.pose.position.z = float(pos[2])
+
+            pose_msg.pose.orientation.x = float(quat[idx][0])
+            pose_msg.pose.orientation.y = float(quat[idx][1])
+            pose_msg.pose.orientation.z = float(quat[idx][2])
+            pose_msg.pose.orientation.w = float(quat[idx][3])
+            
+            msg.poses.append(pose_msg)
+        return msg
+    
 
 class PoseTx(ControllerROSTx):
     def __init__(self,
@@ -123,7 +156,53 @@ class PoseTx(ControllerROSTx):
         msg.pose.orientation.w = float(quat[3])
 
         return msg
-        
+
+class MeshMarkerTx(ControllerROSTx):
+    name : str
+    mesh_url : List[str]
+    frame_id : str
+    def __init__(self,
+                 node_name : str,
+                 topic_name : str,
+                 queue_size : np.integer,
+                 frame_id : str,
+                 mesh_path : Union[List[str], str]):
+        super().__init__(node_name, Marker, topic_name, queue_size)
+        self.name = node_name
+        self.frame_id = frame_id
+        if isinstance(mesh_path, str):
+            self.mesh_url = ['file://' + os.path.abspath(mesh_path)]
+        else:
+            self.mesh_url = ['file://' + os.path.abspath(path) for path in mesh_path]
+
+    def process_data(self, raw_data : Dict[str, NDArray])-> MsgType:
+        idx = 0
+        if raw_data is not None:
+            idx = raw_data.get('idx', 0)
+        marker = Marker()
+        marker.header.frame_id = self.frame_id
+        marker.header.stamp = self.get_clock().now().to_msg()
+
+        marker.ns = self.name
+        marker.id = 0
+        marker.type = Marker.MESH_RESOURCE
+        marker.action = Marker.ADD
+
+        marker.mesh_resource = self.mesh_url[idx]
+        marker.mesh_use_embedded_materials = True
+
+        # Scales
+        marker.scale.x = 1.0
+        marker.scale.y = 1.0
+        marker.scale.z = 1.0
+
+        marker.color.a = 1.0
+
+        marker.pose.orientation.w = 1.0
+
+        return marker
+
+
 
 class FresssackController(Controller):
     """Controller base class with predifined functions for further development! """
@@ -145,14 +224,18 @@ class FresssackController(Controller):
     ros_tx : bool
     ego_pose_tx : PoseTx
     ego_TF_tx : TFTx
+    drone_marker_tx : MeshMarkerTx
     ros_tx_freq : np.floating
+    ros_tx_freq_slow : np.floating
     _ros_tx_internal_freq : np.integer
+    _ros_tx_internal_freq_slow : np.integer
     def __init__(self, obs: Dict[str, NDArray[np.floating]],
                 info: dict,
                 config: dict,
                 env = None,
                 data_log : dict = None,
-                ros_tx_freq : Optional[np.floating] = None):
+                ros_tx_freq : Optional[np.floating] = None, 
+                ros_tx_freq_slow : Optional[np.floating] = 10.0):
         """Initialization of the controller.
 
         Args:
@@ -194,7 +277,9 @@ class FresssackController(Controller):
             except:
                 pass
             self.ros_tx_freq = ros_tx_freq
+            self.ros_tx_freq_slow = ros_tx_freq_slow
             self._ros_tx_internal_freq = max(int(abs(self._freq / self.ros_tx_freq)), 1)
+            self._ros_tx_internal_freq_slow = max(int(abs(self._freq / self.ros_tx_freq_slow)), 1)
             self.ego_pose_tx = PoseTx(
                 node_name = 'ego_pose_tx',
                 topic_name = 'drone_pose',
@@ -203,6 +288,24 @@ class FresssackController(Controller):
             self.ego_TF_tx = TFTx(
                 node_name = 'ego_TF_tx',
                 topic_name = 'drone'
+            )
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            drone_mesh_file = os.path.join(current_dir, '..', 'ros', 'rviz','meshes', 'crazy_flies.dae')
+            self.drone_marker_tx = MeshMarkerTx(
+                node_name = 'drone_marker_tx',
+                topic_name = 'drone_marker',
+                mesh_path = os.path.abspath(drone_mesh_file),
+                frame_id = 'drone',
+                queue_size = 1
+            )
+            ground_mesh_file = os.path.join(current_dir, '..', 'ros', 'rviz','meshes', 'ground.dae')
+
+            self.ground_marker_tx = MeshMarkerTx(
+                node_name = 'ground_marker_tx',
+                topic_name = 'ground_marker',
+                mesh_path = os.path.abspath(ground_mesh_file),
+                frame_id = 'map',
+                queue_size = 1
             )
         else:
             self.ros_tx = False
@@ -445,8 +548,8 @@ class FresssackController(Controller):
                     val.append(self.current_log_frame[key])
     def need_log_file(self) -> bool:
         return self.log_file and (self._tick % self._data_log_internal_freq == 0)
-    def need_ros_tx(self) -> bool:
-        return self.ros_tx and (self._tick % self._ros_tx_internal_freq == 0)
+    def need_ros_tx(self, slow = False) -> bool:
+        return self.ros_tx and (((self._tick % self._ros_tx_internal_freq) == 0) if not slow else ((self._tick % self._ros_tx_internal_freq_slow) == 0))
     
     def step_update(self, obs : Dict[str, np.ndarray]) -> None:
         self.last_pos = self.pos
@@ -481,7 +584,9 @@ class FresssackController(Controller):
                     'frame_id' : 'map'
                 }
             )
-
+            self.drone_marker_tx.publish(None)
+        if self.need_ros_tx(slow = True):
+            self.ground_marker_tx.publish(None)
         self._tick += 1
 
     
@@ -512,7 +617,13 @@ class FresssackController(Controller):
     def update_obstacles(self, obst_idx : int, obst_pnt : np.array) -> None:
         self.obstacles[obst_idx].pos = obst_pnt
 
+    def update_target_gate(self, obs) -> bool:
+        result = self.next_gate != obs['target_gate']
+        self.next_gate = obs['target_gate']
+        return result
+
     def update_next_gate(self, distance = 0.5) -> bool:
+        # Older version for detecting gate change!
         if not self.next_gate <= len(self.gates):
             return False
         if np.linalg.norm(self.pos - (self.gates[self.next_gate].pos)) > distance:

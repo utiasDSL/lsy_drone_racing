@@ -21,3 +21,6 @@ lsy_drone_racing/control/test_controller.py
 lsy_drone_racing/control/kino_A_star_with_replan_controller_backup.py
 lsy_drone_racing/control/mpcc_precripted_trajectory_IPOPT.py
 lsy_drone_racing/control/test_controller.py
+/lsy_drone_racing/ros/rviz/meshes/assets
+*.blend1
+*.blend

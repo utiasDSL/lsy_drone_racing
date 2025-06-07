@@ -23,8 +23,9 @@ from scipy.signal import savgol_filter
 from casadi import interpolant
 from sympy import true
 from traitlets import TraitError
+import os
 
-from lsy_drone_racing.control.fresssack_controller import FresssackController
+from lsy_drone_racing.control.fresssack_controller import FresssackController,MeshMarkerTx, PathTx, TFTx
 from lsy_drone_racing.control.easy_controller import EasyController
 from lsy_drone_racing.control import Controller
 from lsy_drone_racing.tools.ext_tools import TrajectoryTool
@@ -41,10 +42,25 @@ except ModuleNotFoundError:
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-
+ROS_AVAILABLE = False
+try:
+    import rclpy
+    from rclpy.node import Node
+    from rclpy.publisher import Publisher
+    from rclpy.publisher import MsgType
+    from geometry_msgs.msg import PoseStamped, TransformStamped
+    from nav_msgs.msg import Path
+    from tf2_ros import TransformBroadcaster
+    from transformations import quaternion_from_euler, euler_from_quaternion
+    ROS_AVAILABLE = True
+except:
+    ROS_AVAILABLE = False
 
 class MPCCPrescriptedController(EasyController):
     """Implementation of MPCC using the collective thrust and attitude interface."""
+    mpcc_traj_tx : PathTx
+    path_tx : PathTx
+    gate_tf_txs : TFTx
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, env=None):
         """Initialize the attitude controller.
@@ -70,7 +86,8 @@ class MPCCPrescriptedController(EasyController):
                         #  exit_offset = [0.5,0.1,0.1,0.3],
                          thickness = [0.2, 0.2, 0.2, 0.05],
                          vel_limit = [1.0, 1.0, 0.2, 1.0])
-
+        self.init_obstacles(obs = obs,
+                            obs_safe_radius = [0.1,0.1,0.1,0.1])
         # # pre-planned trajectory
         # t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/param_a_5_sec_offsets.csv")
         t, pos, vel = FresssackController.read_trajectory(r"lsy_drone_racing/planned_trajectories/param_c_6_sec_bigger_pillar.csv")     
@@ -100,6 +117,55 @@ class MPCCPrescriptedController(EasyController):
         self.last_f_cmd = 0.3
         self.config = config
         self.finished = False
+
+        if ROS_AVAILABLE and self.ros_tx:
+            self.mpcc_traj_tx = PathTx(
+                node_name = 'mpcc_path_tx',
+                topic_name = 'mpcc_traj',
+                queue_size = 10
+            )
+            self.path_tx = PathTx(
+                node_name = 'global_path_tx',
+                topic_name = 'global_path',
+                queue_size = 10
+            )
+            self.gate_tf_txs = [
+                TFTx(node_name = 'gate_' + str(i) + '_TF_tx', topic_name = 'gate_' + str(i))
+                for i in range(len(self.gates))
+            ]
+            self.obstacle_tf_txs = [
+                TFTx(node_name = 'obstacles_' + str(i) + '_TF_tx', topic_name = 'obstacles_' + str(i))
+                for i in range(len(self.obstacles))
+            ]
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            gate_mesh_file = os.path.join(current_dir, '..', 'ros', 'rviz','meshes', 'gate.dae')
+            gate_unobserved_mesh_file = os.path.join(current_dir, '..', 'ros', 'rviz','meshes', 'gate_not_sure.dae')
+            gate_passed_mesh_file = os.path.join(current_dir, '..', 'ros', 'rviz','meshes', 'gate_passed.dae')
+            self.gate_marker_txs = [
+                    MeshMarkerTx(
+                    node_name = 'gate_' + str(i) + '_marker_tx',
+                    topic_name = 'gate_' + str(i) + '_marker',
+                    mesh_path = [os.path.abspath(gate_unobserved_mesh_file),
+                                  os.path.abspath(gate_mesh_file),
+                                  os.path.abspath(gate_passed_mesh_file)],
+                    frame_id = 'gate_' + str(i),
+                    queue_size = 1
+                )
+                for i in range(len(self.gates))
+            ]
+            obstacle_mesh_file = os.path.join(current_dir, '..', 'ros', 'rviz','meshes', 'obstacle.dae')
+            obstacle_unobserved_mesh_file = os.path.join(current_dir, '..', 'ros', 'rviz','meshes', 'obstacle_not_sure.dae')
+            self.obstacle_marker_txs = [
+                    MeshMarkerTx(
+                    node_name = 'obstacles_' + str(i) + '_marker_tx',
+                    topic_name = 'obstacles_' + str(i) + '_marker',
+                    mesh_path = [os.path.abspath(obstacle_unobserved_mesh_file),
+                                 os.path.abspath(obstacle_mesh_file)],
+                    frame_id = 'obstacles_' + str(i),
+                    queue_size = 1
+                )
+                for i in range(len(self.obstacles))
+            ]
 
     def export_quadrotor_ode_model(self) -> AcadosModel:
         """Symbolic Quadrotor Model."""
@@ -403,7 +469,8 @@ class MPCCPrescriptedController(EasyController):
         # i = min(self._tick, len(self.x_des) - 1)
         # if self._tick > i:
         #     self.finished = True
-
+        self.update_gate_if_needed(obs=obs)
+        self.update_obstacle_if_needed(obs = obs)
         q = obs["quat"]
         r = R.from_quat(q)
         # Convert to Euler angles in XYZ order
@@ -496,11 +563,54 @@ class MPCCPrescriptedController(EasyController):
         # plt.plot(self.arc_trajectory.x, self.radius_filtered(self.arc_trajectory.x))
         # plt.show()
         # input()
+
+        pos_traj = np.array([self.acados_ocp_solver.get(i, "x")[:3] for i in range(self.N+1)])
+        if self.need_ros_tx():
+            self.mpcc_traj_tx.publish(
+                raw_data = {
+                    'traj' : pos_traj,
+                    'frame_id' : 'map'
+                }
+            )
+        if self.need_ros_tx(slow=True):
+            for idx, tx in enumerate(self.gate_marker_txs):
+                if self.next_gate > idx:
+                    tx.publish(
+                        {
+                            'idx' : 2
+                        }
+                    )
+                elif self.gates_visited[idx]:
+                    tx.publish(
+                        {
+                            'idx' : 1
+                        }
+                    )
+                else:
+                    tx.publish(
+                        {
+                            'idx' : 0
+                        }
+                    )
+            for idx, tx in enumerate(self.obstacle_marker_txs):
+                if self.obstacles_visited[idx]:
+                    tx.publish(
+                        {
+                            'idx' : 1
+                        }
+                        )
+                else:
+                    tx.publish(
+                        {
+                            'idx' : 0
+                        }
+                        )
+
         try:
 
             draw_line(self.env, self.arc_trajectory(self.arc_trajectory.x), rgba=np.array([1.0, 1.0, 1.0, 0.2]))
             draw_line(self.env, np.stack([self.arc_trajectory(self.last_theta), obs["pos"]]), rgba=np.array([0.0, 0.0, 1.0, 1.0]))
-            pos_traj = np.array([self.acados_ocp_solver.get(i, "x")[:3] for i in range(self.N+1)])
+            
             draw_line(self.env, pos_traj[0:-1:5],rgba=np.array([1.0, 1.0, 0.0, 0.2]) )
         except:
             pass
@@ -518,7 +628,36 @@ class MPCCPrescriptedController(EasyController):
     ) -> bool:
         """Increment the tick counter."""
         self.step_update(obs = obs)
-        self.update_next_gate()
+        self.update_target_gate(obs = obs)
+        if self.need_ros_tx(): 
+            self.path_tx.publish(
+                raw_data = {
+                    'traj' : self.arc_trajectory(self.arc_trajectory.x),
+                    'frame_id' : 'map'
+                }
+            )
+            for idx, tx in enumerate(self.gate_tf_txs):
+                tx.publish(
+                    raw_data = 
+                    {
+                        'pos' : self.gates[idx].pos,
+                        'quat' : self.gates[idx]._quat,
+                        'frame_id' : 'map'
+                    }
+                )
+            for idx, tx in enumerate(self.obstacle_tf_txs):
+                tx.publish(
+                    raw_data = 
+                    {
+                        'pos' : self.obstacles[idx].pos,
+                        'quat' : [0,0,0,1],
+                        'frame_id' : 'map'
+                    }
+                )
+        if self.need_ros_tx(slow = True): 
+            pass
+            
+        
 
         return self.finished
 
