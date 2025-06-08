@@ -32,6 +32,7 @@ def export_quadrotor_ode_model() -> AcadosModel:
     # Define Gravitational Acceleration
     GRAVITY = 9.806
 
+
     # Sys ID Params
     params_pitch_rate = [-6.003842038081178, 6.213752925707588]
     params_roll_rate = [-3.960889336015948, 4.078293254657104]
@@ -99,6 +100,15 @@ def export_quadrotor_ode_model() -> AcadosModel:
         dp_cmd,
         dy_cmd,
     )
+    # Define the pole location and radius
+    pole_x = 0.36  # example x position of pole
+    pole_y = -0.87  # example y position of pole
+    pole_radius = 0.125  # radius to avoid
+    
+    # Nonlinear constraint: distance from pole must be greater than pole_radius
+    # We'll use (x - pole_x)² + (y - pole_y)² - radius² ≥ 0
+    constraint_expr = (px - pole_x)**2 + (py - pole_y)**2 - pole_radius**2
+
 
     # Initialize the nonlinear model for NMPC formulation
     model = AcadosModel()
@@ -107,6 +117,9 @@ def export_quadrotor_ode_model() -> AcadosModel:
     model.f_impl_expr = None
     model.x = states
     model.u = inputs
+
+    # Add the nonlinear constraint expression
+    model.con_h_expr = constraint_expr
 
     return model
 
@@ -216,6 +229,17 @@ def create_ocp_solver(
     # set prediction horizon
     ocp.solver_options.tf = Tf
 
+     # Set nonlinear constraints for obstacle avoidance
+    ocp.model.con_h_expr = model.con_h_expr
+    
+    # Lower bound for nonlinear constraint (must be > 0 to avoid pole)
+    ocp.constraints.lh = np.array([0.0])  # (x-x0)² + (y-y0)² - r² ≥ 0
+    ocp.constraints.uh = np.array([1e8])  # upper bound is effectively infinity
+    
+    # The constraint is nonlinear, so we need to specify its type
+    ocp.constraints.constr_type = 'BGH'
+
+
     acados_ocp_solver = AcadosOcpSolver(ocp, json_file="lsy_example_mpc.json", verbose=verbose)
 
     return acados_ocp_solver, ocp
@@ -236,6 +260,7 @@ class MPController(Controller):
         super().__init__(obs, info, config)
         self.freq = config.env.freq
         self._tick = 0
+        self.y=[]
         self.prev_obstacle = [
             [1, 0, 1.4],
             [0.5, -1, 1.4],
@@ -250,7 +275,7 @@ class MPController(Controller):
         ]
         self.prev_gates=[
             [0.45, -0.5, 0.56],
-            [1.0, -1.05, 1.11],
+            [1.1, -1.05, 1.11],
             [0.0, 1.0, 0.56],
             [-0.5, 0.0, 1.11],
         ]
@@ -265,17 +290,17 @@ class MPController(Controller):
             [0.2, -1.3, 0.65],
             [0.6, -1.375, 0.78],
             [0.8, -1.375, 0.88],
-            [1.0, -1.05, 1.11],
-            [1.05, -1.0, 1.11],
+            [1.0, -1.05, 1.11], 
+            [1.1, -0.8, 1.11],#[1.05, -1.0, 1.2],
             [0.7, -0.275, 0.88],
             [0.2, 0.5, 0.65],
-            [0.0, 1.0, 0.56],
-            [0.0, 1.05, 0.56],
+            [0.0, 1.1, 0.56],
+            [0.0, 1.18, 0.56],
             [0.0, 0.9, 0.63],
             [-0.1, 0.7, 0.75],
             [-0.25, 0.3, 0.95],
-            [-0.5, 0.0, 1.11],
-            [-0.5, -0.1, 1.11],
+            [-0.4, -0.13, 1.1],
+            [-0.42, -0.45, 1.11],
             ]
         )
         # Scale trajectory between 0 and 1
@@ -349,6 +374,7 @@ class MPController(Controller):
         self.acados_ocp_solver.set(0, "lbx", xcurrent)
         self.acados_ocp_solver.set(0, "ubx", xcurrent)
 
+        self.y=[]
         for j in range(self.N):
             yref = np.array(
                 [
@@ -372,7 +398,8 @@ class MPController(Controller):
                     0.0,
                 ]
             )
-            self.acados_ocp_solver.set(j, "yref", yref)
+            self.acados_ocp_solver.set(j, "yref", yref)  
+            self.y.append(yref)
         yref_N = np.array(
             [
                 self.x_des[i + self.N],
