@@ -62,7 +62,7 @@ def export_quadrotor_ode_model() -> AcadosModel:
     dp_cmd = MX.sym("dp_cmd")
     dy_cmd = MX.sym("dy_cmd")
 
-    # define state and input vector
+    # define state and input vectors
     states = vertcat(
         px,
         py,
@@ -100,15 +100,15 @@ def export_quadrotor_ode_model() -> AcadosModel:
         dp_cmd,
         dy_cmd,
     )
-    # Define the pole location and radius
-    pole_x = 0.36  # example x position of pole
-    pole_y = -0.87  # example y position of pole
-    pole_radius = 0.125  # radius to avoid
+    # Define the pole location and radius##################################
+    pole_x = 0.36415142
+    pole_y = -0.86942714
+    pole_radius = 0.14
     
-    # Nonlinear constraint: distance from pole must be greater than pole_radius
-    # We'll use (x - pole_x)² + (y - pole_y)² - radius² ≥ 0
-    constraint_expr = (px - pole_x)**2 + (py - pole_y)**2 - pole_radius**2
-
+    # Constraint: must stay outside the pole area
+    # Formulated as (px-pole_x)^2 + (py-pole_y)^2 ≥ radius^2
+    # Which becomes (px-pole_x)^2 + (py-pole_y)^2 - radius^2 ≥ 0
+    h_expr = (px - pole_x)**2 + (py - pole_y)**2 - pole_radius**2
 
     # Initialize the nonlinear model for NMPC formulation
     model = AcadosModel()
@@ -119,7 +119,7 @@ def export_quadrotor_ode_model() -> AcadosModel:
     model.u = inputs
 
     # Add the nonlinear constraint expression
-    model.con_h_expr = constraint_expr
+    model.con_h_expr = h_expr
 
     return model
 
@@ -233,10 +233,8 @@ def create_ocp_solver(
     ocp.model.con_h_expr = model.con_h_expr
     
     # Lower bound for nonlinear constraint (must be > 0 to avoid pole)
-    ocp.constraints.lh = np.array([0.0])  # (x-x0)² + (y-y0)² - r² ≥ 0
-    ocp.constraints.uh = np.array([1e8])  # upper bound is effectively infinity
-    
-    # The constraint is nonlinear, so we need to specify its type
+    ocp.constraints.lh = np.array([0.0])  # Must be ≥ 0
+    ocp.constraints.uh = np.array([1e8])  # No upper bound
     ocp.constraints.constr_type = 'BGH'
 
 
@@ -261,6 +259,7 @@ class MPController(Controller):
         self.freq = config.env.freq
         self._tick = 0
         self.y=[]
+        self.y_mpc=[]
         self.prev_obstacle = [
             [1, 0, 1.4],
             [0.5, -1, 1.4],
@@ -290,17 +289,17 @@ class MPController(Controller):
             [0.2, -1.3, 0.65],
             [0.6, -1.375, 0.78],
             [0.8, -1.375, 0.88],
-            [1.0, -1.05, 1.11], 
-            [1.1, -0.8, 1.11],#[1.05, -1.0, 1.2],
+            [1.0, -1.05, 1.11], # [1.0, -1.05, 1.11],
+            [1.1, -0.8, 1.11],
             [0.7, -0.275, 0.88],
             [0.2, 0.5, 0.65],
-            [0.0, 1.1, 0.56],
-            [0.0, 1.18, 0.56],
+            [0.0, 1.0, 0.56],
+            [0.0, 1.05, 0.56],
             [0.0, 0.9, 0.63],
             [-0.1, 0.7, 0.75],
             [-0.25, 0.3, 0.95],
-            [-0.4, -0.13, 1.1],
-            [-0.42, -0.45, 1.11],
+            #[-0.5, 0.0, 1.1],
+            [-0.5, 0.0, 1.1],
             ]
         )
         # Scale trajectory between 0 and 1
@@ -346,7 +345,8 @@ class MPController(Controller):
         """
         
         if self.check_for_update(obs):
-            print('Changes were detected, now we can update traj')
+            print('Changes were detected, now we can update traj at:',self._tick)
+            print('The current waypoint ist:',(self._tick-np.mod(self._tick,self.freq))/self.freq)
             
         
 
@@ -421,6 +421,14 @@ class MPController(Controller):
         self.acados_ocp_solver.set(self.N, "yref", yref_N)
 
         self.acados_ocp_solver.solve()
+        self.y_mpc = []
+        for j in range(self.N + 1):  # Include terminal state
+            x_pred = self.acados_ocp_solver.get(j, "x")
+            # Extract relevant states to match your y_ref format if needed
+            # This depends on how you want to compare them
+            y_mpc = x_pred[:len(yref_N)]  # Adjust this based on your state vector
+            self.y_mpc.append(y_mpc)
+
         x1 = self.acados_ocp_solver.get(1, "x")
         w = 1 / self.config.env.freq / self.dt
         self.last_f_collective = self.last_f_collective * (1 - w) + x1[9] * w

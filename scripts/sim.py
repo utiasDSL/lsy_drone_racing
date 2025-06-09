@@ -18,7 +18,8 @@ import gymnasium
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 import numpy as np
 
-rgba = np.array([1.0, 0, 0, 1.0])  # Red, fully opaque
+rgba_1 = np.array([1.0, 0, 0, 1.0])  # Red, fully opaque
+rgba_2=np.array([0,0,1,1])
 
 from lsy_drone_racing.utils import load_config, load_controller,draw_line
 
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "level0.toml",
+    config: str = "level2.toml",
     controller: str | None = None,
     n_runs: int = 1,
     gui: bool | None = True,
@@ -87,9 +88,8 @@ def simulate(
 
             action = controller.compute_control(obs, info)
             y_ref = np.array([y[:3] for y in controller.y])
-            if np.mod(curr_time,2):
-                print('y_Ref')
-                print(y_ref)
+            y_mpc=np.array([y[:3] for y in controller.y_mpc])
+            
             obs, reward, terminated, truncated, info = env.step(action)
             # Update the controller internal state and models.
             controller_finished = controller.step_callback(
@@ -101,7 +101,8 @@ def simulate(
             # Synchronize the GUI.
             if config.sim.gui:
                 if ((i * fps) % config.env.freq) < fps:
-                    draw_line(env=env,points=y_ref,rgba=rgba)
+                    draw_line(env=env,points=y_ref,rgba=rgba_1)
+                    draw_line(env=env,points=y_mpc,rgba=rgba_2)
                     env.render()
             i += 1
 

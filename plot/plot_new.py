@@ -68,9 +68,27 @@ def plot_waypoints_and_environment(waypoints, obstacle_positions, gates_position
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    ax.set_xlim(-1.5, 1.5)
-    ax.set_ylim(-2, 2)
-    ax.set_zlim(0, 2)
+
+    # Set axis limits to nearest multiples of 0.15 that cover the data
+    def get_grid_limits(data, step=0.15):
+        dmin = np.min(data)
+        dmax = np.max(data)
+        lower = step * np.floor(dmin / step)
+        upper = step * np.ceil(dmax / step)
+        return lower, upper
+
+    xlim = get_grid_limits(np.concatenate([waypoints[:,0], np.array(gates_positions)[:,0], np.array(obstacle_positions)[:,0]]))
+    ylim = get_grid_limits(np.concatenate([waypoints[:,1], np.array(gates_positions)[:,1], np.array(obstacle_positions)[:,1]]))
+    zlim = get_grid_limits(np.concatenate([waypoints[:,2], np.array(gates_positions)[:,2], np.array(obstacle_positions)[:,2]]))
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_zlim(zlim)
+
+    # Set grid lines every 0.15
+    ax.set_xticks(np.arange(xlim[0], xlim[1]+0.001, 0.15))
+    ax.set_yticks(np.arange(ylim[0], ylim[1]+0.001, 0.15))
+    ax.set_zticks(np.arange(zlim[0], zlim[1]+0.001, 0.15))
 
     ax.legend()
     ax.set_title('3D Waypoints mit Stäben, rotierbaren Gates' +
@@ -87,7 +105,7 @@ waypoints = np.array(
             [0.2, -1.3, 0.65],
             [0.6, -1.375, 0.78],
             [0.8, -1.375, 0.88],
-            [1., -1.05, 1.11], # [1.0, -1.05, 1.11],
+            [1.0, -1.05, 1.11], # [1.0, -1.05, 1.11],
             [1.1, -0.8, 1.11],
             [0.7, -0.275, 0.88],
             [0.2, 0.5, 0.65],
@@ -96,13 +114,13 @@ waypoints = np.array(
             [0.0, 0.9, 0.63],
             [-0.1, 0.7, 0.75],
             [-0.25, 0.3, 0.95],
-            [-0.4, -0.13, 1.1],
+            #[-0.5, 0.0, 1.1],
             [-0.42, -0.4, 1.11],
             ])
 
 
 obstacles_positions = [
-    [1.0, 0.0, 1.4],
+    [1, -0.0, 1.4],
     [0.5, -1.0, 1.4],
     [0.0, 1.5, 1.4],
     [-0.5, 0.5, 1.4],
