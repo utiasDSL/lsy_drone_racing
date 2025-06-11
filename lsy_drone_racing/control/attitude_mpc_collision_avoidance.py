@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 OBSTACLE_RADIUS = 0.15  # Radius of the obstacles in meters
 GATE_LENGTH = 0.50  # Length of the gate in meters
 ELLIPSOID_DIAMETER = 0.3  # Diameter of the ellipsoid in meters
+ELLIPSOID_LENGTH = 0.7  # Length of the ellipsoid in meters
 
 
 def export_quadrotor_ode_model() -> AcadosModel:
@@ -138,10 +139,25 @@ class MPController(Controller):
         waypoints = np.array(
             [
                 obs["pos"],
-                obs["gates_pos"][0],
+                obs["obstacles_pos"][0] + [0.2, 0.5, -0.7],
+                obs["obstacles_pos"][0] + [0.2, -0.3, -0.7],
+                obs["gates_pos"][0]
+                + 0.5 * (obs["obstacles_pos"][0] - [0, 0, 0.6] - obs["gates_pos"][0]),
+                obs["gates_pos"][0] + [0.1, 0.1, 0],
+                obs["gates_pos"][0] + [-0.3, -0.2, 0],
+                obs["obstacles_pos"][1] + [-0.3, -0.3, -0.7],
+                obs["gates_pos"][1] + [-0.1, -0.2, 0],
                 obs["gates_pos"][1],
-                obs["gates_pos"][2],
+                obs["gates_pos"][1] + [0.2, 0.5, 0],
+                obs["obstacles_pos"][0] + [-0.3, 0, -0.7],
+                obs["gates_pos"][2] + [0.2, -0.5, 0],
+                obs["gates_pos"][2] + [0.1, 0, 0],
+                obs["gates_pos"][2] + [0.1, 0.15, 0],
+                obs["gates_pos"][2] + [0.1, 0.15, 1],
+                obs["obstacles_pos"][3] + [0.4, 0.3, -0.2],
+                obs["obstacles_pos"][3] + [0.4, 0, -0.2],
                 obs["gates_pos"][3],
+                obs["gates_pos"][3] + [0, -0.5, 0],
             ]
         )
         # Scale trajectory between 0 and 1
@@ -280,7 +296,7 @@ class MPController(Controller):
         self.ocp.solver_options.qp_solver = "PARTIAL_CONDENSING_HPIPM"  # FULL_CONDENSING_QPOASES
         self.ocp.solver_options.hessian_approx = "GAUSS_NEWTON"
         self.ocp.solver_options.integrator_type = "ERK"
-        self.ocp.solver_options.nlp_solver_type = "SQP"  # SQP_RTI
+        self.ocp.solver_options.nlp_solver_type = "SQP_RTI"  # SQP_RTI
         self.ocp.solver_options.tol = 1e-5
         self.ocp.solver_options.qp_solver_cond_N = self.N
         self.ocp.solver_options.qp_solver_warm_start = 1
@@ -334,10 +350,10 @@ class MPController(Controller):
         )
         ellipsoid_axes = np.array(
             [
-                [ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2, GATE_LENGTH / 2],
-                [GATE_LENGTH / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2],
-                [ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2, GATE_LENGTH / 2],
-                [GATE_LENGTH / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2],
+                [ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_LENGTH / 2],
+                [ELLIPSOID_LENGTH / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2],
+                [ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_LENGTH / 2],
+                [ELLIPSOID_LENGTH / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2],
             ]
         )
 
@@ -529,10 +545,10 @@ class MPController(Controller):
         )
         ellipsoid_axes = np.array(
             [
-                [ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2, GATE_LENGTH / 2],
-                [GATE_LENGTH / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2],
-                [ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2, GATE_LENGTH / 2],
-                [GATE_LENGTH / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2],
+                [ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_LENGTH / 2],
+                [ELLIPSOID_LENGTH / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2],
+                [ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_LENGTH / 2],
+                [ELLIPSOID_LENGTH / 2, ELLIPSOID_DIAMETER / 2, ELLIPSOID_DIAMETER / 2],
             ]
         )
 
