@@ -76,7 +76,7 @@ class CollisionAvoidanceHandler:
         obs_params, obs_h_expr = self._create_obstacle_expressions(pos)
         gate_params, gate_h_expr = self._create_gate_expressions(pos)
 
-        model.p = vertcat(*obs_params, *gate_params)
+        model.p = vertcat(model.p, *obs_params, *gate_params)
         model.con_h_expr = vertcat(*obs_h_expr, *gate_h_expr)
 
     def setup_ocp(self, ocp: AcadosOcp):
@@ -97,9 +97,9 @@ class CollisionAvoidanceHandler:
         ocp.constraints.ush = np.array([1e10] * self.num_constraints)
 
         # Set the cost for constraint violations
-        ocp.cost.Zl = np.array([100] * self.num_constraints)
+        ocp.cost.Zl = np.array([10000] * self.num_constraints)
         ocp.cost.Zu = np.array([0] * self.num_constraints)
-        ocp.cost.zl = np.array([100] * self.num_constraints)
+        ocp.cost.zl = np.array([10000] * self.num_constraints)
         ocp.cost.zu = np.array([0] * self.num_constraints)
 
         # Set initial parameter values
@@ -122,6 +122,7 @@ class CollisionAvoidanceHandler:
         gate_rotations = Rotation.from_quat(obs["gates_quat"]).as_euler("xyz", degrees=False)
         gate_params = np.hstack((gate_positions, gate_rotations[:, 2:])).flatten()
         params = np.concatenate((obstacle_params, gate_params))
+        return params
 
         for i in range(N_horizon):
             gate_params = gate_positions[:, :4].flatten()

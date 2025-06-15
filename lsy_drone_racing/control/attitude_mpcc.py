@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from lsy_drone_racing.envs.drone_race import DroneRaceEnv
 
-OBSTACLE_RADIUS = 0.15  # Radius of the obstacles in meters
+OBSTACLE_RADIUS = 0.17  # Radius of the obstacles in meters
 GATE_LENGTH = 0.50  # Length of the gate in meters
 ELLIPSOID_RADIUS = 0.15  # Diameter of the ellipsoid in meters
 ELLIPSOID_LENGTH = 0.7  # Length of the ellipsoid in meters
@@ -53,6 +53,7 @@ class MPController(Controller):
         waypoints = np.array(
             [
                 obs["pos"],
+                obs["pos"] + [0.1, -0.1, 0.3],
                 obs["obstacles_pos"][0] + [0.2, 0.5, -0.7],
                 obs["obstacles_pos"][0] + [0.2, -0.3, -0.7],
                 obs["gates_pos"][0]
@@ -81,7 +82,7 @@ class MPController(Controller):
         cs_y = CubicSpline(ts, waypoints[:, 1])
         cs_z = CubicSpline(ts, waypoints[:, 2])
 
-        des_completion_time = 10
+        des_completion_time = 7
         ts = np.linspace(0, 1, int(self.freq * des_completion_time))
 
         self.x_des = cs_x(ts)
@@ -95,34 +96,34 @@ class MPController(Controller):
         self.N = 30
         self.T_HORIZON = 1.5
         self.dt = self.T_HORIZON / self.N
-        self.x_des = np.concatenate((self.x_des, [self.x_des[-1]] * (2 * self.N + 1)))
-        self.y_des = np.concatenate((self.y_des, [self.y_des[-1]] * (2 * self.N + 1)))
-        self.z_des = np.concatenate((self.z_des, [self.z_des[-1]] * (2 * self.N + 1)))
-        self.dx_des = np.concatenate((self.dx_des, [self.dx_des[-1]] * (2 * self.N + 1)))
-        self.dy_des = np.concatenate((self.dy_des, [self.dy_des[-1]] * (2 * self.N + 1)))
-        self.dz_des = np.concatenate((self.dz_des, [self.dz_des[-1]] * (2 * self.N + 1)))
+        self.x_des = np.concatenate((self.x_des, [self.x_des[-1]] * (3 * self.N + 1)))
+        self.y_des = np.concatenate((self.y_des, [self.y_des[-1]] * (3 * self.N + 1)))
+        self.z_des = np.concatenate((self.z_des, [self.z_des[-1]] * (3 * self.N + 1)))
+        self.dx_des = np.concatenate((self.dx_des, [self.dx_des[-1]] * (3 * self.N + 1)))
+        self.dy_des = np.concatenate((self.dy_des, [self.dy_des[-1]] * (3 * self.N + 1)))
+        self.dz_des = np.concatenate((self.dz_des, [self.dz_des[-1]] * (3 * self.N + 1)))
 
         # Virtual state / input
         self.theta = 0.0
         self.v_theta = 0.001
 
-        # # Setup collision avoidance
-        # num_gates = len(obs["gates_pos"])
-        # num_obstacles = len(obs["obstacles_pos"])
-        # self.collision_avoidance_handler = CollisionAvoidanceHandler(
-        #     num_gates,
-        #     num_obstacles,
-        #     GATE_LENGTH,
-        #     ELLIPSOID_LENGTH,
-        #     ELLIPSOID_RADIUS,
-        #     OBSTACLE_RADIUS,
-        # )
+        # Setup collision avoidance
+        num_gates = len(obs["gates_pos"])
+        num_obstacles = len(obs["obstacles_pos"])
+        self.collision_avoidance_handler = CollisionAvoidanceHandler(
+            num_gates,
+            num_obstacles,
+            GATE_LENGTH,
+            ELLIPSOID_LENGTH,
+            ELLIPSOID_RADIUS,
+            OBSTACLE_RADIUS,
+        )
 
         # Setup the acados model and solver
         model = export_quadrotor_ode_model_mpcc()
-        # self.collision_avoidance_handler.setup_model(model)
+        self.collision_avoidance_handler.setup_model(model)
         ocp = setup_ocp(model, self.T_HORIZON, self.N)
-        # self.collision_avoidance_handler.setup_ocp(ocp)
+        self.collision_avoidance_handler.setup_ocp(ocp)
         self.acados_ocp_solver = AcadosOcpSolver(
             ocp, json_file="lsy_example_mpc.json", verbose=True
         )
@@ -177,13 +178,19 @@ class MPController(Controller):
         self.acados_ocp_solver.set(0, "lbx", xcurrent)
         self.acados_ocp_solver.set(0, "ubx", xcurrent)
 
+        obs_params = self.collision_avoidance_handler.update_parameters(
+            self.acados_ocp_solver, self.N, obs
+        )
+
         for j in range(self.N):
             p_d_k = np.array([self.x_des[i + j], self.y_des[i + j], self.z_des[i + j]])
             tangent_k = self.evaluate_tangent(i + j)
             p_k = np.concatenate([p_d_k, tangent_k])
-            self.acados_ocp_solver.set(j, "p", p_k)
+            self.acados_ocp_solver.set(j, "p", np.concatenate([p_k, obs_params]))
 
-        # self.collision_avoidance_handler.update_parameters(self.acados_ocp_solver, self.N, obs)
+        obs_params = self.collision_avoidance_handler.update_parameters(
+            self.acados_ocp_solver, self.N, obs
+        )
 
         self.acados_ocp_solver.solve()
         x1 = self.acados_ocp_solver.get(1, "x")
@@ -195,7 +202,6 @@ class MPController(Controller):
         # Update theta
         self.theta = x1[-2]
         self.v_theta = x1[-1]
-        print(self.v_theta)
 
         cmd = x1[10:14]
 
@@ -220,7 +226,7 @@ class MPController(Controller):
             max_size=0.01,
         )
 
-        # self.collision_avoidance_handler.draw_collision_bodies(env, self.obs)
+        self.collision_avoidance_handler.draw_collision_bodies(env, self.obs)
 
     def step_callback(
         self,

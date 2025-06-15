@@ -155,16 +155,20 @@ def define_mpcc_cost(model):
     contour_error = e - lag_error * t_hat
 
     # Weights (tune as needed)
-    q_c = 100.0
-    q_l = 500.0
+    q_c = 300.0
+    q_l = 50.0
     mu = 0.001
+
+    # u_ref
+    u_ref = np.array([0.35, 0, 0, 0, 0])
 
     # Cost expression
     stage_cost = (
         q_c * dot(contour_error, contour_error)
         + q_l * lag_error**2
-        # - mu * v_theta
-        + transpose(Vu @ model.u) @ (Vu @ model.u)
+        - mu * v_theta
+        + 0.1 * transpose(model.u - u_ref) @ (model.u - u_ref)
+        + 200 * transpose(model.x[6:9]) @ (model.x[6:9])
     )
     terminal_cost = 0  # stage_cost
 
@@ -207,7 +211,7 @@ def setup_ocp(
     ocp.solver_options.qp_solver = "PARTIAL_CONDENSING_HPIPM"
     ocp.solver_options.hessian_approx = "GAUSS_NEWTON"
     ocp.solver_options.integrator_type = "ERK"
-    ocp.solver_options.nlp_solver_type = "SQP_RTI"
+    ocp.solver_options.nlp_solver_type = "SQP"
     ocp.solver_options.tol = 1e-5
 
     ocp.solver_options.qp_solver_cond_N = N
