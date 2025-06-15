@@ -36,21 +36,16 @@ def export_quadrotor_ode_model() -> AcadosModel:
     r_cmd = MX.sym("r_cmd")
     p_cmd = MX.sym("p_cmd")
     y_cmd = MX.sym("y_cmd")
-    # Form MPCC
-    theta = MX.sym("theta")
-    v_theta = MX.sym("v_theta")
 
     # Control inputs: 4 real controls only
     df_cmd = MX.sym("df_cmd")
     dr_cmd = MX.sym("dr_cmd")
     dp_cmd = MX.sym("dp_cmd")
     dy_cmd = MX.sym("dy_cmd")
-    # For MPCC
-    d_v_theta = MX.sym("d_v_theta")
 
     # Params
     # Parameters: reference position (3) + tangent vector (3)
-    p_ref = MX.sym("p_ref", 3)
+    p_ref = MX.sym("p_ref", 6)
 
     # State and input vectors
     states = vertcat(
@@ -68,8 +63,6 @@ def export_quadrotor_ode_model() -> AcadosModel:
         r_cmd,
         p_cmd,
         y_cmd,
-        # theta,
-        # v_theta,
     )
     inputs = vertcat(df_cmd, dr_cmd, dp_cmd, dy_cmd)
 
@@ -91,8 +84,6 @@ def export_quadrotor_ode_model() -> AcadosModel:
         dr_cmd,
         dp_cmd,
         dy_cmd,
-        # v_theta,
-        # d_v_theta,
     )
 
     # Initialize the model
@@ -106,56 +97,76 @@ def export_quadrotor_ode_model() -> AcadosModel:
     return model
 
 
+def export_quadrotor_ode_model_mpcc() -> AcadosModel:
+    model = export_quadrotor_ode_model()
+    model.name = "quadrotor_mpcc"
+
+    # Add MPCC variables to the state
+    theta = MX.sym("theta")  # Arc-length position along path
+    v_theta = MX.sym("v_theta")  # Virtual progress velocity
+
+    # Add to state vector
+    model.x = vertcat(model.x, theta, v_theta)
+
+    # Add virtual input ∆v_theta
+    d_v_theta = MX.sym("d_v_theta")
+    model.u = vertcat(model.u, d_v_theta)
+
+    # Append progress dynamics
+    delta_t = 0.02  # sample time, change as needed
+    v_theta_next = v_theta + d_v_theta * delta_t
+    theta_next = theta + v_theta * delta_t
+
+    # Extend f_expl_expr to include progress dynamics
+    model.f_expl_expr = vertcat(model.f_expl_expr, theta_next - theta, v_theta_next - v_theta)
+
+    return model
+
+
 def define_mpcc_cost(model):
     """Construct the external MPCC cost expression using parameterized reference."""
-    # px, py, pz = model.x[0], model.x[1], model.x[2]
-    # # v_theta = model.x[-1]
-    # pos = vertcat(px, py, pz)
-
-    # p_d = model.p[0:3]  # reference position
-    # t_hat = model.p[3:6]  # unit tangent vector
-
-    # e = pos - p_d
-    # e_lag = dot(e, t_hat)
-    # e_contour = e - e_lag * t_hat
-
-    # lag_cost = 1.0 * e_lag**2
-    # contour_cost = 1.0 * dot(e_contour, e_contour)
-    # # progress_reward = -10.0 * v_theta
-
-    # control_cost = dot(model.u, model.u) * 0.1
-
-    # control_cost = dot(model.u, model.u) * 0.1
-    # stage_cost = lag_cost + contour_cost + control_cost  # + progress_reward
-    # terminal_cost = lag_cost + contour_cost  # + progress_reward  # exclude u
-
-    p_ref = model.p
 
     # Get Dimensions - no slack variables
     nx = model.x.rows()  # 14 states
     nu = model.u.rows()  # 4 inputs (real controls only)
     ny = nx + nu  # 18 total for cost (14 states + 4 inputs)
     ny_e = nx  # 14 for terminal
-
-    # Vx matrix (18x14) - maps states to cost
-    Vx = np.zeros((ny, nx))
-    Vx[:nx, :] = np.eye(nx)
-
-    # Vu matrix (18x4) - maps inputs to cost
     Vu = np.zeros((ny, nu))
     Vu[nx : nx + 4, :4] = np.eye(4)  # Real controls
 
-    # y_ref (18, 1)
-    y_ref = vertcat(p_ref[0], p_ref[1], p_ref[2], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    # Parameters (must match ocp.parameter_values layout)
+    p_ref = model.p[:3]  # desired position on reference path
+    t_ref = model.p[3:6]  # tangent vector at that point
 
-    # W matrix (18x18)
-    Q = np.diag([7.0, 7.0, 7.0, 0.5, 0.5, 0.5, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01])
-    R = np.diag([0.007, 0.007, 0.007, 0.007])  # Real control cost
-    W = scipy.linalg.block_diag(Q, R)
+    # Extract state vars
+    x = model.x
+    pos = x[0:3]  # current position
+    theta = x[-2]
+    v_theta = x[-1]
 
-    y = Vx @ model.x + Vu @ model.u
-    stage_cost = 0.5 * transpose(y - y_ref) @ W @ (y - y_ref)
-    terminal_cost = 0
+    # Error from current to desired path
+    e = pos - p_ref
+
+    # Unit tangent vector
+    t_hat = t_ref / (dot(t_ref, t_ref) + 1e-6) ** 0.5
+
+    # Lag and contour errors
+    lag_error = dot(t_hat, e)
+    contour_error = e - lag_error * t_hat
+
+    # Weights (tune as needed)
+    q_c = 100.0
+    q_l = 500.0
+    mu = 0.001
+
+    # Cost expression
+    stage_cost = (
+        q_c * dot(contour_error, contour_error)
+        + q_l * lag_error**2
+        # - mu * v_theta
+        + transpose(Vu @ model.u) @ (Vu @ model.u)
+    )
+    terminal_cost = 0  # stage_cost
 
     return stage_cost, terminal_cost
 
@@ -171,9 +182,6 @@ def setup_ocp(
 
     # Get Dimensions - no slack variables
     nx = model.x.rows()  # 14 states
-    nu = model.u.rows()  # 4 inputs (real controls only)
-    ny = nx + nu  # 18 total for cost (14 states + 4 inputs)
-    ny_e = nx  # 14 for terminal
 
     # Set dimensions
     ocp.solver_options.N_horizon = N
@@ -187,99 +195,10 @@ def setup_ocp(
 
     ocp.parameter_values = np.array([0.0] * ocp.model.p.rows())
 
-    # # Define weight matrices for the cost function
-    # # Use provided weights or defaults
-    # if mpc_weights is not None:
-    #     pos = mpc_weights.get("Q_pos", 7.0)
-    #     vel = mpc_weights.get("Q_vel", 0.5)
-    #     rpy = mpc_weights.get("Q_rpy", 0.01)
-    #     f_col = mpc_weights.get("Q_thrust", 0.01)
-    #     rpy_cmd = mpc_weights.get("Q_cmd", 0.01)
-    #     r_param = mpc_weights.get("R", 0.007)
-    # else:
-    #     # Default values
-    #     pos = 7.0
-    #     vel = 0.5
-    #     rpy = 0.01
-    #     f_col = 0.01
-    #     rpy_cmd = 0.01
-    #     r_param = 0.007
-
-    # Q = np.diag(
-    #     [
-    #         pos,
-    #         pos,
-    #         pos,  # Position
-    #         vel,
-    #         vel,
-    #         vel,  # Velocity
-    #         rpy,
-    #         rpy,
-    #         rpy,  # rpy - roll, pitch, yaw
-    #         f_col,
-    #         f_col,  # f_collective, f_collective_cmd
-    #         rpy_cmd,
-    #         rpy_cmd,
-    #         rpy_cmd,  # rpy_cmd
-    #     ]
-    # )
-
-    # # Control input regularization
-    # R = np.diag([r_param, r_param, r_param, r_param])  # Real control cost
-
-    # Q_e = Q.copy()
-
-    # # Stage cost matrix (18x18) - states + real controls only
-    # ocp.cost.W = scipy.linalg.block_diag(Q, R)
-    # ocp.cost.W_e = Q_e
-
-    # # Vx matrix (18x14) - maps states to cost
-    # Vx = np.zeros((ny, nx))
-    # Vx[:nx, :] = np.eye(nx)
-    # ocp.cost.Vx = Vx
-
-    # # Vu matrix (18x4) - maps inputs to cost
-    # Vu = np.zeros((ny, nu))
-    # Vu[nx : nx + 4, :4] = np.eye(4)  # Real controls
-    # ocp.cost.Vu = Vu
-
-    # # Terminal Vx matrix (14x14)
-    # Vx_e = np.zeros((ny_e, nx))
-    # Vx_e[:nx, :nx] = np.eye(nx)
-    # ocp.cost.Vx_e = Vx_e
-
-    # # Set initial references (18 dimensions)
-    # ocp.cost.yref = np.array(
-    #     [
-    #         1.0,
-    #         1.0,
-    #         0.4,
-    #         0.0,
-    #         0.0,
-    #         0.0,
-    #         0.0,
-    #         0.0,
-    #         0.0,
-    #         0.35,
-    #         0.35,
-    #         0.0,
-    #         0.0,
-    #         0.0,  # states
-    #         0.0,
-    #         0.0,
-    #         0.0,
-    #         0.0,  # real controls
-    #     ]
-    # )
-
-    # ocp.cost.yref_e = np.array(
-    #     [1.0, 1.0, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, 0.35, 0.0, 0.0, 0.0]
-    # )
-
     # Set State Constraints
-    ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57])
-    ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57])
-    ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13])
+    ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57, 0, -0.5])
+    ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57, 10, 0.5])
+    ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13, 14, 15])
 
     # We have to set x0 even though we will overwrite it later on.
     ocp.constraints.x0 = np.zeros((nx))

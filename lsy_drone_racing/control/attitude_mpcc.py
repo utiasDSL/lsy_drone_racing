@@ -17,7 +17,7 @@ from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.control import Controller
-from lsy_drone_racing.control.acados_model import export_quadrotor_ode_model, setup_ocp
+from lsy_drone_racing.control.acados_model import export_quadrotor_ode_model_mpcc, setup_ocp
 from lsy_drone_racing.control.collision_avoidance import CollisionAvoidanceHandler
 from lsy_drone_racing.utils import draw_line
 
@@ -81,7 +81,7 @@ class MPController(Controller):
         cs_y = CubicSpline(ts, waypoints[:, 1])
         cs_z = CubicSpline(ts, waypoints[:, 2])
 
-        des_completion_time = 15
+        des_completion_time = 10
         ts = np.linspace(0, 1, int(self.freq * des_completion_time))
 
         self.x_des = cs_x(ts)
@@ -98,6 +98,13 @@ class MPController(Controller):
         self.x_des = np.concatenate((self.x_des, [self.x_des[-1]] * (2 * self.N + 1)))
         self.y_des = np.concatenate((self.y_des, [self.y_des[-1]] * (2 * self.N + 1)))
         self.z_des = np.concatenate((self.z_des, [self.z_des[-1]] * (2 * self.N + 1)))
+        self.dx_des = np.concatenate((self.dx_des, [self.dx_des[-1]] * (2 * self.N + 1)))
+        self.dy_des = np.concatenate((self.dy_des, [self.dy_des[-1]] * (2 * self.N + 1)))
+        self.dz_des = np.concatenate((self.dz_des, [self.dz_des[-1]] * (2 * self.N + 1)))
+
+        # Virtual state / input
+        self.theta = 0.0
+        self.v_theta = 0.001
 
         # # Setup collision avoidance
         # num_gates = len(obs["gates_pos"])
@@ -112,7 +119,7 @@ class MPController(Controller):
         # )
 
         # Setup the acados model and solver
-        model = export_quadrotor_ode_model()
+        model = export_quadrotor_ode_model_mpcc()
         # self.collision_avoidance_handler.setup_model(model)
         ocp = setup_ocp(model, self.T_HORIZON, self.N)
         # self.collision_avoidance_handler.setup_ocp(ocp)
@@ -164,59 +171,17 @@ class MPController(Controller):
                 rpy,
                 np.array([self.last_f_collective, self.last_f_cmd]),
                 self.last_rpy_cmd,
+                np.array([self.theta, self.v_theta]),
             )
         )
         self.acados_ocp_solver.set(0, "lbx", xcurrent)
         self.acados_ocp_solver.set(0, "ubx", xcurrent)
 
         for j in range(self.N):
-            yref = np.array(
-                [
-                    self.x_des[i + j],
-                    self.y_des[i + j],
-                    self.z_des[i + j],
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                ]
-            )
-            # self.acados_ocp_solver.set(j, "yref", yref)
             p_d_k = np.array([self.x_des[i + j], self.y_des[i + j], self.z_des[i + j]])
-            # tangent_k = self.evaluate_tangent(i + j)
-            # p_k = np.concatenate([p_d_k, tangent_k])
-            self.acados_ocp_solver.set(j, "p", p_d_k)
-
-        yref_N = np.array(
-            [
-                self.x_des[i + self.N - 1],
-                self.y_des[i + self.N - 1],
-                self.z_des[i + self.N - 1],
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.35,
-                0.35,
-                0.0,
-                0.0,
-                0.0,
-            ]
-        )
-        # self.acados_ocp_solver.set(self.N, "yref", yref_N)
+            tangent_k = self.evaluate_tangent(i + j)
+            p_k = np.concatenate([p_d_k, tangent_k])
+            self.acados_ocp_solver.set(j, "p", p_k)
 
         # self.collision_avoidance_handler.update_parameters(self.acados_ocp_solver, self.N, obs)
 
@@ -226,6 +191,11 @@ class MPController(Controller):
         self.last_f_collective = self.last_f_collective * (1 - w) + x1[9] * w
         self.last_f_cmd = x1[10]
         self.last_rpy_cmd = x1[11:14]
+
+        # Update theta
+        self.theta = x1[-2]
+        self.v_theta = x1[-1]
+        print(self.v_theta)
 
         cmd = x1[10:14]
 
