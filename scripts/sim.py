@@ -20,6 +20,7 @@ import numpy as np
 
 rgba_1 = np.array([1.0, 0, 0, 1.0])  # Red, fully opaque
 rgba_2=np.array([0,0,1,1])
+rgba_3=np.array([0,1,0,1])
 
 from lsy_drone_racing.utils import load_config, load_controller,draw_line
 
@@ -72,7 +73,7 @@ def simulate(
         track=config.env.track,
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),
-        seed=config.env.seed,
+        seed=np.random.randint(0,1000), #seed=config.env.seed,
     )
     env = JaxToNumpy(env)
 
@@ -87,7 +88,7 @@ def simulate(
             curr_time = i / config.env.freq
 
             action = controller.compute_control(obs, info)
-            y_ref = np.array([y[:3] for y in controller.y])
+            y_ref = np.array([y[8:11] for y in controller.y])
             y_mpc=np.array([y[:3] for y in controller.y_mpc])
             
             obs, reward, terminated, truncated, info = env.step(action)
@@ -101,8 +102,9 @@ def simulate(
             # Synchronize the GUI.
             if config.sim.gui:
                 if ((i * fps) % config.env.freq) < fps:
-                    draw_line(env=env,points=y_ref,rgba=rgba_1)
-                    draw_line(env=env,points=y_mpc,rgba=rgba_2)
+                    draw_line(env=env,points=controller.traj_vis.T,rgba=rgba_2)
+                    draw_line(env=env,points=y_mpc,rgba=rgba_1)
+                    draw_line(env=env,points=y_ref,rgba=rgba_3)
                     env.render()
             i += 1
 
