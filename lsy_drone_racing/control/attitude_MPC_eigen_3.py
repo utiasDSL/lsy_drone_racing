@@ -284,6 +284,7 @@ class MPController(Controller):
         y = cs_y(tvisual)
         z = cs_z(tvisual)
         self.traj_vis=np.array([x,y,z])
+        self.update_traj_vis=np.array([x,y,z])
         #
         des_completion_time = 9
         ts = np.linspace(0, 1, int(self.freq * des_completion_time))
@@ -480,7 +481,7 @@ class MPController(Controller):
         center_idx = self.gate_map[int(gate_idx)]
 
         # 1. Neue Sub-Waypoints auswählen
-        rel_indices = [-1, 0, 1, 2]
+        rel_indices = [-1, 0, 1,2]
         abs_indices = [
             center_idx + i for i in rel_indices
             if 0 <= center_idx + i < len(self.waypoints)
@@ -523,9 +524,7 @@ class MPController(Controller):
         x_new = cs_x(ts)
         y_new = cs_y(ts)
         z_new = cs_z(ts)
-        vx_new = cs_x.derivative()(ts) # Geschindigkei ?
-        vy_new = cs_y.derivative()(ts)
-        vz_new = cs_z.derivative()(ts)
+        self.update_traj_vis=np.array([x_new,y_new,z_new])
 
         # --- 4. Aktuelle Trajektorie ersetzen
         tick_min = tick_section[0]

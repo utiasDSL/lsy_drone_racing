@@ -21,6 +21,7 @@ import numpy as np
 rgba_1 = np.array([1.0, 0, 0, 1.0])  # Red, fully opaque
 rgba_2=np.array([0,0,1,1])
 rgba_3=np.array([0,1,0,1])
+rgba_4=np.array([1,1,0,1])
 
 from lsy_drone_racing.utils import load_config, load_controller,draw_line
 
@@ -105,6 +106,7 @@ def simulate(
                     draw_line(env=env,points=controller.traj_vis.T,rgba=rgba_2)
                     draw_line(env=env,points=y_mpc,rgba=rgba_1)
                     draw_line(env=env,points=y_ref,rgba=rgba_3)
+                    draw_line(env=env,points=controller.update_traj_vis.T,rgba=rgba_4)
                     env.render()
             i += 1
 
