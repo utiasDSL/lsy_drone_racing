@@ -129,11 +129,11 @@ def export_quadrotor_ode_model() -> AcadosModel:
     
 
     # Penalize aggressive commands (smoother control)
-    Q_control = 0.01
+    Q_control = 0.05
     control_penalty = df_cmd**2 + dr_cmd**2 + dp_cmd**2 + dy_cmd**2
 
     # Penalize large angles (prevents flips)
-    Q_angle = 0.01
+    Q_angle = 0.05
     angle_penalty = roll**2 + pitch**2  # Yaw penalty optional
 
     sharpness=8
@@ -143,7 +143,7 @@ def export_quadrotor_ode_model() -> AcadosModel:
     d3 = (px - p_obs3[0])**sharpness + (py - p_obs3[1])**sharpness
     d4 = (px - p_obs4[0])**sharpness + (py - p_obs4[1])**sharpness
     safety_margin = 0.000002 # Min allowed distance squared
-    Q_obs=2 
+    Q_obs=0 
     obs_cost = (0.25*np.exp(-d1/(safety_margin)) + np.exp(-d2/safety_margin) + 
            np.exp(-d3/safety_margin) + 0.5*np.exp(-d4/safety_margin))
 
@@ -242,6 +242,7 @@ class MPController(Controller):
         self.y=[]
         self.y_mpc=[]
         # Same waypoints as in the trajectory controller. Determined by trial and error.
+        '''
         self.waypoints = np.array(
             [
                 [1.0, 1.5, 0.05],
@@ -263,13 +264,44 @@ class MPController(Controller):
             2 : 6,
             3 : 8
         }
+        '''
+        self.waypoints= np.array([
+                [1.0, 1.5, 0.05],  # Original Punkt 0
+                [0.9, 1.25, 0.125], # Neu (Mitte zwischen 0 und 1)
+                [0.8, 1.0, 0.2],    # Original Punkt 1
+                [0.675, 0.35, 0.35], # Neu (Mitte zwischen 1 und 2)
+                [0.55, -0.3, 0.5],  # Original Punkt 2 (gate 0)
+                [0.325, -0.9, 0.575], # Neu (Mitte zwischen 2 und 3)
+                [0.1, -1.5, 0.65],  # Original Punkt 3
+                [0.75, -1.3, 0.9],#[0.6, -1.175, 0.9], # Neu (Mitte zwischen 3 und 4)
+                [1.1, -0.85, 1.15], # Original Punkt 4 (gate 1)
+                [0.65, -0.175, 0.9], # Neu (Mitte zwischen 4 und 5)
+                [0.2, 0.5, 0.65],   # Original Punkt 5
+                #[0.1, 0.85, 0.5875], # Neu (Mitte zwischen 5 und 6)
+                [0.0, 1.2, 0.525],  # Original Punkt 6 (gate 2)
+                #[0.0, 1.2, 0.8125], # Neu (Mitte zwischen 6 und 7)
+                [0.0, 1.2, 1.1],    # Original Punkt 7
+                [-0.25, 0.6, 1.1],  # Neu (Mitte zwischen 7 und 8)
+                [-0.5, 0.0, 1.1],   # Original Punkt 8 (gate 3)
+                #[-0.5, -0.25, 1.1], # Neu (Mitte zwischen 8 und 9)
+                [-0.5, -0.5, 1.1],  # Original Punkt 9
+                #[-0.5, -0.75, 1.1], # Neu (Mitte zwischen 9 und 10)
+                [-0.5, -1.0, 1.1],  # Original Punkt 10
+            ])
+        self.gate_map = {
+            0 : 4,
+            1 : 8,
+            2 : 11,
+            3 : 14
+        }
 
-        self.prev_obstacle = [
+
+        self.prev_obstacle = np.array([
             [1, 0, 1.4],
             [0.5, -1, 1.4],
             [0, 1.5, 1.4],
             [-0.5, 0.5, 1.4],
-        ]
+        ])
         self.prev_gates_quat = [ [0.0, 0.0, 0.92268986, 0.38554308], [0.0, 0.0, -0.38018841, 0.92490906], [0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 0.0], ]
         self.prev_gates=[ [0.45, -0.5, 0.56], [1.1, -1.05, 1.11], [0.0, 1.0, 0.56], [-0.5, 0.0, 1.11], ]
 
@@ -330,20 +362,10 @@ class MPController(Controller):
             The collective thrust and orientation [t_des, r_des, p_des, y_des] as a numpy array.
         """
 
-        update = self.check_for_update(obs)
-        if update:
-            if update ==2:
-                print('Changes were detected, now we can update traj at:',self._tick)
-
-                
+        updated_gate = self.check_for_update_2(obs)
+        if updated_gate:
+            self.update_traj(obs,updated_gate)
             
-
-                self.update_traj(obs)
-            else:
-                print('Changes were detected, obstacle:',self._tick)
-                print("update prev_obstacle welche benutzte werden für NB", "\n")
-                
-        
 
 
 
@@ -450,6 +472,7 @@ class MPController(Controller):
             # print('Obstacle has changed:')  
             # print(obs["obstacles_pos"])
             self.prev_obstacle=obs["obstacles_pos"]
+            #self.prev_obstacle[1]=obs["obstacles_pos"][1]+[0,0.2,0.04]
             flag=1
         if not np.array_equal(self.prev_gates_quat,obs["gates_quat"]):
             # print('Gate_rotation has changed:')
@@ -464,7 +487,26 @@ class MPController(Controller):
 
         return flag
     
-    def update_traj(self, obs):
+    def check_for_update_2(self, obs):
+        """Check if any gate's position has changed significantly.
+        Returns:
+            - `None` if no gate moved beyond threshold
+            - The **index (int)** of the first changed gate (row-wise comparison)
+        """
+        current_gates = np.asarray(obs["gates_pos"])  # Shape: (N_gates, 3)
+        
+        for gate_idx in range(len(self.prev_gates)):  # Compare each gate (row) individually
+            prev_gate = np.asarray(self.prev_gates[gate_idx])
+            current_gate = np.asarray(current_gates[gate_idx])
+            
+            if np.linalg.norm(prev_gate - current_gate) > 0.1:  # Threshold
+                self.prev_gates = current_gates.copy()  # Update stored positions
+                print(f"Gate {gate_idx} moved significantly.")
+                return gate_idx+1  # Add one, so that we can check update for gate 0 with if statement. 
+        
+        return None
+
+    def update_traj(self, obs,updated_gate):
         """
         Set the cubic splines new from the current position
         """
@@ -477,11 +519,11 @@ class MPController(Controller):
         for i, idx in self.gate_map.items(): # update the waypoints that correspond to a specific gate
             self.waypoints[idx] = self.prev_gates[i]
 
-        gate_idx = obs["target_gate"]
+        gate_idx = updated_gate-1 # Subtract the one we added in check_for_update because of if statement
         center_idx = self.gate_map[int(gate_idx)]
 
         # 1. Neue Sub-Waypoints auswählen
-        rel_indices = [-1, 0, 1,2]
+        rel_indices = [-1, 0, 1]
         abs_indices = [
             center_idx + i for i in rel_indices
             if 0 <= center_idx + i < len(self.waypoints)
