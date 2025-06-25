@@ -295,6 +295,8 @@ class MPController(Controller):
             3 : 14
         }
 
+        self.init_gates=[ [0.45, -0.5, 0.56], [1.0, -1.05, 1.11], [0.0, 1.0, 0.56], [-0.5, 0.0, 1.11], ]
+
 
         self.prev_obstacle = np.array([
             [1, 0, 1.4],
@@ -303,7 +305,7 @@ class MPController(Controller):
             [-0.5, 0.5, 1.4],
         ])
         self.prev_gates_quat = [ [0.0, 0.0, 0.92268986, 0.38554308], [0.0, 0.0, -0.38018841, 0.92490906], [0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 0.0], ]
-        self.prev_gates=[ [0.45, -0.5, 0.56], [1.1, -1.05, 1.11], [0.0, 1.0, 0.56], [-0.5, 0.0, 1.11], ]
+        self.prev_gates=[ [0.45, -0.5, 0.56], [1.0, -1.05, 1.11], [0.0, 1.0, 0.56], [-0.5, 0.0, 1.11], ]
 
         # Scale trajectory between 0 and 1
         ts = np.linspace(0, 1, np.shape(self.waypoints)[0])
@@ -494,14 +496,14 @@ class MPController(Controller):
             - The **index (int)** of the first changed gate (row-wise comparison)
         """
         current_gates = np.asarray(obs["gates_pos"])  # Shape: (N_gates, 3)
-        
         for gate_idx in range(len(self.prev_gates)):  # Compare each gate (row) individually
             prev_gate = np.asarray(self.prev_gates[gate_idx])
             current_gate = np.asarray(current_gates[gate_idx])
             
-            if np.linalg.norm(prev_gate - current_gate) > 0.1:  # Threshold
+            if np.linalg.norm(prev_gate - current_gate) > 0.12:  # Threshold
                 self.prev_gates = current_gates.copy()  # Update stored positions
                 print(f"Gate {gate_idx} moved significantly.")
+                print(self.prev_gates[gate_idx])
                 return gate_idx+1  # Add one, so that we can check update for gate 0 with if statement. 
         
         return None
@@ -517,7 +519,12 @@ class MPController(Controller):
         
 
         for i, idx in self.gate_map.items(): # update the waypoints that correspond to a specific gate
-            self.waypoints[idx] = self.prev_gates[i]
+            diff=self.prev_gates[i]-self.init_gates[i]
+            print('Prev_mitte',self.prev_gates)
+            print('Init',self.init_gates[i])
+            print('Differenz von:',i,':',diff)
+            self.waypoints[idx] += diff
+            
 
         gate_idx = updated_gate-1 # Subtract the one we added in check_for_update because of if statement
         center_idx = self.gate_map[int(gate_idx)]
@@ -539,11 +546,11 @@ class MPController(Controller):
         dt_segments = np.diff(tick_section)
         
 
-        print("rel_indices:      ", rel_indices)
-        print("abs_indices:      ", abs_indices)
-        print("tick_section:     ", tick_section)
-        print("tick_times:       ", tick_times)
-        print("dt_segments:      ", dt_segments)
+        #print("rel_indices:      ", rel_indices)
+        #print("abs_indices:      ", abs_indices)
+        #print("tick_section:     ", tick_section)
+        #print("tick_times:       ", tick_times)
+        #print("dt_segments:      ", dt_segments)
 
 
         ts = []
@@ -580,3 +587,4 @@ class MPController(Controller):
 
 
         print(f"✅ Neue Teiltrajektorie (Spline) um Gate {gate_idx} aktualisiert.")
+        
