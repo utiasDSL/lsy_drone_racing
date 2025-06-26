@@ -15,7 +15,6 @@ import numpy as np
 import scipy
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 from casadi import MX, cos, sin, vertcat
-from lsy_models.utils.constants import Constants
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
@@ -24,7 +23,13 @@ from lsy_drone_racing.control import Controller
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-constants = Constants.from_config("cf2x_L250")
+
+PARAMS_RPY = np.array([[-12.7, 10.15], [-12.7, 10.15], [-8.117, 14.36]])
+PARAMS_ACC = np.array([0.1906, 0.4903])
+MASS = 0.027
+GRAVITY = 9.81
+THRUST_MIN = 0.02
+THRUST_MAX = 0.1125
 
 
 def export_quadrotor_ode_model() -> AcadosModel:
@@ -34,22 +39,11 @@ def export_quadrotor_ode_model() -> AcadosModel:
 
     """Model setting"""
     # define basic variables in state and input vector
-    px = MX.sym("px")
-    py = MX.sym("py")
-    pz = MX.sym("pz")
-    pos = vertcat(px, py, pz)
-    vx = MX.sym("vx")
-    vy = MX.sym("vy")
-    vz = MX.sym("vz")
-    vel = vertcat(vx, vy, vz)
-    roll = MX.sym("r")
-    pitch = MX.sym("p")
-    yaw = MX.sym("y")
-    rpy = vertcat(roll, pitch, yaw)
+    pos = vertcat(MX.sym("x"), MX.sym("y"), MX.sym("z"))
+    vel = vertcat(MX.sym("vx"), MX.sym("vy"), MX.sym("vz"))
+    rpy = vertcat(MX.sym("r"), MX.sym("p"), MX.sym("y"))
 
-    r_cmd = MX.sym("r_cmd")
-    p_cmd = MX.sym("p_cmd")
-    y_cmd = MX.sym("y_cmd")
+    r_cmd, p_cmd, y_cmd = MX.sym("r_cmd"), MX.sym("p_cmd"), MX.sym("y_cmd")
     thrust_cmd = MX.sym("thrust_cmd")
 
     # define state and input vector
@@ -57,15 +51,15 @@ def export_quadrotor_ode_model() -> AcadosModel:
     inputs = vertcat(r_cmd, p_cmd, y_cmd, thrust_cmd)
 
     # Define nonlinear system dynamics
-    pos_dot = vertcat(vx, vy, vz)
+    pos_dot = vel
     z_axis = vertcat(
-        cos(roll) * sin(pitch) * cos(yaw) + sin(roll) * sin(yaw),
-        cos(roll) * sin(pitch) * sin(yaw) - sin(roll) * cos(yaw),
-        cos(roll) * cos(pitch),
+        cos(rpy[0]) * sin(rpy[1]) * cos(rpy[2]) + sin(rpy[0]) * sin(rpy[2]),
+        cos(rpy[0]) * sin(rpy[1]) * sin(rpy[2]) - sin(rpy[0]) * cos(rpy[2]),
+        cos(rpy[0]) * cos(rpy[1]),
     )
-    thrust = constants.SI_ACC[0] + constants.SI_ACC[1] * inputs[3]
-    vel_dot = thrust * z_axis / constants.MASS + constants.GRAVITY_VEC
-    rpy_dot = constants.SI_PARAMS[:, 0] * rpy + constants.SI_PARAMS[:, 1] * inputs[:3]
+    thrust = PARAMS_ACC[0] + PARAMS_ACC[1] * inputs[3]
+    vel_dot = thrust * z_axis / MASS - np.array([0.0, 0.0, GRAVITY])
+    rpy_dot = PARAMS_RPY[:, 0] * rpy + PARAMS_RPY[:, 1] * inputs[:3]
     f = vertcat(pos_dot, vel_dot, rpy_dot)
 
     # Initialize the nonlinear model for NMPC formulation
@@ -156,8 +150,8 @@ def create_ocp_solver(
     ocp.constraints.idxbx = np.array([6, 7, 8])
 
     # Set Input Constraints (rpy < 60°)
-    ocp.constraints.lbu = np.array([-1.0, -1.0, -1.0, constants.THRUST_MIN * 4])
-    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, constants.THRUST_MAX * 4])
+    ocp.constraints.lbu = np.array([-1.0, -1.0, -1.0, THRUST_MIN * 4])
+    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, THRUST_MAX * 4])
     ocp.constraints.idxbu = np.array([0, 1, 2, 3])
 
     # We have to set x0 even though we will overwrite it later on.
@@ -274,7 +268,7 @@ class AttitudeMPC(Controller):
         yref = np.zeros((self._N, self._ny))
         yref[:, 0:3] = self._waypoints_pos[i + self._N]  # position
         yref[:, 5] = self._waypoints_yaw[i + self._N]  # yaw
-        yref[:, 9] = constants.MASS * constants.GRAVITY  # hover thrust
+        yref[:, 9] = MASS * GRAVITY  # hover thrust
         for j in range(self._N):
             self._acados_ocp_solver.set(j, "yref", yref[j])
 
@@ -291,7 +285,7 @@ class AttitudeMPC(Controller):
         # The Crazyflie uses the rpyt command format, the environment
         # take trpy format. Remove this line as soon as the env
         # also works with rpyt!
-        u0 = np.array([u0[3], *u0[:3]])
+        u0 = np.array([u0[3], *u0[:3]], dtype=np.float32)
 
         return u0
 
