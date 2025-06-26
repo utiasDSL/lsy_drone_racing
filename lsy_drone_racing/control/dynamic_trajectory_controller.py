@@ -17,6 +17,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 
 from lsy_drone_racing.control import Controller
+from lsy_drone_racing.utils import DataLogger
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -36,6 +37,7 @@ class DynamicTrajectoryController(Controller):
                 information such as disturbance configurations, randomizations, etc.
         """
         super().__init__(obs, info, config)
+        self.logger = DataLogger()
 
         self.start_pos = obs["pos"]
 
@@ -43,8 +45,7 @@ class DynamicTrajectoryController(Controller):
         self._tick = 0
         self._freq = config.env.freq
         self._finished = False
-        
-      
+
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
     ) -> NDArray[np.floating]:
@@ -66,9 +67,9 @@ class DynamicTrajectoryController(Controller):
         target_pos = trajectory(tau)
         if tau == self.t_total:  # Maximum duration reached
             self._finished = True
-        
+
         return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
-    
+
     def create_trajectory(self, obs: NDArray[np.floating]) -> CubicSpline:
         """Create a cubic spline trajectory based on the current observation.
 
@@ -79,31 +80,33 @@ class DynamicTrajectoryController(Controller):
         Returns:
             CubicSpline: A cubic spline object representing the trajectory.
         """
-        waypoints = np.array([
-            self.start_pos,
-            obs["obstacles_pos"][0] + [0.2, 0.5, -0.7],
-            obs["obstacles_pos"][0] + [0.2, -0.3, -0.7],
-            obs["gates_pos"][0] + 0.5 * (obs["obstacles_pos"][0] - [0, 0, 0.6] - obs["gates_pos"][0]),
-            obs["gates_pos"][0] + [-0.1, 0.1, 0],
-            obs["gates_pos"][0] + [-0.6, -0.2, 0],
-            obs["obstacles_pos"][1] + [-0.3, -0.3, -0.7],
-            obs["gates_pos"][1] + [-0.1, -0.2, 0],
-            obs["gates_pos"][1],
-            obs["gates_pos"][1] + [0.2, 0.5, 0],
-            obs["obstacles_pos"][0] + [-0.3, 0, -0.7],
-            obs["gates_pos"][2] + [0.2, -0.5, 0],
-            obs["gates_pos"][2] + [0.1, 0, 0],
-            obs["gates_pos"][2] + [0.1, 0.15, 0],
-            obs["gates_pos"][2] + [0.1, 0.15, 1],
-            obs["obstacles_pos"][3] + [0.4, 0.3, -0.2],
-            obs["obstacles_pos"][3] + [0.4, 0, -0.2],
-            obs["gates_pos"][3],
-            obs["gates_pos"][3] + [0, -0.5, 0],
-        ])
+        waypoints = np.array(
+            [
+                self.start_pos,
+                obs["obstacles_pos"][0] + [0.2, 0.5, -0.7],
+                obs["obstacles_pos"][0] + [0.2, -0.3, -0.7],
+                obs["gates_pos"][0]
+                + 0.5 * (obs["obstacles_pos"][0] - [0, 0, 0.6] - obs["gates_pos"][0]),
+                obs["gates_pos"][0] + [-0.1, 0.1, 0],
+                obs["gates_pos"][0] + [-0.6, -0.2, 0],
+                obs["obstacles_pos"][1] + [-0.3, -0.3, -0.7],
+                obs["gates_pos"][1] + [-0.1, -0.2, 0],
+                obs["gates_pos"][1],
+                obs["gates_pos"][1] + [0.2, 0.5, 0],
+                obs["obstacles_pos"][0] + [-0.3, 0, -0.7],
+                obs["gates_pos"][2] + [0.2, -0.5, 0],
+                obs["gates_pos"][2] + [0.1, 0, 0],
+                obs["gates_pos"][2] + [0.1, 0.15, 0],
+                obs["gates_pos"][2] + [0.1, 0.15, 1],
+                obs["obstacles_pos"][3] + [0.4, 0.3, -0.2],
+                obs["obstacles_pos"][3] + [0.4, 0, -0.2],
+                obs["gates_pos"][3],
+                obs["gates_pos"][3] + [0, -0.5, 0],
+            ]
+        )
 
         t = np.linspace(0, self.t_total, len(waypoints))
         return CubicSpline(t, waypoints)
-
 
     def step_callback(
         self,
@@ -119,7 +122,15 @@ class DynamicTrajectoryController(Controller):
         Returns:
             True if the controller is finished, False otherwise.
         """
+        self.logger.log_step(obs, action, reward, terminated, truncated, info)
         self._tick += 1
         return self._finished
         """Reset the time step counter."""
         self._tick = 0
+
+    def episode_callback(self):
+        """Callback function called once after each episode.
+
+        Currently, it stores the episode data using the DataLogger.
+        """
+        self.logger.store_episode()

@@ -12,23 +12,27 @@ from lsy_drone_racing.ros.ros_connector import ROSConnector
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
-    from numpy.typing import NDArray
+    from numpy.typing import ArrayLike, NDArray
 
 logger = logging.getLogger("rosout." + __name__)
 
 
-def check_race_track(gates: ConfigDict, obstacles: ConfigDict, rng_config: ConfigDict):
+def check_race_track(
+    gates_pos: ArrayLike, gates_quat: ArrayLike, obstacles_pos: ArrayLike, rng_config: ConfigDict
+):
     """Check if the race track's gates and obstacles are within tolerances.
 
     Args:
-        gates: Gate configuration.
-        obstacles: Obstacle configuration.
+        gates_pos: An Nx3 ArrayLike with all nominal gate positions.
+        gates_quat: An Nx4 ArrayLike with all nominal gate quaternions.
+        obstacles_pos: An Mx3 ArrayLike with all nominal obstacle positions.
         rng_config: Environment randomization config.
     """
     assert rng_config.gate_pos.fn == "uniform", "Race track checks expect uniform distributions"
     assert rng_config.obstacle_pos.fn == "uniform", "Race track checks expect uniform distributions"
-
-    n_gates, n_obstacles = len(gates.pos), len(obstacles.pos)
+    gates_pos, gates_quat = np.array(gates_pos), np.array(gates_quat)
+    obstacles_pos = np.array(obstacles_pos)
+    n_gates, n_obstacles = len(gates_pos), len(obstacles_pos)
     gate_names = [f"gate{i}" for i in range(1, n_gates + 1)]
     obstacle_names = [f"obstacle{i}" for i in range(1, n_obstacles + 1)]
     ros_connector = ROSConnector(tf_names=gate_names + obstacle_names, timeout=5.0)
@@ -36,7 +40,7 @@ def check_race_track(gates: ConfigDict, obstacles: ConfigDict, rng_config: Confi
         ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
         for i in range(n_gates):
             name = f"gate{i + 1}"
-            nominal_pos, nominal_rot = gates.pos[i, ...], R.from_quat(gates.quat[i, ...])
+            nominal_pos, nominal_rot = gates_pos[i, ...], R.from_quat(gates_quat[i, ...])
             gate_pos, gate_rot = ros_connector.pos[name], R.from_quat(ros_connector.quat[name])
             low, high = rng_config.gate_pos.kwargs.minval, rng_config.gate_pos.kwargs.maxval
             check_bounds(name, gate_pos, nominal_pos, low, high)
@@ -44,7 +48,7 @@ def check_race_track(gates: ConfigDict, obstacles: ConfigDict, rng_config: Confi
 
         for i in range(n_obstacles):
             name = f"obstacle{i + 1}"
-            nominal_pos = obstacles.pos[i, ...]
+            nominal_pos = obstacles_pos[i, ...]
             low, high = rng_config.obstacle_pos.kwargs.minval, rng_config.obstacle_pos.kwargs.maxval
             check_bounds(name, ros_connector.pos[name][:2], nominal_pos[:2], low[:2], high[:2])
     finally:
