@@ -17,8 +17,9 @@ from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.control import Controller
-from lsy_drone_racing.control.acados_model import export_quadrotor_ode_model_mpcc, setup_ocp
+from lsy_drone_racing.control.acados_model import export_quadrotor_ode_model, setup_ocp
 from lsy_drone_racing.control.collision_avoidance import CollisionAvoidanceHandler
+from lsy_drone_racing.control.trajectory_planner import TrajectoryPlanner
 from lsy_drone_racing.utils import draw_line
 
 if TYPE_CHECKING:
@@ -26,9 +27,9 @@ if TYPE_CHECKING:
 
     from lsy_drone_racing.envs.drone_race import DroneRaceEnv
 
-OBSTACLE_RADIUS = 0.17  # Radius of the obstacles in meters
+OBSTACLE_RADIUS = 0.15  # Radius of the obstacles in meters
 GATE_LENGTH = 0.50  # Length of the gate in meters
-ELLIPSOID_RADIUS = 0.15  # Diameter of the ellipsoid in meters
+ELLIPSOID_RADIUS = 0.12  # Diameter of the ellipsoid in meters
 ELLIPSOID_LENGTH = 0.7  # Length of the ellipsoid in meters
 
 
@@ -48,64 +49,28 @@ class MPController(Controller):
         self.freq = config.env.freq
         self._tick = 0
         self.obs = obs
+        self.config = config
 
-        # Same waypoints as in the trajectory controller. Determined by trial and error.
-        waypoints = np.array(
-            [
-                obs["pos"],
-                obs["pos"] + [0.1, -0.1, 0.3],
-                obs["obstacles_pos"][0] + [0.2, 0.5, -0.7],
-                obs["obstacles_pos"][0] + [0.2, -0.3, -0.7],
-                obs["gates_pos"][0]
-                + 0.5 * (obs["obstacles_pos"][0] - [0, 0, 0.6] - obs["gates_pos"][0]),
-                obs["gates_pos"][0] + [0.1, 0.1, 0],
-                obs["gates_pos"][0] + [-0.3, -0.2, 0],
-                obs["obstacles_pos"][1] + [-0.3, -0.3, -0.7],
-                obs["gates_pos"][1] + [-0.1, -0.2, 0],
-                obs["gates_pos"][1],
-                obs["gates_pos"][1] + [0.2, 0.5, 0],
-                obs["obstacles_pos"][0] + [-0.3, 0, -0.7],
-                obs["gates_pos"][2] + [0.2, -0.5, 0],
-                obs["gates_pos"][2] + [0.1, 0, 0],
-                obs["gates_pos"][2] + [0.1, 0.15, 0],
-                obs["gates_pos"][2] + [0.1, 0.15, 0.4],
-                obs["gates_pos"][2] + [0.1, 0.15, 0.8],
-                obs["obstacles_pos"][3] + [0.4, 0.3, -0.2],
-                obs["obstacles_pos"][3] + [0.4, 0, -0.2],
-                obs["gates_pos"][3],
-                obs["gates_pos"][3] + [0, -0.5, 0],
-            ]
-        )
-        # Scale trajectory between 0 and 1
-        ts = np.linspace(0, 1, np.shape(waypoints)[0])
-        cs_x = CubicSpline(ts, waypoints[:, 0])
-        cs_y = CubicSpline(ts, waypoints[:, 1])
-        cs_z = CubicSpline(ts, waypoints[:, 2])
+        # Initialize trajectory planner with correct argument order
+        self.trajectory_planner = TrajectoryPlanner(self.config)
+        self.trajectory_planner.freq = self.freq
+        self.trajectory_planner.approach_dist = [0.2, 0.35, 0.25, 0.2]
+        self.trajectory_planner.exit_dist = [0.8, 0.35, 0.3, 1.2]
+        self.trajectory_planner.approach_height_offset = [0.01, 0.0, -0.2, 0.1]
+        self.trajectory_planner.exit_height_offset = [0.1, 0.0, 0.3, 0.1]
+        self.trajectory_planner.default_approach_dist = 0.1
+        self.trajectory_planner.default_exit_dist = 0.1
+        self.trajectory_planner.default_approach_height_offset = 0.1
+        self.trajectory_planner.default_exit_height_offset = 0.0
 
-        des_completion_time = 7
-        ts = np.linspace(0, 1, int(self.freq * des_completion_time))
-
-        self.x_des = cs_x(ts)
-        self.y_des = cs_y(ts)
-        self.z_des = cs_z(ts)
-
-        self.dx_des = cs_x.derivative()(ts)
-        self.dy_des = cs_y.derivative()(ts)
-        self.dz_des = cs_z.derivative()(ts)
-
-        self.N = 30
-        self.T_HORIZON = 1.5
+        self.N = 45
+        self.T_HORIZON = 2.0
         self.dt = self.T_HORIZON / self.N
-        self.x_des = np.concatenate((self.x_des, [self.x_des[-1]] * (3 * self.N + 1)))
-        self.y_des = np.concatenate((self.y_des, [self.y_des[-1]] * (3 * self.N + 1)))
-        self.z_des = np.concatenate((self.z_des, [self.z_des[-1]] * (3 * self.N + 1)))
-        self.dx_des = np.concatenate((self.dx_des, [self.dx_des[-1]] * (3 * self.N + 1)))
-        self.dy_des = np.concatenate((self.dy_des, [self.dy_des[-1]] * (3 * self.N + 1)))
-        self.dz_des = np.concatenate((self.dz_des, [self.dz_des[-1]] * (3 * self.N + 1)))
 
-        # Virtual state / input
-        self.theta = 0.0
-        self.v_theta = 0.001
+        self.waypoints = self.trajectory_planner.generate_waypoints(obs, 0)
+        self.x_des, self.y_des, self.z_des, self.dx_des, self.dy_des, self.dz_des = (
+            self.trajectory_planner.generate_trajectory_from_waypoints(self.waypoints, 0)
+        )
 
         # Setup collision avoidance
         num_gates = len(obs["gates_pos"])
@@ -120,7 +85,7 @@ class MPController(Controller):
         )
 
         # Setup the acados model and solver
-        model = export_quadrotor_ode_model_mpcc()
+        model = export_quadrotor_ode_model()
         self.collision_avoidance_handler.setup_model(model)
         ocp = setup_ocp(model, self.T_HORIZON, self.N)
         self.collision_avoidance_handler.setup_ocp(ocp)
@@ -172,7 +137,6 @@ class MPController(Controller):
                 rpy,
                 np.array([self.last_f_collective, self.last_f_cmd]),
                 self.last_rpy_cmd,
-                np.array([self.theta, self.v_theta]),
             )
         )
         self.acados_ocp_solver.set(0, "lbx", xcurrent)
@@ -222,6 +186,13 @@ class MPController(Controller):
             env,
             np.array(positions),
             rgba=np.array([0.0, 1.0, 0.0, 1.0]),
+            min_size=0.01,
+            max_size=0.01,
+        )
+        draw_line(
+            env,
+            np.array([self.x_des[:-100], self.y_des[:-100], self.z_des[:-100]]).T,
+            rgba=np.array([1.0, 0.0, 1.0, 1.0]),
             min_size=0.01,
             max_size=0.01,
         )

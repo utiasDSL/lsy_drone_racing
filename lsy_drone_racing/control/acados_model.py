@@ -97,34 +97,8 @@ def export_quadrotor_ode_model() -> AcadosModel:
     return model
 
 
-def export_quadrotor_ode_model_mpcc() -> AcadosModel:
-    model = export_quadrotor_ode_model()
-    model.name = "quadrotor_mpcc"
-
-    # Add MPCC variables to the state
-    theta = MX.sym("theta")  # Arc-length position along path
-    v_theta = MX.sym("v_theta")  # Virtual progress velocity
-
-    # Add to state vector
-    model.x = vertcat(model.x, theta, v_theta)
-
-    # Add virtual input ∆v_theta
-    d_v_theta = MX.sym("d_v_theta")
-    model.u = vertcat(model.u, d_v_theta)
-
-    # Append progress dynamics
-    delta_t = 0.02  # sample time, change as needed
-    v_theta_next = v_theta + d_v_theta * delta_t
-    theta_next = theta + v_theta * delta_t
-
-    # Extend f_expl_expr to include progress dynamics
-    model.f_expl_expr = vertcat(model.f_expl_expr, theta_next - theta, v_theta_next - v_theta)
-
-    return model
-
-
-def define_mpcc_cost(model):
-    """Construct the external MPCC cost expression using parameterized reference."""
+def define_cost(model):
+    """Construct the external cost expression using parameterized reference."""
 
     # Get Dimensions - no slack variables
     nx = model.x.rows()  # 14 states
@@ -141,8 +115,6 @@ def define_mpcc_cost(model):
     # Extract state vars
     x = model.x
     pos = x[0:3]  # current position
-    theta = x[-2]
-    v_theta = x[-1]
 
     # Error from current to desired path
     e = pos - p_ref
@@ -157,16 +129,14 @@ def define_mpcc_cost(model):
     # Weights (tune as needed)
     q_c = 300.0
     q_l = 50.0
-    mu = 0.001
 
     # u_ref
-    u_ref = np.array([0.35, 0, 0, 0, 0])
+    u_ref = np.array([0.35, 0, 0, 0])
 
     # Cost expression
     stage_cost = (
         q_c * dot(contour_error, contour_error)
         + q_l * lag_error**2
-        - mu * v_theta
         + 0.1 * transpose(model.u - u_ref) @ (model.u - u_ref)
         + 200 * transpose(model.x[6:9]) @ (model.x[6:9])
     )
@@ -195,14 +165,14 @@ def setup_ocp(
     ocp.cost.cost_type = "EXTERNAL"
     ocp.cost.cost_type_e = "EXTERNAL"
 
-    ocp.model.cost_expr_ext_cost, ocp.model.cost_expr_ext_cost_e = define_mpcc_cost(model)
+    ocp.model.cost_expr_ext_cost, ocp.model.cost_expr_ext_cost_e = define_cost(model)
 
     ocp.parameter_values = np.array([0.0] * ocp.model.p.rows())
 
     # Set State Constraints
-    ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57, 0, -0.5])
-    ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57, 10, 0.5])
-    ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13, 14, 15])
+    ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57])
+    ocp.constraints.ubx = np.array([0.55, 0.55, 1.57, 1.57, 1.57])
+    ocp.constraints.idxbx = np.array([9, 10, 11, 12, 13])
 
     # We have to set x0 even though we will overwrite it later on.
     ocp.constraints.x0 = np.zeros((nx))
