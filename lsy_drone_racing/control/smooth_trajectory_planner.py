@@ -58,9 +58,6 @@ class TrajectoryPlanner:
         # Use uniform speeds
         speeds = [1.7] * len(waypoints)  # 1.3
         speeds[0:4] = [0.9, 0.9, 0.9, 0.9]
-        print(speeds)
-
-        print(waypoints)
 
         # speeds = self.calculate_adaptive_speeds(waypoints, target_gate_idx)
 

@@ -23,6 +23,7 @@ from lsy_drone_racing.control.smooth_trajectory_planner import TrajectoryPlanner
 from lsy_drone_racing.control.collision_avoidance import CollisionAvoidanceHandler
 from lsy_drone_racing.envs.drone_race import DroneRaceEnv
 from lsy_drone_racing.utils.utils import draw_line
+from lsy_drone_racing.control.warm_start import x_initial, u_initial
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -102,6 +103,12 @@ class MPController(Controller):
         self.acados_ocp_solver = AcadosOcpSolver(
             ocp, json_file="lsy_example_mpc.json", verbose=False
         )
+
+        # Warm start the solver
+        for i in range(self.N):
+            # Set initial state and control inputs
+            self.acados_ocp_solver.set(i, "x", x_initial[i])
+            self.acados_ocp_solver.set(i, "u", u_initial[i])
 
         # Controller state variables
         self.last_f_collective = 0
