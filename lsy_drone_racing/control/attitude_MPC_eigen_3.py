@@ -268,17 +268,16 @@ class MPController(Controller):
         '''
         self.waypoints= np.array([
                 [1.0, 1.5, 0.05],  # Original Punkt 0
-                [0.9, 1.25, 0.125], # Neu (Mitte zwischen 0 und 1)
+                #[0.9, 1.25, 0.125], # Neu (Mitte zwischen 0 und 1)
                 [0.8, 1.0, 0.2],    # Original Punkt 1
                 [0.675, 0.35, 0.35], # Neu (Mitte zwischen 1 und 2)
-                [0.55, -0.3, 0.5],  # Original Punkt 2 (gate 0)
-                [0.325, -0.9, 0.575], # Neu (Mitte zwischen 2 und 3)
+                [0.57, -0.3, 0.5],#[0.5, -0.3, 0.5],#[0.55, -0.3, 0.5],  # Original Punkt 2 (gate 0)
+                [0.23, -0.9, 0.575],#[0.3, -0.9, 0.575],#[0.325, -0.9, 0.575], # Neu (Mitte zwischen 2 und 3)
                 [0.1, -1.5, 0.65],  # Original Punkt 3
                 [0.75, -1.3, 0.9],#[0.6, -1.175, 0.9], # Neu (Mitte zwischen 3 und 4)
                 [1.1, -0.85, 1.15], # Original Punkt 4 (gate 1)
                 [0.65, -0.175, 0.9], # Neu (Mitte zwischen 4 und 5)
-                [0.2, 0.5, 0.65],   # Original Punkt 5
-                #[0.1, 0.85, 0.5875], # Neu (Mitte zwischen 5 und 6)
+                [0.1, 0.45, 0.65], #[0.2, 0.5, 0.65],   
                 [0.0, 1.2, 0.525],  # Original Punkt 6 (gate 2)
                 #[0.0, 1.2, 0.8125], # Neu (Mitte zwischen 6 und 7)
                 [0.0, 1.2, 1.1],    # Original Punkt 7
@@ -290,10 +289,10 @@ class MPController(Controller):
                 [-0.5, -1.0, 1.1],  # Original Punkt 10
             ])
         self.gate_map = {
-            0 : 4,
-            1 : 8,
-            2 : 11,
-            3 : 14
+            0 : 3,
+            1 : 7,
+            2 : 10,
+            3 : 13
         }
 
         self.init_gates=[ [0.45, -0.5, 0.56], [1.0, -1.05, 1.11], [0.0, 1.0, 0.56], [-0.5, 0.0, 1.11], ]
@@ -321,7 +320,7 @@ class MPController(Controller):
         self.traj_vis=np.array([x,y,z])
         self.update_traj_vis=np.array([x,y,z])
         #
-        des_completion_time = 9
+        des_completion_time = 7
         ts = np.linspace(0, 1, int(self.freq * des_completion_time))
 
 
@@ -545,12 +544,6 @@ class MPController(Controller):
         tick_times = np.array(tick_section) / self.freq
         dt_segments = np.diff(tick_section)
         
-
-        #print("rel_indices:      ", rel_indices)
-        #print("abs_indices:      ", abs_indices)
-        #print("tick_section:     ", tick_section)
-        #print("tick_times:       ", tick_times)
-        #print("dt_segments:      ", dt_segments)
 
 
         ts = []

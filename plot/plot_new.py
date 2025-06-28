@@ -97,25 +97,27 @@ def plot_waypoints_and_environment(waypoints, obstacle_positions, gates_position
 
 waypoints = np.array(
             [
-            [1.0, 1.5, 0.2],
-            [0.625, 0.25, 0.38],
-            [0.45, -0.5, 0.56],
-            [0.425, -0.57, 0.56],
-            [0.325, -0.9, 0.605],
-            [0.2, -1.3, 0.65],
-            [0.6, -1.375, 0.78],
-            [0.8, -1.375, 0.88],
-            [1.0, -1.05, 1.11], # [1.0, -1.05, 1.11],
-            [1.1, -0.8, 1.11],
-            [0.7, -0.275, 0.88],
-            [0.2, 0.5, 0.65],
-            [0.0, 1.0, 0.56],
-            [0.0, 1.05, 0.56],
-            [0.0, 0.9, 0.63],
-            [-0.1, 0.7, 0.75],
-            [-0.25, 0.3, 0.95],
-            #[-0.5, 0.0, 1.1],
-            [-0.42, -0.4, 1.11],
+            [1.0, 1.5, 0.05],  # Original Punkt 0
+               # [0.9, 1.25, 0.125], # Neu (Mitte zwischen 0 und 1)
+                [0.8, 1.0, 0.2],    # Original Punkt 1
+                [0.675, 0.35, 0.35], # Neu (Mitte zwischen 1 und 2)
+                [0.55, -0.3, 0.5],  # Original Punkt 2 (gate 0)
+                [0.25, -0.9, 0.575], # Neu (Mitte zwischen 2 und 3)
+                [0.1, -1.5, 0.65],  # Original Punkt 3
+                [0.75, -1.3, 0.9],#[0.6, -1.175, 0.9], # Neu (Mitte zwischen 3 und 4)
+                [1.1, -0.85, 1.15], # Original Punkt 4 (gate 1)
+                [0.65, -0.175, 0.9], # Neu (Mitte zwischen 4 und 5)
+                [0.1, 0.45, 0.65],   # Original Punkt 5
+                #[0.1, 0.85, 0.5875], # Neu (Mitte zwischen 5 und 6)
+                [0.0, 1.2, 0.525],  # Original Punkt 6 (gate 2)
+                #[0.0, 1.2, 0.8125], # Neu (Mitte zwischen 6 und 7)
+                [0.0, 1.2, 1.1],    # Original Punkt 7
+                [-0.15, 0.6, 1.1],  # Neu (Mitte zwischen 7 und 8)
+                [-0.5, 0.0, 1.1],   # Original Punkt 8 (gate 3)
+                #[-0.5, -0.25, 1.1], # Neu (Mitte zwischen 8 und 9)
+                [-0.5, -0.5, 1.1],  # Original Punkt 9
+                #[-0.5, -0.75, 1.1], # Neu (Mitte zwischen 9 und 10)
+                [-0.5, -1.0, 1.1],
             ])
 
 
