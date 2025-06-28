@@ -7,7 +7,7 @@ for the quadrotor attitude control interface.
 import numpy as np
 import scipy
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
-from casadi import MX, cos, sin, vertcat
+from casadi import MX, cos, sin, vertcat, dot, transpose
 
 
 def export_quadrotor_ode_model() -> AcadosModel:
@@ -42,6 +42,10 @@ def export_quadrotor_ode_model() -> AcadosModel:
     dr_cmd = MX.sym("dr_cmd")
     dp_cmd = MX.sym("dp_cmd")
     dy_cmd = MX.sym("dy_cmd")
+
+    # Params
+    # Parameters: reference position (3) + tangent vector (3)
+    p_ref = MX.sym("p_ref", 6)
 
     # State and input vectors
     states = vertcat(
@@ -86,10 +90,59 @@ def export_quadrotor_ode_model() -> AcadosModel:
     model = AcadosModel()
     model.name = model_name
     model.f_expl_expr = f
+    model.p = p_ref
     model.x = states
     model.u = inputs
 
     return model
+
+
+def define_cost(model):
+    """Construct the external cost expression using parameterized reference."""
+
+    # Get Dimensions - no slack variables
+    nx = model.x.rows()  # 14 states
+    nu = model.u.rows()  # 4 inputs (real controls only)
+    ny = nx + nu  # 18 total for cost (14 states + 4 inputs)
+    ny_e = nx  # 14 for terminal
+    Vu = np.zeros((ny, nu))
+    Vu[nx : nx + 4, :4] = np.eye(4)  # Real controls
+
+    # Parameters (must match ocp.parameter_values layout)
+    p_ref = model.p[:3]  # desired position on reference path
+    t_ref = model.p[3:6]  # tangent vector at that point
+
+    # Extract state vars
+    x = model.x
+    pos = x[0:3]  # current position
+
+    # Error from current to desired path
+    e = pos - p_ref
+
+    # Unit tangent vector
+    t_hat = t_ref / (dot(t_ref, t_ref) + 1e-6) ** 0.5
+
+    # Lag and contour errors
+    lag_error = dot(t_hat, e)
+    contour_error = e - lag_error * t_hat
+
+    # Weights (tune as needed)
+    q_c = 300.0
+    q_l = 50.0
+
+    # u_ref
+    u_ref = np.array([0.35, 0, 0, 0])
+
+    # Cost expression
+    stage_cost = (
+        q_c * dot(contour_error, contour_error)
+        + q_l * lag_error**2
+        + 0.1 * transpose(model.u - u_ref) @ (model.u - u_ref)
+        + 200 * transpose(model.x[6:9]) @ (model.x[6:9])
+    )
+    terminal_cost = 0  # stage_cost
+
+    return stage_cost, terminal_cost
 
 
 def setup_ocp(
@@ -103,106 +156,18 @@ def setup_ocp(
 
     # Get Dimensions - no slack variables
     nx = model.x.rows()  # 14 states
-    nu = model.u.rows()  # 4 inputs (real controls only)
-    ny = nx + nu  # 18 total for cost (14 states + 4 inputs)
-    ny_e = nx  # 14 for terminal
 
     # Set dimensions
     ocp.solver_options.N_horizon = N
 
     ## Set Cost
     # Cost Type
-    ocp.cost.cost_type = "LINEAR_LS"
-    ocp.cost.cost_type_e = "LINEAR_LS"
+    ocp.cost.cost_type = "EXTERNAL"
+    ocp.cost.cost_type_e = "EXTERNAL"
 
-    # Define weight matrices for the cost function
-    # Use provided weights or defaults
-    if mpc_weights is not None:
-        pos = mpc_weights.get("Q_pos", 7.0)
-        vel = mpc_weights.get("Q_vel", 0.5)
-        rpy = mpc_weights.get("Q_rpy", 0.01)
-        f_col = mpc_weights.get("Q_thrust", 0.01)
-        rpy_cmd = mpc_weights.get("Q_cmd", 0.01)
-        r_param = mpc_weights.get("R", 0.007)
-    else:
-        # Default values
-        pos = 7.0
-        vel = 0.5
-        rpy = 0.01
-        f_col = 0.01
-        rpy_cmd = 0.01
-        r_param = 0.007
+    ocp.model.cost_expr_ext_cost, ocp.model.cost_expr_ext_cost_e = define_cost(model)
 
-    Q = np.diag(
-        [
-            pos,
-            pos,
-            pos,  # Position
-            vel,
-            vel,
-            vel,  # Velocity
-            rpy,
-            rpy,
-            rpy,  # rpy - roll, pitch, yaw
-            f_col,
-            f_col,  # f_collective, f_collective_cmd
-            rpy_cmd,
-            rpy_cmd,
-            rpy_cmd,  # rpy_cmd
-        ]
-    )
-
-    # Control input regularization
-    R = np.diag([r_param, r_param, r_param, r_param])  # Real control cost
-
-    Q_e = Q.copy()
-
-    # Stage cost matrix (18x18) - states + real controls only
-    ocp.cost.W = scipy.linalg.block_diag(Q, R)
-    ocp.cost.W_e = Q_e
-
-    # Vx matrix (18x14) - maps states to cost
-    Vx = np.zeros((ny, nx))
-    Vx[:nx, :] = np.eye(nx)
-    ocp.cost.Vx = Vx
-
-    # Vu matrix (18x4) - maps inputs to cost
-    Vu = np.zeros((ny, nu))
-    Vu[nx : nx + 4, :4] = np.eye(4)  # Real controls
-    ocp.cost.Vu = Vu
-
-    # Terminal Vx matrix (14x14)
-    Vx_e = np.zeros((ny_e, nx))
-    Vx_e[:nx, :nx] = np.eye(nx)
-    ocp.cost.Vx_e = Vx_e
-
-    # Set initial references (18 dimensions)
-    ocp.cost.yref = np.array(
-        [
-            1.0,
-            1.0,
-            0.4,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.35,
-            0.35,
-            0.0,
-            0.0,
-            0.0,  # states
-            0.0,
-            0.0,
-            0.0,
-            0.0,  # real controls
-        ]
-    )
-
-    ocp.cost.yref_e = np.array(
-        [1.0, 1.0, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.35, 0.35, 0.0, 0.0, 0.0]
-    )
+    ocp.parameter_values = np.array([0.0] * ocp.model.p.rows())
 
     # Set State Constraints
     ocp.constraints.lbx = np.array([0.1, 0.1, -1.57, -1.57, -1.57])

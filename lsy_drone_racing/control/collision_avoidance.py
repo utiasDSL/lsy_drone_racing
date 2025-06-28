@@ -122,7 +122,6 @@ class CollisionAvoidanceHandler:
         gate_rotations = Rotation.from_quat(obs["gates_quat"]).as_euler("xyz", degrees=False)
         gate_params = np.hstack((gate_positions, gate_rotations[:, 2:])).flatten()
         params = np.concatenate((obstacle_params, gate_params))
-        return params
 
         for i in range(N_horizon):
             gate_params = gate_positions[:, :4].flatten()
