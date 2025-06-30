@@ -11,5 +11,13 @@ from lsy_drone_racing.utils.utils import (
     load_config,
     load_controller,
 )
+from lsy_drone_racing.utils.visualizer import Visualizer
 
-__all__ = ["draw_cylinder", "draw_ellipsoid", "draw_line", "load_config", "load_controller"]
+__all__ = [
+    "draw_cylinder",
+    "draw_ellipsoid",
+    "draw_line",
+    "load_config",
+    "load_controller",
+    "Visualizer",
+]

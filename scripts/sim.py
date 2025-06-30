@@ -15,9 +15,10 @@ from typing import TYPE_CHECKING
 
 import fire
 import gymnasium
+import numpy as np
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 
-from lsy_drone_racing.utils import load_config, load_controller
+from lsy_drone_racing.utils import Visualizer, load_config, load_controller
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
@@ -75,6 +76,25 @@ def simulate(
     for _ in range(n_runs):  # Run n_runs episodes with the controller
         obs, info = env.reset()
         controller: Controller = controller_cls(obs, info, config)
+
+        if config.sim.gui:
+            # Add viualizations to the environment
+            visualizer = Visualizer(env)
+            visualizer.register_line_visualization(
+                controller.get_path, rgba=np.array([0.0, 0.0, 1.0, 1.0])
+            )
+            visualizer.register_line_visualization(
+                controller.get_predicted_path, rgba=np.array([1.0, 0.0, 0.0, 1.0])
+            )
+            visualizer.register_cylinder_visualizations(
+                controller.collision_avoidance_handler.get_obstacle_cylinders,
+                rgba=np.array([0.2, 0.2, 0.8, 0.5]),
+            )
+            visualizer.register_ellipsoid_visualizations(
+                controller.collision_avoidance_handler.get_gate_ellipsoids,
+                rgba=np.array([0.8, 0.2, 0.2, 0.5]),
+            )
+
         i = 0
         fps = 60
 
@@ -82,7 +102,6 @@ def simulate(
             curr_time = i / config.env.freq
 
             action = controller.compute_control(obs, info)
-            controller.draw(env)
             obs, reward, terminated, truncated, info = env.step(action)
             # Update the controller internal state and models.
             controller_finished = controller.step_callback(
@@ -94,6 +113,7 @@ def simulate(
             # Synchronize the GUI.
             if config.sim.gui:
                 if ((i * fps) % config.env.freq) < fps:
+                    visualizer.visualize()
                     env.render()
             i += 1
 
@@ -116,6 +136,7 @@ def log_episode_stats(obs: dict, info: dict, config: ConfigDict, curr_time: floa
     logger.info(
         f"Flight time (s): {curr_time}\nFinished: {finished}\nGates passed: {gates_passed}\n"
     )
+    print(f"Flight time (s): {curr_time}\nFinished: {finished}\nGates passed: {gates_passed}\n")
 
 
 if __name__ == "__main__":

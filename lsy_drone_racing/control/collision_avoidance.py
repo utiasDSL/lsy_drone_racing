@@ -6,9 +6,6 @@ from casadi import MX, cos, diag, horzcat, sin, vertcat
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 
-from lsy_drone_racing.envs.drone_race import DroneRaceEnv
-from lsy_drone_racing.utils import draw_cylinder, draw_ellipsoid
-
 
 class CollisionAvoidanceHandler:
     """Handles the collision avoidance by setting up the constraints for the gates and obstacles in the environment.
@@ -42,6 +39,9 @@ class CollisionAvoidanceHandler:
         self.ellipsoid_length = ellipsoid_length
         self.ellipsoid_radius = ellipsoid_radius
         self.obstacle_radius = obstacle_radius
+        self.obstacle_positions = None
+        self.gate_positions = None
+        self.gate_rotations = None
 
         self.num_constraints = num_gates * 4 + num_obstacles
 
@@ -115,55 +115,59 @@ class CollisionAvoidanceHandler:
             N_horizon (int): Number of time steps in the horizon.
             obs (dict[str, NDArray[np.floating]]): The current observation of the environment containing obstacle and gate positions.
         """
-        obstacle_positions = obs["obstacles_pos"]
-        obstacle_params = obstacle_positions[:, :2].flatten()
+        self.obstacle_positions = obs["obstacles_pos"]
+        obstacle_params = self.obstacle_positions[:, :2].flatten()
 
-        gate_positions = obs["gates_pos"]
-        gate_rotations = Rotation.from_quat(obs["gates_quat"]).as_euler("xyz", degrees=False)
-        gate_params = np.hstack((gate_positions, gate_rotations[:, 2:])).flatten()
+        self.gate_positions = obs["gates_pos"]
+        self.gate_rotations = Rotation.from_quat(obs["gates_quat"]).as_euler("xyz", degrees=False)
+        gate_params = np.hstack((self.gate_positions, self.gate_rotations[:, 2:])).flatten()
         params = np.concatenate((obstacle_params, gate_params))
 
         for i in range(N_horizon):
-            gate_params = gate_positions[:, :4].flatten()
+            gate_params = self.gate_positions[:, :4].flatten()
             ocp_solver.set(i, "p", params)
 
-    def draw_collision_bodies(self, env: DroneRaceEnv, obs: dict[str, NDArray[np.floating]]):
-        """Draw the collision bodies (gates and obstacles) in the environment.
+    def get_obstacle_cylinders(self) -> dict[str, NDArray[np.floating]]:
+        """Get the parameters for the infinite cylinders representing the obstacles.
 
-        Args:
-            env (DroneRaceEnv): The drone racing environment where the collision bodies will be drawn.
-            obs (dict[str, NDArray[np.floating]]): The current observation of the environment containing obstacle and gate positions.
+        Returns:
+            dict[str, NDArray[np.floating]]: A dictionary containing the positions and radii of the cylinders.
         """
-        # Draw obstacles
-        obstacle_positions = obs["obstacles_pos"]
-        obstacle_positions[:, 2] = 0  # Only use x and y values
-        for obstacle_pos in obstacle_positions:
-            draw_cylinder(
-                env,
-                pos=obstacle_pos,
-                size=np.array([self.obstacle_radius, 2.0]),
-                rgba=np.array([0.2, 0.2, 0.8, 0.5]),
-            )
+        cylinder_positions = self.obstacle_positions
+        cylinder_positions[:, 2] = 0  # Set z to 0 for infinite cylinders
 
-        # Draw gates
-        gate_positions = obs["gates_pos"]
-        gate_quats = obs["gates_quat"]
-        gate_yaws = Rotation.from_quat(gate_quats).as_euler("xyz")[:, 2]  # Extract yaw angles
-        for pos, yaw in zip(gate_positions, gate_yaws):
+        return {
+            "pos": np.array(cylinder_positions),
+            "radius": np.array([self.obstacle_radius] * len(cylinder_positions)),
+        }
+
+    def get_gate_ellipsoids(self) -> dict[str, NDArray[np.floating]]:
+        """Get the parameters for the ellipsoids representing the gates.
+
+        Returns:
+            dict[str, NDArray[np.floating]]: A dictionary containing the positions, axes, and rotations of the ellipsoids.
+        """
+        ellipsoid_midpoints = []
+        ellipsoid_axes = []
+        ellipsoid_rotations = []
+
+        gate_yaws = self.gate_rotations[:, 2]  # Extract yaw angles
+        for pos, yaw in zip(self.gate_positions, gate_yaws):
             # Rotation matrix for yaw (around z)
             c = np.cos(yaw)
             s = np.sin(yaw)
             Rz = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
 
             for midpoint, axes in zip(self.ellipsoid_midpoints, self.ellipsoid_axes):
-                ellipsoid_center = pos + Rz @ midpoint
-                draw_ellipsoid(
-                    env,
-                    pos=ellipsoid_center,
-                    size=axes,
-                    rot=Rz,
-                    rgba=np.array([0.8, 0.2, 0.2, 0.5]),
-                )
+                ellipsoid_midpoints.append(pos + Rz @ midpoint)
+                ellipsoid_axes.append(axes)
+                ellipsoid_rotations.append(Rz)
+
+        return {
+            "pos": np.array(ellipsoid_midpoints),
+            "axes": np.array(ellipsoid_axes),
+            "rot": np.array(ellipsoid_rotations),
+        }
 
     def _create_gate_expressions(self, drone_pos: MX) -> tuple[list[MX], list[MX]]:
         """Create parameters and expressions for ellipsoidal collision bodies for the gates.
