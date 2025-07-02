@@ -22,13 +22,12 @@ from lsy_drone_racing.control.logging_setup import FlightLogger
 from lsy_drone_racing.control.smooth_trajectory_planner import TrajectoryPlanner
 from lsy_drone_racing.control.collision_avoidance import CollisionAvoidanceHandler
 from lsy_drone_racing.envs.drone_race import DroneRaceEnv
-from lsy_drone_racing.utils.utils import draw_line
 from lsy_drone_racing.control.warm_start import x_initial, u_initial
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-OBSTACLE_RADIUS = 0.15  # Radius of the obstacles in meters
+OBSTACLE_RADIUS = 0.13  # Radius of the obstacles in meters
 GATE_LENGTH = 0.50  # Length of the gate in meters
 ELLIPSOID_RADIUS = 0.12  # Diameter of the ellipsoid in meters
 ELLIPSOID_LENGTH = 0.7  # Length of the ellipsoid in meters
@@ -60,14 +59,14 @@ class MPController(Controller):
         self.last_replanning_tick = 0
 
         # Approach parameters for different gates
-        self.approach_dist = [0.2, 0.35, 0.3, 0.3]
-        self.exit_dist = [0.5, 0.15, 0.35, 0.4]
+        self.approach_dist = [0.2, 0.3, 0.3, 0.1]
+        self.exit_dist = [0.5, 0.15, 0.35, 5.0]
         self.default_approach_dist = 0.1
         self.default_exit_dist = 0.5
 
         # Height offset parameters
-        self.approach_height_offset = [0.01, 0.1, -0.1, 0.0]
-        self.exit_height_offset = [0.1, 0.1, 0.1, 0.0]
+        self.approach_height_offset = [0.01, 0.01, -0.1, 0.0]
+        self.exit_height_offset = [0.1, 0.01, 0.1, 0.0]
         self.default_approach_height_offset = 0.1
         self.default_exit_height_offset = 0.0
 
@@ -88,7 +87,7 @@ class MPController(Controller):
 
         # Create the MPC solver
         self.mpc_weights = {
-            "Q_pos": 10,  # Position tracking weight -2.3
+            "Q_pos": 8,  # Position tracking weight -10
             "Q_vel": 0.01,  # Velocity tracking weight -0.01
             "Q_rpy": 0.01,  # Attitude (roll/pitch/yaw) weight
             "Q_thrust": 0.01,  # Collective thrust weight
@@ -111,9 +110,9 @@ class MPController(Controller):
             self.acados_ocp_solver.set(i, "u", u_initial[i])
 
         # Controller state variables
-        self.last_f_collective = 0
+        self.last_f_collective = 0.3
         self.last_rpy_cmd = np.zeros(3)
-        self.last_f_cmd = 0
+        self.last_f_cmd = 0.3
         self.finished = False
 
         # Trajectory tracking
@@ -138,9 +137,7 @@ class MPController(Controller):
 
         # Define replanning weights (higher path following)
         self.replanning_mpc_weights = self.mpc_weights.copy()
-        self.replanning_mpc_weights["Q_pos"] *= 3.0  #  position tracking
-        self.replanning_mpc_weights["Q_vel"] *= 1.0  # velocity tracking
-        self.replanning_mpc_weights["R"] *= 1.0  # control penalty
+        self.replanning_mpc_weights["Q_pos"] *= 2.0  #  position tracking
 
         # Weight adjustment tracking
         self.weights_adjusted = False
@@ -210,7 +207,6 @@ class MPController(Controller):
         """Execute MPC control with replanning capabilities."""
         # Store current velocity for smooth trajectory transitions
         self._current_vel = obs["vel"].copy()
-        self.obs = obs
 
         # Track gate progress
         current_target_gate = obs.get("target_gate", 0)
@@ -248,11 +244,6 @@ class MPController(Controller):
         just_replanned = False
         should_replan = False
 
-        # Store previous trajectory for blending
-        previous_trajectory = None
-        if hasattr(self, "current_trajectory") and self.current_trajectory is not None:
-            previous_trajectory = self.current_trajectory.copy()
-
         # Check for replanning based on gate observations
         if self._tick - self.last_replanning_tick >= self.replanning_frequency:
             self.last_replanning_tick = self._tick
@@ -273,7 +264,9 @@ class MPController(Controller):
                     # Check distance gate has moved
                     diff = np.linalg.norm(config_pos - observed_pos)
 
-                    if diff > 0.10:  # 10cm threshold
+                    if diff > 0.05 and self._is_drone_approaching_gate(
+                        obs, current_target_gate
+                    ):  # cm threshold and drone is approaching the gate
                         replan_info = {
                             "gate_idx": current_target_gate,
                             "diff": diff,
@@ -285,15 +278,6 @@ class MPController(Controller):
                         should_replan = True
                         just_replanned = True
                         self.updated_gates.add(current_target_gate)
-            # if (
-            #     current_target_gate < len(self.config.env.track["gates"])
-            #     and np.linalg.norm(obs["pos"] - np.array(obs["gates_pos"][current_target_gate]))
-            #     < 1.0
-            #     and current_target_gate not in self.updated_speeds
-            # ):
-            #     should_replan = True
-            #     just_replanned = True
-            #     self.updated_speeds.add(current_target_gate)
 
             if should_replan:
                 self._activate_replanning_weights_gradual()
@@ -314,8 +298,6 @@ class MPController(Controller):
                         use_velocity_aware=True,
                         current_vel=obs["vel"] if "vel" in obs else np.zeros(3),
                         tick=self._tick,
-                        blend_with_previous=True,
-                        previous_trajectory=previous_trajectory,
                     )
                 )
 
@@ -327,7 +309,6 @@ class MPController(Controller):
                     "target_gate": current_target_gate,
                     "weights_boosted": True,
                     "momentum_preserved": True,
-                    "trajectory_blended": previous_trajectory is not None,
                 }
 
                 self.flight_logger.log_trajectory_update(trajectory_info, self._tick)
@@ -343,6 +324,57 @@ class MPController(Controller):
                 }
 
         return just_replanned
+
+    def _is_drone_approaching_gate(self, obs: dict, gate_idx: int) -> bool:
+        """Check if drone is approaching the gate (not moving away from it)."""
+        try:
+            # Get drone position and velocity
+            drone_pos = obs["pos"]
+            drone_vel = obs["vel"]
+
+            # Get gate position (use observed if available, otherwise config)
+            if "gates_pos" in obs and gate_idx < len(obs["gates_pos"]):
+                gate_pos = np.array(obs["gates_pos"][gate_idx])
+            else:
+                gate_pos = np.array(self.config.env.track["gates"][gate_idx]["pos"])
+
+            # Vector from drone to gate
+            to_gate = gate_pos - drone_pos
+
+            # Check if drone velocity is generally toward the gate
+            if np.linalg.norm(drone_vel) > 0.1:  # Only check if drone is moving
+                vel_normalized = drone_vel / np.linalg.norm(drone_vel)
+                to_gate_normalized = to_gate / max(np.linalg.norm(to_gate), 1e-6)
+
+                # Dot product > 0 means moving toward gate
+                approach_alignment = np.dot(vel_normalized, to_gate_normalized)
+
+                # Also check distance - if very close (< 1m), might be passing through
+                distance_to_gate = np.linalg.norm(to_gate)
+
+                # Approaching if:
+                # 1. Moving toward gate (dot product > 0.3, about 70° cone)
+                # 2. Not too close (> 0.5m) OR moving fast toward it
+                is_moving_toward = approach_alignment > 0.3
+                is_reasonable_distance = distance_to_gate > 0.7 or approach_alignment > 0.7
+
+                result = is_moving_toward and is_reasonable_distance
+
+                # Debug logging for problematic cases
+                if not result and self._tick % 50 == 0:
+                    print(
+                        f"Not approaching gate {gate_idx}: alignment={approach_alignment:.2f}, distance={distance_to_gate:.2f}"
+                    )
+
+                return result
+            else:
+                # If drone is not moving, assume it's valid to replan
+                return True
+
+        except Exception as e:
+            # If any error occurs, err on the side of allowing replanning
+            print(f"Error in _is_drone_approaching_gate: {e}")
+            return True
 
     def _execute_mpc_control(
         self, obs: dict, current_target_gate: int, just_replanned: bool
@@ -509,7 +541,6 @@ class MPController(Controller):
             )
 
             self.acados_ocp_solver.set(j, "yref", yref)
-            # print(f"Setting MPC reference for step {j}: {yref}")
 
         # Terminal cost (14 dimensions: states only)
         terminal_idx = min(i + self.N, traj_len - 1)
@@ -696,19 +727,7 @@ class MPController(Controller):
 
                 try:
                     # Read back the cost matrix from stage 0
-                    W_readback = self.acados_ocp_solver.cost_get(0, "W")
-
-                    # Check if values match
-                    pos_match = abs(W_readback[0, 0] - self.mpc_weights["Q_pos"]) < 1e-6
-                    vel_match = abs(W_readback[3, 3] - self.mpc_weights["Q_vel"]) < 1e-6
-                    r_match = abs(W_readback[14, 14] - self.mpc_weights["R"]) < 1e-6
-
-                    # if pos_match and vel_match and r_match:
-                    #     print(
-                    #         f"----WEIGHTS SUCCESSFULLY UPDATED IN SOLVER, pos weight: {W_readback[0, 0]}"
-                    #     )
-                    # else:
-                    #     print("----WEIGHTS MISMATCH IN SOLVER!")
+                    _ = self.acados_ocp_solver.cost_get(0, "W")
 
                 except Exception as verify_e:
                     print(f"---Could not verify weights: {verify_e}")

@@ -30,6 +30,7 @@ class TrajectoryPlanner:
 
         # Current target gate tracking
         self.current_target_gate_idx = 0
+        self.gate_indices = []
 
         # Trajectory storage
         self.current_trajectory = None
@@ -47,19 +48,13 @@ class TrajectoryPlanner:
         use_velocity_aware: bool = False,
         current_vel: np.ndarray = None,
         tick: int = 0,
-        blend_with_previous: bool = False,
-        previous_trajectory: dict = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Generate trajectory from waypoints with optional velocity boundary conditions and blending."""
+        """Generate trajectory from waypoints with smooth continuation after last gate."""
         if len(waypoints) < 2:
             self.logger.log_warning("Not enough waypoints to generate trajectory", tick)
             return np.array([]), np.array([]), np.array([])
 
-        # Use uniform speeds
-        speeds = [1.7] * len(waypoints)  # 1.3
-        speeds[0:4] = [0.9, 0.9, 0.9, 0.9]
-
-        # speeds = self.calculate_adaptive_speeds(waypoints, target_gate_idx)
+        speeds = self.calculate_adaptive_speeds(waypoints, target_gate_idx)
 
         # Time parameterization
         time_points = [0.0]
@@ -70,8 +65,33 @@ class TrajectoryPlanner:
             time_points.append(time_points[-1] + segment_time)
 
         total_time = time_points[-1]
-        num_gates = len(waypoints) // 3
-        min_duration = max(num_gates * 3.0, total_time)  # 2.5
+        if self.gate_indices and len(self.gate_indices) > 0:
+            # Gate indices are stored as [approach, center, exit, approach, center, exit, ...]
+            num_gates = len(self.gate_indices) // 3
+        else:
+            # Fallback: estimate based on waypoints
+            num_gates = max(1, (len(waypoints) - 2) // 3)  # Subtract momentum/transition points
+        min_duration = max(num_gates * 3.0, total_time)
+
+        # ADD SMOOTH CONTINUATION POINTS FOR LAST GATE
+        if target_gate_idx >= 3 or target_gate_idx == -1:
+            # Calculate continuation direction from last two waypoints
+            if len(waypoints) >= 2:
+                last_direction = waypoints[-1] - waypoints[-2]
+                last_direction_norm = last_direction / max(np.linalg.norm(last_direction), 1e-6)
+
+                # Add continuation waypoints that extend naturally
+                continuation_distances = [0.5, 1.0, 1.5, 2.0]  # Progressive distances
+                for dist in continuation_distances:
+                    continuation_point = waypoints[-1] + last_direction_norm * dist
+                    waypoints = np.vstack([waypoints, continuation_point])
+
+                    # Add corresponding time points
+                    continuation_time = dist / 1.6  # Continue at 1.6 m/s
+                    time_points.append(time_points[-1] + continuation_time)
+
+                total_time = time_points[-1]
+                min_duration = max(min_duration, total_time + 1.0)  # Extra time buffer
 
         if total_time < min_duration:
             time_points.append(min_duration)
@@ -80,17 +100,33 @@ class TrajectoryPlanner:
         # Spline generation with optional velocity boundary conditions
         time_normalized = np.array(time_points) / max(time_points[-1], 1.0)
 
-        # velocity boundary conditions for smoother splines
         if use_velocity_aware and current_vel is not None and np.linalg.norm(current_vel) > 0.3:
             try:
+                # For last gate, set terminal velocity to continue forward
+                if target_gate_idx >= 3 or target_gate_idx == -1:
+                    if len(waypoints) >= 2:
+                        terminal_vel = (waypoints[-1] - waypoints[-2]) / max(
+                            time_points[-1] - time_points[-2], 0.1
+                        )
+                    else:
+                        terminal_vel = current_vel * 0.5  # Reduce speed gradually
+                else:
+                    terminal_vel = np.zeros(3)  # Stop for intermediate gates
+
                 cs_x = CubicSpline(
-                    time_normalized, waypoints[:, 0], bc_type=((1, current_vel[0]), (2, 0))
+                    time_normalized,
+                    waypoints[:, 0],
+                    bc_type=((1, current_vel[0]), (1, terminal_vel[0])),
                 )
                 cs_y = CubicSpline(
-                    time_normalized, waypoints[:, 1], bc_type=((1, current_vel[1]), (2, 0))
+                    time_normalized,
+                    waypoints[:, 1],
+                    bc_type=((1, current_vel[1]), (1, terminal_vel[1])),
                 )
                 cs_z = CubicSpline(
-                    time_normalized, waypoints[:, 2], bc_type=((1, current_vel[2]), (2, 0))
+                    time_normalized,
+                    waypoints[:, 2],
+                    bc_type=((1, current_vel[2]), (1, terminal_vel[2])),
                 )
             except Exception as e:
                 self.logger.log_warning(f"Velocity boundary conditions failed: {str(e)}", tick)
@@ -109,8 +145,12 @@ class TrajectoryPlanner:
         y_des = cs_y(ts)
         z_des = cs_z(ts)
 
-        # Add terminal points for stability
-        extra_points = 3 * 30 + 1
+        # Minimal terminal extension - spline already handles continuation
+        if target_gate_idx >= 3 or target_gate_idx == -1:
+            extra_points = 1  # Just 0.3 seconds - minimal for MPC horizon
+        else:
+            extra_points = 60  # Normal extension for earlier gates
+
         x_des = np.concatenate((x_des, [x_des[-1]] * extra_points))
         y_des = np.concatenate((y_des, [y_des[-1]] * extra_points))
         z_des = np.concatenate((z_des, [z_des[-1]] * extra_points))
@@ -124,63 +164,9 @@ class TrajectoryPlanner:
             "z": z_des.copy(),
             "timestamp": time.time(),
         }
-
-        # trajectory blending for smooth transitions
-        if blend_with_previous and previous_trajectory is not None:
-            x_des, y_des, z_des = self._blend_trajectories(
-                x_des, y_des, z_des, previous_trajectory, current_vel, tick
-            )
-        self.save_trajectories_to_file(f"flight_logs/blended_{target_gate_idx}_trajectories.npz")
+        self.save_trajectories_to_file(f"flight_logs/{target_gate_idx}_trajectories.npz")
 
         return x_des, y_des, z_des
-
-    def _blend_trajectories(
-        self,
-        new_x: np.ndarray,
-        new_y: np.ndarray,
-        new_z: np.ndarray,
-        previous_traj: dict,
-        current_vel: np.ndarray,
-        current_tick: int,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Blend new trajectory with previous one while preserving velocity magnitudes."""
-        blend_horizon = 5  # Only 0.1 seconds at 50Hz
-
-        # Skip blending if moving too fast
-        current_speed = np.linalg.norm(current_vel) if current_vel is not None else 0
-        if current_speed > 3.0:
-            return new_x, new_y, new_z
-
-        # Extract relevant portion of previous trajectory
-        prev_start_idx = current_tick - previous_traj["tick"]
-        if prev_start_idx < 0 or prev_start_idx >= len(previous_traj["x"]):
-            return new_x, new_y, new_z
-
-        prev_x = previous_traj["x"][prev_start_idx : prev_start_idx + blend_horizon]
-        prev_y = previous_traj["y"][prev_start_idx : prev_start_idx + blend_horizon]
-        prev_z = previous_traj["z"][prev_start_idx : prev_start_idx + blend_horizon]
-
-        # Ensure arrays are same length
-        min_len = min(len(prev_x), len(new_x), blend_horizon)
-
-        if min_len < 3:  # Too short to blend meaningfully
-            return new_x, new_y, new_z
-
-        # Create smooth transition weights (steeper transition)
-        alpha = np.linspace(0, 1, min_len)
-        alpha_smooth = alpha**3  # Steeper transition to minimize interpolation distance
-
-        # Blend trajectories
-        blended_x = prev_x[:min_len] * (1 - alpha_smooth) + new_x[:min_len] * alpha_smooth
-        blended_y = prev_y[:min_len] * (1 - alpha_smooth) + new_y[:min_len] * alpha_smooth
-        blended_z = prev_z[:min_len] * (1 - alpha_smooth) + new_z[:min_len] * alpha_smooth
-
-        # Concatenate with rest of new trajectory (no velocity constraint - let waypoints do their job)
-        final_x = np.concatenate([blended_x, new_x[min_len:]])
-        final_y = np.concatenate([blended_y, new_y[min_len:]])
-        final_z = np.concatenate([blended_z, new_z[min_len:]])
-
-        return final_x, final_y, final_z
 
     def generate_waypoints(
         self,
@@ -211,6 +197,7 @@ class TrajectoryPlanner:
             waypoints.append(start_point[0])
 
         # Create waypoints for each gate
+        self.gate_indices = []
         for gate_idx, gate in enumerate(gates):
             gate_info = self._get_gate_info(gate)
             original_gate_idx = gate_idx + (4 - len(gates))
@@ -249,14 +236,16 @@ class TrajectoryPlanner:
 
             # Add approach point with height offset
             waypoints.append(approach_point)
+            self.gate_indices.append(len(waypoints) - 1)
 
             # Always add gate center point
             gate_point = gate_info["center"].copy()
-            # gate_point[2] += 0.2  # Ensure height offset is applied
             waypoints.append(gate_point)
+            self.gate_indices.append(len(waypoints) - 1)
 
             # Add exit point with height offset
             waypoints.append(exit_point)
+            self.gate_indices.append(len(waypoints) - 1)
 
             if self.current_target_gate_idx == 2:
                 exit_point = gate_info["center"] - gate_info["normal"] * exit_dist
@@ -406,7 +395,7 @@ class TrajectoryPlanner:
             # Calculate normal vector and adjusted gate center
             temp_normal = rotation.apply([1.0, 0.0, 0.0])
             gate_info["normal"] = np.array([temp_normal[1], -temp_normal[0], temp_normal[2]])
-            if distance_moved > 0.1:
+            if distance_moved > 0.05:  # cm threshold
                 gate_info["pos"] = self._calculate_optimal_gate_crossing(
                     original_pos, observed_pos_array
                 )
@@ -598,6 +587,7 @@ class TrajectoryPlanner:
         current_speed = np.linalg.norm(current_vel)
 
         waypoints = []
+        self.gate_indices = []
 
         # Safety check
         if not remaining_gates:
@@ -606,17 +596,17 @@ class TrajectoryPlanner:
 
         # 1. MOMENTUM PRESERVATION PHASE
         if current_speed > 0.5:
-            momentum_time = 0.3
-            momentum_distance = min(current_speed * momentum_time, 0.15)
+            momentum_time = 0.1
+            momentum_distance = min(current_speed * momentum_time, 0.3)
 
             vel_normalized = current_vel / current_speed
             momentum_point = current_pos + vel_normalized * momentum_distance
             waypoints.append(momentum_point)
 
             # 2. SMOOTH TRANSITION PHASE
-            # Get the actual observed gate position instead of static position
+            # Get the actual observed gate position
             observed_gate = self._get_gate_with_observation(obs, updated_gate_idx)
-            gate_info = self._get_gate_info(observed_gate)  # Now uses observed position
+            gate_info = self._get_gate_info(observed_gate)
 
             # Get configured approach distance and height offset
             if updated_gate_idx < len(self.approach_dist):
@@ -646,7 +636,7 @@ class TrajectoryPlanner:
 
             # Create transition toward proper approach point
             approach_vector = proper_approach_point - momentum_point
-            transition_point = momentum_point + 0.2 * approach_vector
+            transition_point = momentum_point + 0.5 * approach_vector
             waypoints.append(transition_point)
 
         # 3. GATE APPROACH PHASE WITH JUMP PREVENTION
@@ -685,46 +675,19 @@ class TrajectoryPlanner:
             configured_approach = gate_info["center"] + gate_info["normal"] * approach_dist
             configured_approach[2] += approach_z_offset
 
-            # Check if configured approach is forward-facing
-            to_configured = configured_approach - current_pos
-            if np.linalg.norm(current_vel) > 0.1:
-                vel_normalized = current_vel / np.linalg.norm(current_vel)
-                progress = np.dot(to_configured, vel_normalized)
-                if progress >= 0:
-                    approach_point = configured_approach
-                else:
-                    approach_point = self._calculate_forward_approach_point(
-                        current_pos, current_vel, gate_info
-                    )
-            else:
-                approach_point = configured_approach
-
-            # PREVENT LARGE JUMPS: Add intermediate waypoints for big distances
-            if len(waypoints) > 0:
-                last_waypoint = waypoints[-1]
-                distance_to_approach = np.linalg.norm(approach_point - last_waypoint)
-
-                # If distance is > 0.5m, add intermediate waypoints
-                if distance_to_approach > 0.5:
-                    num_intermediate = int(distance_to_approach / 0.5)  # One waypoint every 30cm
-                    for i in range(1, num_intermediate + 1):
-                        fraction = i / (num_intermediate + 1)
-                        intermediate_point = last_waypoint + fraction * (
-                            approach_point - last_waypoint
-                        )
-                        waypoints.append(intermediate_point)
-
             # Add the main gate waypoints using observed positions
-            waypoints.append(approach_point)
+            waypoints.append(configured_approach)
+            self.gate_indices.append(len(waypoints) - 1)
 
             gate_point = gate_info["center"].copy()
-            # gate_point[2] += 0.2
             gate_point[2] += 0.0
             waypoints.append(gate_point)
+            self.gate_indices.append(len(waypoints) - 1)
 
             exit_point = gate_info["center"] - gate_info["normal"] * exit_dist
             exit_point[2] += exit_z_offset
             waypoints.append(exit_point)
+            self.gate_indices.append(len(waypoints) - 1)
 
             # Gate 2 special case
             if absolute_gate_idx == 2:
@@ -732,68 +695,13 @@ class TrajectoryPlanner:
                 extra_exit_point[2] += 0.6
                 waypoints.append(extra_exit_point)
 
-                extra_approach_point = gate_info["center"] + gate_info["normal"] * approach_dist
+                extra_approach_point = gate_info["center"] + gate_info["normal"] * 0.1
                 extra_approach_point[2] += 0.6
                 waypoints.append(extra_approach_point)
-
-        # Check for any remaining large jumps and fix them
-        waypoints = self._fix_large_jumps(waypoints)
 
         waypoints_array = np.array(waypoints)
 
         return waypoints_array
-
-    def _fix_large_jumps(self, waypoints: list) -> list:
-        """Fix any remaining large jumps between waypoints and add waypoints for sharp turns."""
-        if not waypoints:
-            return []
-
-        fixed_waypoints = [waypoints[0]]  # Always include first waypoint
-
-        for i in range(1, len(waypoints)):
-            current_wp = waypoints[i]
-            last_wp = fixed_waypoints[-1]
-
-            distance = np.linalg.norm(current_wp - last_wp)
-
-            # Check for sharp turns (even with reasonable distances)
-            if i < len(waypoints) - 1:
-                next_wp = waypoints[i + 1]
-
-                # Calculate angle between segments
-                vec1 = current_wp - last_wp
-                vec2 = next_wp - current_wp
-
-                if np.linalg.norm(vec1) > 1e-6 and np.linalg.norm(vec2) > 1e-6:
-                    vec1_norm = vec1 / np.linalg.norm(vec1)
-                    vec2_norm = vec2 / np.linalg.norm(vec2)
-
-                    dot_product = np.clip(np.dot(vec1_norm, vec2_norm), -1.0, 1.0)
-                    angle = np.arccos(dot_product)
-
-                    dis_threshold = 0.15
-                    # Sharp turn detected (> 120 degrees)
-                    if angle > np.pi / 3 and distance > dis_threshold:
-                        # Add more intermediate points for sharp turns
-                        num_intermediate = max(
-                            2, int(distance / dis_threshold)
-                        )  # One every 15cm for sharp turns
-                        for j in range(1, num_intermediate + 1):
-                            fraction = j / (num_intermediate + 1)
-                            intermediate = last_wp + fraction * (current_wp - last_wp)
-                            fixed_waypoints.append(intermediate)
-
-            # Normal distance-based intermediate points
-            if distance > dis_threshold:
-                num_intermediate = int(distance / dis_threshold)  # One every 20cm
-                for j in range(1, num_intermediate + 1):
-                    fraction = j / (num_intermediate + 1)
-                    intermediate = last_wp + fraction * (current_wp - last_wp)
-                    fixed_waypoints.append(intermediate)
-
-            fixed_waypoints.append(current_wp)
-
-        return fixed_waypoints
 
     def _calculate_forward_approach_point(
         self, current_pos: np.ndarray, current_vel: np.ndarray, gate_info: dict
@@ -802,9 +710,15 @@ class TrajectoryPlanner:
         gate_center = gate_info["center"]
         gate_normal = gate_info["normal"]
 
-        # Extract the gate index to get the right approach distance
-        original_gate_idx = self.current_target_gate_idx
-        print(f"Calculating forward approach for gate index {original_gate_idx}, {gate_center}")
+        # Protect against invalid gate index
+        original_gate_idx = max(0, min(self.current_target_gate_idx, 3))
+
+        # Additional safety check
+        if original_gate_idx < 0 or original_gate_idx >= 4:
+            self.logger.log_warning(
+                f"Invalid gate index {self.current_target_gate_idx}, using default", 0
+            )
+            original_gate_idx = 0  # Use gate 0 as fallback
 
         # Use individual distances if available, otherwise fall back to defaults
         if original_gate_idx < len(self.approach_dist):
@@ -815,100 +729,65 @@ class TrajectoryPlanner:
         # Calculate approach point using your configured distance
         standard_approach = gate_center + gate_normal * approach_distance
 
-        # Vector from current position to standard approach
-        to_approach = standard_approach - current_pos
-
-        # Check if approach point is behind drone (negative progress)
-        if np.linalg.norm(current_vel) > 0.1:
-            vel_normalized = current_vel / np.linalg.norm(current_vel)
-            progress = np.dot(to_approach, vel_normalized)
-
-            if progress < 0:
-                # Approach point is behind, calculate forward alternative
-
-                # Side approach - approach from the side
-                lateral_offset = self._calculate_lateral_approach(
-                    current_pos, current_vel, gate_info, approach_distance
-                )
-                return lateral_offset
-
         return standard_approach
-
-    def _calculate_lateral_approach(
-        self,
-        current_pos: np.ndarray,
-        current_vel: np.ndarray,
-        gate_info: dict,
-        approach_distance: float,
-    ) -> np.ndarray:
-        """Calculate a lateral approach point when standard approach is behind."""
-        gate_center = gate_info["center"]
-        gate_y_dir = gate_info["y_dir"]  # Lateral direction of gate
-
-        # Move laterally along gate width, then approach from side
-        lateral_distance = 0.05  # 40cm to the side
-
-        # Choose left or right based on current position
-        to_gate = gate_center - current_pos
-        cross_product = np.cross(to_gate[:2], gate_y_dir[:2])
-        side_multiplier = 1 if cross_product > 0 else -1
-
-        lateral_point = (
-            gate_center
-            + gate_y_dir * lateral_distance * side_multiplier
-            + gate_info["normal"] * approach_distance  # Use configured approach distance
-        )
-
-        return lateral_point
 
     def calculate_adaptive_speeds(
         self, waypoints: np.ndarray, current_target_gate: int
     ) -> list[float]:
-        """Calculate adaptive speeds based on gate proximity and flight phase."""
+        """Calculate adaptive speeds based on gate proximity and flight phase using gate_indices."""
         speeds = []
 
         # Speed configuration
-        base_speed = 1.3
-        high_speed = 2.5  # Increased speed between gates -2.5
-        approach_speed = 1.3  # Slower approach speed
-        approach_distance = 1.0  # Start slowing down Xm before gate
+        base_speed = 1.8
+        high_speed = 2.2  # Increased speed between gates
+        approach_speed = 1.5  # Speed through gates
+        exit_speed = 2.2  # Speed after gates
 
-        for i, waypoint in enumerate(waypoints):
-            # Determine which gate this waypoint belongs to
-            gate_idx = i // 3  # Every 3 waypoints per gate (approach, center, exit)
-            waypoint_type = i % 3  # 0=approach, 1=center, 2=exit
+        for i, _ in enumerate(waypoints):
+            # Default to base speed
+            speed = base_speed
 
-            # Calculate absolute gate index
-            absolute_gate_idx = current_target_gate + gate_idx
+            # Check if this waypoint index is in gate_indices
+            if i in self.gate_indices:
+                # Find which position in gate_indices this is
+                gate_position = self.gate_indices.index(i)
 
-            if absolute_gate_idx == 1:
-                # Between Gate 0 and Gate 1: Use base speed (no increase)
-                if waypoint_type == 0:  # Approaching Gate 1
-                    speed = approach_speed
-                else:
-                    speed = base_speed
+                # Every 3 indices represent: approach, center, exit for each gate
+                waypoint_type = gate_position % 3  # 0=approach, 1=center, 2=exit
+                gate_number = gate_position // 3  # Which gate (0, 1, 2, 3)
+                absolute_gate_idx = current_target_gate + gate_number
 
-            elif absolute_gate_idx == 0 or absolute_gate_idx >= 2:
-                # Gate 0 or Gate 2 and beyond: High speed with approach slowdown
                 if waypoint_type == 0:  # Approach point
-                    # Check distance to gate center
-                    gate_center_idx = i + 1
-                    if gate_center_idx < len(waypoints):
-                        distance_to_gate = np.linalg.norm(waypoint - waypoints[gate_center_idx])
-                        if distance_to_gate <= approach_distance:
-                            speed = approach_speed  # Slow down
-                        else:
-                            speed = high_speed  # High speed when far from gate
-                    else:
-                        speed = high_speed
+                    speed = approach_speed
                 elif waypoint_type == 1:  # Gate center
-                    speed = approach_speed  # Always slow through gate
-                else:  # Exit point
-                    speed = high_speed  # Speed up after gate
+                    speed = approach_speed
+                elif waypoint_type == 2:  # Exit point
+                    speed = exit_speed
+
+                # Special handling for Gate 1 (reduce speeds)
+                if absolute_gate_idx == 0:
+                    if waypoint_type in [0, 1]:
+                        speed = approach_speed * 0.7
+                elif absolute_gate_idx == 1:
+                    if waypoint_type in [0, 1]:  # Approach and center
+                        speed = approach_speed * 0.8  # Slower for Gate 1
+                    # Exit speed remains high for Gate 1
+                elif absolute_gate_idx == 2:
+                    if waypoint_type == 0:
+                        speed = approach_speed * 0.8
+                    elif waypoint_type == 2:
+                        speed = exit_speed * 0.8
+
             else:
-                speed = base_speed
+                # Non-gate waypoints (momentum, transition, intermediate points)
+                if i <= 1:
+                    # Early waypoints (momentum/transition) - maintain reasonable speed
+                    speed = base_speed
+                else:
+                    # Intermediate waypoints between gates - use high speed
+                    speed = high_speed
 
             speeds.append(speed)
-        print(f"Adaptive speeds: {speeds}")
 
+        print(f"Final speeds: {speeds}")
         return speeds
