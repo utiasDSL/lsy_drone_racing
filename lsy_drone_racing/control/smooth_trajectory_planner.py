@@ -149,7 +149,7 @@ class TrajectoryPlanner:
         if target_gate_idx >= 3 or target_gate_idx == -1:
             extra_points = 1  # Just 0.3 seconds - minimal for MPC horizon
         else:
-            extra_points = 60  # Normal extension for earlier gates
+            extra_points = 30  # Normal extension for earlier gates
 
         x_des = np.concatenate((x_des, [x_des[-1]] * extra_points))
         y_des = np.concatenate((y_des, [y_des[-1]] * extra_points))
@@ -318,6 +318,22 @@ class TrajectoryPlanner:
             # Adjust center point height
             gate_center = pos.copy()
             gate_center[2] = target_height
+
+            # SPEED OPTIMIZATION: Shift gate center for racing line
+            if hasattr(self, "current_target_gate_idx"):
+                current_gate = self.current_target_gate_idx
+
+                # Create racing line by shifting gate centers
+                if current_gate > 0:
+                    # Get previous gate for approach direction
+                    prev_gate = self.config.env.track["gates"][current_gate - 1]
+                    prev_pos = np.array(prev_gate["pos"])
+
+                    # Shift gate center forward along approach direction
+                    approach_direction = gate_center - prev_pos
+                    if np.linalg.norm(approach_direction) > 0:
+                        approach_norm = approach_direction / np.linalg.norm(approach_direction)
+                        gate_center += approach_norm * 0.05  # 5cm forward shift
 
             return {
                 "pos": pos,
@@ -623,20 +639,9 @@ class TrajectoryPlanner:
             proper_approach_point = gate_info["center"] + gate_info["normal"] * approach_dist
             proper_approach_point[2] += approach_z_offset
 
-            # Check if forward-facing
-            to_approach = proper_approach_point - momentum_point
-            if np.linalg.norm(current_vel) > 0.1:
-                vel_normalized_check = current_vel / np.linalg.norm(current_vel)
-                progress = np.dot(to_approach, vel_normalized_check)
-
-                if progress < 0:
-                    proper_approach_point = self._calculate_forward_approach_point(
-                        momentum_point, current_vel, gate_info
-                    )
-
             # Create transition toward proper approach point
             approach_vector = proper_approach_point - momentum_point
-            transition_point = momentum_point + 0.5 * approach_vector
+            transition_point = momentum_point + 0.7 * approach_vector
             waypoints.append(transition_point)
 
         # 3. GATE APPROACH PHASE WITH JUMP PREVENTION
@@ -692,44 +697,16 @@ class TrajectoryPlanner:
             # Gate 2 special case
             if absolute_gate_idx == 2:
                 extra_exit_point = gate_info["center"] - gate_info["normal"] * exit_dist
-                extra_exit_point[2] += 0.6
+                extra_exit_point[2] += 0.5
                 waypoints.append(extra_exit_point)
 
                 extra_approach_point = gate_info["center"] + gate_info["normal"] * 0.1
-                extra_approach_point[2] += 0.6
+                extra_approach_point[2] += 0.5
                 waypoints.append(extra_approach_point)
 
         waypoints_array = np.array(waypoints)
 
         return waypoints_array
-
-    def _calculate_forward_approach_point(
-        self, current_pos: np.ndarray, current_vel: np.ndarray, gate_info: dict
-    ) -> np.ndarray:
-        """Calculate approach point that's always forward of drone's current position."""
-        gate_center = gate_info["center"]
-        gate_normal = gate_info["normal"]
-
-        # Protect against invalid gate index
-        original_gate_idx = max(0, min(self.current_target_gate_idx, 3))
-
-        # Additional safety check
-        if original_gate_idx < 0 or original_gate_idx >= 4:
-            self.logger.log_warning(
-                f"Invalid gate index {self.current_target_gate_idx}, using default", 0
-            )
-            original_gate_idx = 0  # Use gate 0 as fallback
-
-        # Use individual distances if available, otherwise fall back to defaults
-        if original_gate_idx < len(self.approach_dist):
-            approach_distance = self.approach_dist[original_gate_idx]
-        else:
-            approach_distance = self.default_approach_dist
-
-        # Calculate approach point using your configured distance
-        standard_approach = gate_center + gate_normal * approach_distance
-
-        return standard_approach
 
     def calculate_adaptive_speeds(
         self, waypoints: np.ndarray, current_target_gate: int

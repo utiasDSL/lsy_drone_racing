@@ -69,7 +69,6 @@ class Visualizer:
         for cylinder_visualization in self.cylinder_visualizations:
             cylinder_params = cylinder_visualization["function"]()
             for pos, radius in zip(cylinder_params["pos"], cylinder_params["radius"]):
-                print(pos, radius)
                 draw_cylinder(
                     self.env,
                     pos=pos,
