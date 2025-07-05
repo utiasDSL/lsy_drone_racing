@@ -248,11 +248,9 @@ class TrajectoryPlanner:
             self.gate_indices.append(len(waypoints) - 1)
 
             if self.current_target_gate_idx == 2:
-                exit_point = gate_info["center"] - gate_info["normal"] * exit_dist
-                exit_point[2] += 0.6
-                waypoints.append(exit_point)
                 approach_point = gate_info["center"] + gate_info["normal"] * approach_dist
-                approach_point[2] += 0.6
+                approach_point[0] -= 0.05
+                approach_point[2] += 0.05
                 waypoints.append(approach_point)
 
         return np.array(waypoints)
@@ -696,12 +694,9 @@ class TrajectoryPlanner:
 
             # Gate 2 special case
             if absolute_gate_idx == 2:
-                extra_exit_point = gate_info["center"] - gate_info["normal"] * exit_dist
-                extra_exit_point[2] += 0.5
-                waypoints.append(extra_exit_point)
-
                 extra_approach_point = gate_info["center"] + gate_info["normal"] * 0.1
-                extra_approach_point[2] += 0.5
+                extra_approach_point[0] -= 0.05
+                extra_approach_point[2] += 0.05
                 waypoints.append(extra_approach_point)
 
         waypoints_array = np.array(waypoints)

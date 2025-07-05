@@ -22,6 +22,7 @@ class CollisionAvoidanceHandler:
         ellipsoid_length: float,
         ellipsoid_radius: float,
         obstacle_radius: float,
+        ignored_obstacle_indices: list[int] | None = None,
     ):
         """Constructor for the CollisionAvoidanceHandler.
 
@@ -32,6 +33,7 @@ class CollisionAvoidanceHandler:
             ellipsoid_length (float): Length of the ellipsoid representing the border of the gates.
             ellipsoid_radius (float): Radius of the ellipsoid representing the border of the gates.
             obstacle_radius (float): Radius of the infinite cylinder representing the obstacles.
+            ignored_obstacle_indices (list[int] | None): List of obstacle indices to ignore for collision avoidance. Defaults to None.
         """
         self.num_gates = num_gates
         self.num_obstacles = num_obstacles
@@ -39,11 +41,14 @@ class CollisionAvoidanceHandler:
         self.ellipsoid_length = ellipsoid_length
         self.ellipsoid_radius = ellipsoid_radius
         self.obstacle_radius = obstacle_radius
+        self.ignored_obstacle_indices = set(ignored_obstacle_indices or [])
         self.obstacle_positions = None
         self.gate_positions = None
         self.gate_rotations = None
 
-        self.num_constraints = num_gates * 4 + num_obstacles
+        # Calculate active obstacles (those not ignored)
+        self.num_active_obstacles = num_obstacles - len(self.ignored_obstacle_indices)
+        self.num_constraints = num_gates * 4 + self.num_active_obstacles
 
         # Midpoints of the four ellipsoids representing the gate
         self.ellipsoid_midpoints = np.array(
@@ -116,7 +121,21 @@ class CollisionAvoidanceHandler:
             obs (dict[str, NDArray[np.floating]]): The current observation of the environment containing obstacle and gate positions.
         """
         self.obstacle_positions = obs["obstacles_pos"]
-        obstacle_params = self.obstacle_positions[:, :2].flatten()
+
+        # Filter out ignored obstacles
+        active_obstacle_positions = np.array(
+            [
+                pos
+                for i, pos in enumerate(self.obstacle_positions)
+                if i not in self.ignored_obstacle_indices
+            ]
+        )
+
+        obstacle_params = (
+            active_obstacle_positions[:, :2].flatten()
+            if len(active_obstacle_positions) > 0
+            else np.array([])
+        )
 
         self.gate_positions = obs["gates_pos"]
         self.gate_rotations = Rotation.from_quat(obs["gates_quat"]).as_euler("xyz", degrees=False)
@@ -127,13 +146,36 @@ class CollisionAvoidanceHandler:
             gate_params = self.gate_positions[:, :4].flatten()
             ocp_solver.set(i, "p", params)
 
+    def get_active_obstacle_indices(self) -> list[int]:
+        """Get the indices of obstacles that are not ignored.
+
+        Returns:
+            list[int]: List of obstacle indices that are actively considered for collision avoidance.
+        """
+        return [i for i in range(self.num_obstacles) if i not in self.ignored_obstacle_indices]
+
     def get_obstacle_cylinders(self) -> dict[str, NDArray[np.floating]]:
         """Get the parameters for the infinite cylinders representing the obstacles.
 
         Returns:
             dict[str, NDArray[np.floating]]: A dictionary containing the positions and radii of the cylinders.
         """
-        cylinder_positions = self.obstacle_positions
+        if self.obstacle_positions is None:
+            return {"pos": np.array([]), "radius": np.array([])}
+
+        # Filter out ignored obstacles
+        active_obstacle_positions = np.array(
+            [
+                pos
+                for i, pos in enumerate(self.obstacle_positions)
+                if i not in self.ignored_obstacle_indices
+            ]
+        )
+
+        if len(active_obstacle_positions) == 0:
+            return {"pos": np.array([]), "radius": np.array([])}
+
+        cylinder_positions = active_obstacle_positions.copy()
         cylinder_positions[:, 2] = 0  # Set z to 0 for infinite cylinders
 
         return {
@@ -221,13 +263,21 @@ class CollisionAvoidanceHandler:
         """
         params = []
         h_expr = []
-        for i in range(self.num_obstacles):
-            center_obs = MX.sym(f"p_obs{i}", 2)
-            params.append(center_obs)
 
-            # Infinitly high cylinder around the obstacle with radius OBSTACLE_RADIUS
-            pos_xy = drone_pos[:2]  # Get the x and y position of the drone
-            con_h_expr = (pos_xy - center_obs).T @ (pos_xy - center_obs) - self.obstacle_radius**2
-            h_expr.append(con_h_expr)
+        # Create expressions only for non-ignored obstacles
+        active_obstacle_count = 0
+        for i in range(self.num_obstacles):
+            if i not in self.ignored_obstacle_indices:
+                center_obs = MX.sym(f"p_obs{active_obstacle_count}", 2)
+                params.append(center_obs)
+
+                # Infinitly high cylinder around the obstacle with radius OBSTACLE_RADIUS
+                pos_xy = drone_pos[:2]  # Get the x and y position of the drone
+                con_h_expr = (pos_xy - center_obs).T @ (
+                    pos_xy - center_obs
+                ) - self.obstacle_radius**2
+                h_expr.append(con_h_expr)
+
+                active_obstacle_count += 1
 
         return params, h_expr

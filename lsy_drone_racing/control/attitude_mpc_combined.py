@@ -59,13 +59,13 @@ class MPController(Controller):
 
         # Approach parameters for different gates
         self.approach_dist = [0.2, 0.3, 0.2, 0.1]
-        self.exit_dist = [0.4, 0.15, 0.25, 5.0]
+        self.exit_dist = [0.4, 0.15, 0.2, 5.0]
         self.default_approach_dist = 0.1
         self.default_exit_dist = 0.5
 
         # Height offset parameters
-        self.approach_height_offset = [0.01, 0.1, -0.05, 0.0]
-        self.exit_height_offset = [0.1, 0.0, 0.1, 0.0]
+        self.approach_height_offset = [0.01, 0.1, 0.0, 0.0]
+        self.exit_height_offset = [0.1, 0.0, 0.05, 0.0]
         self.default_approach_height_offset = 0.1
         self.default_exit_height_offset = 0.0
 
@@ -82,6 +82,7 @@ class MPController(Controller):
             ELLIPSOID_LENGTH,
             ELLIPSOID_RADIUS,
             OBSTACLE_RADIUS,
+            ignored_obstacle_indices=[2],
         )
 
         # Create the MPC solver
