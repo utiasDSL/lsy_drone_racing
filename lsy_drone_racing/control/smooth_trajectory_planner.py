@@ -21,8 +21,17 @@ if TYPE_CHECKING:
 class TrajectoryPlanner:
     """Handles trajectory planning and waypoint generation for drone racing."""
 
-    def __init__(self, config: dict, logger: any, N: int = 30, T_HORIZON: float = 1.5):
+    def __init__(
+        self,
+        config: dict,
+        logger: any,
+        N: int = 30,
+        T_HORIZON: float = 1.5,
+        start_time: str = "00_00_00",
+    ):
         """Initialize the trajectory planner."""
+
+        self.start_time = start_time
         self.config = config
         self.logger = logger  # FlightLogger instance
         self.N = N  # Number of trajectory points
@@ -164,7 +173,14 @@ class TrajectoryPlanner:
             "z": z_des.copy(),
             "timestamp": time.time(),
         }
-        self.save_trajectories_to_file(f"flight_logs/{target_gate_idx}_trajectories.npz")
+        if not use_velocity_aware:
+            self.save_trajectories_to_file(
+                f"flight_logs/-1_planned_trajectories_{self.start_time}.npz"
+            )
+        else:
+            self.save_trajectories_to_file(
+                f"flight_logs/{target_gate_idx}_planned_trajectories_{self.start_time}.npz"
+            )
 
         return x_des, y_des, z_des
 

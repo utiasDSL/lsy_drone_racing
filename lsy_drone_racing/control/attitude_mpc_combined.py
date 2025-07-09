@@ -131,9 +131,11 @@ class MPController(Controller):
         self.total_gates = len(config.env.track["gates"])
         self.flight_successful = False
 
+        self.start_time = time.strftime("%H_%M_%S", time.localtime())
+
         # Initialize trajectory planner
         self.trajectory_planner = TrajectoryPlanner(
-            self.config, self.flight_logger, self.N, self.T_HORIZON
+            self.config, self.flight_logger, self.N, self.T_HORIZON, self.start_time
         )
 
         # Store original weights for restoration
@@ -204,11 +206,14 @@ class MPController(Controller):
             "z": z_des.copy(),
             "timestamp": time.time(),
         }
+        self.x_traj = []
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
     ) -> NDArray[np.floating]:
         """Execute MPC control with replanning capabilities."""
+        self.x_traj.append(obs["pos"])
+
         # Store current velocity for smooth trajectory transitions
         self._current_vel = obs["vel"].copy()
 
@@ -641,6 +646,8 @@ class MPController(Controller):
         self.trajectory_planner.drone_positions = []
         self.trajectory_planner.drone_timestamps = []
         self.trajectory_planner.drone_ticks = []
+
+        np.savez(f"flight_logs/actual_trajectory_{self.start_time}", self.x_traj)
 
     def episode_reset(self):
         """Reset controller state for new episode (called from sim.py)."""
