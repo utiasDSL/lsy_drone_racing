@@ -21,12 +21,12 @@ from lsy_drone_racing.control.acados_model import setup_ocp, export_quadrotor_od
 from lsy_drone_racing.control.logging_setup import FlightLogger
 from lsy_drone_racing.control.smooth_trajectory_planner import TrajectoryPlanner
 from lsy_drone_racing.control.collision_avoidance import CollisionAvoidanceHandler
-from lsy_drone_racing.control.warm_start import x_initial, u_initial
+from lsy_drone_racing.control.hotstart_data import x_hotstart, u_hotstart, lam_hotstart, pi_hotstart
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-OBSTACLE_RADIUS = 0.13  # Radius of the obstacles in meters
+OBSTACLE_RADIUS = 0.14  # Radius of the obstacles in meters
 GATE_LENGTH = 0.50  # Length of the gate in meters
 ELLIPSOID_RADIUS = 0.12  # Diameter of the ellipsoid in meters
 ELLIPSOID_LENGTH = 0.7  # Length of the ellipsoid in meters
@@ -103,11 +103,15 @@ class MPController(Controller):
             ocp, json_file="lsy_example_mpc.json", verbose=False
         )
 
-        # Warm start the solver
-        for i in range(self.N):
+        # Hot start the solver
+        for stage in range(self.N + 1):
             # Set initial state and control inputs
-            self.acados_ocp_solver.set(i, "x", x_initial[i])
-            self.acados_ocp_solver.set(i, "u", u_initial[i])
+            self.acados_ocp_solver.set(stage, "x", np.array(x_hotstart[stage]))
+            self.acados_ocp_solver.set(stage, "lam", np.array(lam_hotstart[stage]))
+
+            if stage < self.N:
+                self.acados_ocp_solver.set(stage, "u", np.array(u_hotstart[stage]))
+                self.acados_ocp_solver.set(stage, "pi", np.array(pi_hotstart[stage]))
 
         # Controller state variables
         self.last_f_collective = 0.3

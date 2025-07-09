@@ -610,7 +610,7 @@ class TrajectoryPlanner:
 
         # 1. MOMENTUM PRESERVATION PHASE
         if current_speed > 0.5:
-            momentum_time = 0.1
+            momentum_time = 0.15
             momentum_distance = min(current_speed * momentum_time, 0.3)
 
             vel_normalized = current_vel / current_speed
@@ -746,7 +746,7 @@ class TrajectoryPlanner:
                     # Exit speed remains high for Gate 1
                 elif absolute_gate_idx == 2:
                     if waypoint_type == 0:
-                        speed = approach_speed * 0.8
+                        speed = approach_speed * 0.5
                     elif waypoint_type == 2:
                         speed = exit_speed * 0.8
 
