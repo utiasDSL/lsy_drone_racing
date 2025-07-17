@@ -355,11 +355,8 @@ class MPController(Controller):
             drone_pos = obs["pos"]
             drone_vel = obs["vel"]
 
-            # Get gate position (use observed if available, otherwise config)
-            if "gates_pos" in obs and gate_idx < len(obs["gates_pos"]):
-                gate_pos = np.array(obs["gates_pos"][gate_idx])
-            else:
-                gate_pos = np.array(self.config.env.track["gates"][gate_idx]["pos"])
+            # Get gate position
+            gate_pos = np.array(obs["gates_pos"][gate_idx])
 
             # Vector from drone to gate
             to_gate = gate_pos - drone_pos
