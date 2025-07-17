@@ -13,23 +13,31 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import scipy.linalg
-from scipy.spatial.transform import Rotation as R
 from acados_template import AcadosOcpSolver
+from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.control import Controller
-from lsy_drone_racing.control.acados_model import setup_ocp, export_quadrotor_ode_model
+from lsy_drone_racing.control.acados_model import export_quadrotor_ode_model, setup_ocp
+from lsy_drone_racing.control.collision_avoidance import CollisionAvoidanceHandler
 from lsy_drone_racing.control.logging_setup import FlightLogger
 from lsy_drone_racing.control.smooth_trajectory_planner import TrajectoryPlanner
-from lsy_drone_racing.control.collision_avoidance import CollisionAvoidanceHandler
-from lsy_drone_racing.control.hotstart_data import x_hotstart, u_hotstart, lam_hotstart, pi_hotstart
+from lsy_drone_racing.control.warmstart_data import (
+    lam_warmstart,
+    pi_warmstart,
+    u_warmstart,
+    x_warmstart,
+)
+from lsy_drone_racing.utils.controller_config import (
+    get_collision_params,
+    get_constant,
+    get_gate_distances,
+    get_height_offsets,
+    get_mpc_weights,
+    get_replanning_weights,
+)
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
-
-OBSTACLE_RADIUS = 0.14  # Radius of the obstacles in meters
-GATE_LENGTH = 0.50  # Length of the gate in meters
-ELLIPSOID_RADIUS = 0.12  # Diameter of the ellipsoid in meters
-ELLIPSOID_LENGTH = 0.7  # Length of the ellipsoid in meters
 
 
 class MPController(Controller):
@@ -48,26 +56,41 @@ class MPController(Controller):
         self.start_pos = obs["pos"]
         self.config = config
 
-        # MPC parameters
-        self.N = 60
-        self.T_HORIZON = 2.0
+        # Load constants from config
+        # MPC parameters from config
+        self.N = get_constant("mpc.N")
+        self.T_HORIZON = get_constant("mpc.T_HORIZON")
+        self.replanning_frequency = get_constant("mpc.replanning_frequency")
+
+        # Gate distances from config
+        gate_distances = get_gate_distances()
+        self.approach_dist = gate_distances["approach_dist"]
+        self.exit_dist = gate_distances["exit_dist"]
+        self.default_approach_dist = gate_distances["default_approach_dist"]
+        self.default_exit_dist = gate_distances["default_exit_dist"]
+
+        # Height offsets from config
+        height_offsets = get_height_offsets()
+        self.approach_height_offset = height_offsets["approach_height_offset"]
+        self.exit_height_offset = height_offsets["exit_height_offset"]
+        self.default_approach_height_offset = height_offsets["default_approach_height_offset"]
+        self.default_exit_height_offset = height_offsets["default_exit_height_offset"]
+
+        # MPC weights from config
+        self.mpc_weights = get_mpc_weights()
+        self.replanning_mpc_weights = get_replanning_weights()
+
+        # Control parameters from config
+        self.last_f_collective = get_constant("mpc.control.last_f_collective_default")
+        self.last_f_cmd = get_constant("mpc.control.last_f_cmd_default")
+
+        # Weight adjustment duration from config
+        self.weight_adjustment_duration = int(
+            get_constant("mpc.weight_adjustment_duration_ratio") * config.env.freq
+        )
+
         self.dt = self.T_HORIZON / self.N
-
-        # Replanning configuration
-        self.replanning_frequency = 1
         self.last_replanning_tick = 0
-
-        # Approach parameters for different gates
-        self.approach_dist = [0.2, 0.3, 0.2, 0.1]
-        self.exit_dist = [0.4, 0.15, 0.2, 5.0]
-        self.default_approach_dist = 0.1
-        self.default_exit_dist = 0.5
-
-        # Height offset parameters
-        self.approach_height_offset = [0.01, 0.1, 0.0, 0.0]
-        self.exit_height_offset = [0.1, 0.0, 0.05, 0.0]
-        self.default_approach_height_offset = 0.1
-        self.default_exit_height_offset = 0.0
 
         # Initialize target gate tracking
         self.current_target_gate_idx = 0
@@ -75,25 +98,24 @@ class MPController(Controller):
         # Setup collision avoidance
         num_gates = len(obs["gates_pos"])
         num_obstacles = len(obs["obstacles_pos"])
+
+        # Get collision parameters from config
+        collision_params = get_collision_params()
+
+        # Get ignored obstacle indices from config
+        ignored_indices = get_constant("collision_avoidance.ignored_obstacle_indices")
+
         self.collision_avoidance_handler = CollisionAvoidanceHandler(
             num_gates,
             num_obstacles,
-            GATE_LENGTH,
-            ELLIPSOID_LENGTH,
-            ELLIPSOID_RADIUS,
-            OBSTACLE_RADIUS,
-            ignored_obstacle_indices=[2],
+            collision_params["gate_length"],
+            collision_params["ellipsoid_length"],
+            collision_params["ellipsoid_radius"],
+            collision_params["obstacle_radius"],
+            ignored_obstacle_indices=ignored_indices,
         )
 
-        # Create the MPC solver
-        self.mpc_weights = {
-            "Q_pos": 8,  # Position tracking weight -10
-            "Q_vel": 0.01,  # Velocity tracking weight -0.01
-            "Q_rpy": 0.01,  # Attitude (roll/pitch/yaw) weight
-            "Q_thrust": 0.01,  # Collective thrust weight
-            "Q_cmd": 0.01,  # Command tracking weight
-            "R": 0.01,  # Control input regularization weight -0.007
-        }
+        # Create the MPC solver (weights are already loaded above)
         # Setup the acados model and solver
         model = export_quadrotor_ode_model()
         self.collision_avoidance_handler.setup_model(model)
@@ -103,20 +125,18 @@ class MPController(Controller):
             ocp, json_file="lsy_example_mpc.json", verbose=False
         )
 
-        # Hot start the solver
+        # Warm start the solver
         for stage in range(self.N + 1):
             # Set initial state and control inputs
-            self.acados_ocp_solver.set(stage, "x", np.array(x_hotstart[stage]))
-            self.acados_ocp_solver.set(stage, "lam", np.array(lam_hotstart[stage]))
+            self.acados_ocp_solver.set(stage, "x", np.array(x_warmstart[stage]))
+            self.acados_ocp_solver.set(stage, "lam", np.array(lam_warmstart[stage]))
 
             if stage < self.N:
-                self.acados_ocp_solver.set(stage, "u", np.array(u_hotstart[stage]))
-                self.acados_ocp_solver.set(stage, "pi", np.array(pi_hotstart[stage]))
+                self.acados_ocp_solver.set(stage, "u", np.array(u_warmstart[stage]))
+                self.acados_ocp_solver.set(stage, "pi", np.array(pi_warmstart[stage]))
 
-        # Controller state variables
-        self.last_f_collective = 0.3
+        # Controller state variables (values already loaded from config above)
         self.last_rpy_cmd = np.zeros(3)
-        self.last_f_cmd = 0.3
         self.finished = False
 
         # Trajectory tracking
@@ -141,14 +161,9 @@ class MPController(Controller):
         # Store original weights for restoration
         self.original_mpc_weights = self.mpc_weights.copy()
 
-        # Define replanning weights (higher path following)
-        self.replanning_mpc_weights = self.mpc_weights.copy()
-        self.replanning_mpc_weights["Q_pos"] *= 2.0  #  position tracking
-
         # Weight adjustment tracking
         self.weights_adjusted = False
         self.weight_adjustment_start_tick = 0
-        self.weight_adjustment_duration = int(0.7 * config.env.freq)
 
         # Store parameters directly in the trajectory planner
         self.trajectory_planner.freq = self.freq
@@ -273,9 +288,14 @@ class MPController(Controller):
                     # Check distance gate has moved
                     diff = np.linalg.norm(config_pos - observed_pos)
 
-                    if diff > 0.02 and self._is_drone_approaching_gate(
+                    # Get replanning threshold from config
+                    replanning_threshold = get_constant(
+                        "trajectory_planner.optimization.replanning_threshold"
+                    )
+
+                    if diff > replanning_threshold and self._is_drone_approaching_gate(
                         obs, current_target_gate
-                    ):  # cm threshold and drone is approaching the gate
+                    ):  # threshold and drone is approaching the gate
                         replan_info = {
                             "gate_idx": current_target_gate,
                             "diff": diff,

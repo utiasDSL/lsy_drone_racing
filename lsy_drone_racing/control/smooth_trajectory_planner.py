@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from scipy.interpolate import CubicSpline
@@ -18,47 +18,120 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
+from lsy_drone_racing.utils.controller_config import (
+    get_constant,
+    get_optimization_params,
+    get_speed_params,
+    get_trajectory_params,
+)
+
+
 class TrajectoryPlanner:
     """Handles trajectory planning and waypoint generation for drone racing."""
 
     def __init__(
         self,
-        config: dict,
-        logger: any,
-        N: int = 30,
-        T_HORIZON: float = 1.5,
+        config: dict[str, Any],
+        logger: Any,
+        N: int = None,
+        T_HORIZON: float = None,
         start_time: str = "00_00_00",
-    ):
-        """Initialize the trajectory planner."""
+    ) -> None:
+        """Initialize the trajectory planner.
 
+        Args:
+            config: Configuration dictionary containing environment settings
+            logger: Logger instance for recording events
+            N: Number of trajectory points (default: loaded from config or 30)
+            T_HORIZON: Horizon time for trajectory planning (default: loaded from config or 1.5)
+            start_time: Start time string for logging (default: "00_00_00")
+        """
         self.start_time = start_time
         self.config = config
         self.logger = logger  # FlightLogger instance
-        self.N = N  # Number of trajectory points
-        self.T_HORIZON = T_HORIZON  # Horizon time for trajectory planning
+
+        # Load constants from config
+        self.N = N if N is not None else get_constant("trajectory_planner.N_default")
+        self.T_HORIZON = (
+            T_HORIZON
+            if T_HORIZON is not None
+            else get_constant("trajectory_planner.T_HORIZON_default")
+        )
+
+        # Load trajectory parameters
+        traj_params = get_trajectory_params()
+        self.approach_dist = traj_params["approach_dist"]
+        self.exit_dist = traj_params["exit_dist"]
+        self.approach_height_offset = traj_params["approach_height_offset"]
+        self.exit_height_offset = traj_params["exit_height_offset"]
+        self.default_approach_dist = traj_params["default_approach_dist"]
+        self.default_exit_dist = traj_params["default_exit_dist"]
+        self.default_approach_height_offset = traj_params["default_approach_height_offset"]
+        self.default_exit_height_offset = traj_params["default_exit_height_offset"]
+
+        # Load optimization parameters
+        optimization_params = get_optimization_params()
+        self.drone_clearance_horizontal = optimization_params["drone_clearance_horizontal"]
+        self.gate_half_width = optimization_params["gate_half_width"]
+        self.position_diff_threshold = optimization_params["position_diff_threshold"]
+        self.replanning_threshold = optimization_params["replanning_threshold"]
+
+        # Load speed parameters
+        speed_params = get_speed_params()
+        self.base_speed = speed_params["base_speed"]
+        self.high_speed = speed_params["high_speed"]
+        self.approach_speed = speed_params["approach_speed"]
+        self.exit_speed = speed_params["exit_speed"]
+
+        # Load generation parameters
+        self.min_speed_threshold = get_constant("trajectory_planner.generation.min_speed_threshold")
+        self.min_gate_duration = get_constant("trajectory_planner.generation.min_gate_duration")
+        self.extra_points_final_gate = get_constant(
+            "trajectory_planner.generation.extra_points_final_gate"
+        )
+        self.extra_points_normal = get_constant("trajectory_planner.generation.extra_points_normal")
+
+        # Load smoothing parameters
+        self.momentum_time = get_constant("trajectory_planner.smoothing.momentum_time")
+        self.max_momentum_distance = get_constant(
+            "trajectory_planner.smoothing.max_momentum_distance"
+        )
+        self.velocity_threshold = get_constant("trajectory_planner.smoothing.velocity_threshold")
+        self.transition_factor = get_constant("trajectory_planner.smoothing.transition_factor")
 
         # Current target gate tracking
         self.current_target_gate_idx = 0
-        self.gate_indices = []
+        self.gate_indices: list[int] = []
 
         # Trajectory storage
-        self.current_trajectory = None
+        self.current_trajectory: dict[str, Any] | None = None
         self.freq = config.env.freq
 
         # Drone position tracking
-        self.drone_positions = []
-        self.drone_timestamps = []
-        self.drone_ticks = []
+        self.drone_positions: list[NDArray[np.floating]] = []
+        self.drone_timestamps: list[float] = []
+        self.drone_ticks: list[int] = []
 
     def generate_trajectory_from_waypoints(
         self,
-        waypoints: np.ndarray,
+        waypoints: NDArray[np.floating],
         target_gate_idx: int,
         use_velocity_aware: bool = False,
-        current_vel: np.ndarray = None,
+        current_vel: NDArray[np.floating] | None = None,
         tick: int = 0,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Generate trajectory from waypoints with smooth continuation after last gate."""
+    ) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
+        """Generate trajectory from waypoints with smooth continuation after last gate.
+
+        Args:
+            waypoints: Array of waypoint coordinates (shape: N x 3)
+            target_gate_idx: Index of the target gate
+            use_velocity_aware: Whether to use velocity-aware trajectory generation
+            current_vel: Current velocity vector (default: None)
+            tick: Current simulation tick (default: 0)
+
+        Returns:
+            Tuple of (x_trajectory, y_trajectory, z_trajectory) arrays
+        """
         if len(waypoints) < 2:
             self.logger.log_warning("Not enough waypoints to generate trajectory", tick)
             return np.array([]), np.array([]), np.array([])
@@ -156,9 +229,9 @@ class TrajectoryPlanner:
 
         # Minimal terminal extension - spline already handles continuation
         if target_gate_idx >= 3 or target_gate_idx == -1:
-            extra_points = 1  # Just 0.3 seconds - minimal for MPC horizon
+            extra_points = self.extra_points_final_gate  # Minimal for MPC horizon
         else:
-            extra_points = 30  # Normal extension for earlier gates
+            extra_points = self.extra_points_normal  # Normal extension for earlier gates
 
         x_des = np.concatenate((x_des, [x_des[-1]] * extra_points))
         y_des = np.concatenate((y_des, [y_des[-1]] * extra_points))
@@ -189,8 +262,17 @@ class TrajectoryPlanner:
         obs: dict[str, NDArray[np.floating]],
         start_gate_idx: int = 0,
         elevated_start: bool = False,
-    ) -> np.ndarray:
-        """Generate waypoints that navigate through all gates."""
+    ) -> NDArray[np.floating]:
+        """Generate waypoints that navigate through all gates.
+
+        Args:
+            obs: Observation dictionary containing position and gate information
+            start_gate_idx: Starting gate index (default: 0)
+            elevated_start: Whether to start at elevated position (default: False)
+
+        Returns:
+            Array of waypoints for trajectory generation
+        """
         # Start with the current position as a single-element array
         start_point = np.array(obs["pos"]).reshape(1, 3)
 
@@ -202,9 +284,21 @@ class TrajectoryPlanner:
         return np.concatenate((start_point, gate_waypoints))
 
     def loop_path_gen(
-        self, gates: list[dict], obs: dict[str, NDArray[np.floating]], elevated_start: bool = False
-    ) -> np.ndarray:
-        """Generate a loop path through all gates with height offsets."""
+        self,
+        gates: list[dict[str, Any]],
+        obs: dict[str, NDArray[np.floating]],
+        elevated_start: bool = False,
+    ) -> NDArray[np.floating]:
+        """Generate a loop path through all gates with height offsets.
+
+        Args:
+            gates: List of gate dictionaries containing position and orientation
+            obs: Observation dictionary containing current position
+            elevated_start: Whether to start at elevated position (default: False)
+
+        Returns:
+            Array of waypoints for gate traversal
+        """
         waypoints = []
         if elevated_start:
             # Start with an elevated position if specified
@@ -271,8 +365,15 @@ class TrajectoryPlanner:
 
         return np.array(waypoints)
 
-    def _get_gate_info(self, gate: dict) -> dict:
-        """Extract gate information including position, orientation, and dimensions."""
+    def _get_gate_info(self, gate: dict[str, Any]) -> dict[str, Any]:
+        """Extract gate information including position, orientation, and dimensions.
+
+        Args:
+            gate: Gate dictionary containing position and orientation information
+
+        Returns:
+            Dictionary containing processed gate information including center, normal, dimensions
+        """
         try:
             # Ensure we're working with a valid dictionary
             if not isinstance(gate, dict):
@@ -378,8 +479,18 @@ class TrajectoryPlanner:
                 "rpy": np.zeros(3),
             }
 
-    def _get_gates_with_observations(self, obs: dict, start_idx: int) -> list[dict]:
-        """Get gate info using observed positions when available."""
+    def _get_gates_with_observations(
+        self, obs: dict[str, Any], start_idx: int
+    ) -> list[dict[str, Any]]:
+        """Get gate info using observed positions when available.
+
+        Args:
+            obs: Observation dictionary containing gate positions
+            start_idx: Starting gate index
+
+        Returns:
+            List of gate dictionaries with observed or configured positions
+        """
         gates = []
         has_observations = "gates_pos" in obs and obs["gates_pos"] is not None
 
@@ -389,8 +500,16 @@ class TrajectoryPlanner:
 
         return gates
 
-    def _get_gate_with_observation(self, obs: dict, gate_idx: int) -> dict:
-        """Get a single gate with observed position if available."""
+    def _get_gate_with_observation(self, obs: dict[str, Any], gate_idx: int) -> dict[str, Any]:
+        """Get a single gate with observed position if available.
+
+        Args:
+            obs: Observation dictionary containing gate positions
+            gate_idx: Index of the gate to retrieve
+
+        Returns:
+            Gate dictionary with observed or configured position
+        """
         has_observations = "gates_pos" in obs and obs["gates_pos"] is not None
 
         if has_observations and gate_idx < len(obs["gates_pos"]):
@@ -437,15 +556,22 @@ class TrajectoryPlanner:
             return self.config.env.track["gates"][gate_idx]
 
     def _calculate_optimal_gate_crossing(
-        self, original_gate: np.ndarray, new_pos: np.ndarray
-    ) -> np.ndarray:
+        self, original_gate: NDArray[np.floating], new_pos: NDArray[np.floating]
+    ) -> NDArray[np.floating]:
         """Calculate the optimal gate crossing point that lies between the two gate centers.
 
         Minimizes adjustment while ensuring safe passage.
+
+        Args:
+            original_gate: Original gate position
+            new_pos: New observed gate position
+
+        Returns:
+            Optimal gate crossing position
         """
-        # Define drone safety clearance
-        drone_clearance_horizontal = 0.2  # cm clearance needed
-        gate_half_width = 0.25  # Gate margin is 25cm from center
+        # Define drone safety clearance (use instance variables loaded from config)
+        drone_clearance_horizontal = self.drone_clearance_horizontal
+        gate_half_width = self.gate_half_width
 
         # Vector from original to new gate center
         gate_displacement = new_pos - original_gate
@@ -478,7 +604,14 @@ class TrajectoryPlanner:
         return optimal_point
 
     def save_trajectories_to_file(self, filename: str = "trajectories.npz") -> bool:
-        """Save the current trajectory and drone positions to a file for later analysis."""
+        """Save the current trajectory and drone positions to a file for later analysis.
+
+        Args:
+            filename: Name of the output file (default: "trajectories.npz")
+
+        Returns:
+            True if successful, False otherwise
+        """
         try:
             # Check if we have a trajectory to save
             if self.current_trajectory is None:
@@ -610,9 +743,23 @@ class TrajectoryPlanner:
             return False
 
     def generate_smooth_replanning_waypoints(
-        self, obs: dict, current_vel: np.ndarray, updated_gate_idx: int, remaining_gates: list
-    ) -> np.ndarray:
-        """Generate waypoints that preserve momentum and avoid backward motion."""
+        self,
+        obs: dict[str, Any],
+        current_vel: NDArray[np.floating],
+        updated_gate_idx: int,
+        remaining_gates: list[dict[str, Any]],
+    ) -> NDArray[np.floating]:
+        """Generate waypoints that preserve momentum and avoid backward motion.
+
+        Args:
+            obs: Observation dictionary containing current state
+            current_vel: Current velocity vector
+            updated_gate_idx: Index of the updated gate
+            remaining_gates: List of remaining gates to traverse
+
+        Returns:
+            Array of waypoints for smooth replanning
+        """
         current_pos = obs["pos"]
         current_speed = np.linalg.norm(current_vel)
 
@@ -625,9 +772,9 @@ class TrajectoryPlanner:
             return np.array([current_pos])
 
         # 1. MOMENTUM PRESERVATION PHASE
-        if current_speed > 0.5:
-            momentum_time = 0.15
-            momentum_distance = min(current_speed * momentum_time, 0.3)
+        if current_speed > self.velocity_threshold:
+            momentum_time = self.momentum_time
+            momentum_distance = min(current_speed * momentum_time, self.max_momentum_distance)
 
             vel_normalized = current_vel / current_speed
             momentum_point = current_pos + vel_normalized * momentum_distance
@@ -655,7 +802,7 @@ class TrajectoryPlanner:
 
             # Create transition toward proper approach point
             approach_vector = proper_approach_point - momentum_point
-            transition_point = momentum_point + 0.7 * approach_vector
+            transition_point = momentum_point + self.transition_factor * approach_vector
             waypoints.append(transition_point)
 
         # 3. GATE APPROACH PHASE WITH JUMP PREVENTION
@@ -720,16 +867,24 @@ class TrajectoryPlanner:
         return waypoints_array
 
     def calculate_adaptive_speeds(
-        self, waypoints: np.ndarray, current_target_gate: int
+        self, waypoints: NDArray[np.floating], current_target_gate: int
     ) -> list[float]:
-        """Calculate adaptive speeds based on gate proximity and flight phase using gate_indices."""
+        """Calculate adaptive speeds based on gate proximity and flight phase using gate_indices.
+
+        Args:
+            waypoints: Array of waypoints for trajectory
+            current_target_gate: Index of the current target gate
+
+        Returns:
+            List of speeds corresponding to each waypoint
+        """
         speeds = []
 
-        # Speed configuration
-        base_speed = 1.8
-        high_speed = 2.2  # Increased speed between gates
-        approach_speed = 1.5  # Speed through gates
-        exit_speed = 2.2  # Speed after gates
+        # Speed configuration (use instance variables loaded from config)
+        base_speed = self.base_speed
+        high_speed = self.high_speed
+        approach_speed = self.approach_speed
+        exit_speed = self.exit_speed
 
         for i, _ in enumerate(waypoints):
             # Default to base speed

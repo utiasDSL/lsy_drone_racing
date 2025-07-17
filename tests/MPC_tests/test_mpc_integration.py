@@ -1,6 +1,7 @@
 """Integration tests for MPC controller that test end-to-end functionality."""
 
 from pathlib import Path
+from typing import Any, Dict, List, Union
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -14,14 +15,18 @@ class TestMPCIntegration:
     """Integration tests for complete MPC controller workflows."""
 
     @pytest.fixture
-    def real_config(self):
-        """Load actual config file if available, otherwise create mock."""
+    def real_config(self) -> Union[Mock, Any]:
+        """Load actual config file if available, otherwise create mock.
+
+        Returns:
+            Union[Mock, Any]: Either a loaded configuration object or a mock configuration.
+        """
         try:
             # Try to load real config - adjust path as needed
             config_path = Path(__file__).parents[2] / "config/level0.toml"
             if config_path.exists():
                 return load_config(config_path)
-        except:
+        except Exception:
             pass
 
         # Fallback to mock config
@@ -38,8 +43,12 @@ class TestMPCIntegration:
         return config
 
     @pytest.fixture
-    def flight_sequence(self):
-        """Create a sequence of observations simulating a flight."""
+    def flight_sequence(self) -> List[Dict[str, Any]]:
+        """Create a sequence of observations simulating a flight.
+
+        Returns:
+            List[Dict[str, Any]]: List of observation dictionaries representing a flight sequence.
+        """
         sequence = []
 
         # Starting position
@@ -74,9 +83,15 @@ class TestMPCIntegration:
         return sequence
 
     @pytest.mark.integration
-    def test_full_control_loop_sequence(self, real_config, flight_sequence):
-        """Test running full control loop for multiple time steps."""
+    def test_full_control_loop_sequence(
+        self, real_config: Union[Mock, Any], flight_sequence: List[Dict[str, Any]]
+    ) -> None:
+        """Test running full control loop for multiple time steps.
 
+        Args:
+            real_config: Configuration object (real or mock).
+            flight_sequence: List of observation dictionaries for flight simulation.
+        """
         # Mock the heavy Acados dependencies
         with patch(
             "lsy_drone_racing.control.attitude_mpc_combined.AcadosOcpSolver"
@@ -137,9 +152,12 @@ class TestMPCIntegration:
                             assert controller._tick == len(flight_sequence)
 
     @pytest.mark.integration
-    def test_gate_progression_tracking(self, real_config):
-        """Test gate progression tracking through multiple gates."""
+    def test_gate_progression_tracking(self, real_config: Union[Mock, Any]) -> None:
+        """Test gate progression tracking through multiple gates.
 
+        Args:
+            real_config: Configuration object (real or mock).
+        """
         with patch(
             "lsy_drone_racing.control.attitude_mpc_combined.AcadosOcpSolver"
         ) as mock_solver_class:
@@ -185,12 +203,15 @@ class TestMPCIntegration:
                             obs["target_gate"] = -1
                             controller.compute_control(obs)
                             assert controller.gates_passed == 4
-                            assert controller.flight_successful == True
+                            assert controller.flight_successful
 
     @pytest.mark.integration
-    def test_replanning_integration(self, real_config):
-        """Test integration of replanning functionality."""
+    def test_replanning_integration(self, real_config: Union[Mock, Any]) -> None:
+        """Test integration of replanning functionality.
 
+        Args:
+            real_config: Configuration object (real or mock).
+        """
         with patch(
             "lsy_drone_racing.control.attitude_mpc_combined.AcadosOcpSolver"
         ) as mock_solver_class:
@@ -283,9 +304,12 @@ class TestMPCIntegration:
                             assert 0 in controller.updated_gates
 
     @pytest.mark.integration
-    def test_weight_adjustment_integration(self, real_config):
-        """Test weight adjustment integration during replanning."""
+    def test_weight_adjustment_integration(self, real_config: Union[Mock, Any]) -> None:
+        """Test weight adjustment integration during replanning.
 
+        Args:
+            real_config: Configuration object (real or mock).
+        """
         with patch(
             "lsy_drone_racing.control.attitude_mpc_combined.AcadosOcpSolver"
         ) as mock_solver_class:
@@ -326,9 +350,12 @@ class TestMPCIntegration:
                             assert controller.mpc_weights["Q_pos"] >= original_q_pos
 
     @pytest.mark.integration
-    def test_episode_reset_integration(self, real_config):
-        """Test full episode reset integration."""
+    def test_episode_reset_integration(self, real_config: Union[Mock, Any]) -> None:
+        """Test full episode reset integration.
 
+        Args:
+            real_config: Configuration object (real or mock).
+        """
         with patch(
             "lsy_drone_racing.control.attitude_mpc_combined.AcadosOcpSolver"
         ) as mock_solver_class:
@@ -368,22 +395,25 @@ class TestMPCIntegration:
 
                             # Mock the file operations that happen in episode_reset
                             with patch.object(controller, "x_traj", []):  # Mock trajectory data
-                                with patch("numpy.savez") as mock_savez:  # Mock file saving
+                                with patch("numpy.savez"):  # Mock file saving
                                     # Reset episode
                                     controller.episode_reset()
 
                             # Verify complete reset
                             assert controller._tick == 0
                             assert controller.gates_passed == 0
-                            assert controller.finished == False
+                            assert not controller.finished
                             assert len(controller.updated_gates) == 0
-                            assert controller.weights_adjusted == False
+                            assert not controller.weights_adjusted
                             assert controller.mpc_weights == controller.original_mpc_weights
 
     @pytest.mark.integration
-    def test_trajectory_planning_integration(self, real_config):
-        """Test integration between controller and trajectory planner."""
+    def test_trajectory_planning_integration(self, real_config: Union[Mock, Any]) -> None:
+        """Test integration between controller and trajectory planner.
 
+        Args:
+            real_config: Configuration object (real or mock).
+        """
         with patch(
             "lsy_drone_racing.control.attitude_mpc_combined.AcadosOcpSolver"
         ) as mock_solver_class:
@@ -439,9 +469,12 @@ class TestMPCIntegration:
                             assert pred_traj.shape[1] == 3
 
     @pytest.mark.integration
-    def test_error_handling_integration(self, real_config):
-        """Test error handling in integrated system."""
+    def test_error_handling_integration(self, real_config: Union[Mock, Any]) -> None:
+        """Test error handling in integrated system.
 
+        Args:
+            real_config: Configuration object (real or mock).
+        """
         with patch(
             "lsy_drone_racing.control.attitude_mpc_combined.AcadosOcpSolver"
         ) as mock_solver_class:
