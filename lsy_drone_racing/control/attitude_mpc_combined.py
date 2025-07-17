@@ -21,20 +21,15 @@ from lsy_drone_racing.control.acados_model import export_quadrotor_ode_model, se
 from lsy_drone_racing.control.collision_avoidance import CollisionAvoidanceHandler
 from lsy_drone_racing.control.logging_setup import FlightLogger
 from lsy_drone_racing.control.smooth_trajectory_planner import TrajectoryPlanner
-from lsy_drone_racing.control.warmstart_data import (
-    lam_warmstart,
-    pi_warmstart,
-    u_warmstart,
-    x_warmstart,
-)
 from lsy_drone_racing.utils.controller_config import (
     get_collision_params,
-    get_constant,
     get_gate_distances,
     get_height_offsets,
     get_mpc_weights,
+    get_parameter,
     get_replanning_weights,
 )
+from lsy_drone_racing.utils.warmstart_loader import load_warmstart_data
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -58,9 +53,9 @@ class MPController(Controller):
 
         # Load constants from config
         # MPC parameters from config
-        self.N = get_constant("mpc.N")
-        self.T_HORIZON = get_constant("mpc.T_HORIZON")
-        self.replanning_frequency = get_constant("mpc.replanning_frequency")
+        self.N = get_parameter("mpc.N")
+        self.T_HORIZON = get_parameter("mpc.T_HORIZON")
+        self.replanning_frequency = get_parameter("mpc.replanning_frequency")
 
         # Gate distances from config
         gate_distances = get_gate_distances()
@@ -81,12 +76,12 @@ class MPController(Controller):
         self.replanning_mpc_weights = get_replanning_weights()
 
         # Control parameters from config
-        self.last_f_collective = get_constant("mpc.control.last_f_collective_default")
-        self.last_f_cmd = get_constant("mpc.control.last_f_cmd_default")
+        self.last_f_collective = get_parameter("mpc.control.last_f_collective_default")
+        self.last_f_cmd = get_parameter("mpc.control.last_f_cmd_default")
 
         # Weight adjustment duration from config
         self.weight_adjustment_duration = int(
-            get_constant("mpc.weight_adjustment_duration_ratio") * config.env.freq
+            get_parameter("mpc.weight_adjustment_duration_ratio") * config.env.freq
         )
 
         self.dt = self.T_HORIZON / self.N
@@ -103,7 +98,7 @@ class MPController(Controller):
         collision_params = get_collision_params()
 
         # Get ignored obstacle indices from config
-        ignored_indices = get_constant("collision_avoidance.ignored_obstacle_indices")
+        ignored_indices = get_parameter("collision_avoidance.ignored_obstacle_indices")
 
         self.collision_avoidance_handler = CollisionAvoidanceHandler(
             num_gates,
@@ -126,10 +121,9 @@ class MPController(Controller):
         )
 
         # Warm start the solver
+        x_warmstart, u_warmstart, pi_warmstart = load_warmstart_data()
         for stage in range(self.N + 1):
-            # Set initial state and control inputs
             self.acados_ocp_solver.set(stage, "x", np.array(x_warmstart[stage]))
-            self.acados_ocp_solver.set(stage, "lam", np.array(lam_warmstart[stage]))
 
             if stage < self.N:
                 self.acados_ocp_solver.set(stage, "u", np.array(u_warmstart[stage]))
@@ -289,7 +283,7 @@ class MPController(Controller):
                     diff = np.linalg.norm(config_pos - observed_pos)
 
                     # Get replanning threshold from config
-                    replanning_threshold = get_constant(
+                    replanning_threshold = get_parameter(
                         "trajectory_planner.optimization.replanning_threshold"
                     )
 

@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 
 
 from lsy_drone_racing.utils.controller_config import (
-    get_constant,
     get_optimization_params,
+    get_parameter,
     get_speed_params,
     get_trajectory_params,
 )
@@ -51,11 +51,11 @@ class TrajectoryPlanner:
         self.logger = logger  # FlightLogger instance
 
         # Load constants from config
-        self.N = N if N is not None else get_constant("trajectory_planner.N_default")
+        self.N = N if N is not None else get_parameter("trajectory_planner.N_default")
         self.T_HORIZON = (
             T_HORIZON
             if T_HORIZON is not None
-            else get_constant("trajectory_planner.T_HORIZON_default")
+            else get_parameter("trajectory_planner.T_HORIZON_default")
         )
 
         # Load trajectory parameters
@@ -84,20 +84,24 @@ class TrajectoryPlanner:
         self.exit_speed = speed_params["exit_speed"]
 
         # Load generation parameters
-        self.min_speed_threshold = get_constant("trajectory_planner.generation.min_speed_threshold")
-        self.min_gate_duration = get_constant("trajectory_planner.generation.min_gate_duration")
-        self.extra_points_final_gate = get_constant(
+        self.min_speed_threshold = get_parameter(
+            "trajectory_planner.generation.min_speed_threshold"
+        )
+        self.min_gate_duration = get_parameter("trajectory_planner.generation.min_gate_duration")
+        self.extra_points_final_gate = get_parameter(
             "trajectory_planner.generation.extra_points_final_gate"
         )
-        self.extra_points_normal = get_constant("trajectory_planner.generation.extra_points_normal")
+        self.extra_points_normal = get_parameter(
+            "trajectory_planner.generation.extra_points_normal"
+        )
 
         # Load smoothing parameters
-        self.momentum_time = get_constant("trajectory_planner.smoothing.momentum_time")
-        self.max_momentum_distance = get_constant(
+        self.momentum_time = get_parameter("trajectory_planner.smoothing.momentum_time")
+        self.max_momentum_distance = get_parameter(
             "trajectory_planner.smoothing.max_momentum_distance"
         )
-        self.velocity_threshold = get_constant("trajectory_planner.smoothing.velocity_threshold")
-        self.transition_factor = get_constant("trajectory_planner.smoothing.transition_factor")
+        self.velocity_threshold = get_parameter("trajectory_planner.smoothing.velocity_threshold")
+        self.transition_factor = get_parameter("trajectory_planner.smoothing.transition_factor")
 
         # Current target gate tracking
         self.current_target_gate_idx = 0

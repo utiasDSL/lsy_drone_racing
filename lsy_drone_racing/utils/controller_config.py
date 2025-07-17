@@ -339,7 +339,7 @@ def get_tuning_params(mode: str = "balanced") -> Dict[str, float]:
     return controller_config.get_tuning_params(mode)
 
 
-def get_constant(key_path: str, default: Any = None) -> Any:
+def get_parameter(key_path: str, default: Any = None) -> Any:
     """Get a constant value using dot notation."""
     return controller_config.get(key_path, default)
 
