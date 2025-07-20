@@ -354,8 +354,6 @@ class TrajectoryPlanner:
 
             # Always add gate center point
             gate_point = gate_info["center"].copy()
-            if gate_idx == 0:
-                gate_point[2] += 0.05  # Slightly elevated for first gate
             waypoints.append(gate_point)
             self.gate_indices.append(len(waypoints) - 1)
 
@@ -852,9 +850,6 @@ class TrajectoryPlanner:
             self.gate_indices.append(len(waypoints) - 1)
 
             gate_point = gate_info["center"].copy()
-            if absolute_gate_idx == 0:
-                gate_point[2] += 0.05
-
             waypoints.append(gate_point)
             self.gate_indices.append(len(waypoints) - 1)
 
