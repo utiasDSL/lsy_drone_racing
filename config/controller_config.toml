@@ -40,7 +40,7 @@ max_velocity_conservative = 2.0  # Maximum conservative velocity limit
 
 # Warmstart configuration
 [mpc.warmstart]
-file_path = "data/mpc_warmstart.json"  # Path to the warmstart file
+file_path = "control/data/mpc_warmstart.json"  # Path to the warmstart file
 
 [trajectory_planner]
 # Trajectory planner default parameters

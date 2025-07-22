@@ -32,8 +32,8 @@ def load_warmstart_data() -> Tuple[
     current_dir = Path(__file__).parent
 
     # Default relative path to mpc_warmstart.json (2 levels up, then into data/)
-    file_path = current_dir.parent.parent / Path(
-        get_parameter("mpc.warmstart.file_path", "data/mpc_warmstart.json")
+    file_path = current_dir.parent / Path(
+        get_parameter("mpc.warmstart.file_path", "control/data/mpc_warmstart.json")
     )
 
     try:
