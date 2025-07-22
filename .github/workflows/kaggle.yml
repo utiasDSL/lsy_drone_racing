@@ -27,6 +27,39 @@ jobs:
           init-shell: bash
           create-args: python=3.12
           cache-environment: true
+      - name: Install ACADOS with Python interface
+        run: |
+          git clone https://github.com/acados/acados.git
+          cd acados
+          git checkout tags/v0.5.0
+          git submodule update --recursive --init
+
+          mkdir -p build
+          cd build
+          cmake -DACADOS_WITH_QPOASES=ON ..
+          cmake .. -DACADOS_WITH_QPOASES=ON #-DCMAKE_INSTALL_PREFIX=$GITHUB_WORKSPACE/acados_install
+          make install -j$(nproc)
+
+          # Install acados Python interface
+          cd ../interfaces/acados_template
+          pip install .
+        shell: micromamba-shell {0}
+
+      - name: Export ACADOS Paths
+        run: |
+          echo "ACADOS_SOURCE_DIR=${GITHUB_WORKSPACE}/acados" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=${GITHUB_WORKSPACE}/acados/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "${GITHUB_WORKSPACE}/acados/interfaces/acados_template" >> $GITHUB_PATH
+        shell: bash
+
+        # ACADOS dependency
+      - name: Download tera_renderer
+        run: |
+          mkdir -p acados/bin
+          curl -L https://github.com/acados/tera_renderer/releases/download/v0.0.34/t_renderer-v0.0.34-linux \
+            -o acados/bin/t_renderer
+          chmod +x acados/bin/t_renderer
+        shell: micromamba-shell {0}
       - run: pip install .[online_submission,test]
         shell: micromamba-shell {0}
       - name: Run simulation tests
