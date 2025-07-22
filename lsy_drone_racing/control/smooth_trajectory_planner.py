@@ -935,5 +935,4 @@ class TrajectoryPlanner:
 
             speeds.append(speed)
 
-        print(f"Final speeds: {speeds}")
         return speeds

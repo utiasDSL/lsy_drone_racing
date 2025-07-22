@@ -380,12 +380,6 @@ class MPController(Controller):
 
                 result = is_moving_toward and is_reasonable_distance
 
-                # Debug logging for problematic cases
-                if not result and self._tick % 50 == 0:
-                    print(
-                        f"Not approaching gate {gate_idx}: alignment={approach_alignment:.2f}, distance={distance_to_gate:.2f}"
-                    )
-
                 return result
             else:
                 # If drone is not moving, assume it's valid to replan
@@ -393,7 +387,7 @@ class MPController(Controller):
 
         except Exception as e:
             # If any error occurs, err on the side of allowing replanning
-            print(f"Error in _is_drone_approaching_gate: {e}")
+            self.flight_logger.log_warning(f"Error in _is_drone_approaching_gate: {e}")
             return True
 
     def _execute_mpc_control(
@@ -643,7 +637,7 @@ class MPController(Controller):
         self._tick = 0
         self.finished = False
         self.updated_gates = set()
-        self.upadted_speeds = set()
+        self.updated_speeds = set()
         self._trajectory_start_tick = 0
         self.gates_passed = 0
         self.flight_successful = False
@@ -752,11 +746,10 @@ class MPController(Controller):
                     _ = self.acados_ocp_solver.cost_get(0, "W")
 
                 except Exception as verify_e:
-                    print(f"---Could not verify weights: {verify_e}")
+                    self.flight_logger.log_warning(f"---Could not verify weights: {verify_e}")
 
             except Exception as e:
-                print(f"----Failed to update OCP weights: {e}")
-                pass
+                self.flight_logger.log_warning(f"----Failed to update OCP weights: {e}")
 
     def get_path(self) -> np.ndarray:
         """Get the current path of the drone."""

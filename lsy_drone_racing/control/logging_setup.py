@@ -244,4 +244,3 @@ class FlightLogger:
     def log_error(self, message: str, tick: int = 0):
         """Log error message."""
         self.logger.error(message, extra={"tick": tick})
-        self.logger.error(message, extra={"tick": tick})
