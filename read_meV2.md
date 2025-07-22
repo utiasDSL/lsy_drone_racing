@@ -12,6 +12,47 @@ The system combines several advanced control techniques:
 - **Adaptive Flight Modes**: Different speed profiles and approach strategies for each gate
 - **Momentum Preservation**: Smooth trajectory transitions that avoid abrupt direction changes
 
+## 🛠️ Prerequisites
+### Setup
+
+Follow the getting started guide: https://lsy-drone-racing.readthedocs.io/en/latest/getting_started/setup.html
+
+## Acados
+Summary of installation:
+```bash
+# Clone the repo and check out the correct branch, initialize submodules.
+cd ~/repos
+git clone https://github.com/acados/acados.git
+cd acados
+git checkout tags/v0.5.0
+git submodule update --recursive --init
+
+# Build the application
+# Note: If you use Robostack, this might lead to issues. Try to build acados outside your environment if this is the case.
+mkdir -p build
+cd build
+cmake -DACADOS_WITH_QPOASES=ON ..
+# add more optional arguments e.g. -DACADOS_WITH_DAQP=ON, a list of CMake options is provided below
+make install -j4
+
+# In your environment, make sure you install the acados python interface:
+# Note: If you build acados outside your environment previously, activate it again before executing the following commands.
+cd ~/repos/acados
+pip install -e interfaces/acados_template
+
+# Make sure acados can be found by adding its location to the path. For robostack and micromamba, this would be:
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:"$HOME/repos/acados/lib"' > ~/micromamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_ld_library.sh
+echo 'export ACADOS_SOURCE_DIR="$HOME/repos/acados"' > ~/micromamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_source.sh
+
+
+# Deactivate and activate your env again such that the previous two lines can take effect.
+micromamba deactivate 
+micromamba activate ros_env
+# Run a simple example from the acados example to make sure it works.
+# If he asks you whether you want to get the t_renderer package installed automatically, press yes.
+python3 ~/repos/acados/examples/acados_python/getting_started/minimal_example_ocp.py
+```
+
 ## 🛠️ System Architecture
 
 ### Main Components
@@ -208,33 +249,3 @@ The trajectory planner implements racing line techniques:
 - **Control Frequency (240 Hz)**: Higher frequency for better tracking, more computation
 - **Replanning Frequency (10 ticks)**: Balance between reactivity and stability
 - **Cost Weights**: Tune for desired tracking vs. control effort trade-off
-
-### Speed Optimization Tips
-1. Adjust `approach_dist` and `exit_dist` for faster gate passages
-2. Tune speed profiles in `calculate_adaptive_speeds()` function
-3. Optimize gate center shifts for racing lines in `_get_gate_info()`
-4. Balance momentum preservation vs. trajectory tracking in replanning
-5. Use gate-specific height offsets to optimize flight paths
-
-## 📋 Usage Example
-
-```python
-# Initialize controller
-controller = MPController(obs, info, config)
-
-# Main control loop
-while not done:
-    # Compute control action
-    action = controller.compute_control(obs, info)
-    
-    # Execute action and get new observation
-    obs, reward, terminated, truncated, info = env.step(action)
-    
-    # Update controller state
-    done = controller.step_callback(action, obs, reward, terminated, truncated, info)
-
-# Episode completion
-controller.episode_callback()
-```
-
-The system automatically handles gate detection, trajectory replanning, collision avoidance, and performance logging throughout the flight.
