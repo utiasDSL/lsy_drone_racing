@@ -1,0 +1,178 @@
+# Controller Constants Configuration
+# This file contains all the constants used in the drone racing controllers
+# Organized by category for easy maintenance and tuning
+
+[collision_avoidance]
+# Physical dimensions for collision avoidance
+obstacle_radius = 0.14          # Radius of the obstacles in meters
+gate_length = 0.50              # Length of the gate in meters
+ellipsoid_radius = 0.12         # Diameter of the ellipsoid in meters
+ellipsoid_length = 0.7          # Length of the ellipsoid in meters
+ignored_obstacle_indices = [2]   # List of obstacle indices to ignore
+
+[mpc]
+# MPC controller parameters
+N = 60                          # Number of MPC horizon steps
+T_HORIZON = 2.0                 # MPC horizon time in seconds
+replanning_frequency = 1        # Frequency of replanning in ticks
+weight_adjustment_duration_ratio = 0.7  # Duration for weight adjustment as ratio of frequency
+
+# MPC cost function weights
+[mpc.weights]
+Q_pos = 8                       # Position tracking weight
+Q_vel = 0.01                    # Velocity tracking weight
+Q_rpy = 0.01                    # Attitude (roll/pitch/yaw) weight
+Q_thrust = 0.01                 # Collective thrust weight
+Q_cmd = 0.01                    # Command tracking weight
+R = 0.01                        # Control input regularization weight
+
+# Replanning weights (higher path following)
+[mpc.replanning_weights]
+Q_pos_multiplier = 2.0          # Multiplier for position weight during replanning
+
+# Control smoothing parameters
+[mpc.control]
+last_f_collective_default = 0.3  # Default collective thrust
+last_f_cmd_default = 0.3        # Default thrust command
+vel_scale_replanning = 1.2      # Velocity scaling during replanning
+vel_scale_normal = 1.0          # Normal velocity scaling
+max_velocity_conservative = 2.0  # Maximum conservative velocity limit
+
+# Warmstart configuration
+[mpc.warmstart]
+file_path = "data/mpc_warmstart.json"  # Path to the warmstart file
+
+[trajectory_planner]
+# Trajectory planner default parameters
+N_default = 30                  # Default number of trajectory points
+T_HORIZON_default = 1.5         # Default horizon time for trajectory planning
+
+# Gate approach distances per gate (4 gates)
+approach_dist = [0.2, 0.3, 0.2, 0.1]
+exit_dist = [0.4, 0.15, 0.2, 5.0]
+
+# Default distances for fallback
+default_approach_dist = 0.1
+default_exit_dist = 0.5
+
+# Height offset parameters per gate
+approach_height_offset = [0.01, 0.1, 0.0, 0.0]
+exit_height_offset = [0.1, 0.0, 0.05, 0.0]
+
+# Default height offsets for fallback
+default_approach_height_offset = 0.1
+default_exit_height_offset = 0.0
+
+# Trajectory generation parameters
+[trajectory_planner.generation]
+min_speed_threshold = 0.1       # Minimum speed threshold for time calculation
+gates_per_section = 3           # Number of waypoints per gate section
+min_gate_duration = 3.0         # Minimum duration per gate in seconds
+continuation_distances = [0.5, 1.0, 1.5, 2.0]  # Progressive continuation distances
+extra_points_final_gate = 1     # Extra points for final gate extension
+extra_points_normal = 30        # Extra points for normal gate extension
+
+# Trajectory smoothing parameters
+[trajectory_planner.smoothing]
+momentum_time = 0.15            # Time for momentum preservation
+max_momentum_distance = 0.3     # Maximum momentum distance
+velocity_threshold = 0.5        # Velocity threshold for momentum preservation
+transition_factor = 0.7         # Factor for transition point calculation
+
+# Speed calculation parameters
+[trajectory_planner.speeds]
+base_speed = 1.8                # Base speed for trajectory
+high_speed = 2.2                # High speed between gates
+approach_speed = 1.5            # Speed through gates
+exit_speed = 2.2                # Speed after gates
+
+# Gate optimization parameters
+[trajectory_planner.optimization]
+drone_clearance_horizontal = 0.2  # Horizontal clearance needed (meters)
+gate_half_width = 0.25          # Gate margin from center (meters)
+position_diff_threshold = 0.05   # Threshold for position difference (meters)
+replanning_threshold = 0.02     # Threshold for replanning (meters)
+
+# Approach detection parameters
+[trajectory_planner.approach_detection]
+velocity_threshold = 0.1        # Minimum velocity for approach detection
+approach_alignment_threshold = 0.3  # Dot product threshold for approach alignment
+reasonable_distance_threshold = 0.7  # Distance threshold for approach detection
+high_alignment_threshold = 0.7  # High alignment threshold for close approach
+
+# Trajectory extension parameters
+[trajectory_planner.extension]
+min_duration_buffer = 1.0       # Extra time buffer for minimum duration
+velocity_influence_light = 0.3  # Light velocity influence factor
+time_extension_factor = 1.0     # Factor for time extension
+
+# Gate processing parameters
+[trajectory_planner.gates]
+default_gate_height = 0.5       # Default gate height
+default_gate_width = 0.5        # Default gate width
+short_gate_threshold = 0.6      # Threshold for short gate detection
+height_adjustment_tall = 0.2    # Height adjustment for tall gates
+racing_line_shift = 0.05        # Shift for racing line optimization
+gate_2_special_shift_x = -0.05  # Special X shift for gate 2
+gate_2_special_shift_z = 0.05   # Special Z shift for gate 2
+
+# Logging and debugging parameters
+[logging]
+step_info_frequency = 100       # Frequency for step info logging
+tracking_info_frequency = 100   # Frequency for tracking info logging
+debug_print_frequency = 50      # Frequency for debug prints
+
+# File paths and naming
+[file_paths]
+flight_logs_dir = "flight_logs"
+planned_trajectories_suffix = "planned_trajectories"
+actual_trajectory_suffix = "actual_trajectory"
+trajectory_file_extension = ".npz"
+
+# Physics constants
+[physics]
+gravity = 9.81                  # Gravitational acceleration (m/s^2)
+
+# Solver parameters
+[solver]
+tolerance = 1e-5                # Solver tolerance
+qp_solver_warm_start = 1        # QP solver warm start flag
+qp_solver_iter_max = 20         # Maximum QP solver iterations
+nlp_solver_max_iter = 50        # Maximum NLP solver iterations
+verbose = false                 # Solver verbosity
+
+# Time and completion parameters
+[mission]
+default_completion_time = 15    # Default mission completion time (seconds)
+default_total_time = 11         # Default total mission time (seconds)
+default_des_yaw = 0.0           # Default desired yaw angle (radians)
+
+# Environment adaptation parameters
+[environment]
+sensor_range_default = 0.7      # Default sensor range for gate detection
+frequency_default = 50          # Default environment frequency
+attitude_frequency_default = 500  # Default attitude control frequency
+
+# Safety parameters
+[safety]
+min_clearance_horizontal = 0.2  # Minimum horizontal clearance from gates
+min_clearance_vertical = 0.1    # Minimum vertical clearance from gates
+max_approach_speed = 3.0        # Maximum approach speed to gates
+emergency_stop_distance = 0.1   # Distance for emergency stop
+
+# Tuning parameters for different difficulty levels
+[tuning]
+# Conservative settings for stable flight
+conservative_Q_pos = 10
+conservative_Q_vel = 0.05
+conservative_R = 0.005
+
+# Aggressive settings for faster flight
+aggressive_Q_pos = 5
+aggressive_Q_vel = 0.001
+aggressive_R = 0.001
+
+# Balanced settings (default)
+balanced_Q_pos = 8
+balanced_Q_vel = 0.01
+balanced_R = 0.01

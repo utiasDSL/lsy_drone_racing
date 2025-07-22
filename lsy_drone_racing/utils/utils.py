@@ -118,6 +118,82 @@ def draw_line(
         )
 
 
+def draw_ellipsoid(
+    env: RaceCoreEnv,
+    pos: NDArray,
+    size: NDArray,
+    rgba: NDArray | None = None,
+    rot: NDArray | None = None,
+):
+    """Draw an ellipsoid into the simulation.
+
+    Args:
+        env: The drone racing environment.
+        pos: The position of the ellipsoid.
+        size: The size of the ellipsoid.
+        rgba: The color of the ellipsoid.
+        rot: Optional 3x3 rotation matrix to set the orientation.
+
+    Note:
+        This function has to be called every time before the env.render() step.
+    """
+    assert pos.shape == (3,), f"Expected position to be a 3D vector, got {pos.shape}"
+    assert size.shape == (3,), f"Expected size to be a 2D vector, got {size.shape}"
+    if rot is not None:
+        assert rot.shape == (3, 3), f"Expected rot to be a 3x3 matrix, got {rot.shape}"
+    sim = env.unwrapped.sim
+    if sim.viewer is None:  # Do not attempt to add markers if viewer is still None
+        return
+    if sim.max_visual_geom < 1:
+        raise RuntimeError(
+            "Attempted to draw too many ellipsoids. Try to increase Sim.max_visual_geom"
+        )
+    viewer = sim.viewer.viewer
+    if rgba is None:
+        rgba = np.array([1.0, 0, 0, 1])
+    mat = rot.flatten() if rot is not None else np.eye(3).flatten()
+    viewer.add_marker(type=mujoco.mjtGeom.mjGEOM_ELLIPSOID, size=size, pos=pos, mat=mat, rgba=rgba)
+
+
+def draw_cylinder(
+    env: RaceCoreEnv,
+    pos: NDArray,
+    size: NDArray,
+    rgba: NDArray | None = None,
+    rot: NDArray | None = None,
+):
+    """Draw a cylinder into the simulation.
+
+    Args:
+        env: The drone racing environment.
+        pos: The position of the cylinder.
+        size: The size of the cylinder (radius, half height).
+        rgba: The color of the cylinder.
+        rot: Optional 3x3 rotation matrix to set the orientation.
+
+    Note:
+        This function has to be called every time before the env.render() step.
+    """
+    assert pos.shape == (3,), f"Expected position to be a 3D vector, got {pos.shape}"
+    assert size.shape == (2,), f"Expected size to be a 3D vector, got {size.shape}"
+    if rot is not None:
+        assert rot.shape == (3, 3), f"Expected rot to be a 3x3 matrix, got {rot.shape}"
+    sim = env.unwrapped.sim
+    if sim.viewer is None:  # Do not attempt to add markers if viewer is still None
+        return
+    if sim.max_visual_geom < 1:
+        raise RuntimeError(
+            "Attempted to draw too many cylinders. Try to increase Sim.max_visual_geom"
+        )
+    viewer = sim.viewer.viewer
+    if rgba is None:
+        rgba = np.array([1.0, 0, 0, 1])
+    mat = rot.flatten() if rot is not None else np.eye(3).flatten()
+    viewer.add_marker(
+        type=mujoco.mjtGeom.mjGEOM_CYLINDER, size=np.pad(size, (0, 1)), pos=pos, mat=mat, rgba=rgba
+    )
+
+
 def _rotation_matrix_from_points(p1: NDArray, p2: NDArray) -> R:
     """Generate rotation matrices that align their z-axis to p2-p1."""
     z_axis = (v := p2 - p1) / np.linalg.norm(v, axis=-1, keepdims=True)
