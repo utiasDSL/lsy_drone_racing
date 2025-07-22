@@ -1,6 +1,6 @@
 # Autonomous Drone Racing with MPC Control
 
-A high-performance Model Predictive Control (MPC) system for autonomous drone racing through dynamic gate sequences. This project implements a sophisticated trajectory planning and control system that can adapt to moving gates in real-time while optimizing flight performance.
+A high-performance Model Predictive Control (MPC) system for autonomous drone racing through dynamic gate sequences. This system implements sophisticated trajectory planning and control that can adapt to moving gates in real-time while optimizing flight performance.
 
 ## 🚁 Core Functionality
 
@@ -12,90 +12,53 @@ The system combines several advanced control techniques:
 - **Adaptive Flight Modes**: Different speed profiles and approach strategies for each gate
 - **Momentum Preservation**: Smooth trajectory transitions that avoid abrupt direction changes
 
-## 🛠️ Prerequisites
-
-follow insturctions from https://lsy-drone-racing.readthedocs.io/en/latest/getting_started/setup.html
-
-## 📋 System Architecture
+## 🛠️ System Architecture
 
 ### Main Components
 
 #### 1. **MPController** (`attitude_mpc_combined.py`)
 The main controller class that orchestrates all components:
 
-```python
-class MPController(Controller):
-    def __init__(self, obs, info, config):
-        # Initialize MPC solver, trajectory planner, collision avoidance
-        
-    def compute_control(self, obs, info):
-        # Main control computation with replanning logic
-        
-    def step_callback(self, action, obs, reward, terminated, truncated, info):
-        # Update controller state after each step
-```
-
-**Key Methods:**
-- `compute_control()`: Main control loop with adaptive replanning
-- `_check_and_execute_replanning()`: Detects gate movements and triggers replanning
-- `_execute_mpc_control()`: Solves MPC optimization problem
-- `_update_weights()`: Dynamically adjusts MPC cost weights
+**Key Functions:**
+- `__init__()`: Initializes MPC solver, trajectory planner, collision avoidance, and logging systems
+- `compute_control()`: Main control loop that executes MPC optimization with adaptive replanning
+- `_check_and_execute_replanning()`: Detects gate movements above threshold (0.05m) and triggers smooth replanning
+- `_execute_mpc_control()`: Solves MPC optimization problem and returns attitude commands
+- `_update_weights()`: Dynamically adjusts MPC cost weights during replanning phases
+- `step_callback()`: Updates controller state and logs performance metrics after each control step
 
 #### 2. **TrajectoryPlanner** (`smooth_trajectory_planner.py`)
 Handles waypoint generation and trajectory smoothing:
 
-```python
-class TrajectoryPlanner:
-    def generate_waypoints(self, obs, start_gate_idx, elevated_start):
-        # Create waypoints through all gates
-        
-    def generate_trajectory_from_waypoints(self, waypoints, target_gate_idx, use_velocity_aware):
-        # Convert waypoints to smooth trajectory using splines
-        
-    def generate_smooth_replanning_waypoints(self, obs, current_vel, updated_gate_idx, remaining_gates):
-        # Create momentum-preserving waypoints for replanning
-```
-
-**Features:**
-- Cubic spline interpolation for smooth trajectories
-- Velocity-aware boundary conditions for replanning
-- Adaptive speed profiles for different flight phases
-- Racing line optimization with gate center shifts
+**Key Functions:**
+- `generate_waypoints()`: Creates waypoints through all gates with approach/exit points and height offsets
+- `generate_trajectory_from_waypoints()`: Converts waypoints to smooth trajectories using cubic splines with velocity-aware boundary conditions
+- `generate_smooth_replanning_waypoints()`: Creates momentum-preserving waypoints for replanning that avoid backward motion
+- `loop_path_gen()`: Generates racing line through gates with individual distances and height offsets
+- `calculate_adaptive_speeds()`: Computes speed profiles based on gate proximity and flight phase
+- `save_trajectories_to_file()`: Saves planned trajectories and actual flight paths for analysis
 
 #### 3. **CollisionAvoidanceHandler** (`collision_avoidance.py`)
 Manages collision constraints for gates and obstacles:
 
-```python
-class CollisionAvoidanceHandler:
-    def setup_model(self, model):
-        # Add collision constraints to ACADOS model
-        
-    def update_parameters(self, ocp_solver, N_horizon, obs):
-        # Update constraint parameters with current positions
-        
-    def get_gate_ellipsoids(self):
-        # Return ellipsoid parameters for gate constraints
-```
-
-**Constraint Types:**
-- **Gate Constraints**: Four ellipsoids per gate (top, bottom, left, right borders)
-- **Obstacle Constraints**: Infinite cylinders for static obstacles
-- **Dynamic Updates**: Real-time parameter updates as gates move
+**Key Functions:**
+- `setup_model()`: Adds collision constraints to ACADOS model using complementary constraints
+- `setup_ocp()`: Configures OCP with constraint dimensions and slack variables
+- `update_parameters()`: Updates constraint parameters with current gate/obstacle positions in real-time
+- `get_gate_ellipsoids()`: Returns ellipsoid parameters (4 per gate) for constraint visualization
+- `get_obstacle_cylinders()`: Returns infinite cylinder parameters for obstacle constraints
+- `get_active_obstacle_indices()`: Filters obstacles based on ignored indices configuration
 
 #### 4. **FlightLogger** (`logging_setup.py`)
 Comprehensive logging system for analysis and debugging:
 
-```python
-class FlightLogger:
-    def log_initialization(self, controller_params, tick):
-        # Log controller setup parameters
-        
-    def log_replanning_event(self, replan_info, tick):
-        # Log trajectory replanning events
-        
-    def log_tracking_performance(self, tracking_info, tick):
-        # Log MPC tracking performance
-```
+**Key Functions:**
+- `setup_logging()`: Configures file-only logging with timestamped outputs
+- `log_initialization()`: Records controller parameters, weights, and configuration at startup
+- `log_replanning_event()`: Logs trajectory replanning events with gate position differences
+- `log_tracking_performance()`: Records MPC tracking errors and solver performance
+- `log_gate_progress()`: Tracks gate passing events and completion status
+- `log_episode_summary()`: Generates comprehensive flight statistics and success metrics
 
 ## ⚙️ Configuration Parameters
 
@@ -105,10 +68,21 @@ class FlightLogger:
 N = 60                    # Prediction horizon steps
 T_HORIZON = 2.0          # Prediction horizon time (seconds)
 freq = 240               # Control frequency (Hz)
+replanning_frequency = 10 # Replanning check frequency (ticks)
 
-# Cost function weights
+# Cost function weights (tunable for performance)
 mpc_weights = {
-    'Q_pos': 8,          # Position tracking weight
+    'Q_pos': 8.0,        # Position tracking weight
+    'Q_vel': 0.01,       # Velocity tracking weight  
+    'Q_rpy': 0.01,       # Attitude weight
+    'Q_thrust': 0.01,    # Thrust weight
+    'Q_cmd': 0.01,       # Command tracking weight
+    'R': 0.01           # Control regularization weight
+}
+
+# Enhanced weights during replanning (temporary boost)
+replanning_weights = {
+    'Q_pos': 16.0,       # 2x position tracking during replanning
     'Q_vel': 0.01,       # Velocity tracking weight  
     'Q_rpy': 0.01,       # Attitude weight
     'Q_thrust': 0.01,    # Thrust weight
@@ -120,80 +94,147 @@ mpc_weights = {
 ### Gate-Specific Parameters
 ```python
 # Individual gate approach distances (meters)
-approach_dist = [0.2, 0.3, 0.2, 0.1]
+approach_dist = [0.2, 0.3, 0.2, 0.1]     # Distance before gate center
 
 # Individual gate exit distances (meters)  
-exit_dist = [0.4, 0.15, 0.2, 5.0]
+exit_dist = [0.4, 0.15, 0.2, 5.0]        # Distance after gate center
 
 # Height offsets for approach points (meters)
-approach_height_offset = [0.01, 0.1, 0.0, 0.0]
+approach_height_offset = [0.01, 0.1, 0.0, 0.0]  # Vertical offset before gates
 
 # Height offsets for exit points (meters)
-exit_height_offset = [0.1, 0.0, 0.05, 0.0]
+exit_height_offset = [0.1, 0.0, 0.05, 0.0]      # Vertical offset after gates
+
+# Default values for gates beyond configured indices
+default_approach_dist = 0.2              # Default approach distance
+default_exit_dist = 0.3                  # Default exit distance
+default_approach_height_offset = 0.0     # Default approach height
+default_exit_height_offset = 0.0         # Default exit height
+```
+
+### Speed Configuration
+```python
+# Speed profiles for different flight phases (m/s)
+base_speed = 1.6         # Normal cruising speed
+high_speed = 2.5         # Speed between gates
+approach_speed = 1.0     # Speed when approaching gates
+exit_speed = 2.0         # Speed when exiting gates
 ```
 
 ### Collision Avoidance Parameters
 ```python
-OBSTACLE_RADIUS = 0.14    # Obstacle cylinder radius (meters)
-GATE_LENGTH = 0.50        # Gate length (meters)
-ELLIPSOID_RADIUS = 0.12   # Gate ellipsoid radius (meters)
-ELLIPSOID_LENGTH = 0.7    # Gate ellipsoid length (meters)
+# Obstacle and gate constraint parameters
+obstacle_radius = 0.14          # Obstacle cylinder radius (meters)
+gate_length = 0.50             # Gate length (meters)
+ellipsoid_radius = 0.12        # Gate ellipsoid radius (meters)
+ellipsoid_length = 0.7         # Gate ellipsoid length (meters)
+
+# Replanning threshold
+replanning_threshold = 0.05     # Minimum gate movement to trigger replanning (meters)
+
+# Ignored obstacles (list of indices to skip)
+ignored_obstacle_indices = []   # Obstacles to ignore for collision avoidance
+```
+
+### Trajectory Planning Parameters
+```python
+# Trajectory generation settings
+N_default = 30                  # Default number of trajectory points
+T_HORIZON_default = 1.5        # Default horizon time
+
+# Smoothing parameters
+momentum_time = 0.3            # Time to preserve momentum during replanning
+max_momentum_distance = 1.0    # Maximum momentum preservation distance
+velocity_threshold = 0.5       # Minimum velocity for momentum preservation
+transition_factor = 0.7        # Blending factor for smooth transitions
+
+# Generation parameters
+min_speed_threshold = 0.1      # Minimum allowable speed
+min_gate_duration = 1.0        # Minimum time per gate
+extra_points_final_gate = 50   # Extra trajectory points after final gate
+extra_points_normal = 200      # Extra trajectory points for intermediate gates
 ```
 
 ## 🎯 Advanced Features
 
 ### Adaptive Replanning
-The system monitors gate positions and automatically replans trajectories when gates move:
+The system monitors gate positions and automatically replans trajectories when gates move beyond the threshold:
 
-- **Movement Detection**: Compares observed vs. configured gate positions
-- **Approach Detection**: Only replans when drone is approaching the moved gate
-- **Smooth Transitions**: Preserves momentum to avoid abrupt direction changes
-- **Weight Adjustment**: Temporarily increases path-following weights during replanning
+- **Movement Detection**: Compares observed vs. configured gate positions every 10 ticks
+- **Approach Detection**: Only replans when drone is approaching the moved gate (prevents unnecessary replanning)
+- **Smooth Transitions**: Preserves forward momentum to avoid abrupt direction changes
+- **Weight Adjustment**: Temporarily increases path-following weights during replanning phase
 
 ### Dynamic Weight Management
 The MPC cost function weights adapt based on flight conditions:
 
 ```python
-# Normal flight weights
-original_weights = {...}
+# Weight adjustment phases
+weight_adjustment_duration = 2.4 * freq  # Duration of enhanced weights (seconds * frequency)
 
-# Enhanced path-following during replanning
-replanning_weights = {
-    'Q_pos': original_weights['Q_pos'] * 2.0  # Increased position tracking
-}
+# Gradual transition between weight sets during replanning
+def _update_weights(self):
+    if self.weights_adjusted:
+        ticks_since_start = self._tick - self.weight_adjustment_start_tick
+        if ticks_since_start < self.weight_adjustment_duration:
+            self.mpc_weights = self.replanning_mpc_weights.copy()  # Enhanced tracking
+        else:
+            self.mpc_weights = self.original_mpc_weights.copy()    # Return to normal
+            self.weights_adjusted = False
 ```
 
 ### Racing Line Optimization
 The trajectory planner implements racing line techniques:
 
 - **Gate Center Shifts**: Shifts gate crossing points forward for optimal racing lines
-- **Speed Profiles**: Different speeds for approach, gate passage, and exit phases
-- **Momentum Preservation**: Maintains forward momentum through turns
+- **Speed Profiles**: Different speeds for approach (1.0 m/s), gate passage (1.0 m/s), and exit phases (2.0 m/s)
+- **Momentum Preservation**: Maintains forward momentum through turns using cubic spline velocity boundary conditions
 
-## 📊 Logging and Analysis
+## 📊 Control Pipeline
 
-### Real-time Logging
-All flight data is logged to files in `flight_logs/`:
-
-- **Controller Parameters**: Initial setup and configuration
-- **Trajectory Updates**: Waypoint generation and replanning events
-- **Gate Progress**: Gate passing events and completion status
-- **Performance Metrics**: Tracking errors and solver status
-- **Episode Summary**: Final flight statistics and success metrics
-
-### Saved Trajectory Data
-Planned trajectories and actual flight paths are saved as `.npz` files for post-flight analysis.
+1. **Initialization**: Load configuration, setup MPC solver, initialize trajectory planner and collision avoidance
+2. **Gate Progress Tracking**: Monitor current target gate and gates passed
+3. **Replanning Check**: Every 10 ticks, check if gates have moved beyond 0.05m threshold
+4. **Weight Update**: Adjust MPC weights based on replanning status
+5. **Collision Parameter Update**: Update ellipsoid and cylinder constraints with current positions
+6. **MPC Optimization**: Solve for optimal control inputs over prediction horizon
+7. **Control Output**: Return attitude commands [thrust, roll, pitch, yaw]
+8. **Logging**: Record performance metrics and flight data
 
 ## 📈 Performance Optimization
 
 ### Key Performance Parameters
-- **Prediction Horizon**: Balance between performance and computational cost
-- **Control Frequency**: Higher frequency for better tracking, more computation
+- **Prediction Horizon (N=60)**: Balance between performance and computational cost
+- **Control Frequency (240 Hz)**: Higher frequency for better tracking, more computation
+- **Replanning Frequency (10 ticks)**: Balance between reactivity and stability
 - **Cost Weights**: Tune for desired tracking vs. control effort trade-off
-- **Replanning Frequency**: Balance between reactivity and stability
 
 ### Speed Optimization Tips
 1. Adjust `approach_dist` and `exit_dist` for faster gate passages
-2. Tune speed profiles in `calculate_adaptive_speeds()`
-3. Optimize gate center shifts for racing lines
-4. Balance momentum preservation vs. trajectory tracking
+2. Tune speed profiles in `calculate_adaptive_speeds()` function
+3. Optimize gate center shifts for racing lines in `_get_gate_info()`
+4. Balance momentum preservation vs. trajectory tracking in replanning
+5. Use gate-specific height offsets to optimize flight paths
+
+## 📋 Usage Example
+
+```python
+# Initialize controller
+controller = MPController(obs, info, config)
+
+# Main control loop
+while not done:
+    # Compute control action
+    action = controller.compute_control(obs, info)
+    
+    # Execute action and get new observation
+    obs, reward, terminated, truncated, info = env.step(action)
+    
+    # Update controller state
+    done = controller.step_callback(action, obs, reward, terminated, truncated, info)
+
+# Episode completion
+controller.episode_callback()
+```
+
+The system automatically handles gate detection, trajectory replanning, collision avoidance, and performance logging throughout the flight.
