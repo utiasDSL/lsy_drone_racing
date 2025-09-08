@@ -27,7 +27,7 @@ dependencies = [
     "toml >= 0.10.2",
     "ml-collections >= 1.0",
     "packaging >= 24.0",
-    "crazyflow >= 0.0.1",
+    "crazyflow == 0.0.1",
     "jax >0.5,<0.6",
 ]
 
