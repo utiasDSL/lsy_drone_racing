@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from jax import Array, Device
     from ml_collections import ConfigDict
     from mujoco import MjSpec
+    from mujoco.mjx import Data
     from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
@@ -285,32 +286,32 @@ class RaceCoreEnv:
         specs = {} if disturbances is None else disturbances
         self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
         specs = {} if randomizations is None else randomizations
-        self.randomizations = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
+        randomizations = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
 
         # Load the track into the simulation and compile the reset and step functions with hooks
-        self._setup_sim()
+        self._setup_sim(randomizations)
 
-        # Create the environment data struct. TODO: Remove unnecessary replacements
+        # Create the environment data struct.
         n_gates, n_obstacles = len(track.gates), len(track.obstacles)
-        masks = self._load_contact_masks(self.sim)
-        masks = jp.array(masks, dtype=bool, device=self.device)
-        gate_mj_ids, obstacle_mj_ids = self.gates["mj_ids"], self.obstacles["mj_ids"]
-        pos_limit_low = jp.array([-3, -3, 0], dtype=np.float32, device=self.device)
-        pos_limit_high = jp.array([3, 3, 2.5], dtype=np.float32, device=self.device)
+        contact_masks = self._load_contact_masks(self.sim)
+        m = self.sim.mj_model
+        gate_ids = [int(m.body(f"gate:{i}").mocapid.squeeze()) for i in range(n_gates)]
+        obstacle_ids = [int(m.body(f"obstacle:{i}").mocapid.squeeze()) for i in range(n_obstacles)]
         self.data = EnvData.create(
-            n_envs,
-            n_drones,
-            n_gates,
-            n_obstacles,
-            masks,
-            gate_mj_ids,
-            obstacle_mj_ids,
-            max_episode_steps,
-            sensor_range,
-            pos_limit_low,
-            pos_limit_high,
-            self.device,
+            n_envs=n_envs,
+            n_drones=n_drones,
+            n_gates=n_gates,
+            n_obstacles=n_obstacles,
+            contact_masks=contact_masks,
+            gate_mj_ids=gate_ids,
+            obstacle_mj_ids=obstacle_ids,
+            max_episode_steps=max_episode_steps,
+            sensor_range=sensor_range,
+            pos_limit_low=[-3, -3, 0],
+            pos_limit_high=[3, 3, 2.5],
+            device=self.device,
         )
+        self.randomize_track = build_track_randomization_fn(randomizations, gate_ids, obstacle_ids)
 
     def _reset(
         self, *, seed: int | None = None, options: dict | None = None, mask: Array | None = None
@@ -325,14 +326,20 @@ class RaceCoreEnv:
         Returns:
             Observation and info.
         """
-        # TODO: Allow per-world sim seeding
         if seed is not None:
             self.sim.seed(seed)
             self._np_random = np.random.default_rng(seed)  # Also update gymnasium's rng
-        # Randomization of gates, obstacles and drones is compiled into the sim reset function with
-        # the sim.reset_hook function, so we don't need to explicitly do it here
+        # Randomization of the drone is compiled into the sim reset pipeline, so we don't need to
+        # explicitly do it here
         self.sim.reset(mask=mask)
-        self.data = self._reset_env_data(self.data, self.sim.data.states.pos, mask)
+        key, subkey = jax.random.split(self.sim.data.core.rng_key)
+        # Randomize the track
+        self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
+        self.sim.mjx_data = self.randomize_track(self.sim.mjx_data, mask, subkey)
+        # Reset the environment data
+        self.data = self._reset_env_data(
+            self.data, self.sim.data.states.pos, self.sim.mjx_data.mocap_pos, mask
+        )
         return self.obs(), self.info()
 
     def _step(self, action: Array) -> tuple[dict[str, Array], float, bool, bool, dict]:
@@ -396,11 +403,11 @@ class RaceCoreEnv:
             self.sim.mjx_data.mocap_pos,
             self.sim.mjx_data.mocap_quat,
             self.data.gates_visited,
-            self.gates["mj_ids"],
+            self.data.gate_mj_ids,
             self.gates["nominal_pos"],
             self.gates["nominal_quat"],
             self.data.obstacles_visited,
-            self.obstacles["mj_ids"],
+            self.data.obstacle_mj_ids,
             self.obstacles["nominal_pos"],
         )
         obs = {
@@ -458,16 +465,28 @@ class RaceCoreEnv:
 
     @staticmethod
     @jax.jit
-    def _reset_env_data(data: EnvData, drone_pos: Array, mask: Array | None = None) -> EnvData:
+    def _reset_env_data(
+        data: EnvData, drone_pos: Array, mocap_pos: Array, mask: Array | None = None
+    ) -> EnvData:
         """Reset auxiliary variables of the environment data."""
         mask = jp.ones(data.steps.shape, dtype=bool) if mask is None else mask
         target_gate = jp.where(mask[..., None], 0, data.target_gate)
         last_drone_pos = jp.where(mask[..., None, None], drone_pos, data.last_drone_pos)
         disabled_drones = jp.where(mask[..., None], False, data.disabled_drones)
         steps = jp.where(mask, 0, data.steps)
-        gates_visited = jp.where(mask[..., None, None], False, data.gates_visited)
-        obstacles_visited = jp.where(mask[..., None, None], False, data.obstacles_visited)
-        data = data.replace(
+        # Check which gates are in range of the drone
+        gates_pos = mocap_pos[:, data.gate_mj_ids]
+        dpos = drone_pos[..., None, :2] - gates_pos[:, None, :, :2]
+        gates_visited = jp.linalg.norm(dpos, axis=-1) < data.sensor_range
+        gates_visited = jp.where(mask[..., None, None], gates_visited, data.gates_visited)
+        # And which obstacles are in range
+        obstacles_pos = mocap_pos[:, data.obstacle_mj_ids]
+        dpos = drone_pos[..., None, :2] - obstacles_pos[:, None, :, :2]
+        obstacles_visited = jp.linalg.norm(dpos, axis=-1) < data.sensor_range
+        obstacles_visited = jp.where(
+            mask[..., None, None], obstacles_visited, data.obstacles_visited
+        )
+        return data.replace(
             target_gate=target_gate,
             last_drone_pos=last_drone_pos,
             disabled_drones=disabled_drones,
@@ -476,7 +495,6 @@ class RaceCoreEnv:
             steps=steps,
             marked_for_reset=jp.where(mask, 0, data.marked_for_reset),  # Unmark after env reset
         )
-        return data
 
     @staticmethod
     @jax.jit
@@ -505,13 +523,9 @@ class RaceCoreEnv:
         # Update which gates and obstacles are or have been in range of the drone
         sensor_range = data.sensor_range
         dpos = drone_pos[..., None, :2] - gates_pos[:, None, :, :2]
-        gates_visited = jp.logical_or(
-            data.gates_visited, jp.linalg.norm(dpos, axis=-1) < sensor_range
-        )
+        gates_visited = data.gates_visited | (jp.linalg.norm(dpos, axis=-1) < sensor_range)
         dpos = drone_pos[..., None, :2] - obstacles_pos[:, None, :, :2]
-        obstacles_visited = jp.logical_or(
-            data.obstacles_visited, jp.linalg.norm(dpos, axis=-1) < sensor_range
-        )
+        obstacles_visited = data.obstacles_visited | (jp.linalg.norm(dpos, axis=-1) < sensor_range)
         data = data.replace(
             last_drone_pos=drone_pos,
             target_gate=target_gate,
@@ -566,12 +580,11 @@ class RaceCoreEnv:
         pos = jax.numpy.where(mask[..., None], -1, data.states.pos)
         return data.replace(states=data.states.replace(pos=pos))
 
-    def _setup_sim(self):
+    def _setup_sim(self, randomizations: dict):
         """Setup the simulation data and build the reset and step functions with custom hooks."""
         gate_spec = mujoco.MjSpec.from_file(str(self.gate_spec_path))
         obstacle_spec = mujoco.MjSpec.from_file(str(self.obstacle_spec_path))
         self._load_track_into_sim(gate_spec, obstacle_spec)
-        self._register_object_ids()
         # Set the initial drone states
         pos = self.sim.data.states.pos.at[...].set(self.drone["pos"])
         quat = self.sim.data.states.quat.at[...].set(self.drone["quat"])
@@ -581,10 +594,7 @@ class RaceCoreEnv:
         self.sim.data = self.sim.data.replace(states=states)
         self.sim.build_default_data()
         # Build the reset randomizations and disturbances into the sim itself
-        reset_fn = build_reset_hook(
-            self.randomizations, self.gates["mj_ids"], self.obstacles["mj_ids"]
-        )
-        self.sim.reset_pipeline = self.sim.reset_pipeline + (reset_fn,)
+        self.sim.reset_pipeline = self.sim.reset_pipeline + (build_reset_fn(randomizations),)
         self.sim.build_reset_fn()
         if "dynamics" in self.disturbances:
             disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
@@ -615,32 +625,22 @@ class RaceCoreEnv:
             obstacle.mocap = True
         self.sim.build_mjx()
 
-    def _register_object_ids(self) -> tuple[dict, dict]:
-        """Register the ids and mocap ids of the gates and obstacles."""
-        n_gates, n_obstacles = len(self.gates["pos"]), len(self.obstacles["pos"])
-        mj_model = self.sim.mj_model
-        self.gates["ids"] = [mj_model.body(f"gate:{i}").id for i in range(n_gates)]
-        mj_ids = [int(mj_model.body(f"gate:{i}").mocapid.squeeze()) for i in range(n_gates)]
-        self.gates["mj_ids"] = jp.array(mj_ids, dtype=np.int32, device=self.device)
-        self.obstacles["ids"] = [mj_model.body(f"obstacle:{i}").id for i in range(n_obstacles)]
-        mj_ids = [int(mj_model.body(f"obstacle:{i}").mocapid.squeeze()) for i in range(n_obstacles)]
-        self.obstacles["mj_ids"] = jp.array(mj_ids, dtype=np.int32, device=self.device)
-
-    def _load_contact_masks(self, sim: Sim) -> Array:
+    @staticmethod
+    def _load_contact_masks(sim: Sim) -> Array:
         """Load contact masks for the simulation that zero out irrelevant contacts per drone."""
-        n_contacts = len(self.sim.mjx_data.contact.geom1[0])
+        contact = sim.mjx_data._impl.contact
+        n_contacts = len(contact.geom1[0])
         masks = np.zeros((sim.n_drones, n_contacts), dtype=bool)
-        mj_model = sim.mj_model
-        geom1 = sim.mjx_data.contact.geom1[0]  # We only need one world to create the mask
-        geom2 = sim.mjx_data.contact.geom2[0]
+        # We only need one world to create the mask
+        geom1, geom2 = (contact.geom1[0], contact.geom2[0])
         for i in range(sim.n_drones):
-            geom_start = mj_model.body_geomadr[mj_model.body(f"drone:{i}").id]
-            geom_count = mj_model.body_geomnum[mj_model.body(f"drone:{i}").id]
+            geom_start = sim.mj_model.body_geomadr[sim.mj_model.body(f"drone:{i}").id]
+            geom_count = sim.mj_model.body_geomnum[sim.mj_model.body(f"drone:{i}").id]
             geom1_valid = (geom1 >= geom_start) & (geom1 < geom_start + geom_count)
             geom2_valid = (geom2 >= geom_start) & (geom2 < geom_start + geom_count)
             masks[i, :] = geom1_valid | geom2_valid
-        geom_start = mj_model.body_geomadr[mj_model.body("world").id]
-        geom_count = mj_model.body_geomnum[mj_model.body("world").id]
+        geom_start = sim.mj_model.body_geomadr[sim.mj_model.body("world").id]
+        geom_count = sim.mj_model.body_geomnum[sim.mj_model.body("world").id]
         geom1_valid = (geom1 >= geom_start) & (geom1 < geom_start + geom_count)
         geom2_valid = (geom2 >= geom_start) & (geom2 < geom_start + geom_count)
         masks[:, (geom1_valid | geom2_valid).squeeze()] = 0  # Floor contacts are not collisions
@@ -666,36 +666,58 @@ def rng_spec2fn(fn_spec: dict) -> Callable:
     return random_fn
 
 
-def build_reset_hook(
-    randomizations: dict, gate_mocap_ids: list[int], obstacle_mocap_ids: list[int]
-) -> Callable[[SimData, Array], SimData]:
+def build_reset_fn(randomizations: dict) -> Callable[[SimData, Array], SimData]:
     """Build the reset hook for the simulation."""
-    randomization_fns = []
+    randomization_fns = ()
     for target, rng in sorted(randomizations.items()):
         match target:
             case "drone_pos":
-                randomization_fns.append(randomize_drone_pos_fn(rng))
+                randomization_fns += (randomize_drone_pos_fn(rng),)
             case "drone_rpy":
-                randomization_fns.append(randomize_drone_quat_fn(rng))
+                randomization_fns += (randomize_drone_quat_fn(rng),)
             case "drone_mass":
-                randomization_fns.append(randomize_drone_mass_fn(rng))
+                randomization_fns += (randomize_drone_mass_fn(rng),)
             case "drone_inertia":
-                randomization_fns.append(randomize_drone_inertia_fn(rng))
-            case "gate_pos":
-                randomization_fns.append(randomize_gate_pos_fn(rng, gate_mocap_ids))
-            case "gate_rpy":
-                randomization_fns.append(randomize_gate_rpy_fn(rng, gate_mocap_ids))
-            case "obstacle_pos":
-                randomization_fns.append(randomize_obstacle_pos_fn(rng, obstacle_mocap_ids))
+                randomization_fns += (randomize_drone_inertia_fn(rng),)
+            case "gate_pos" | "gate_rpy" | "obstacle_pos":
+                pass
             case _:
                 raise ValueError(f"Invalid target: {target}")
 
-    def reset_hook(data: SimData, mask: Array) -> SimData:
+    def reset_fn(data: SimData, mask: Array) -> SimData:
         for randomize_fn in randomization_fns:
             data = randomize_fn(data, mask)
         return data
 
-    return reset_hook
+    return reset_fn
+
+
+def build_track_randomization_fn(
+    randomizations: dict, gate_mocap_ids: list[int], obstacle_mocap_ids: list[int]
+) -> Callable[[Data, Array, jax.random.PRNGKey], Data]:
+    """Build the track randomization function for the simulation."""
+    randomization_fns = ()
+    for target, rng in sorted(randomizations.items()):
+        match target:
+            case "gate_pos":
+                randomization_fns += (randomize_gate_pos_fn(rng, gate_mocap_ids),)
+            case "gate_rpy":
+                randomization_fns += (randomize_gate_rpy_fn(rng, gate_mocap_ids),)
+            case "obstacle_pos":
+                randomization_fns += (randomize_obstacle_pos_fn(rng, obstacle_mocap_ids),)
+            case "drone_pos" | "drone_rpy" | "drone_mass" | "drone_inertia":
+                pass
+            case _:
+                raise ValueError(f"Invalid target: {target}")
+
+    @jax.jit
+    def track_randomization(data: Data, mask: Array, key: jax.random.PRNGKey) -> Data:
+        keys = jax.random.split(key, len(randomization_fns))
+        for key, randomize_fn in zip(keys, randomization_fns, strict=True):
+            data = randomize_fn(data, mask, key)
+        return data
+
+    return track_randomization
 
 
 def build_dynamics_disturbance_fn(

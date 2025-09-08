@@ -13,6 +13,7 @@ from crazyflow.sim.structs import SimData
 from crazyflow.utils import leaf_replace
 from jax import Array
 from jax.scipy.spatial.transform import Rotation as R
+from mujoco.mjx import Data
 
 
 def randomize_drone_pos_fn(
@@ -75,49 +76,43 @@ def randomize_drone_inertia_fn(
 
 def randomize_gate_pos_fn(
     randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array], gate_ids: list[int]
-) -> Callable[[SimData, Array], SimData]:
+) -> Callable[[Data, Array | None, jax.random.PRNGKey], Data]:
     """Create a function that randomizes the gate position."""
 
-    def randomize_gate_pos(data: SimData, mask: Array) -> SimData:
-        key, subkey = jax.random.split(data.core.rng_key)
-        gate_pos = data.mjx_data.mocap_pos[:, gate_ids, :]
-        gate_pos = gate_pos + randomize_fn(subkey, shape=gate_pos.shape)
-        mocap_pos = data.mjx_data.mocap_pos.at[:, gate_ids, :].set(gate_pos)
-        mjx_data = leaf_replace(data.mjx_data, mask, mocap_pos=mocap_pos)
-        return data.replace(core=data.core.replace(rng_key=key), mjx_data=mjx_data)
+    def randomize_gate_pos(mjx_data: Data, mask: Array | None, key: jax.random.PRNGKey) -> Data:
+        gate_pos = mjx_data.mocap_pos[:, gate_ids, :]
+        gate_pos = gate_pos + randomize_fn(key, shape=gate_pos.shape)
+        mocap_pos = mjx_data.mocap_pos.at[:, gate_ids, :].set(gate_pos)
+        return leaf_replace(mjx_data, mask, mocap_pos=mocap_pos)
 
     return randomize_gate_pos
 
 
 def randomize_gate_rpy_fn(
     randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array], gate_ids: list[int]
-) -> Callable[[SimData, Array], SimData]:
+) -> Callable[[Data, Array | None, jax.random.PRNGKey], Data]:
     """Create a function that randomizes the gate rotation."""
 
-    def randomize_gate_rpy(data: SimData, mask: Array) -> SimData:
-        key, subkey = jax.random.split(data.core.rng_key)
-        gate_quat = data.mjx_data.mocap_quat[:, gate_ids, :][..., [1, 2, 3, 0]]
+    def randomize_gate_rpy(mjx_data: Data, mask: Array | None, key: jax.random.PRNGKey) -> Data:
+        gate_quat = jp.roll(mjx_data.mocap_quat[:, gate_ids, :], 1, axis=-1)
         gate_rpy = R.from_quat(gate_quat).as_euler("xyz")
-        gate_rpy = gate_rpy + randomize_fn(subkey, shape=gate_rpy.shape)
+        gate_rpy = gate_rpy + randomize_fn(key, shape=gate_rpy.shape)
         gate_quat = R.from_euler("xyz", gate_rpy).as_quat(scalar_first=True)
-        mocap_quat = data.mjx_data.mocap_quat.at[:, gate_ids, :].set(gate_quat)
-        mjx_data = leaf_replace(data.mjx_data, mask, mocap_quat=mocap_quat)
-        return data.replace(core=data.core.replace(rng_key=key), mjx_data=mjx_data)
+        mocap_quat = mjx_data.mocap_quat.at[:, gate_ids, :].set(gate_quat)
+        return leaf_replace(mjx_data, mask, mocap_quat=mocap_quat)
 
     return randomize_gate_rpy
 
 
 def randomize_obstacle_pos_fn(
     randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array], obstacle_ids: list[int]
-) -> Callable[[SimData, Array], SimData]:
+) -> Callable[[Data, Array | None, jax.random.PRNGKey], Data]:
     """Create a function that randomizes the obstacle position."""
 
-    def randomize_obstacle_pos(data: SimData, mask: Array) -> SimData:
-        key, subkey = jax.random.split(data.core.rng_key)
-        obstacle_pos = data.mjx_data.mocap_pos[:, obstacle_ids, :]
-        obstacle_pos = obstacle_pos + randomize_fn(subkey, shape=obstacle_pos.shape)
-        mocap_pos = data.mjx_data.mocap_pos.at[:, obstacle_ids, :].set(obstacle_pos)
-        mjx_data = leaf_replace(data.mjx_data, mask, mocap_pos=mocap_pos)
-        return data.replace(core=data.core.replace(rng_key=key), mjx_data=mjx_data)
+    def randomize_obstacle_pos(mjx_data: Data, mask: Array, key: jax.random.PRNGKey) -> Data:
+        obstacle_pos = mjx_data.mocap_pos[:, obstacle_ids, :]
+        obstacle_pos = obstacle_pos + randomize_fn(key, shape=obstacle_pos.shape)
+        mocap_pos = mjx_data.mocap_pos.at[:, obstacle_ids, :].set(obstacle_pos)
+        return leaf_replace(mjx_data, mask, mocap_pos=mocap_pos)
 
     return randomize_obstacle_pos
