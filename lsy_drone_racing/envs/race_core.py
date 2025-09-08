@@ -311,7 +311,14 @@ class RaceCoreEnv:
             pos_limit_high=[3, 3, 2.5],
             device=self.device,
         )
-        self.randomize_track = build_track_randomization_fn(randomizations, gate_ids, obstacle_ids)
+        self.randomize_track = build_track_randomization_fn(
+            randomizations,
+            gate_ids,
+            obstacle_ids,
+            self.gates["nominal_pos"],
+            self.gates["nominal_quat"],
+            self.obstacles["nominal_pos"],
+        )
 
     def _reset(
         self, *, seed: int | None = None, options: dict | None = None, mask: Array | None = None
@@ -566,11 +573,11 @@ class RaceCoreEnv:
 
     @staticmethod
     def _disabled_drones(pos: Array, contacts: Array, data: EnvData) -> Array:
-        disabled = jp.logical_or(data.disabled_drones, jp.any(pos < data.pos_limit_low, axis=-1))
-        disabled = jp.logical_or(disabled, jp.any(pos > data.pos_limit_high, axis=-1))
-        disabled = jp.logical_or(disabled, data.target_gate == -1)
-        contacts = jp.any(jp.logical_and(contacts[:, None, :], data.contact_masks), axis=-1)
-        disabled = jp.logical_or(disabled, contacts)
+        disabled = data.disabled_drones | jp.any(pos < data.pos_limit_low, axis=-1)
+        disabled = disabled | jp.any(pos > data.pos_limit_high, axis=-1)
+        disabled = disabled | (data.target_gate == -1)
+        contacts = jp.any(contacts[:, None, :] & data.contact_masks, axis=-1)
+        disabled = disabled | contacts
         return disabled
 
     @staticmethod
@@ -628,6 +635,7 @@ class RaceCoreEnv:
     @staticmethod
     def _load_contact_masks(sim: Sim) -> Array:
         """Load contact masks for the simulation that zero out irrelevant contacts per drone."""
+        sim.contacts()  # Trigger initial contact information computation
         contact = sim.mjx_data._impl.contact
         n_contacts = len(contact.geom1[0])
         masks = np.zeros((sim.n_drones, n_contacts), dtype=bool)
@@ -693,7 +701,12 @@ def build_reset_fn(randomizations: dict) -> Callable[[SimData, Array], SimData]:
 
 
 def build_track_randomization_fn(
-    randomizations: dict, gate_mocap_ids: list[int], obstacle_mocap_ids: list[int]
+    randomizations: dict,
+    gate_mocap_ids: list[int],
+    obstacle_mocap_ids: list[int],
+    nominal_gate_pos: Array,
+    nominal_gate_quat: Array,
+    nominal_obstacle_pos: Array,
 ) -> Callable[[Data, Array, jax.random.PRNGKey], Data]:
     """Build the track randomization function for the simulation."""
     randomization_fns = ()
@@ -710,8 +723,16 @@ def build_track_randomization_fn(
             case _:
                 raise ValueError(f"Invalid target: {target}")
 
+    gate_quat = jp.roll(nominal_gate_quat, 1, axis=-1)  # Convert from scipy to MuJoCo order
+
     @jax.jit
     def track_randomization(data: Data, mask: Array, key: jax.random.PRNGKey) -> Data:
+        # Reset to default track positions first
+        data = data.replace(mocap_pos=data.mocap_pos.at[:, gate_mocap_ids].set(nominal_gate_pos))
+        data = data.replace(mocap_quat=data.mocap_quat.at[:, gate_mocap_ids].set(gate_quat))
+        data = data.replace(
+            mocap_pos=data.mocap_pos.at[:, obstacle_mocap_ids].set(nominal_obstacle_pos)
+        )
         keys = jax.random.split(key, len(randomization_fns))
         for key, randomize_fn in zip(keys, randomization_fns, strict=True):
             data = randomize_fn(data, mask, key)

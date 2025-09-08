@@ -94,7 +94,7 @@ def randomize_gate_rpy_fn(
     """Create a function that randomizes the gate rotation."""
 
     def randomize_gate_rpy(mjx_data: Data, mask: Array | None, key: jax.random.PRNGKey) -> Data:
-        gate_quat = jp.roll(mjx_data.mocap_quat[:, gate_ids, :], 1, axis=-1)
+        gate_quat = jp.roll(mjx_data.mocap_quat[:, gate_ids, :], -1, axis=-1)
         gate_rpy = R.from_quat(gate_quat).as_euler("xyz")
         gate_rpy = gate_rpy + randomize_fn(key, shape=gate_rpy.shape)
         gate_quat = R.from_euler("xyz", gate_rpy).as_quat(scalar_first=True)

@@ -2,6 +2,7 @@ import warnings
 from pathlib import Path
 
 import gymnasium
+import jax.numpy as jp
 import pytest
 from gymnasium.utils.env_checker import check_env
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
@@ -139,3 +140,22 @@ def test_level2_randomization():
     assert not (gate_pos_1 == gate_pos_2).all(), "Gate positions unchanged after reset."
     assert not (obstacle_pos_1 == obstacle_pos_2).all(), "Obstacle positions unchanged after reset."
     assert not (gate_quat_1 == gate_quat_2).all(), "Gate rotations unchanged after reset."
+
+
+@pytest.mark.unit
+def test_contact_mask():
+    """Test that collision mask is properly generated and not all zeros."""
+    config = load_config(Path(__file__).parents[3] / "config/level0.toml")
+    env = gymnasium.make(
+        "DroneRacing-v0",
+        freq=config.env.freq,
+        sim_config=config.sim,
+        sensor_range=config.env.sensor_range,
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=config.env.seed,
+    )
+    mask = env.unwrapped.data.contact_masks
+    assert not jp.all(mask == 0), "Contact mask is all zeros."
