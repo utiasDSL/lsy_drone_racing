@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir .[test,gpu]
 COPY . .
 RUN pip install -e .[test,gpu]
 
-ENTRYPOINT ["python", "/home/lsy_drone_racing/scripts/sim.py", "--gui", "False"]
+ENTRYPOINT ["python", "/home/lsy_drone_racing/scripts/sim.py", "-r", "False"]

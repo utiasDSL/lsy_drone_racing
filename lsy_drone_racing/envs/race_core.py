@@ -353,7 +353,7 @@ class RaceCoreEnv:
         # Apply the environment logic. Check which drones are now disabled, check which gates have
         # been passed, and update the target gate.
         drone_pos = self.sim.data.states.pos
-        mocap_pos, mocap_quat = self.sim.data.mjx_data.mocap_pos, self.sim.data.mjx_data.mocap_quat
+        mocap_pos, mocap_quat = self.sim.mjx_data.mocap_pos, self.sim.mjx_data.mocap_quat
         contacts = self.sim.contacts()
         # Get marked_for_reset before it is updated, because the autoreset needs to be based on the
         # previous flags, not the ones from the current step
@@ -393,8 +393,8 @@ class RaceCoreEnv:
         # Add the gate and obstacle poses to the info. If gates or obstacles are in sensor range,
         # use the actual pose, otherwise use the nominal pose.
         gates_pos, gates_quat, obstacles_pos = self._obs(
-            self.sim.data.mjx_data.mocap_pos,
-            self.sim.data.mjx_data.mocap_quat,
+            self.sim.mjx_data.mocap_pos,
+            self.sim.mjx_data.mocap_quat,
             self.data.gates_visited,
             self.gates["mj_ids"],
             self.gates["nominal_pos"],
@@ -579,14 +579,19 @@ class RaceCoreEnv:
         ang_vel = self.sim.data.states.ang_vel.at[...].set(self.drone["ang_vel"])
         states = self.sim.data.states.replace(pos=pos, quat=quat, vel=vel, ang_vel=ang_vel)
         self.sim.data = self.sim.data.replace(states=states)
+        self.sim.build_default_data()
         # Build the reset randomizations and disturbances into the sim itself
-        self.sim.reset_hook = build_reset_hook(
+        reset_fn = build_reset_hook(
             self.randomizations, self.gates["mj_ids"], self.obstacles["mj_ids"]
         )
+        self.sim.reset_pipeline = self.sim.reset_pipeline + (reset_fn,)
+        self.sim.build_reset_fn()
         if "dynamics" in self.disturbances:
-            self.sim.disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
-        # Save the reset state and rebuild the reset function
-        self.sim.build(mjx=False, data=False)
+            disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
+            self.sim.step_pipeline = (
+                self.sim.step_pipeline[:2] + (disturbance_fn,) + self.sim.step_pipeline[2:]
+            )
+            self.sim.build_step_fn()
 
     def _load_track_into_sim(self, gate_spec: MjSpec, obstacle_spec: MjSpec):
         """Load the track into the simulation."""
@@ -608,7 +613,7 @@ class RaceCoreEnv:
             obstacle = frame.attach_body(obstacle_body, "", f":{i}")
             obstacle.pos = self.obstacles["pos"][i]
             obstacle.mocap = True
-        self.sim.build(data=False, default_data=False)
+        self.sim.build_mjx()
 
     def _register_object_ids(self) -> tuple[dict, dict]:
         """Register the ids and mocap ids of the gates and obstacles."""
@@ -623,11 +628,11 @@ class RaceCoreEnv:
 
     def _load_contact_masks(self, sim: Sim) -> Array:
         """Load contact masks for the simulation that zero out irrelevant contacts per drone."""
-        n_contacts = len(self.sim.data.mjx_data.contact.geom1[0])
+        n_contacts = len(self.sim.mjx_data.contact.geom1[0])
         masks = np.zeros((sim.n_drones, n_contacts), dtype=bool)
         mj_model = sim.mj_model
-        geom1 = sim.data.mjx_data.contact.geom1[0]  # We only need one world to create the mask
-        geom2 = sim.data.mjx_data.contact.geom2[0]
+        geom1 = sim.mjx_data.contact.geom1[0]  # We only need one world to create the mask
+        geom2 = sim.mjx_data.contact.geom2[0]
         for i in range(sim.n_drones):
             geom_start = mj_model.body_geomadr[mj_model.body(f"drone:{i}").id]
             geom_count = mj_model.body_geomnum[mj_model.body(f"drone:{i}").id]

@@ -35,7 +35,7 @@ def simulate(
     config: str = "level0.toml",
     controller: str | None = None,
     n_runs: int = 1,
-    gui: bool | None = None,
+    render: bool | None = None,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
@@ -44,17 +44,17 @@ def simulate(
         controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
             the controller specified in the config file is used.
         n_runs: The number of episodes.
-        gui: Enable/disable the simulation GUI.
+        render: Enable/disable rendering the simulation.
 
     Returns:
         A list of episode times.
     """
     # Load configuration and check if firmare should be used.
     config = load_config(Path(__file__).parents[1] / "config" / config)
-    if gui is None:
-        gui = config.sim.gui
+    if render is None:
+        render = config.sim.render
     else:
-        config.sim.gui = gui
+        config.sim.render = render
     # Load the controller module
     control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
     controller_path = control_path / (controller or config.controller.file)
@@ -98,8 +98,7 @@ def simulate(
             # Add up reward, collisions
             if terminated or truncated or controller_finished:
                 break
-            # Synchronize the GUI.
-            if config.sim.gui:
+            if config.sim.render:  # Render the sim if selected.
                 if ((i * fps) % config.env.freq) < fps:
                     env.render()
             i += 1

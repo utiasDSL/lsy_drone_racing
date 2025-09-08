@@ -16,9 +16,9 @@ The simulation script has a built-in CLI that allows you to set a few useful arg
 
 .. code-block:: bash
 
-   python scripts/sim.py -g -n 10
+   python scripts/sim.py -r -n 10
 
-This will render the simulation (``-g`` or ``--gui``) and run 10 races in succession (``-n`` or ``--n_runs``). For a list of all arguments, use ``-h`` or ``--help``.
+This will render the simulation (``-r`` or ``--render``) and run 10 races in succession (``-n`` or ``--n_runs``). For a list of all arguments, use ``-h`` or ``--help``.
 
 
 Difficulty Levels
