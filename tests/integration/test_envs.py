@@ -9,7 +9,7 @@ from lsy_drone_racing.utils import load_config
 
 CONFIG_FILES = {
     "DroneRacing-v0": ["level0.toml", "level1.toml", "level2.toml"],
-    "MultiDroneRacing-v0": ["multi_level0.toml", "multi_level3.toml"],
+    "MultiDroneRacing-v0": ["multi_level0.toml", "multi_level2.toml"],
 }
 DEVICES = ["cpu", "gpu"]
 

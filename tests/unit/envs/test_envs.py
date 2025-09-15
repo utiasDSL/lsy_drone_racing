@@ -2,6 +2,7 @@ import warnings
 from pathlib import Path
 
 import gymnasium
+import jax.numpy as jp
 import pytest
 from gymnasium.utils.env_checker import check_env
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
@@ -110,3 +111,51 @@ def test_passive_checker_wrapper_warnings(control_mode: str):
         assert terminated.shape == (3, 2)  # 2 envs, 3 drones
         assert truncated.shape == (3, 2)  # 2 envs, 3 drones
     env.close()
+
+
+@pytest.mark.unit
+def test_level2_randomization():
+    """Test that level2 config properly randomizes gate and obstacle positions."""
+    config = load_config(Path(__file__).parents[3] / "config/level2.toml")
+    env = gymnasium.make(
+        "DroneRacing-v0",
+        freq=config.env.freq,
+        sim_config=config.sim,
+        sensor_range=100.0,  # Large sensor range to immediately see all changes
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=0,
+    )
+    obs, info = env.reset()
+    gate_pos_1, obstacle_pos_1 = obs["gates_pos"], obs["obstacles_pos"]
+    gate_quat_1 = obs["gates_quat"]
+
+    obs, info = env.reset()
+    gate_pos_2, obstacle_pos_2 = obs["gates_pos"], obs["obstacles_pos"]
+    gate_quat_2 = obs["gates_quat"]
+    env.close()
+
+    assert not (gate_pos_1 == gate_pos_2).all(), "Gate positions unchanged after reset."
+    assert not (obstacle_pos_1 == obstacle_pos_2).all(), "Obstacle positions unchanged after reset."
+    assert not (gate_quat_1 == gate_quat_2).all(), "Gate rotations unchanged after reset."
+
+
+@pytest.mark.unit
+def test_contact_mask():
+    """Test that collision mask is properly generated and not all zeros."""
+    config = load_config(Path(__file__).parents[3] / "config/level0.toml")
+    env = gymnasium.make(
+        "DroneRacing-v0",
+        freq=config.env.freq,
+        sim_config=config.sim,
+        sensor_range=config.env.sensor_range,
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=config.env.seed,
+    )
+    mask = env.unwrapped.data.contact_masks
+    assert not jp.all(mask == 0), "Contact mask is all zeros."

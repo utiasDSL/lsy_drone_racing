@@ -111,8 +111,8 @@ maxval = [0.1, 0.1, 0.1]
 [env.randomizations.drone_mass]
 fn = "uniform"
 [env.randomizations.drone_mass.kwargs]
-minval = -0.01
-maxval = 0.01
+minval = -0.005
+maxval = 0.005
 
 [env.randomizations.drone_inertia]
 fn = "uniform"

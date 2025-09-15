@@ -26,7 +26,7 @@ def test_config_load_and_env_creation(config_file: str):
     )
 
 
-@pytest.mark.parametrize("config_file", ["multi_level0.toml", "multi_level3.toml"])
+@pytest.mark.parametrize("config_file", ["multi_level0.toml", "multi_level2.toml"])
 @pytest.mark.unit
 def test_multi_config_load_and_env_creation(config_file: str):
     """Test if config files can be loaded and used to create a functioning environment."""
