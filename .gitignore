@@ -10,6 +10,8 @@ saves
 **/*.json
 **/*.csv
 plots/
-c_generated_code/# pixi environments
+c_generated_code/
+
+# pixi environments
 .pixi/*
 !.pixi/config.toml
