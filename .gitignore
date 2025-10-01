@@ -15,3 +15,5 @@ c_generated_code/
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+ros_ws/
+acados/

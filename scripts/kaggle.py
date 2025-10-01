@@ -21,7 +21,7 @@ def main():
     config_file = "level2.toml"
     config = load_config(Path(__file__).parents[1] / "config" / config_file)
     ep_times = simulate(
-        config=config_file, controller=config.controller.file, n_runs=n_runs, gui=False
+        config=config_file, controller=config.controller.file, n_runs=n_runs, render=False
     )
 
     # Log the number of failed runs if any

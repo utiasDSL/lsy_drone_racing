@@ -28,17 +28,14 @@
   - [Step-by-Step Installation](#step-by-step-installation)
     - [Fork lsy\_drone\_racing](#fork-lsy_drone_racing)
     - [Setting up your environment](#setting-up-your-environment)
-      - [Simulation \& on Hardware (Recommended)](#simulation--on-hardware-recommended)
+      - [Pixi package manager (Recommended)](#pixi-package-manager-recommended)
       - [Simulation \& Hardware on our Lab PC (If Necessary)](#simulation--hardware-on-our-lab-pc-if-necessary)
       - [Simulation only (Not Recommended)](#simulation-only-not-recommended)
-    - [Package Installation](#package-installation)
-      - [Installation of you lsy\_drone\_racing fork (necessary for sim \& real)](#installation-of-you-lsy_drone_racing-fork-necessary-for-sim--real)
-      - [Installation of crazyflow (necessary for sim \& real)](#installation-of-crazyflow-necessary-for-sim--real)
-      - [Install Motion Capture Tracking (necessary for real only)](#install-motion-capture-tracking-necessary-for-real-only)
-      - [Install Models Repository (necessary for real only)](#install-models-repository-necessary-for-real-only)
-      - [Install Estimators Repository (necessary for real only)](#install-estimators-repository-necessary-for-real-only)
-      - [Install cflib (necessary for real only)](#install-cflib-necessary-for-real-only)
-      - [Install Acados (necessary for MPC approaches in sim \& real)](#install-acados-necessary-for-mpc-approaches-in-sim--real)
+    - [Installation](#installation)  
+      - [Clone repository](#clone-repository)  
+      - [Install simulation (developing & testing controllers)](#install-simulation-developing--testing-controllers)  
+      - [Install deployment (deploy controller to real drones)](#install-deployment-deploy-controller-to-real-drones)  
+      - [Install Acados (necessary for MPC approaches in sim & real)](#install-acados-necessary-for-mpc-approaches-in-sim--real)  
       - [USB Preparation for crazyradio (real only)](#usb-preparation-for-crazyradio-real-only)
       - [cfclient (real only/ optional)](#cfclient-real-only-optional)
     - [Using Docker](#using-docker)
@@ -89,53 +86,54 @@ If you have never worked with GitHub before, see the [docs](https://docs.github.
 
 ### Setting up your environment
 
-#### Simulation & on Hardware (Recommended)
+#### Pixi package manager (Recommended)
 
-You need a working installation of ROS2 Jazzy and Python 3.11 in order to deploy your controller on the real drone in the end. 
+We recommend using [Pixi](https://pixi.sh) to manage dependencies and virtual environments for this project. Pixi creates a dedicated .pixi directory in the project root, which contains the isolated virtual environment. Installed packages are cached globally under ~/.cache/rattler/ to speed up subsequent environment setups across projects.
 
-We recommend [RoboStack](https://robostack.github.io) and [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html) for this. Robostack lets you install your favorite ROS version independent of you OS. It builds on top of conda/mamba to do this.
+To activate the environment, simply run "pixi shell", or "pixi shell -e < feature_name >" for specific sub-environments. On the first invocation, Pixi will automatically resolve and install all required dependencies.
 
-Please follow the [Robostack Getting Started](https://robostack.github.io/GettingStarted.html) in order to create a ROS2 Jazzy Environment on Python3.11 using micromamba or another package manager of your choice.
+> **Note:** In pixi shell, you can still use pip to install any packages you need.
+
+To [install pixi](https://pixi.sh/latest/installation/), run:
+```bash
+curl -fsSL https://pixi.sh/install.sh | sh
+```
 
 #### Simulation & Hardware on our Lab PC (If Necessary)
 
-We provide a PC in the Lab on which you are allowed to run your controllers during deployment. Please create a new user for each team and follow the instructions regarding micromamba & robostack as noted above. Then, proceed with the Package Installation instructions.
+We provide a PC in the Lab on which you are allowed to run your controllers during deployment. Please create a new user for each team and follow the instructions below.
 
 #### Simulation only (Not Recommended)
 
 If you only want to run the simulation, you can use your favorite conda/mamba/venv to install the packages. However, you will need a working installation of ROS2 if you want to deploy your controller on the real drone.
 
 
-### Package Installation
+### Installation
 
-> **Note:** Make sure you have activated your environment before installing the packages
-
-#### Installation of you lsy_drone_racing fork (necessary for sim & real)
+#### Clone repository
 
 First, clone the new fork from your own account and create a new environment by running
 
 ```bash
 mkdir -p ~/repos && cd repos
 git clone https://github.com/<YOUR-USERNAME>/lsy_drone_racing.git
+cd lsy_drone_racing
 ```
 
-Now you can install the lsy_drone_racing package in editable mode from the repository root
+#### Install simulation (developing & testing controllers)
+
+Stay in the repository, run:
 
 ```bash
-cd ~/repos/lsy_drone_racing
-pip install --upgrade pip
-pip install -e .
+pixi shell
 ```
+<!-- > **Note:** By running the commands above, you will have **acados** installed by default. This will cause the terminal to freeze for several minutes. -->
 
-#### Installation of crazyflow (necessary for sim & real)
+> **Note:** To leave a pixi shell, press **ESC** or **Ctrl+D**. Make sure to leave the shell before you activate another shell.
 
-In addition, you also need to install the crazyflow package
-
+To speed up simulation with GPU (optional), run:
 ```bash
-cd ~/repos
-git clone https://github.com/utiasDSL/crazyflow.git
-cd ~/repos/crazyflow
-pip install -e .
+pixi shell -e gpu
 ```
 
 Finally, you can test if the installation was successful by running 
@@ -147,7 +145,7 @@ python scripts/sim.py
 
 If everything is installed correctly, this opens the simulator and simulates a drone flying through four gates.
 
-You can also install the extended dependencies with 
+(Optional) You can also install the extended dependencies with 
 ```bash
 cd ~/repos/lsy_drone_racing
 pip install -e .[rl,test]
@@ -157,20 +155,21 @@ and check if all tests complete with
 cd ~/repos/lsy_drone_racing
 pytest tests
 ```
+#### Install deployment (deploy controller to real drones)
 
-#### Install Motion Capture Tracking (necessary for real only)
+Stay in the repository, run:
 
-Create a ros2 workspace in which the package will be located:
-```
-mkdir -p ~/ros_ws/src
+```bash
+pixi shell -e deploy
 ```
 
-Clone the repository and build it using colcon. Make sure your robostack environment is activated.
-```
-cd ~/ros_ws/src
-git clone --recurse-submodules https://github.com/utiasDSL/motion_capture_tracking
-cd ../
-colcon build --cmake-args -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+This will automatically create a ros2 workspace, clone the motion_capture_tracking package, and build it. The terminal might freeze for 1 minute.
+
+Then we still have to install extra packages with pip, **stay in the shell**, run one of the commands below:
+
+```bash
+pip install -e .[sim,deploy]
+pip install -e .[sim,gpu,deploy]
 ```
 
 Test your installation: For this to work you have to be in the lab and be connected to our local network. 
@@ -179,47 +178,25 @@ Test your installation: For this to work you have to be in the lab and be connec
 ping 10.157.163.191
 ```
 
-If this works, source the workspace and run the motiontracking node
+If this works, stay in the *deploy* shell and run the motion capture tracking node, if there are valid elements in the field, you should be able to see them in rviz.
 ```
-source ~/ros_ws/install/setup.sh
 ros2 launch motion_capture_tracking launch.py
 ```
-Optional: Sourcing your workspace automatically
-Every time you run the motion_capture_tracking node, you have to source the workspace first. You can either do this manually or automate this. In order to automate this, you have to modify the ```activate.d``` directory of your package manager. The files within this directory are run when the environment is activated. Because the files are run in alphabetic order, we start our file name with "x".
-
-For micromamba this would be:
+If you already have your drone placed inside the motion capture area, you can start another *deploy* shell and run the estimator node. Please check the actual HEX number on the drone.
+```bash
+python -m drone_estimators.ros_nodes.ros2_node --drone_name cf52
 ```
-echo "source $HOME/ros_ws/install/setup.sh" > ~/micromamba/envs/ros_env/etc/conda/activate.d/xcustom_activate.sh
-```
-
-#### Install Models Repository (necessary for real only)
-
-```
-cd ~/repos
-# Download and install our models repository
-git clone git@github.com:utiasDSL/models.git
-cd models
-pip install -e . 
-```
-
-#### Install Estimators Repository (necessary for real only)
-
-```
-cd ~/repos
-git clone git@github.com:utiasDSL/estimators.git
-cd estimators
-pip install -e .
-```
-
-#### Install cflib (necessary for real only)
-
-Cflib is a library provided by crazyflie to communicate with the drones via the radio. As it depends on numpy<1.x, but our repositories require numpy>=2.0,  we first install cflib and then reinstall numpy 2.x.
-```
-pip install cflib
-pip install -U numpy
-```
+If this works, you should be able to see some information in terminal. 
 
 #### Install Acados (necessary for MPC approaches in sim & real)
+[Acados](https://docs.acados.org/index.html) is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller.
+We prepared an automatic script to install acados, you only have to stay in any environment shell, and run:
+```bash
+bash setup_acados.sh
+```
+Alternatively, you can refer to the [official installation guide](https://docs.acados.org/installation/).
+
+<!-- #### Install Acados (necessary for MPC approaches in sim & real)
 [Acados](https://docs.acados.org/index.html) is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller.
 Even though the installation instructions can also be found on the wepage, we summarized the installation for our recommended setup:
 
@@ -256,7 +233,7 @@ micromamba activate ros_env
 # If he asks you whether you want to get the t_renderer package installed automatically, press yes.
 python3 ~/repos/acados/examples/acados_python/getting_started/minimal_example_ocp.py
 
-```
+``` -->
 
 #### USB Preparation for crazyradio (real only)
 

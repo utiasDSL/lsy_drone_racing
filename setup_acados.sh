@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ACADOS_DIR=acados
+
+# Clone and build acados
+if [ ! -d ${ACADOS_DIR}/.git ]; then
+  echo "[Setup Acados] Cloning acados..."
+  git clone https://github.com/acados/acados.git ${ACADOS_DIR}
+  (
+    cd ${ACADOS_DIR}
+    git checkout tags/v0.5.1
+    git submodule update --recursive --init
+  )
+fi
+
+if [ ! -f ${ACADOS_DIR}/lib/libacados.so ]; then
+  echo "[Setup Acados] Building acados..."
+  mkdir -p ${ACADOS_DIR}/build
+  (
+    cd ${ACADOS_DIR}/build
+    # cmake -DACADOS_WITH_QPOASES=ON ..
+    cmake -DACADOS_WITH_QPOASES=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ..
+    #  -DCMAKE_CXX_STANDARD=11 ..
+    make install -j"$(nproc)"
+  )
+fi
+
+# Install Acados Python interface
+if ! pip show acados-template >/dev/null 2>&1; then
+  echo "[Setup Acados] Installing acados Python interface..."
+  pip install -e ${ACADOS_DIR}/interfaces/acados_template
+fi
+
+# Download Tera Renderer
+if [ ! -f ${ACADOS_DIR}/bin/t_renderer ]; then
+  echo "[Setup Acados] Downloading tera_renderer..."
+  mkdir -p ${ACADOS_DIR}/bin
+  curl -L https://github.com/acados/tera_renderer/releases/download/v0.0.34/t_renderer-v0.0.34-linux \
+    -o ${ACADOS_DIR}/bin/t_renderer
+  chmod +x ${ACADOS_DIR}/bin/t_renderer
+fi
+
+echo "[Setup Acados] Acados is ready!"
