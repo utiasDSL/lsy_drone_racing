@@ -163,9 +163,9 @@ Stay in the repository, run:
 pixi shell -e deploy
 ```
 
-This will automatically create a ros2 workspace, clone the motion_capture_tracking package, and build it. The terminal might freeze for 1 minute.
+This will automatically create a ros2 workspace, clone the motion_capture_tracking package, and build it. Thus, the terminal might freeze for 1 minute after regular installation.
 
-Then we still have to install extra packages with pip, **stay in the shell**, run one of the commands below:
+Then we still have to install extra packages with pip, **stay in the *deploy* shell**, run one of the commands below:
 
 ```bash
 pip install -e .[sim,deploy]
@@ -178,19 +178,19 @@ Test your installation: For this to work you have to be in the lab and be connec
 ping 10.157.163.191
 ```
 
-If this works, stay in the *deploy* shell and run the motion capture tracking node, if there are valid elements in the field, you should be able to see them in rviz.
+If this works, stay in the *deploy* shell and run the motion capture tracking node, if there are valid elements in the motion capture area, you should be able to see them in rviz.
 ```
 ros2 launch motion_capture_tracking launch.py
 ```
-If you already have your drone placed inside the motion capture area, you can start another *deploy* shell and run the estimator node. Please check the actual HEX number on the drone.
+If you already have your drone placed inside the motion capture area, you can start another *deploy* shell and run the estimator node. Please check the actual DEC number on the drone, or the name shown in rviz.
 ```bash
 python -m drone_estimators.ros_nodes.ros2_node --drone_name cf52
 ```
-If this works, you should be able to see some information in terminal. 
+If this works, you should be able to see frequency information in terminal. 
 
 #### Install Acados (necessary for MPC approaches in sim & real)
 [Acados](https://docs.acados.org/index.html) is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller.
-We prepared an automatic script to install acados, you only have to stay in any environment shell, and run:
+We prepared an automatic script to install acados. You only have to stay in any environment shell, and run:
 ```bash
 bash setup_acados.sh
 ```

@@ -45,7 +45,7 @@ gpu = [
     "jax[cuda12]",
 ]
 deploy = [
-    "cflib", 
+    "cfclient", 
     "drone-estimators @ git+https://github.com/utiasDSL/drone-estimators.git",
 ]
 
