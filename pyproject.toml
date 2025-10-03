@@ -18,12 +18,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
 ]
 
-# GOAL:
-# envs: sim, gpu, deploy
-# for sim: run pixi shell -e sim / gpu: install everything except for ros/mocap/estimator
-# for deploy: run pixi shell -e deploy: install only ros&mocap; then run pip install -e . to install other stuffs
-
-
 dependencies = [
     "fire >= 0.6.0",
     "numpy",
@@ -149,21 +143,21 @@ gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
 
 [tool.pixi.tasks]
 
-# [tool.pixi.activation]
-# scripts = ["setup_acados.sh"]
+[tool.pixi.activation]
+scripts = ["setup_acados.sh"]
 
 [tool.pixi.dependencies]
 # TODO: Remove compilers once scipy 1.17 is released and drone-models have been updated.
 # gcc = ">=15.1.0,<15.2"
 # cxx-compiler = ">=1.0.0,<2"
 # gfortran = ">=15.1.0,<15.2"
+# pkg-config = "*"
+# ninja = "*"
+# rosbags = ">=0.10.9,<0.11"
 openblas = ">=0.3.30,<0.4"
 ruff = "*"
 python = ">=3.11.12,<3.14"
 pip = ">=25.0.1,<26"
 cmake = "*"
 compilers = ">=1.9.0, <1.11.0"
-# pkg-config = "*"
 make = "*"
-# ninja = "*"
-# rosbags = ">=0.10.9,<0.11"

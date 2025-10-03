@@ -127,7 +127,7 @@ Stay in the repository, run:
 ```bash
 pixi shell
 ```
-<!-- > **Note:** By running the commands above, you will have **acados** installed by default. This will cause the terminal to freeze for several minutes. -->
+> **Note:** By running the commands above, you will have **acados** installed by default. This might cause the terminal to freeze for several minutes.
 
 > **Note:** To leave a pixi shell, press **ESC** or **Ctrl+D**. Make sure to leave the shell before you activate another shell.
 
@@ -187,6 +187,13 @@ If you already have your drone placed inside the motion capture area, you can st
 python -m drone_estimators.ros_nodes.ros2_node --drone_name cf52
 ```
 If this works, you should be able to see frequency information in terminal. 
+
+Now you are ready to deploy your controller on real drones. Stay in a new *deploy* shell, run:
+```bash
+python scritps/deploy.py --config level2.toml --controller <your_controller.py>
+```
+> **Note:** Be carefull with flying the drone! Make sure to kill the process (**Ctrl+C**) immediately when your controller is not stable.
+
 
 #### Install Acados (necessary for MPC approaches in sim & real)
 [Acados](https://docs.acados.org/index.html) is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller.
@@ -257,7 +264,7 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-#### cfclient (real only/ optional)
+<!-- #### cfclient (real only/ optional)
 
 Optionally, you can also install cfclient to debug issues with the drones and configure IDs etc.
 >**Note:** We recommend to do this in a seperate environment to prevent conflicts between package versions.
@@ -266,7 +273,7 @@ Optionally, you can also install cfclient to debug issues with the drones and co
 sudo apt install libxcb-xinerama0
 pip install --upgrade pip
 pip install cfclient
-```
+``` -->
 
 ### Using Docker
 You can also run the simulation with Docker, albeit without the GUI at the moment. To test this, install docker with docker compose on your system, and then run
@@ -384,35 +391,31 @@ Change the USB access permissions with
 #### Settings
 Make sure your drone is selected on the vicon system, otherwise it will not be tracked.
 
-You will have to modify wo config files before liftoff:
-
-Please modify `~/repos/estimators/ros_nodes/estimators.toml` in the estimators repository to include the up-to-date drone id (in decimal). 
+You will have to modify the following config files before liftoff:
 
 Please modify either `~/repos/lsy_drone_racing/config/level2.toml` or create your own custom config file to include the correct drone id.
 
 #### Launch
->**Note:** The following should be run within your teams mamba environment.
+>**Note:** The following should be run within your teams pixi *deploy* shell.
 
 You will need a total of three terminal windows for deploying your controller on the real drone:
 
 Terminal 1 launches the motion_capture_tracking an ensures that the position of all vicon objects are published via ros2:
 ```
-micromamba activate ros_env
+pixi shell -e deploy
 ros2 launch motion_capture_tracking launch.py
 ```
 
 Terminal 2 starts the estimator: 
 ```
-micromamba activate ros_env
-cd ~/repos/estimators
-python3 lsy_estimators/ros_nodes/ros2_node.py --settings ros_nodes/estimators.toml
+pixi shell -e deploy
+python -m drone_estimators.ros_nodes.ros2_node --drone_name cf52
 ```
 
 Terminal 3 starts the deployment of the controller: 
 ```
-micromamba activate ros_env
-cd ~/repos/lsy_drone_racing/scripts
-python deploy.py --controller <your_controller.py> --config level2.toml
+pixi shell -e deploy
+python scritps/deploy.py --config level2.toml --controller <your_controller.py>
 ```
 
 where `<your_controller.py>` implements a controller that inherits from `lsy_drone_racing.control.BaseController`
