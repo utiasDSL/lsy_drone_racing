@@ -14,7 +14,6 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
-from crazyflow.constants import MASS
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
@@ -38,7 +37,7 @@ class AttitudeController(Controller):
         """
         super().__init__(obs, info, config)
         self.freq = config.env.freq
-        self.drone_mass = MASS
+        self.drone_mass = 0.34  # TODO get from drone_models
         self.kp = np.array([0.4, 0.4, 1.25])
         self.ki = np.array([0.05, 0.05, 0.05])
         self.kd = np.array([0.2, 0.2, 0.4])

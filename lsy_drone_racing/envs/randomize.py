@@ -9,7 +9,7 @@ from typing import Callable
 
 import jax
 import jax.numpy as jp
-from crazyflow.sim.structs import SimData
+from crazyflow.sim.data import SimData
 from crazyflow.utils import leaf_replace
 from jax import Array
 from jax.scipy.spatial.transform import Rotation as R
@@ -67,8 +67,8 @@ def randomize_drone_inertia_fn(
     def randomize_drone_inertia(data: SimData, mask: Array) -> SimData:
         key, subkey = jax.random.split(data.core.rng_key)
         J = data.params.J + randomize_fn(subkey, shape=data.params.J.shape)
-        J_INV = jp.linalg.inv(J)
-        params = leaf_replace(data.params, mask, J=J, J_INV=J_INV)
+        J_inv = jp.linalg.inv(J)
+        params = leaf_replace(data.params, mask, J=J, J_inv=J_inv)
         return data.replace(core=data.core.replace(rng_key=key), params=params)
 
     return randomize_drone_inertia

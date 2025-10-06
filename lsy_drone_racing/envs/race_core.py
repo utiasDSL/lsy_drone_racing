@@ -31,7 +31,8 @@ import jax.numpy as jp
 import mujoco
 import numpy as np
 from crazyflow import Sim
-from crazyflow.sim.symbolic import symbolic_attitude
+
+# from crazyflow.sim.symbolic import symbolic_attitude
 from flax.struct import dataclass
 from gymnasium import spaces
 
@@ -47,8 +48,9 @@ from lsy_drone_racing.envs.randomize import (
 from lsy_drone_racing.envs.utils import gate_passed, load_track
 
 if TYPE_CHECKING:
-    from crazyflow.sim.structs import SimData
-    from crazyflow.sim.symbolic import SymbolicModel
+    from crazyflow.sim.data import SimData
+
+    # from crazyflow.sim.symbolic import SymbolicModel
     from jax import Array, Device
     from ml_collections import ConfigDict
     from mujoco import MjSpec
@@ -261,6 +263,7 @@ class RaceCoreEnv:
             device: Device used for the environment and the simulation.
         """
         super().__init__()
+        print(f"XXX {n_envs=}, {n_drones=}")
         self.sim = Sim(
             n_worlds=n_envs,
             n_drones=n_drones,
@@ -465,10 +468,10 @@ class RaceCoreEnv:
         """The mass of the drones in the environment."""
         return np.asarray(self.sim.default_data.params.mass[..., 0])
 
-    @property
-    def symbolic_model(self) -> SymbolicModel:
-        """The symbolic model of the environment."""
-        return symbolic_attitude(1 / self.freq)
+    # @property
+    # def symbolic_model(self) -> SymbolicModel:
+    #     """The symbolic model of the environment."""
+    #     return symbolic_attitude(1 / self.freq)
 
     @staticmethod
     @jax.jit

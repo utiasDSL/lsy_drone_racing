@@ -141,7 +141,7 @@ online-submission = { features = ["sim", "online-submission"], solve-group = "de
 tests = { features = ["sim", "tests"], solve-group = "default" }
 gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
 
-[tool.pixi.tasks]
+# [tool.pixi.tasks]
 
 [tool.pixi.activation]
 scripts = ["setup_acados.sh"]
