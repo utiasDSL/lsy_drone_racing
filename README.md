@@ -127,7 +127,7 @@ Stay in the repository, run:
 ```bash
 pixi shell
 ```
-> **Note:** By running the commands above, you will have **acados** installed by default. This might cause the terminal to freeze for several minutes.
+<!-- > **Note:** By running the commands above, you will have **acados** installed by default. This might cause the terminal to freeze for several minutes. -->
 
 > **Note:** To leave a pixi shell, press **ESC** or **Ctrl+D**. Make sure to leave the shell before you activate another shell.
 
