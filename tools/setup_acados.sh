@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ACADOS_DIR=acados
+ACADOS_DIR="${PIXI_PROJECT_ROOT}/acados"
 
 # Clone and build acados
 if [ ! -d ${ACADOS_DIR}/.git ]; then
@@ -39,6 +39,14 @@ if [ ! -f ${ACADOS_DIR}/bin/t_renderer ]; then
   curl -L https://github.com/acados/tera_renderer/releases/download/v0.0.34/t_renderer-v0.0.34-linux \
     -o ${ACADOS_DIR}/bin/t_renderer
   chmod +x ${ACADOS_DIR}/bin/t_renderer
+fi
+
+# Setting Environment Variables
+if [ -f ${ACADOS_DIR}/lib/libacados.so ]; then
+  export ACADOS_SOURCE_DIR="$ACADOS_DIR"
+  export ACADOS_INSTALL_DIR="$ACADOS_DIR"
+  export LD_LIBRARY_PATH="${ACADOS_DIR}/lib:${LD_LIBRARY_PATH}"
+  export PATH="${ACADOS_DIR}/interfaces/acados_template:${PATH}"
 fi
 
 echo "[Setup Acados] Acados is ready!"

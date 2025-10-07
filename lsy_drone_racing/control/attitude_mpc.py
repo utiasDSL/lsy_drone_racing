@@ -15,7 +15,6 @@ import numpy as np
 import scipy
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 from casadi import MX, cos, sin, vertcat
-from lsy_models.utils.constants import Constants
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
@@ -175,7 +174,7 @@ def create_ocp_solver(
     ocp.solver_options.tf = Tf
 
     acados_ocp_solver = AcadosOcpSolver(
-        ocp, json_file="c_generated_code/lsy_example_mpc.json", verbose=verbose
+        ocp, json_file="c_generated_code/lsy_example_mpc.json", verbose=verbose, build=True, generate=True
     )
 
     return acados_ocp_solver, ocp
@@ -282,12 +281,6 @@ class AttitudeMPC(Controller):
         self._acados_ocp_solver.solve()
         u0 = self._acados_ocp_solver.get(0, "u")
 
-        # WARNING: The following line is only for legacy reason!
-        # The Crazyflie uses the rpyt command format, the environment
-        # take trpy format. Remove this line as soon as the env
-        # also works with rpyt!
-        u0 = np.array([u0[3], *u0[:3]], dtype=np.float32)
-
         return u0
 
     def step_callback(
@@ -302,7 +295,7 @@ class AttitudeMPC(Controller):
         """Increment the tick counter."""
         self._tick += 1
 
-        return self.__finished
+        return self._finished
 
     def episode_callback(self):
         """Reset the integral error."""

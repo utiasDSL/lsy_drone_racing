@@ -131,7 +131,10 @@ colcon-common-extensions = "*"
 rosdep = "*"
 
 [tool.pixi.feature.jazzy.activation]
-scripts = ["setup_mocap.sh"]
+scripts = ["tools/setup_mocap.sh"]
+
+[tool.pixi.activation]
+scripts = ["tools/activate_acados.sh"]
 
 # feature[online-submission]
 [tool.pixi.feature.online-submission]

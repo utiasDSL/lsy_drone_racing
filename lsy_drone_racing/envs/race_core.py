@@ -30,7 +30,7 @@ import jax
 import jax.numpy as jp
 import mujoco
 import numpy as np
-from crazyflow import Sim
+from crazyflow.sim import Sim
 
 # from crazyflow.sim.symbolic import symbolic_attitude
 from flax.struct import dataclass

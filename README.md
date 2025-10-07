@@ -199,7 +199,7 @@ python scritps/deploy.py --config level2.toml --controller <your_controller.py>
 [Acados](https://docs.acados.org/index.html) is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller.
 We prepared an automatic script to install acados. You only have to stay in any environment shell, and run:
 ```bash
-bash setup_acados.sh
+source tools/setup_acados.sh
 ```
 Alternatively, you can refer to the [official installation guide](https://docs.acados.org/installation/).
 

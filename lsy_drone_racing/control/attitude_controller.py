@@ -37,7 +37,7 @@ class AttitudeController(Controller):
         """
         super().__init__(obs, info, config)
         self.freq = config.env.freq
-        self.drone_mass = 0.34  # TODO get from drone_models
+        self.drone_mass = 0.033  # TODO get from drone_models
         self.kp = np.array([0.4, 0.4, 1.25])
         self.ki = np.array([0.05, 0.05, 0.05])
         self.kd = np.array([0.2, 0.2, 0.4])
@@ -129,7 +129,7 @@ class AttitudeController(Controller):
         R_desired = np.vstack([x_axis_desired, y_axis_desired, z_axis_desired]).T
         euler_desired = R.from_matrix(R_desired).as_euler("xyz", degrees=False)
         thrust_desired, euler_desired
-        return np.concatenate([[thrust_desired], euler_desired], dtype=np.float32)
+        return np.concatenate([euler_desired, [thrust_desired]], dtype=np.float32)
 
     def step_callback(
         self,
