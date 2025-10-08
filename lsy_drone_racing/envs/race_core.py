@@ -273,6 +273,13 @@ class RaceCoreEnv:
             rng_key=seed,
             device=device,
         )
+        self.default_cam_config = {
+            "distance": sim_config.camera_view[0],
+            "azimuth": sim_config.camera_view[1],
+            "elevation": sim_config.camera_view[2],
+            "lookat": sim_config.camera_view[3:],
+        }
+
         # Sanitize args
         if sim_config.freq % freq != 0:
             raise ValueError(f"({sim_config.freq=}) is no multiple of ({freq=})")
@@ -399,7 +406,7 @@ class RaceCoreEnv:
 
     def render(self):
         """Render the environment."""
-        self.sim.render()
+        self.sim.render(default_cam_config=self.default_cam_config)
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
