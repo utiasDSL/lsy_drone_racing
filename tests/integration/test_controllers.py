@@ -42,13 +42,14 @@ def test_controllers(controller_file: str):
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("controller", ["controller", "mpc"])  # TODO add rl when available
 @pytest.mark.parametrize("physics", available_models.keys())
-def test_attitude_controller(physics: str):
+def test_attitude_controller(physics: str, controller: str):
     config = load_config(Path(__file__).parents[2] / "config/level0.toml")
     config.sim.gui = False
     config.sim.physics = physics
     ctrl_cls = load_controller(
-        Path(__file__).parents[2] / "lsy_drone_racing/control/attitude_controller.py"
+        Path(__file__).parents[2] / f"lsy_drone_racing/control/attitude_{controller}.py"
     )
     env = gymnasium.make(
         "DroneRacing-v0",

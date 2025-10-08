@@ -15,6 +15,7 @@ import numpy as np
 import scipy
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 from casadi import MX, cos, sin, vertcat
+from drone_models.core import load_params
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
@@ -24,15 +25,13 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-PARAMS_RPY = np.array([[-12.7, 10.15], [-12.7, 10.15], [-8.117, 14.36]])
-PARAMS_ACC = np.array([0.1906, 0.4903])
-MASS = 0.027
-GRAVITY = 9.81
-THRUST_MIN = 0.02
-THRUST_MAX = 0.1125
+# Those parameters are hard coded for the legacy simplified identified model "fo_rpy".
+# Check drone-models for better models and parameters
+PARAMS_RPY = np.array([[-100, 100], [-100, 100], [-100, 100]])
+PARAMS_ACC = np.array([0.0, 1.0])
 
 
-def export_quadrotor_ode_model() -> AcadosModel:
+def export_quadrotor_ode_model(parameters: dict) -> AcadosModel:
     """Symbolic Quadrotor Model."""
     # Define name of solver to be used in script
     model_name = "lsy_example_mpc"
@@ -58,7 +57,7 @@ def export_quadrotor_ode_model() -> AcadosModel:
         cos(rpy[0]) * cos(rpy[1]),
     )
     thrust = PARAMS_ACC[0] + PARAMS_ACC[1] * inputs[3]
-    vel_dot = thrust * z_axis / MASS - np.array([0.0, 0.0, GRAVITY])
+    vel_dot = thrust * z_axis / parameters["mass"] + parameters["gravity_vec"]
     rpy_dot = PARAMS_RPY[:, 0] * rpy + PARAMS_RPY[:, 1] * inputs[:3]
     f = vertcat(pos_dot, vel_dot, rpy_dot)
 
@@ -74,13 +73,13 @@ def export_quadrotor_ode_model() -> AcadosModel:
 
 
 def create_ocp_solver(
-    Tf: float, N: int, verbose: bool = False
+    Tf: float, N: int, parameters: dict, verbose: bool = False
 ) -> tuple[AcadosOcpSolver, AcadosOcp]:
     """Creates an acados Optimal Control Problem and Solver."""
     ocp = AcadosOcp()
 
     # set model
-    model = export_quadrotor_ode_model()
+    model = export_quadrotor_ode_model(parameters)
     ocp.model = model
 
     # Get Dimensions
@@ -106,22 +105,22 @@ def create_ocp_solver(
         [
             10.0,  # pos
             10.0,  # pos
-            10.0,  # pos
-            0.0,  # vel
-            0.0,  # vel
-            0.0,  # vel
-            0.0,  # rpy
-            0.0,  # rpy
-            0.0,  # rpy
+            50.0,  # pos
+            1.0,  # vel
+            1.0,  # vel
+            1.0,  # vel
+            1.0,  # rpy
+            1.0,  # rpy
+            1.0,  # rpy
         ]
     )
 
     R = np.diag(
         [
-            5.0,  # rpy
-            5.0,  # rpy
-            5.0,  # rpy
-            8.0,  # thrust
+            10.0,  # rpy
+            10.0,  # rpy
+            10.0,  # rpy
+            20.0,  # thrust
         ]
     )
 
@@ -150,8 +149,8 @@ def create_ocp_solver(
     ocp.constraints.idxbx = np.array([6, 7, 8])
 
     # Set Input Constraints (rpy < 60°)
-    ocp.constraints.lbu = np.array([-1.0, -1.0, -1.0, THRUST_MIN * 4])
-    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, THRUST_MAX * 4])
+    ocp.constraints.lbu = np.array([-1.0, -1.0, -1.0, parameters["thrust_min"] * 4])
+    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, parameters["thrust_max"] * 4])
     ocp.constraints.idxbu = np.array([0, 1, 2, 3])
 
     # We have to set x0 even though we will overwrite it later on.
@@ -174,7 +173,11 @@ def create_ocp_solver(
     ocp.solver_options.tf = Tf
 
     acados_ocp_solver = AcadosOcpSolver(
-        ocp, json_file="c_generated_code/lsy_example_mpc.json", verbose=verbose, build=True, generate=True
+        ocp,
+        json_file="c_generated_code/lsy_example_mpc.json",
+        verbose=verbose,
+        build=True,
+        generate=True,
     )
 
     return acados_ocp_solver, ocp
@@ -206,14 +209,14 @@ class AttitudeMPC(Controller):
                 [1.3, 0.2, 0.65],
                 [0.85, 1.1, 1.1],
                 [-0.5, 0.2, 0.65],
-                [-1.2, 0.0, 0.52],
-                [-1.2, 0.0, 1.1],
-                [-0.0, -0.5, 1.1],
-                [0.5, -0.5, 1.1],
+                [-1.15, 0.0, 0.52],
+                [-1.15, 0.0, 1.1],
+                [-0.0, -0.4, 1.1],
+                [0.5, -0.4, 1.1],
             ]
         )
 
-        des_completion_time = 8
+        des_completion_time = 15
         ts = np.linspace(0, des_completion_time, np.shape(waypoints)[0])
         cs_x = CubicSpline(ts, waypoints[:, 0])
         cs_y = CubicSpline(ts, waypoints[:, 1])
@@ -230,7 +233,10 @@ class AttitudeMPC(Controller):
         self._waypoints_pos = np.stack((x_des, y_des, z_des)).T
         self._waypoints_yaw = x_des * 0
 
-        self._acados_ocp_solver, self._ocp = create_ocp_solver(self._T_HORIZON, self._N)
+        self.drone_params = load_params(config.sim.physics, config.sim.drone_model)
+        self._acados_ocp_solver, self._ocp = create_ocp_solver(
+            self._T_HORIZON, self._N, self.drone_params
+        )
         self._nx = self._ocp.model.x.rows()
         self._nu = self._ocp.model.u.rows()
         self._ny = self._nx + self._nu
@@ -268,7 +274,9 @@ class AttitudeMPC(Controller):
         yref = np.zeros((self._N, self._ny))
         yref[:, 0:3] = self._waypoints_pos[i + self._N]  # position
         yref[:, 5] = self._waypoints_yaw[i + self._N]  # yaw
-        yref[:, 9] = MASS * GRAVITY  # hover thrust
+        # yref[:, 9] = (
+        #     self.drone_params["mass"] * -self.drone_params["gravity_vec"][-1]
+        # )  # hover thrust
         for j in range(self._N):
             self._acados_ocp_solver.set(j, "yref", yref[j])
 
