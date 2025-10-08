@@ -513,8 +513,8 @@ class RaceCoreEnv:
     ) -> EnvData:
         """Step the environment data."""
         n_gates = len(data.gate_mj_ids)
-        disabled_drones = (data.steps > freq // 5)[:, None]  # Only activate check after 0.2s
-        disabled_drones = disabled_drones & RaceCoreEnv._disabled_drones(drone_pos, contacts, data)
+        taken_off_drones = (data.steps > freq // 5)[:, None]  # Only activate check after 0.2s
+        disabled_drones = taken_off_drones & RaceCoreEnv._disabled_drones(drone_pos, contacts, data)
         gates_pos = mocap_pos[:, data.gate_mj_ids]
         obstacles_pos = mocap_pos[:, data.obstacle_mj_ids]
         # We need to convert the mocap quat from MuJoCo order to scipy order
