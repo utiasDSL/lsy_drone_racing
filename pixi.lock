@@ -91,7 +91,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
-      - pypi: git+https://github.com/utiasDSL/drone-models.git#4bfbbea3d91709a15edc9b050df26cae4fe1160b
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -961,7 +961,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
-      - pypi: git+https://github.com/utiasDSL/drone-models.git#4bfbbea3d91709a15edc9b050df26cae4fe1160b
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -1112,7 +1112,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
-      - pypi: git+https://github.com/utiasDSL/drone-models.git#4bfbbea3d91709a15edc9b050df26cae4fe1160b
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -1283,7 +1283,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
-      - pypi: git+https://github.com/utiasDSL/drone-models.git#4bfbbea3d91709a15edc9b050df26cae4fe1160b
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -1420,7 +1420,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
-      - pypi: git+https://github.com/utiasDSL/drone-models.git#4bfbbea3d91709a15edc9b050df26cae4fe1160b
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -2603,7 +2603,7 @@ packages:
   - array-api-extra
   - array-api-typing @ git+https://github.com/data-apis/array-api-typing
   - scipy @ git+https://github.com/scipy/scipy.git@4cb83b6
-- pypi: git+https://github.com/utiasDSL/drone-models.git#4bfbbea3d91709a15edc9b050df26cae4fe1160b
+- pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
   name: drone-models
   version: 0.0.1
   requires_dist:
@@ -5971,7 +5971,7 @@ packages:
 - pypi: ./
   name: lsy-drone-racing
   version: 0.0.1
-  sha256: 40bd59cd1779a4f2d9f11aa71247e314cdf57cb6c2b7a797f42fc1121e99f5d2
+  sha256: 4b962c4646aef762c92f3d690b1df0a9c5079bdc1d9256102a2acd2b29d13a1b
   requires_dist:
   - fire>=0.6.0
   - numpy
