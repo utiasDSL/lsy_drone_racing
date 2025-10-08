@@ -310,7 +310,7 @@ class RaceCoreEnv:
             obstacle_mj_ids=obstacle_ids,
             max_episode_steps=max_episode_steps,
             sensor_range=sensor_range,
-            pos_limit_low=[-3, -3, 0],
+            pos_limit_low=[-3, -3, -1e-3],
             pos_limit_high=[3, 3, 2.5],
             device=self.device,
         )
@@ -376,7 +376,9 @@ class RaceCoreEnv:
         # previous flags, not the ones from the current step
         marked_for_reset = self.data.marked_for_reset
         # Apply the environment logic with updated simulation data.
-        self.data = self._step_env(self.data, drone_pos, mocap_pos, mocap_quat, contacts)
+        self.data = self._step_env(
+            self.data, drone_pos, mocap_pos, mocap_quat, contacts, self.sim.freq
+        )
         # Auto-reset envs. Add configuration option to disable for single-world envs
         if self.autoreset and marked_for_reset.any():
             self._reset(mask=marked_for_reset)
@@ -509,11 +511,17 @@ class RaceCoreEnv:
     @staticmethod
     @jax.jit
     def _step_env(
-        data: EnvData, drone_pos: Array, mocap_pos: Array, mocap_quat: Array, contacts: Array
+        data: EnvData,
+        drone_pos: Array,
+        mocap_pos: Array,
+        mocap_quat: Array,
+        contacts: Array,
+        freq: int,
     ) -> EnvData:
         """Step the environment data."""
         n_gates = len(data.gate_mj_ids)
-        disabled_drones = RaceCoreEnv._disabled_drones(drone_pos, contacts, data)
+        disabled_drones = (data.steps > freq // 5)[:, None]  # Only activate check after 0.2s
+        disabled_drones = disabled_drones & RaceCoreEnv._disabled_drones(drone_pos, contacts, data)
         gates_pos = mocap_pos[:, data.gate_mj_ids]
         obstacles_pos = mocap_pos[:, data.obstacle_mj_ids]
         # We need to convert the mocap quat from MuJoCo order to scipy order
@@ -636,7 +644,7 @@ class RaceCoreEnv:
         self.sim.build_mjx()
 
     @staticmethod
-    def _load_contact_masks(sim: Sim) -> Array:
+    def _load_contact_masks(sim: Sim) -> Array:  # , data: EnvData
         """Load contact masks for the simulation that zero out irrelevant contacts per drone."""
         sim.contacts()  # Trigger initial contact information computation
         contact = sim.mjx_data._impl.contact
@@ -654,7 +662,10 @@ class RaceCoreEnv:
         geom_count = sim.mj_model.body_geomnum[sim.mj_model.body("world").id]
         geom1_valid = (geom1 >= geom_start) & (geom1 < geom_start + geom_count)
         geom2_valid = (geom2 >= geom_start) & (geom2 < geom_start + geom_count)
-        masks[:, (geom1_valid | geom2_valid).squeeze()] = 0  # Floor contacts are not collisions
+
+        # floor_contact_mask = (geom1_valid | geom2_valid).squeeze()
+        # masks[:, floor_contact_mask] = 0  # Floor contacts are not collisions
+
         masks = np.tile(masks[None, ...], (sim.n_worlds, 1, 1))
         return masks
 

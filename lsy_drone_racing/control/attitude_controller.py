@@ -14,6 +14,7 @@ import math
 from typing import TYPE_CHECKING
 
 import numpy as np
+from drone_models.core import load_params
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 
@@ -37,7 +38,10 @@ class AttitudeController(Controller):
         """
         super().__init__(obs, info, config)
         self.freq = config.env.freq
-        self.drone_mass = 0.033  # TODO get from drone_models
+
+        drone_params = load_params(config.sim.physics, config.sim.drone_model)
+        self.drone_mass = drone_params["mass"]  # alternatively from sim.drone_mass
+
         self.kp = np.array([0.4, 0.4, 1.25])
         self.ki = np.array([0.05, 0.05, 0.05])
         self.kd = np.array([0.2, 0.2, 0.4])
@@ -55,10 +59,10 @@ class AttitudeController(Controller):
                 [1.3, 0.2, 0.65],
                 [0.85, 1.1, 1.1],
                 [-0.5, 0.2, 0.65],
-                [-1.2, 0.0, 0.52],
-                [-1.2, 0.0, 1.1],
-                [-0.0, -0.5, 1.1],
-                [0.5, -0.5, 1.1],
+                [-1.15, 0.0, 0.52],
+                [-1.15, 0.0, 1.1],
+                [-0.0, -0.4, 1.1],
+                [0.5, -0.4, 1.1],
             ]
         )
         # Scale trajectory between 0 and 1
@@ -128,7 +132,7 @@ class AttitudeController(Controller):
 
         R_desired = np.vstack([x_axis_desired, y_axis_desired, z_axis_desired]).T
         euler_desired = R.from_matrix(R_desired).as_euler("xyz", degrees=False)
-        thrust_desired, euler_desired
+
         return np.concatenate([euler_desired, [thrust_desired]], dtype=np.float32)
 
     def step_callback(

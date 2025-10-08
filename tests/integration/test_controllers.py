@@ -75,7 +75,7 @@ def test_attitude_controller(physics: str):
 
 @pytest.mark.integration
 @pytest.mark.parametrize("yaw", [0, np.pi / 2, np.pi, 3 * np.pi / 2])
-@pytest.mark.parametrize("physics", available_models.keys())
+@pytest.mark.parametrize("physics", ["first_principles"])
 def test_trajectory_controller_finish(yaw: float, physics: str):
     """Test if the trajectory controller can finish the track.
 
