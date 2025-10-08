@@ -263,11 +263,11 @@ class RaceCoreEnv:
             device: Device used for the environment and the simulation.
         """
         super().__init__()
-        print(f"XXX {n_envs=}, {n_drones=}")
         self.sim = Sim(
             n_worlds=n_envs,
             n_drones=n_drones,
             physics=sim_config.physics,
+            drone_model=sim_config.drone_model,
             control=control_mode,
             freq=sim_config.freq,
             state_freq=freq,
