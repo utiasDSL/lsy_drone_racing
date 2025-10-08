@@ -49,8 +49,6 @@ from lsy_drone_racing.envs.utils import gate_passed, load_track
 
 if TYPE_CHECKING:
     from crazyflow.sim.data import SimData
-
-    # from crazyflow.sim.symbolic import SymbolicModel
     from jax import Array, Device
     from ml_collections import ConfigDict
     from mujoco import MjSpec
@@ -470,11 +468,6 @@ class RaceCoreEnv:
         """The mass of the drones in the environment."""
         return np.asarray(self.sim.default_data.params.mass[..., 0])
 
-    # @property
-    # def symbolic_model(self) -> SymbolicModel:
-    #     """The symbolic model of the environment."""
-    #     return symbolic_attitude(1 / self.freq)
-
     @staticmethod
     @jax.jit
     def _reset_env_data(
@@ -662,9 +655,6 @@ class RaceCoreEnv:
         geom_count = sim.mj_model.body_geomnum[sim.mj_model.body("world").id]
         geom1_valid = (geom1 >= geom_start) & (geom1 < geom_start + geom_count)
         geom2_valid = (geom2 >= geom_start) & (geom2 < geom_start + geom_count)
-
-        # floor_contact_mask = (geom1_valid | geom2_valid).squeeze()
-        # masks[:, floor_contact_mask] = 0  # Floor contacts are not collisions
 
         masks = np.tile(masks[None, ...], (sim.n_worlds, 1, 1))
         return masks
