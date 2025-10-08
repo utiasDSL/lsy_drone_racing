@@ -3,7 +3,7 @@ set -euo pipefail
 ACADOS_DIR="${PIXI_PROJECT_ROOT}/acados"
 
 # Install Acados Python interface
-if ! pip show acados-template >/dev/null 2>&1; then
+if [ -d "${ACADOS_DIR}/interfaces/acados_template" ] && ! pip show acados-template >/dev/null 2>&1; then
   echo "[Setup Acados] Installing acados Python interface..."
   pip install -e ${ACADOS_DIR}/interfaces/acados_template
 fi
