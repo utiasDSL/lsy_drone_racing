@@ -752,7 +752,7 @@ def build_dynamics_disturbance_fn(
     def dynamics_disturbance(data: SimData) -> SimData:
         key, subkey = jax.random.split(data.core.rng_key)
         states = data.states
-        states = states.replace(force=states.force + fn(subkey, states.force.shape))  # World frame
+        states = states.replace(force=fn(subkey, states.force.shape))  # World frame
         return data.replace(states=states, core=data.core.replace(rng_key=key))
 
     return dynamics_disturbance

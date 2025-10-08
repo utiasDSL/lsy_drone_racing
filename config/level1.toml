@@ -74,11 +74,11 @@ ang_vel = [0, 0, 0]
 fn = "normal"
 scale = 0.001
 
-# [env.disturbances.dynamics]
-# fn = "uniform"
-# [env.disturbances.dynamics.kwargs]
-# minval = [-0.1, -0.1, -0.1]
-# maxval = [0.1, 0.1, 0.1]
+[env.disturbances.dynamics]
+fn = "uniform"
+[env.disturbances.dynamics.kwargs]
+minval = [-0.1, -0.1, -0.1]
+maxval = [0.1, 0.1, 0.1]
 
 [env.randomizations.drone_pos]
 fn = "uniform"
