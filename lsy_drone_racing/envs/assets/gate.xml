@@ -7,29 +7,36 @@
     <texture name="gate_texture_bottom" type="2d" file="gate_bottom.png" />
     <texture name="gate_texture_left" type="2d" file="gate_left.png" />
     <texture name="gate_texture_right" type="2d" file="gate_right.png" />
-    <material name="gate_mat_top" texture="gate_texture_top" specular="0.5" shininess="0.3"/>
-    <material name="gate_mat_bottom" texture="gate_texture_bottom" specular="0.5" shininess="0.3"/>
-    <material name="gate_mat_left" texture="gate_texture_left" specular="0.5" shininess="0.3"/>
-    <material name="gate_mat_right" texture="gate_texture_right" specular="0.5" shininess="0.3"/>
-    <material name="gate_mat_back" rgba="1 1 1 1" specular="0.2" shininess="0.5"/>
+    <material name="gate_mat_top" texture="gate_texture_top" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
+    <material name="gate_mat_bottom" texture="gate_texture_bottom" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
+    <material name="gate_mat_left" texture="gate_texture_left" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
+    <material name="gate_mat_right" texture="gate_texture_right" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
+    <material name="frame_mat" rgba="0.5 0.5 0.5 1" specular="0.4" shininess="0.4" reflectance="0.5"/>
+    <material name="stand_mat" rgba="0.7 0.68 0.55 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
   </asset>
 
   <worldbody>
     <body name="gate">
-      <!-- Build gates with four sides -->
-      <geom type="box" size=".3 .05 .01" pos="0 0 -0.25" euler="90 0 0" material="gate_mat_back"/>
-      <geom type="box" size=".3 .05 .01" pos="0 0 0.25" euler="90 0 0" material="gate_mat_back"/>
-      <geom type="box" size=".05 .2 .01" pos="-0.25 0 0" euler="90 0 0" material="gate_mat_back"/>
-      <geom type="box" size=".05 .2 .01" pos="0.25 0 0" euler="90 0 0" material="gate_mat_back"/>
+      <!-- Textured front -->
+      <geom name="front_top" type="box" size=".3 .05 5e-4" pos="0 -1e-2 0.25" euler="90 0 0" material="gate_mat_top"/>
+      <geom name="front_bottom" type="box" size=".3 .05 5e-4" pos="0 -1e-2 -0.25" euler="90 0 0" material="gate_mat_bottom"/>
+      <geom name="front_left" type="box" size=".05 .2 5e-4" pos="-0.25 -1e-2 0" euler="90 0 0" material="gate_mat_left"/>
+      <geom name="front_right" type="box" size=".05 .2 5e-4" pos="0.25 -1e-2 0" euler="90 0 0" material="gate_mat_right"/>
 
-      <!-- Apply textured material to edges -->
-      <geom name="top_edge" type="box" size=".3 .05 1e-4" pos="0 -0.01 0.25" euler="90 0 0" material="gate_mat_top" contype="0" conaffinity="0"/>
-      <geom name="bottom_edge" type="box" size=".3 .05 1e-4" pos="0 -0.01 -0.25" euler="90 0 0" material="gate_mat_bottom" contype="0" conaffinity="0"/>
-      <geom name="left_edge" type="box" size=".05 .2 1e-4" pos="-0.25 -0.01 0" euler="90 0 0" material="gate_mat_left" contype="0" conaffinity="0"/>
-      <geom name="right_edge" type="box" size=".05 .2 1e-4" pos="0.25 -0.01 0" euler="90 0 0" material="gate_mat_right" contype="0" conaffinity="0"/>
+      <!-- Textured back -->
+      <geom name="back_top" type="box" size=".3 .05 5e-4" pos="0 1e-2 0.25" euler="-90 0 180" material="gate_mat_top"/>
+      <geom name="back_bottom" type="box" size=".3 .05 5e-4" pos="0 1e-2 -0.25" euler="-90 0 180" material="gate_mat_bottom"/>
+      <geom name="back_left" type="box" size=".05 .2 5e-4" pos="-0.25 1e-2 0" euler="90 180 180" material="gate_mat_left"/>
+      <geom name="back_right" type="box" size=".05 .2 5e-4" pos="0.25 1e-2 0" euler="90 180 180" material="gate_mat_right"/>
 
-      <!-- Keep the stand as plain material -->
-      <geom name="gate_stand" type="box" size="0.05 0.05 0.5" pos="0 0 -0.79" rgba="0.7 0.68 0.55 1"/>
+      <!-- Frame -->
+      <geom name="frame_top" type="box" size=".3 .01 .01" pos="0 0 0.29" euler="90 0 0" material="frame_mat"/>
+      <geom name="frame_bottom" type="box" size=".3 .01 .01" pos="0 0 -0.29" euler="90 0 0" material="frame_mat"/>
+      <geom name="frame_left" type="box" size=".01 .29 .01" pos="-0.29 0 0" euler="90 0 0" material="frame_mat"/>
+      <geom name="frame_right" type="box" size=".01 .29 .01" pos="0.29 0 0" euler="90 0 0" material="frame_mat"/>
+
+      <!-- Stand -->
+      <geom name="gate_stand" type="box" size="0.05 0.05 0.5" pos="0 0 -0.8" material="stand_mat"/>
     </body>
   </worldbody>
 </mujoco>
