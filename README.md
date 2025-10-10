@@ -29,15 +29,15 @@
     - [Fork lsy\_drone\_racing](#fork-lsy_drone_racing)
     - [Setting up your environment](#setting-up-your-environment)
       - [Pixi package manager (Recommended)](#pixi-package-manager-recommended)
+      - [Micromamba package manager (Not recommended)](#micromamba-package-manager-not-recommended)
       - [Simulation \& Hardware on our Lab PC (If Necessary)](#simulation--hardware-on-our-lab-pc-if-necessary)
       - [Simulation only (Not Recommended)](#simulation-only-not-recommended)
-    - [Installation](#installation)  
-      - [Clone repository](#clone-repository)  
-      - [Install simulation (developing & testing controllers)](#install-simulation-developing--testing-controllers)  
-      - [Install deployment (deploy controller to real drones)](#install-deployment-deploy-controller-to-real-drones)  
-      - [Install Acados (necessary for MPC approaches in sim & real)](#install-acados-necessary-for-mpc-approaches-in-sim--real)  
-      - [USB Preparation for crazyradio (real only)](#usb-preparation-for-crazyradio-real-only)
-      - [cfclient (real only/ optional)](#cfclient-real-only-optional)
+    - [Installation](#installation)
+      - [Clone repository](#clone-repository)
+      - [Install simulation (developing \& testing controllers)](#install-simulation-developing--testing-controllers)
+      - [Install deployment (deploy controller to real drones)](#install-deployment-deploy-controller-to-real-drones)
+      - [Install Acados (necessary for MPC approaches in sim \& real)](#install-acados-necessary-for-mpc-approaches-in-sim--real)
+    - [Development](#development)
     - [Using Docker](#using-docker)
   - [Difficulty levels](#difficulty-levels)
     - [Switching between configurations](#switching-between-configurations)
@@ -48,12 +48,11 @@
   - [Creating your own controller](#creating-your-own-controller)
   - [Common errors](#common-errors)
     - [GLIBCXX](#glibcxx)
-  - [Deployment](#deployment)
-    - [Common errors](#common-errors-1)
+    - [Deployment](#deployment)
       - [LIBUSB\_ERROR\_ACCESS](#libusb_error_access)
-    - [Fly with the drones](#fly-with-the-drones)
       - [Settings](#settings)
       - [Launch](#launch)
+
 
 
 ## Documentation
@@ -65,16 +64,19 @@ To get you started with the drone racing project, you can head over to our [docu
 
 #### In Simulation
 
-To run the LSY Autonomous Drone Racing project in simulation, you will need 2 repositories:
+To run the LSY Autonomous Drone Racing project course in simulation, you will need the following repositories:
 - [lsy_drone_racing](https://github.com/utiasDSL/lsy_drone_racing) - `main` branch: This repository contains the environments and scripts to simulate and deploy the drones in the racing challenge.
 - [crazyflow](https://github.com/utiasDSL/crazyflow) - `main` branch: This repository constains the drone simulation.
+- [drone-models](https://github.com/utiasDSL/drone-models) - `main` branch: Dynamics Models of the crazyflie quadrotor.
+- [drone-controllers](https://github.com/utiasDSL/drone-controllers) - `main` branch: Controllers of the crazyflie quadrotor.
+
+Note that in the [installation section](#step-by-step-installation), we show how those packages are installed automatically.
 
 #### On Hardware
 
 To run the LSY Autonomous Drone Racing project in the lab on real hardware, you need three additional repositories to the ones required for the simulation:
 - [motion_capture_tracking](https://github.com/utiasDSL/motion_capture_tracking) - `ros2` branch: This repository is a ROS 2 package that receives data from our VICON motion capture system and publishes it under the `\tf` topic via ROS2. 
-- [estimators](https://github.com/utiasDSL/estimators) - `main` branch: Estimators to accurately predict the drone state based on the vicon measurements.
-- [models](https://github.com/utiasDSL/models) - `main` branch: Dynamics Models of the crazyflie quadrotor.
+- [drone-estimators](https://github.com/utiasDSL/drone-estimators) - `main` branch: Estimators to accurately predict the drone state based on the vicon measurements.
 
 ## Step-by-Step Installation
 
@@ -90,7 +92,7 @@ If you have never worked with GitHub before, see the [docs](https://docs.github.
 
 We recommend using [Pixi](https://pixi.sh) to manage dependencies and virtual environments for this project. Pixi creates a dedicated .pixi directory in the project root, which contains the isolated virtual environment. Installed packages are cached globally under ~/.cache/rattler/ to speed up subsequent environment setups across projects.
 
-To activate the environment, simply run "pixi shell", or "pixi shell -e < feature_name >" for specific sub-environments. On the first invocation, Pixi will automatically resolve and install all required dependencies.
+To activate the environment, simply run "pixi shell", or "pixi shell -e <environment_name>" for specific sub-environments. On the first invocation, Pixi will automatically resolve and install all required dependencies.
 
 > **Note:** In pixi shell, you can still use pip to install any packages you need.
 
@@ -98,6 +100,10 @@ To [install pixi](https://pixi.sh/latest/installation/), run:
 ```bash
 curl -fsSL https://pixi.sh/install.sh | sh
 ```
+
+#### Micromamba package manager (Not recommended)
+
+Alternatively, [RoboStack](https://robostack.github.io) and [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html) for this. Robostack lets you install your favorite ROS version independent of you OS. It builds on top of conda/mamba to do this. We do not recommend this, since Mamba/Conda environments have the tendency to be leaky and share some system-wide packages. In our experience, this will lead to problems, which is why this project is optimized to use with pixi. If you want to use micromamba anyway, we can't guarantee support. In that case, please follow the [Robostack Getting Started](https://robostack.github.io/GettingStarted.html) in order to create a ROS2 Jazzy Environment on Python3.11 using micromamba. 
 
 #### Simulation & Hardware on our Lab PC (If Necessary)
 
@@ -122,12 +128,14 @@ cd lsy_drone_racing
 
 #### Install simulation (developing & testing controllers)
 
-Stay in the repository, run:
+Stay in the repository and run the following command to activate your pixi shell with the default (sim) environment:
 
 ```bash
 pixi shell
 ```
-<!-- > **Note:** By running the commands above, you will have **acados** installed by default. This might cause the terminal to freeze for several minutes. -->
+> **Note:** This package currently depends on a prerelease version of [scipy](https://github.com/scipy/scipy), which needs to be built from source. This might take more than 10 minutes on older hardware.
+
+> **Note:** By running the commands above, you will have **acados** installed by default. This might cause the terminal to freeze for several minutes.
 
 > **Note:** To leave a pixi shell, press **ESC** or **Ctrl+D**. Make sure to leave the shell before you activate another shell.
 
@@ -145,13 +153,15 @@ python scripts/sim.py
 
 If everything is installed correctly, this opens the simulator and simulates a drone flying through four gates.
 
-(Optional) You can also install the extended dependencies with 
+(Optional) If you want to train RL policies, we recommend you to use [PyTorch](https://pytorch.org/). After choosing the correct hardware setup, you can install torch based on the pip command shown [here](https://pytorch.org/get-started/locally/).
+
+(Optional) You can also run the tests by directly running either 
 ```bash
-cd ~/repos/lsy_drone_racing
-pip install -e .[rl,test]
+pixi run -e tests tests -v
 ```
-and check if all tests complete with 
+or by first activating the correct environment
 ```bash
+pixi shell -e tests
 cd ~/repos/lsy_drone_racing
 pytest tests
 ```
@@ -172,6 +182,8 @@ pip install -e .[sim,deploy]
 pip install -e .[sim,gpu,deploy]
 ```
 
+> **Note:** This package currently depends on a prerelease version of [scipy](https://github.com/scipy/scipy), which needs to be built from source. This might take more than 10 minutes on older hardware.
+
 Test your installation: For this to work you have to be in the lab and be connected to our local network. 
 ```
 # Check connection to the vicon PC
@@ -188,63 +200,7 @@ python -m drone_estimators.ros_nodes.ros2_node --drone_name cf52
 ```
 If this works, you should be able to see frequency information in terminal. 
 
-Now you are ready to deploy your controller on real drones. Stay in a new *deploy* shell, run:
-```bash
-python scritps/deploy.py --config level2.toml --controller <your_controller.py>
-```
-> **Note:** Be carefull with flying the drone! Make sure to kill the process (**Ctrl+C**) immediately when your controller is not stable.
-
-
-#### Install Acados (necessary for MPC approaches in sim & real)
-[Acados](https://docs.acados.org/index.html) is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller.
-We prepared an automatic script to install acados. You only have to stay in any environment shell, and run:
-```bash
-source tools/setup_acados.sh
-```
-Alternatively, you can refer to the [official installation guide](https://docs.acados.org/installation/).
-
-<!-- #### Install Acados (necessary for MPC approaches in sim & real)
-[Acados](https://docs.acados.org/index.html) is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller.
-Even though the installation instructions can also be found on the wepage, we summarized the installation for our recommended setup:
-
-```
-# Clone the repo and check out the correct branch, initialize submodules.
-cd ~/repos
-git clone https://github.com/acados/acados.git
-cd acados
-git checkout tags/v0.5.0
-git submodule update --recursive --init
-
-# Build the application
-# Note: If you use Robostack, this might lead to issues. Try to build acados outside your environment if this is the case.
-mkdir -p build
-cd build
-cmake -DACADOS_WITH_QPOASES=ON ..
-# add more optional arguments e.g. -DACADOS_WITH_DAQP=ON, a list of CMake options is provided below
-make install -j4
-
-# In your environment, make sure you install the acados python interface:
-# Note: If you build acados outside your environment previously, activate it again before executing the following commands.
-cd ~/repos/acados
-pip install -e interfaces/acados_template
-
-# Make sure acados can be found by adding its location to the path. For robostack and micromamba, this would be:
-echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:"$HOME/repos/acados/lib"' > ~/micromamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_ld_library.sh
-echo 'export ACADOS_SOURCE_DIR="$HOME/repos/acados"' > ~/micromamba/envs/ros_env/etc/conda/activate.d/xcustom_acados_source.sh
-
-
-# Deactivate and activate your env again such that the previous two lines can take effect.
-micromamba deactivate 
-micromamba activate ros_env
-# Run a simple example from the acados example to make sure it works.
-# If he asks you whether you want to get the t_renderer package installed automatically, press yes.
-python3 ~/repos/acados/examples/acados_python/getting_started/minimal_example_ocp.py
-
-``` -->
-
-#### USB Preparation for crazyradio (real only)
-
-Next, paste the following block into your terminal
+To send commands to the Crazyflie drones, we need to prepare the USB port for the Crazyradio by executing the following block. Ask the TA to help you with sudo rights.
 ```bash
 cat <<EOF | sudo tee /etc/udev/rules.d/99-bitcraze.rules > /dev/null
 # Crazyradio (normal operation)
@@ -264,19 +220,34 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-<!-- #### cfclient (real only/ optional)
-
-Optionally, you can also install cfclient to debug issues with the drones and configure IDs etc.
->**Note:** We recommend to do this in a seperate environment to prevent conflicts between package versions.
+Now you are ready to deploy your controller on real drones. Start a new *deploy* shell, run:
 ```bash
-# (optional) Install cfclient
-sudo apt install libxcb-xinerama0
-pip install --upgrade pip
-pip install cfclient
-``` -->
+python scripts/deploy.py --config level2.toml --controller <your_controller.py>
+```
+> **Note:** Be carefull with flying the drone! Make sure to kill the process (**Ctrl+C**) immediately when your controller is not stable.
+
+
+#### Install Acados (necessary for MPC approaches in sim & real)
+[Acados](https://docs.acados.org/index.html) is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller.
+We prepared an automatic script to install and activate acados in all environments. If something does not work out of the box, we refer the reader to the [official installation guide](https://docs.acados.org/installation/).
+
+
+### Development
+If you want to do more in-depth development or understand the used packages ([crazyflow](https://github.com/utiasDSL/crazyflow), [drone-models](https://github.com/utiasDSL/drone-models), [drone-controllers](https://github.com/utiasDSL/drone-controllers), [drone-estimators](https://github.com/utiasDSL/drone-estimators)) better, you can fork and install all of those packages separately in editable mode. If you find bugs or other have improvements, feel free to submit a [pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request) or [create an issue](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/creating-an-issue). The installation procedure is the same for all packages:
+```bash
+cd ~/repos/lsy_drone_racing
+pixi shell
+cd ~/repos
+git clone https://github.com/<YOUR-USERNAME>/crazyflow.git
+cd ~/repos/crazyflow
+pip install -e .
+cd ~/repos/lsy_drone_racing
+```
+
+After installation, you can change files in the cloned repository and the changes will directly affect your environment. 
 
 ### Using Docker
-You can also run the simulation with Docker, albeit without the GUI at the moment. To test this, install docker with docker compose on your system, and then run
+You can also run the *simulation* with Docker, albeit without the GUI at the moment. To test this, install docker with docker compose on your system, and then run
 ```bash
 docker compose --profile sim build
 docker compose --profile sim up
@@ -296,15 +267,16 @@ The complete problem is specified by a TOML file, e.g. [`level0.toml`](config/le
 
 The config folder contains settings for progressively harder scenarios:
 
-|        Evaluation Scenario        | Rand. Inertial Properties | Randomized Obstacles, Gates |       Notes        |
-| :-------------------------------: | :-----------------------: | :-------------------------: | :----------------: |
-|   [Level 0](config/level0.toml)   |           *No*            |            *No*             | Perfect knowledge  |
-|   [Level 1](config/level1.toml)   |          **Yes**          |            *No*             |      Adaptive      |
-|   [Level 2](config/level2.toml)   |          **Yes**          |           **Yes**           |    Re-planning     |
-|           **sim2real**            |  **Real-life hardware**   |           **Yes**           | Sim2real transfer  |
-| [Bonus](config/multi_level3.toml) |          **Yes**          |           **Yes**           | Multi-agent racing |
+|      Evaluation Scenario      |     Rand. Inertial Properties     | Randomized Obstacles, Gates | Random Tracks |       Notes       |
+| :---------------------------: | :-------------------------------: | :-------------------------: | :-----------: | :---------------: |
+| [Level 0](config/level0.toml) |               *No*                |            *No*             |     *No*      | Perfect knowledge |
+| [Level 1](config/level1.toml) |              **Yes**              |            *No*             |     *No*      |     Adaptive      |
+| [Level 2](config/level2.toml) |              **Yes**              |           **Yes**           |     *No*      |    Re-planning    |
+| [Level 3](config/level3.toml) |              **Yes**              |           **Yes**           |    **Yes**    |  Online planning  |
+|         **sim2real**          |      **Real-life hardware**       |           **Yes**           |    **Yes**    | Sim2real transfer |
+|             <!--              | [Bonus](config/multi_level3.toml) |           **Yes**           |    **Yes**    |       *No*        | Multi-agent racing | --> |
 
-> **Warning**: The bonus level has not yet been tested with students. You are **not** expected to solve this level. **Only** touch this if you have a solid solution already and want to take the challenge one level further.
+<!-- > **Warning**: The bonus level has not yet been tested with students. You are **not** expected to solve this level. **Only** touch this if you have a solid solution already and want to take the challenge one level further. -->
 
 ### Switching between configurations
 You can choose which configuration to use by changing the `--config` command line option. To e.g. run the example controller on the hardest simulation scenario, you can use the following command
@@ -315,7 +287,7 @@ python scripts/sim.py --config config/level2.toml
 
 ## The online competition
 
-During the semester, you will compete with the other teams on who's the fastest to complete the drone race. You can see the current standings on the competition page in Kaggle, a popular ML competition website. The results of the competition will **NOT** influence your grade directly. However, it gives you a sense of how performant and robust your approach is compared to others. In addition, the competition is an easy way for you to check if your code is running correctly. If there are errors in the automated testing, chances are your project also doesn't run on our systems. The competition will always use difficulty level 3.
+During the semester, you will compete with the other teams on who's the fastest to complete the drone race. You can see the current standings on the competition page in Kaggle, a popular ML competition website. The results of the competition will **NOT** influence your grade directly. However, it gives you a sense of how performant and robust your approach is compared to others. In addition, the competition is an easy way for you to check if your code is running correctly. If there are errors in the automated testing, chances are your project also doesn't run on our systems. The competition will always use difficulty level 2.
 
 ### Signing up for the online competition
 
@@ -377,16 +349,12 @@ micromamba install -c conda-forge gcc=12.1.0
 
 If the program still crashes and complains about not finding `GLIBCXX_3.4.30`, please update your `LD_LIBRARY_PATH` variable to point to your mamba environment's lib folder.
 
-## Deployment
-
-### Common errors
+### Deployment
 
 #### LIBUSB_ERROR_ACCESS
 Change the USB access permissions with
 
 ```sudo chmod -R 777 /dev/bus/usb/```
-
-### Fly with the drones 
 
 #### Settings
 Make sure your drone is selected on the vicon system, otherwise it will not be tracked.
@@ -396,8 +364,6 @@ You will have to modify the following config files before liftoff:
 Please modify either `~/repos/lsy_drone_racing/config/level2.toml` or create your own custom config file to include the correct drone id.
 
 #### Launch
->**Note:** The following should be run within your teams pixi *deploy* shell.
-
 You will need a total of three terminal windows for deploying your controller on the real drone:
 
 Terminal 1 launches the motion_capture_tracking an ensures that the position of all vicon objects are published via ros2:
