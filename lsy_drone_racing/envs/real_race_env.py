@@ -23,12 +23,12 @@ import rclpy
 from cflib.crazyflie import Crazyflie, Localization
 from cflib.crtp.crtpstack import CRTPPacket, CRTPPort
 from cflib.utils.power_switch import PowerSwitch
+from drone_estimators.ros_nodes.ros_connector import ROSConnector
 from gymnasium import Env
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
-from lsy_drone_racing.ros import ROSConnector
-from lsy_drone_racing.ros.ros_utils import check_drone_start_pos, check_race_track
+from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
