@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
-from drone_estimators.ros_nodes.ros_connector import ROSConnector
+from drone_estimators.ros_nodes.ros2_connector import ROSConnector
 from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:

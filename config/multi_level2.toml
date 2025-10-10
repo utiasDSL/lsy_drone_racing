@@ -23,6 +23,8 @@ channel = 80
 [[deploy.drones]]
 id = 6
 channel = 80
+drone_model = "cf21B_500"                        # Model of the drone, i.e., cf2x_L250, cf2x_P250, cf2x_T500, cf21B_500. For this course, we use cf21B_500
+
 
 [sim]
 # Physics options:
@@ -86,6 +88,10 @@ pos = [1.2, 1.2, 0.05]
 rpy = [0, 0, 0]
 vel = [0, 0, 0]
 ang_vel = [0, 0, 0]
+
+[[env.track.safety_limits]]
+pos_limit_low = [-2.5, -1.5, -1e-3]
+pos_limit_high = [2.5, 1.5, 2.0]
 
 [env.disturbances.action]
 fn = "normal"
