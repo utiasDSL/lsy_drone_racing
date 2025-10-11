@@ -391,7 +391,12 @@ class RaceCoreEnv:
 
     def apply_action(self, action: Array):
         """Apply the commanded state action to the simulation."""
-        action = action.reshape((self.sim.n_worlds, self.sim.n_drones, -1))
+        # Convert to a buffer that meets XLA's alginment restrictions to prevent warnings. See
+        # https://github.com/jax-ml/jax/discussions/6055
+        # Tracking issue:
+        # https://github.com/jax-ml/jax/issues/29810
+        # Forcing a copy here is less efficient, but avoids the warning.
+        action = np.reshape(action, (self.sim.n_worlds, self.sim.n_drones, -1), copy=True)
         if "action" in self.disturbances:
             key, subkey = jax.random.split(self.sim.data.core.rng_key)
             action += self.disturbances["action"](subkey, action.shape)
