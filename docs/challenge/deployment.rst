@@ -7,31 +7,33 @@ The idea for the deployment is to have an environment that exactly matches the i
     Please be aware that running a controller on the real drone may still exhibit significant differences compared to the simulation due to the sim2real gap.
 
 Motion Tracking
-~~~~~~~~~~~~~~~
-We use a Vicon motion tracking system to track the motion of the drone. The Vicon system consists of several cameras that are placed around the track, and a base station that calculates object poses by triangulation. Gates, obstacles and the drone are all equipped with reflective markers, which can be tracked by the cameras. Since we'd need to resort to numerical differentiation to get velocity information, we're running state estimators that filter the noisy Vicon measurements and provide smoother estimates of the drone's state.
+---------------
+We use a `Vicon <https://www.vicon.com/>`_ motion tracking system to track the motion of the drone. The Vicon system consists of several cameras that are placed around the track, and a base station that calculates object poses by triangulation. Gates, obstacles and the drone are all equipped with reflective markers, which can be tracked by the cameras. Since we'd need to resort to numerical differentiation to get velocity information, we're running state estimators that filter the noisy Vicon measurements and provide smoother estimates of the drone's state.
 
-Deploying Your Controller
-~~~~~~~~~~~~~~~~~~~~~~~~~
-To deploy your controller on the real drone, use the deployment script in the ``lsy_drone_racing/scripts`` folder. Place the drone on its start position, power it on, and launch the estimators.
-
-.. note::
-    Make sure the drone has enough battery to complete the track. If a red LED is constantly turned on, the drone is low on battery. A blinking red LED indicates that the battery is sufficiently charged.
-
-The estimators require two packages to run. First, you need to launch the ``motion_capture_tracking`` package to publish the Vicon poses to ROS2.
+As mentioned in the :doc:`Installation and Setup <../getting_started/setup>` section, you need to run two terminals to launch a ROS2 node with the ``motion_capture_tracking`` package that make the Vicon poses available:
 
 .. code-block:: bash
 
-    mamba activate race
+    pixi shell -e deploy
     ros2 launch motion_capture_tracking launch.py
-
-Next, you also need to launch the estimator for the drone. Note that you need to modify the ``estimators.toml`` file in the ``estimators`` repository to include the correct drone id.
-
-This should open up an RViz window with the drone frame and the world frame.
 
 .. warning::
     If you cannot see the drone in RVIZ, it is likely that Vicon is not turned on, or the drone is not selected for tracking in the Vicon system.
 
-Once everything is running, you can launch your controller by executing
+The second terminal is used to launch the estimator for the drone. If you want to use the default settings, it's enough to specify your drone ID with the ``--drone_name`` argument. For advanced settings, you need to modify the ``estimators.toml`` file in the ``drone-estimators`` repository or pass a path to your TOML file with the ``--settings`` argument.
+
+.. code-block:: bash
+
+    pixi shell -e deploy
+    python -m drone_estimators.ros_nodes.ros2_node --drone_name cf52
+
+
+Deploying Your Controller
+-------------------------
+To deploy your controller on the real drone, use the deployment script in the ``lsy_drone_racing/scripts`` folder. Place the drone on its start position, power it on, and launch the estimators.
+
+.. note::
+    Make sure the drone has enough battery to complete the track. If a red LED is constantly turned on, the drone is low on battery. A blinking red LED indicates that the battery is sufficiently charged.
 
 .. code-block:: bash
 
