@@ -23,7 +23,7 @@ The challenge is divided into different difficulty levels, each specified by a T
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 15 15 15 20
+   :widths: 20 10 10 10 20
 
    * - Evaluation Scenario
      - Rand. Inertial Properties
@@ -49,7 +49,7 @@ The challenge is divided into different difficulty levels, each specified by a T
      - Yes
      - Yes
      - Yes
-     - Learning, re-planning
+     - Online planning
    * - sim2real
      - Real hardware
      - Yes
