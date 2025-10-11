@@ -4,7 +4,7 @@
 # | :-----------------: | :-----------------------: | :-------------------------: | :---------------: |
 # | `level0.toml`       | *No*                      | *No*                        | Perfect knowledge |
 [controller]
-file = "attitude_mpc.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 
 [deploy]
 ### Settings only relevant for deployment
@@ -18,6 +18,7 @@ real_track_objects = true
 [[deploy.drones]]
 id = 91
 channel = 100
+drone_model = "cf21B_500"                        # Model of the drone, i.e., cf2x_L250, cf2x_P250, cf2x_T500, cf21B_500. For this course, we use cf21B_500
 
 [sim]
 # Physics options:
@@ -37,39 +38,43 @@ id = "DroneRacing-v0"   # "DroneRacing-v0" for single races, "MultiDroneRacing-v
 seed = 1337             # Random seed
 freq = 50               # Frequency of the environment's step function, in Hz
 sensor_range = 0.7      # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
-control_mode = "attitude"  # Control mode of the environment. Can be either "state" or "attitude"
+control_mode = "state"  # Control mode of the environment. Can be either "state" or "attitude"
 
 [env.track]
 # Tall gates: 1.0m height. Short gates: 0.525m height. Height is measured from the ground to the
 # center of the gate.
 [[env.track.gates]]
-pos = [0.5 , 0.45, 0.56]
+pos = [0.5 , 0.25, 0.56]
 rpy = [0.0, 0.0, -2.35]
 [[env.track.gates]]
-pos = [1.05, 1.0, 1.11]
+pos = [1.05, 0.75, 1.11]
 rpy = [0.0, 0.0, 0.78]
 [[env.track.gates]]
-pos = [-1.0, 0.0, 0.56]
+pos = [-1.0, -0.25, 0.56]
 rpy = [0.0, 0.0, 1.57]
 [[env.track.gates]]
-pos = [0.0, -0.5, 1.11]
+pos = [0.0, -0.75, 1.11]
 rpy = [0.0, 0.0, -1.57]
 
 # Obstacle height: 1.4m. Height is measured from the ground to the top of the obstacle.
 [[env.track.obstacles]]
-pos = [0.0, 1.0, 1.4]
+pos = [0.0, 0.75, 1.4]
 [[env.track.obstacles]]
-pos = [1.0, 0.5, 1.4]
+pos = [1.0, 0.25, 1.4]
 [[env.track.obstacles]]
-pos = [-1.5, 0.0, 1.4]
+pos = [-1.5, -0.25, 1.4]
 [[env.track.obstacles]]
-pos = [-0.5, -0.5, 1.4]
+pos = [-0.5, -0.75, 1.4]
 
 [[env.track.drones]]
-pos = [-1.5, 1.0, 0.07]
+pos = [-1.5, 0.75, 0.07]
 rpy = [0.0, 0.0, 0.0]
 vel = [0, 0, 0]
 ang_vel = [0, 0, 0]
+
+[[env.track.safety_limits]]
+pos_limit_low = [-2.5, -1.5, -1e-3]
+pos_limit_high = [2.5, 1.5, 2.0]
 
 [env.disturbances.action]
 fn = "normal"
