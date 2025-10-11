@@ -323,6 +323,19 @@ Usually, the error messages should give you a good idea of what is going wrong. 
 #. Make sure you have selected the correct drone id and channel in the config file.
 
 
+libdecor Warning
+^^^^^^^^^^^^^^^^
+
+If you encounter warnings like
+
+.. code-block:: bash
+   libdecor-gtk-WARNING: Failed to initialize GTK
+   Failed to load plugin 'libdecor-gtk.so': failed to init
+   No plugins found, falling back on no decorations
+
+Note that starting the simulation with `-r` from a terminal inside VSCode might cause this warning. This will cause your window to not have any decorations (close, minimize, maximize buttons). You can safely ignore this warning. If you want to get rid of it, start the simulation from a regular terminal outside of VSCode.
+
+
 GLIBCXX Error
 ^^^^^^^^^^^^^
 
