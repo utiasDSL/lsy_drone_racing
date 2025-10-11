@@ -51,11 +51,11 @@ The challenge is divided into different difficulty levels, each specified by a T
      - Yes
      - Learning, re-planning
    * - sim2real
-     - Real-life hardware
-     - Yes
+     - Real hardware
      - Yes
      - Yes
      - Sim2real transfer
+
 ..    * - Bonus (`config/multi_level3.toml <https://github.com/utiasDSL/lsy_drone_racing/blob/main/config/multi_level3.toml>`_)
 ..      - Yes
 ..      - Yes
