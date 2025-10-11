@@ -103,9 +103,9 @@ def create_ocp_solver(
     # Weights (we only give pos reference anyway)
     Q = np.diag(
         [
-            10.0,  # pos
-            10.0,  # pos
             50.0,  # pos
+            50.0,  # pos
+            100.0,  # pos
             1.0,  # vel
             1.0,  # vel
             1.0,  # vel
@@ -117,10 +117,10 @@ def create_ocp_solver(
 
     R = np.diag(
         [
-            10.0,  # rpy
-            10.0,  # rpy
-            10.0,  # rpy
-            20.0,  # thrust
+            50.0,  # rpy
+            50.0,  # rpy
+            50.0,  # rpy
+            50.0,  # thrust
         ]
     )
 
@@ -143,14 +143,14 @@ def create_ocp_solver(
     # Set initial references (we will overwrite these later on to make the controller track the traj.)
     ocp.cost.yref, ocp.cost.yref_e = np.zeros((ny,)), np.zeros((ny_e,))
 
-    # Set State Constraints (rpy < 60°)
-    ocp.constraints.lbx = np.array([-1.0, -1.0, -1.0])
-    ocp.constraints.ubx = np.array([1.0, 1.0, 1.0])
+    # Set State Constraints (rpy < 30°)
+    ocp.constraints.lbx = np.array([-0.5, -0.5, -0.5])
+    ocp.constraints.ubx = np.array([0.5, 0.5, 0.5])
     ocp.constraints.idxbx = np.array([6, 7, 8])
 
-    # Set Input Constraints (rpy < 60°)
-    ocp.constraints.lbu = np.array([-1.0, -1.0, -1.0, parameters["thrust_min"] * 4])
-    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, parameters["thrust_max"] * 4])
+    # Set Input Constraints (rpy < 30°)
+    ocp.constraints.lbu = np.array([-0.5, -0.5, -0.5, parameters["thrust_min"] * 4])
+    ocp.constraints.ubu = np.array([0.5, 0.5, 0.5, parameters["thrust_max"] * 4])
     ocp.constraints.idxbu = np.array([0, 1, 2, 3])
 
     # We have to set x0 even though we will overwrite it later on.
@@ -196,27 +196,27 @@ class AttitudeMPC(Controller):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
-        self._N = 30
+        self._N = 25
         self._dt = 1 / config.env.freq
         self._T_HORIZON = self._N * self._dt
 
         # Same waypoints as in the trajectory controller. Determined by trial and error.
         waypoints = np.array(
             [
-                [-1.5, 1.0, 0.05],
-                [-1.0, 0.8, 0.2],
-                [0.3, 0.55, 0.5],
-                [1.3, 0.2, 0.65],
-                [0.85, 1.1, 1.1],
-                [-0.5, 0.2, 0.65],
-                [-1.15, 0.0, 0.52],
-                [-1.15, 0.0, 1.1],
-                [-0.0, -0.4, 1.1],
-                [0.5, -0.4, 1.1],
+                [-1.5, 0.75, 0.05],
+                [-1.0, 0.55, 0.2],
+                [0.3, 0.35, 0.5],
+                [1.3, -0.05, 0.65],
+                [0.85, 0.85, 1.1],
+                [-0.5, -0.05, 0.65],
+                [-1.1, -0.2, 0.52],
+                [-1.1, -0.2, 1.1],
+                [-0.0, -0.65, 1.1],
+                [0.5, -0.65, 1.1],
             ]
         )
 
-        des_completion_time = 15
+        des_completion_time = 11
         ts = np.linspace(0, des_completion_time, np.shape(waypoints)[0])
         cs_x = CubicSpline(ts, waypoints[:, 0])
         cs_y = CubicSpline(ts, waypoints[:, 1])
@@ -233,7 +233,7 @@ class AttitudeMPC(Controller):
         self._waypoints_pos = np.stack((x_des, y_des, z_des)).T
         self._waypoints_yaw = x_des * 0
 
-        self.drone_params = load_params(config.sim.physics, config.sim.drone_model)
+        self.drone_params = load_params("so_rpy", config.sim.drone_model)
         self._acados_ocp_solver, self._ocp = create_ocp_solver(
             self._T_HORIZON, self._N, self.drone_params
         )
