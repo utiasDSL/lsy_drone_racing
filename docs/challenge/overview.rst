@@ -61,4 +61,6 @@ The challenge is divided into different difficulty levels, each specified by a T
 ..      - Yes
 ..      - Multi-agent racing
 
+On level 0, we have perfect knowledge of the drones properties (mass, inertia) and the track layout. Merely some noise on the action and physics is applied. On level 1, physics parameters (mass, inertia, etc.) or the drone are randomized. At level 2, the position of the gates and obstacles is randomized around their nominal positions. Only when entering the observation range, the exact position is revealed. Finally, at level 3, unlike in level 2 where the nominal positions are known and hard coding a trajectory is possible, the (noisy) positions of gates and obstacles are only known at runtime and the controller must find the optimal path online.
+
 You may use the easier scenarios to develop and debug your controller. However, the final evaluation will be on the hardest scenario (Level 3) and, more importantly, the sim2real scenario.
