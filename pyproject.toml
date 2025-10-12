@@ -49,6 +49,11 @@ deploy = [
     "cfclient", 
     "drone-estimators @ git+https://github.com/utiasDSL/drone-estimators.git",
 ]
+# option[rl]: train rl policy
+rl = [
+    "torch",
+    "wandb",
+]
 
 [tool.setuptools.packages]
 find = {}
