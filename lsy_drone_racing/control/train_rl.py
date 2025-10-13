@@ -36,7 +36,7 @@ from lsy_drone_racing.utils import load_config
 # region Arguments
 @dataclass
 class Args:
-    seed: int = 44
+    seed: int = 42
     """seed of the experiment"""
     torch_deterministic: bool = True
     """if toggled, `torch.backends.cudnn.deterministic=False`"""
@@ -56,9 +56,9 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "DroneRacing-v0"
     """the id of the environment"""
-    total_timesteps: int = 2_000_000
+    total_timesteps: int = 5_000_000
     """total timesteps of the experiments"""
-    learning_rate: float = 1e-3
+    learning_rate: float = 2e-3
     """the learning rate of the optimizer"""
     num_envs: int = 1024
     """the number of parallel game environments"""
@@ -66,11 +66,11 @@ class Args:
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
     """Toggle learning rate annealing for policy and value networks"""
-    gamma: float = 0.90
+    gamma: float = 0.99
     """the discount factor gamma"""
     gae_lambda: float = 0.95
     """the lambda for the general advantage estimation"""
-    num_minibatches: int = 16
+    num_minibatches: int = 16 * 2
     """the number of mini-batches"""
     update_epochs: int = 15
     """the K epochs to update the policy"""
@@ -97,6 +97,7 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+# region Environment
 class RandTrajEnv(DroneEnv):
     """Drone environment for following a random trajectory.
     
@@ -112,7 +113,7 @@ class RandTrajEnv(DroneEnv):
         *,
         num_envs: int = 1,
         max_episode_time: float = 15.0,
-        physics: Literal["so_rpy", "first_principles"] | Physics = Physics.first_principles,
+        physics: Literal["so_rpy_rotor_drag", "first_principles"] | Physics = Physics.first_principles,
         drone_model: str = "cf2x_L250",
         freq: int = 500,
         device: str = "cpu",
@@ -142,7 +143,7 @@ class RandTrajEnv(DroneEnv):
             raise ValueError("Trajectory time must be greater than max episode time")
         
         # Define trajectory sampling parameters
-        self.num_waypoints = 7
+        self.num_waypoints = 10
         self.n_samples = n_samples
         self.samples_dt = samples_dt
         self.trajectory_time = trajectory_time
@@ -179,9 +180,9 @@ class RandTrajEnv(DroneEnv):
         # n_steps = int(np.ceil(self.trajectory_time * self.freq))
         # t = np.linspace(0, self.trajectory_time, n_steps)
         # # Random control points
-        # scale = np.array([0.7, 0.7, 0.5])
+        # scale = np.array([1.2, 1.2, 0.5])
         # waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
-        # waypoints = waypoints + 0.5*self.takeoff_pos + np.array([0.0, 0.0, 1.0]) # shift up in z direction
+        # waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
         # waypoints[:, 0, :] = self.takeoff_pos # set start point to takeoff position
         # spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1)
         # self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
@@ -202,9 +203,9 @@ class RandTrajEnv(DroneEnv):
         # n_steps = int(np.ceil(self.trajectory_time * self.freq))
         # t = np.linspace(0, self.trajectory_time, n_steps)
         # # Random control points
-        # scale = np.array([0.7, 0.7, 0.5])
+        # scale = np.array([1.2, 1.2, 0.5])
         # waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
-        # waypoints = waypoints + 0.5*self.takeoff_pos + np.array([0, 0, 1.5]) # shift up in z direction
+        # waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
         # waypoints[:, 0, :] = self.takeoff_pos # set start point to takeoff position
         # spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1)
         # self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
@@ -246,16 +247,44 @@ class RandTrajEnv(DroneEnv):
     @staticmethod
     @jax.jit
     def _terminated(pos: Array) -> Array:
-        terminate = pos[:, 0, 2] < 0  # Terminate if the drone has crashed into the ground
-        terminate |= pos[:, 0, 2] > 4  # Terminate if the drone is too high
-        terminate |= pos[:, 0, 0] > 4  # Terminate if the drone is too far in x direction
-        terminate |= pos[:, 0, 0] < -4  # Terminate if the drone is too far in -x direction
-        terminate |= pos[:, 0, 1] > 4  # Terminate if the drone is too far in y direction
-        terminate |= pos[:, 0, 1] < -4  # Terminate if the drone is too far in -y direction
+        lower_bounds = jp.array([-4.0, -4.0, -0.0])
+        upper_bounds = jp.array([ 4.0,  4.0, 4.0])
+        terminate = jp.any((pos[:, 0, :] < lower_bounds) | (pos[:, 0, :] > upper_bounds), axis=-1)
         return terminate
 
     @staticmethod
     def _reset_randomization(data: SimData, mask: Array) -> SimData:
+        """Reload this function to disable reset randomization."""
+        """Simplified reset: randomly choose a waypoint as initial position, zero velocity."""
+        waypoints = jp.array(
+            [
+                [-1.5, 1.0, 0.07],
+                [-1.0, 0.8, 0.2],
+                [0.3, 0.55, 0.5],
+                [1.3, 0.2, 0.65],
+                [0.85, 1.1, 1.1],
+                [-0.5, 0.2, 0.65],
+                [-1.15, 0.0, 0.52],
+                [-1.15, 0.0, 1.1],
+                # [-0.0, -0.4, 1.1],
+                # [0.5, -0.4, 1.1],
+            ]
+        )
+        total_waypoints = 10
+        # random reset from waypoints
+        key, idx_key = jax.random.split(data.core.rng_key)
+        data = data.replace(core=data.core.replace(rng_key=key))
+        rand_idx = jax.random.randint(idx_key, (data.core.n_worlds,), -5, waypoints.shape[0])
+        rand_idx = jp.clip(rand_idx, 0, waypoints.shape[0]-1)
+        pos_world = waypoints[rand_idx]  # (n_worlds, 3)
+        pos = jp.tile(pos_world[:, None, :], (1, data.core.n_drones, 1))  # (n_worlds, n_drones, 3)
+        data = data.replace(states=leaf_replace(data.states, mask, pos=pos))
+        # set steps according to the waypoint index
+        total_time = 15.0
+        total_steps = int(total_time * data.core.freq)
+        steps_mask = jp.ones((data.core.n_worlds, 1), dtype=bool) if mask is None else mask[:, None]
+        step_values = (rand_idx * total_steps // (total_waypoints-1))[:, None]
+        data = data.replace(core=data.core.replace(steps=jp.where(steps_mask, step_values, data.core.steps)))
         return data
     
 # region Wrappers
@@ -299,7 +328,7 @@ class AngleReward(VectorRewardWrapper):
     def rewards(self, rewards: Array, observations: dict[str, Array]) -> Array:
         # apply rpy penalty
         rpy_norm = jp.linalg.norm(R.from_quat(observations["quat"]).as_euler("xyz"), axis=-1)
-        rewards -= 0.08 * rpy_norm
+        rewards -= 0.12 * rpy_norm
         return rewards
     
 class ActionPenalty(VectorWrapper):
@@ -327,8 +356,8 @@ class ActionPenalty(VectorWrapper):
         # energy
         reward -= 0.06 * action[..., -1] ** 2
         # smoothness
-        reward -= 0.4 * action_diff[..., -1] ** 2
-        reward -= 1.0 * jp.sum(action_diff[..., :3] ** 2, axis=-1)
+        reward -= 0.6 * action_diff[..., -1] ** 2
+        reward -= 1.1 * jp.sum(action_diff[..., :3] ** 2, axis=-1)
         self._last_action = action
         # construct new obs
         obs = jp.concat([obs, self._last_action.reshape(self.num_envs, -1)], axis=-1)
@@ -453,11 +482,11 @@ def make_envs(
         physics=config.sim.physics,
         device=jax_device,
     )
-    if config.sim.physics == "first_principles":
-        # increase motor time constant for more realistic motor dynamics
-        data = env.unwrapped.sim.data
-        env.unwrapped.sim.data = data.replace(params=data.params.replace(thrust_tau = 0.03))
-        env.unwrapped.sim.build_default_data()
+    # if config.sim.physics == "first_principles":
+    #     # increase motor time constant for more realistic motor dynamics
+    #     data = env.unwrapped.sim.data
+    #     env.unwrapped.sim.data = data.replace(params=data.params.replace(thrust_tau = 0.03))
+    #     env.unwrapped.sim.build_default_data()
     
     env = NormalizeActions(env)
     env = AngleReward(env)
@@ -707,9 +736,10 @@ def main(wandb_enabled: bool = True, train: bool = True, eval: int = 1):
             agent.load_state_dict(torch.load(model_path))
             episode_rewards = []
             episode_lengths = []
+            ep_seed = args.seed
             # Evaluate the policy
             for episode in range(eval):
-                obs, _ = eval_env.reset(seed=args.seed)
+                obs, _ = eval_env.reset(seed=(ep_seed:=ep_seed+1))
                 done = torch.zeros(10, dtype=bool, device=device)
                 episode_reward = 0
                 steps = 0

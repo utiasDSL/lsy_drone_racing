@@ -45,6 +45,8 @@ class AttitudeRL(Controller):
 
         drone_params = load_params(config.sim.physics, config.sim.drone_model)
         self.drone_mass = drone_params["mass"]  # alternatively from sim.drone_mass
+        self.thrust_min = drone_params["thrust_min"] * 4  # min total thrust
+        self.thrust_max = drone_params["thrust_max"] * 4  # max total thrust
 
         # Set trajectory parameters
         self.n_samples = 10
@@ -101,18 +103,20 @@ class AttitudeRL(Controller):
         if i == self.trajectory.shape[0] - 1:  # Maximum duration reached
             self._finished = True
 
-        obs_rl = self.obs_rl(obs)
+        obs_rl = self._obs_rl(obs)
         obs_rl = torch.tensor(obs_rl, dtype=torch.float32).unsqueeze(0).to("cpu")
         with torch.no_grad():
             act, _, _, _ = self.agent.get_action_and_value(obs_rl, deterministic=True)
             act[..., 2] = 0.0
             self.last_action = act.squeeze(0).numpy()
 
-        self.render()
+        act = self._scale_actions(act.squeeze(0).numpy()).astype(np.float32)
+
+        self._render()
         
-        return act.squeeze(0).numpy()
+        return act
     
-    def obs_rl(
+    def _obs_rl(
             self, obs: dict[str, NDArray[np.floating]]
         ) -> NDArray[np.floating]:
         """Extract the relevant parts of the observation for the RL policy."""
@@ -125,7 +129,13 @@ class AttitudeRL(Controller):
         
         return np.concatenate([v for v in obs_rl.values()], axis=-1).astype(np.float32)
     
-    def render(self):
+    def _scale_actions(self, actions: NDArray) -> NDArray:
+        """Rescale and clip actions from [-1, 1] to [action_sim_low, action_sim_high]."""
+        scale = np.array([np.pi/2, np.pi/2, np.pi/2, (self.thrust_max - self.thrust_min) / 2.0], dtype=np.float32)
+        mean = np.array([0.0, 0.0, 0.0, (self.thrust_max + self.thrust_min) / 2.0], dtype=np.float32)
+        return np.clip(actions, -1.0, 1.0) * scale + mean
+    
+    def _render(self):
         """Render the trajectory and the next waypoints."""
         idx = np.clip(self._tick + self.sample_offsets, 0, self.trajectory.shape[0] - 1)
         next_trajectory = self.trajectory[idx]
