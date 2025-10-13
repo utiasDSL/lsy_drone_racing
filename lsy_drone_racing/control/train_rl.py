@@ -3,7 +3,7 @@ import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import fire
 import gymnasium as gym
@@ -26,10 +26,12 @@ from gymnasium.vector.utils import batch_space
 from gymnasium.wrappers.vector.jax_to_torch import JaxToTorch
 from jax import Array
 from jax.scipy.spatial.transform import Rotation as R
+from ml_collections import ConfigDict
 from scipy.interpolate import CubicSpline
 from torch import Tensor
 from torch.distributions.normal import Normal
 
+from lsy_drone_racing.envs.race_core import build_dynamics_disturbance_fn, rng_spec2fn
 from lsy_drone_racing.utils import load_config
 
 
@@ -116,6 +118,7 @@ class RandTrajEnv(DroneEnv):
         physics: Literal["so_rpy_rotor_drag", "first_principles"] | Physics = Physics.first_principles,
         drone_model: str = "cf2x_L250",
         freq: int = 500,
+        disturbances: ConfigDict | None = None,
         device: str = "cpu",
     ):
         """Initialize the environment and create the figure-eight trajectory.
@@ -187,6 +190,16 @@ class RandTrajEnv(DroneEnv):
         # spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1)
         # self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
 
+        # Apply disturbances specified for racing
+        specs = {} if disturbances is None else disturbances
+        self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
+        if "dynamics" in self.disturbances:
+            disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
+            self.sim.step_pipeline = (
+                self.sim.step_pipeline[:2] + (disturbance_fn,) + self.sim.step_pipeline[2:]
+            )
+            self.sim.build_step_fn()
+
         # Update observation space
         spec = {k: v for k, v in self.single_observation_space.items()}
         spec["local_samples"] = spaces.Box(-np.inf, np.inf, shape=(3 * self.n_samples,))
@@ -236,8 +249,23 @@ class RandTrajEnv(DroneEnv):
         # distance to next trajectory point
         norm_distance = jp.linalg.norm(pos - goal, axis=-1)
         reward = jp.exp(-2.0 * norm_distance) # encourage flying close to goal
-        reward = jp.where(self.terminated(), -1.0, reward) # penalize drones that crash into the ground
+        reward = jp.where(self.terminated(), -2.0, reward) # penalize drones that crash into the ground
         return reward
+
+    def apply_action(self, action: Array):
+        """Apply the commanded state action to the simulation."""
+        action = action.reshape((self.sim.n_worlds, self.sim.n_drones, -1))
+        if "action" in self.disturbances:
+            key, subkey = jax.random.split(self.sim.data.core.rng_key)
+            action += self.disturbances["action"](subkey, action.shape)
+            self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
+        match self.sim.control:
+            case "attitude":
+                self.sim.attitude_control(action)
+            case "state":
+                self.sim.state_control(action)
+            case _:
+                raise ValueError(f"Unsupported control mode: {self.sim.control}")
 
     @property
     def steps(self) -> Array:
@@ -272,7 +300,7 @@ class RandTrajEnv(DroneEnv):
         )
         total_waypoints = 10
         # random reset from waypoints
-        key, idx_key = jax.random.split(data.core.rng_key)
+        key, idx_key, rotor_key = jax.random.split(data.core.rng_key, 3)
         data = data.replace(core=data.core.replace(rng_key=key))
         rand_idx = jax.random.randint(idx_key, (data.core.n_worlds,), -5, waypoints.shape[0])
         rand_idx = jp.clip(rand_idx, 0, waypoints.shape[0]-1)
@@ -285,6 +313,9 @@ class RandTrajEnv(DroneEnv):
         steps_mask = jp.ones((data.core.n_worlds, 1), dtype=bool) if mask is None else mask[:, None]
         step_values = (rand_idx * total_steps // (total_waypoints-1))[:, None]
         data = data.replace(core=data.core.replace(steps=jp.where(steps_mask, step_values, data.core.steps)))
+        # reset initial rotor velocity for easier takeoff
+        rotor_vel = jax.random.uniform(rotor_key, (data.core.n_worlds, data.core.n_drones, 1), minval=4000.0, maxval=10000.0) * jp.ones((1, 1, data.states.rotor_vel.shape[-1]))
+        data = data.replace(states=leaf_replace(data.states, mask, rotor_vel=rotor_vel))
         return data
     
 # region Wrappers
@@ -354,7 +385,7 @@ class ActionPenalty(VectorWrapper):
         obs, reward, terminated, truncated, info = super().step(action)
         action_diff = action - self._last_action
         # energy
-        reward -= 0.06 * action[..., -1] ** 2
+        reward -= 0.08 * action[..., -1] ** 2
         # smoothness
         reward -= 0.6 * action_diff[..., -1] ** 2
         reward -= 1.1 * jp.sum(action_diff[..., :3] ** 2, axis=-1)
@@ -480,6 +511,7 @@ def make_envs(
         freq=config.env.freq,
         drone_model=config.sim.drone_model,
         physics=config.sim.physics,
+        disturbances=config.env.disturbances,
         device=jax_device,
     )
     # if config.sim.physics == "first_principles":
@@ -523,7 +555,8 @@ class Agent(nn.Module):
             nn.Tanh(),
         )
         self.actor_logstd = nn.Parameter(
-            torch.zeros(1, torch.tensor(action_shape).prod())
+            # torch.zeros(1, torch.tensor(action_shape).prod())
+            torch.Tensor([[-1, -1, -1, 1]]) # start with smaller std for roll, pitch, yaw
         )
 
     def get_value(self, x: Tensor) -> Tensor:
