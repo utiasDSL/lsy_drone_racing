@@ -25,6 +25,7 @@ To participate in the online competition, follow these steps:
 
 #. Go to the competition page on Kaggle and accept the rules.
 
+#. Create an API key on Kaggle in settings > API > Create New Token.
 
 Submitting Your Controller
 --------------------------
