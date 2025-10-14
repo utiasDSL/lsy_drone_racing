@@ -89,7 +89,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#c2f8ca9af4f16dcdcf75640ac8a2a83fd0ce05e7
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
       - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
@@ -959,7 +959,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#c2f8ca9af4f16dcdcf75640ac8a2a83fd0ce05e7
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
       - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
@@ -1110,7 +1110,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#c2f8ca9af4f16dcdcf75640ac8a2a83fd0ce05e7
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
       - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
@@ -1281,7 +1281,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#c2f8ca9af4f16dcdcf75640ac8a2a83fd0ce05e7
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
       - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
@@ -1418,7 +1418,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#c2f8ca9af4f16dcdcf75640ac8a2a83fd0ce05e7
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#7b3df61a9314721178d7cd83857a49166c59331a
       - pypi: git+https://github.com/utiasDSL/drone-models.git#95adf9eef86adacd7c64830a563d25ee85814eda
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
@@ -2435,7 +2435,7 @@ packages:
   - pkg:pypi/cppcheck-htmlreport?source=hash-mapping
   size: 3065679
   timestamp: 1757440259649
-- pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#285560e1b2867ab62e626e3421944a2f97ad472d
+- pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=dev#c2f8ca9af4f16dcdcf75640ac8a2a83fd0ce05e7
   name: crazyflow
   version: 0.0.2
   requires_dist:
@@ -5971,7 +5971,7 @@ packages:
 - pypi: ./
   name: lsy-drone-racing
   version: 0.0.1
-  sha256: 4b962c4646aef762c92f3d690b1df0a9c5079bdc1d9256102a2acd2b29d13a1b
+  sha256: 79ea3c965bac5d98206665b71c5bfe8e3e16dbe2965a1d2a6ea87aced55c78de
   requires_dist:
   - fire>=0.6.0
   - numpy

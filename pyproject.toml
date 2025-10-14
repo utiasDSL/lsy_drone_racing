@@ -137,7 +137,11 @@ scripts = ["tools/setup_mocap.sh"]
 scripts = ["tools/setup_acados.sh"]
 
 # feature[online-submission]
-[tool.pixi.feature.online-submission]
+# [tool.pixi.feature.online-submission]
+
+[tool.pixi.feature.online-submission.tasks]
+create-submission = { cmd = "python scripts/kaggle.py", description = "Create online submission" }
+export-submission = { cmd = "kaggle competitions submit -c lsy-drone-racing-ws-25 -f submission.csv -m 'Automated submission'", description = "Submit online submission" }
 
 [tool.pixi.feature.online-submission.dependencies]
 pandas = "*"
