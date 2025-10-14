@@ -20,6 +20,9 @@ def main():
     n_runs = 20
     config_file = "level2.toml"
     config = load_config(Path(__file__).parents[1] / "config" / config_file)
+    assert config.sim.physics == "first_principles", (
+        "Only first_principles physics is allowed for the challenge allowed!"
+    )
     ep_times = simulate(
         config=config_file, controller=config.controller.file, n_runs=n_runs, render=False
     )
