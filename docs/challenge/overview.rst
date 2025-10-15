@@ -23,7 +23,7 @@ The challenge is divided into different difficulty levels, each specified by a T
 
 .. list-table::
    :header-rows: 1
-   :widths: 15 10 10 10 15
+   :widths: 10 10 10 10 10
 
    * - Evaluation Scenario
      - Randomized Inertial Properties
