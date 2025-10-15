@@ -23,29 +23,29 @@ The challenge is divided into different difficulty levels, each specified by a T
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 10 10 10 20
+   :widths: 15 10 10 10 15
 
    * - Evaluation Scenario
-     - Rand. Inertial Properties
+     - Randomized Inertial Properties
      - Randomized Obstacles, Gates
      - Randomized Tracks
      - Notes
-   * - Level 0 (`config/level0.toml <https://github.com/utiasDSL/lsy_drone_racing/blob/main/config/level0.toml>`_)
+   * - `Level 0 <https://github.com/utiasDSL/lsy_drone_racing/blob/main/config/level0.toml>`_
      - No
      - No
      - No
      - Perfect knowledge
-   * - Level 1 (`config/level1.toml <https://github.com/utiasDSL/lsy_drone_racing/blob/main/config/level1.toml>`_)
+   * - `Level 1 <https://github.com/utiasDSL/lsy_drone_racing/blob/main/config/level1.toml>`_
      - Yes
      - No
      - No
      - Adaptive
-   * - Level 2 (`config/level2.toml <https://github.com/utiasDSL/lsy_drone_racing/blob/main/config/level2.toml>`_)
+   * - `Level 2 <https://github.com/utiasDSL/lsy_drone_racing/blob/main/config/level2.toml>`_
      - Yes
      - Yes
      - No
      - Learning, re-planning
-   * - Level 3 (`config/level3.toml <https://github.com/utiasDSL/lsy_drone_racing/blob/main/config/level3.toml>`_)
+   * - `Level 3 <https://github.com/utiasDSL/lsy_drone_racing/blob/main/config/level3.toml>`_
      - Yes
      - Yes
      - Yes
