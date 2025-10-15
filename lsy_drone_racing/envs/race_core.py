@@ -31,6 +31,7 @@ import jax.numpy as jp
 import mujoco
 import numpy as np
 from crazyflow.sim import Sim
+from crazyflow.sim.sim import use_box_collision
 
 # from crazyflow.sim.symbolic import symbolic_attitude
 from flax.struct import dataclass
@@ -273,6 +274,7 @@ class RaceCoreEnv:
             rng_key=seed,
             device=device,
         )
+        use_box_collision(self.sim, True)
         self.default_cam_config = {
             "distance": sim_config.camera_view[0],
             "azimuth": sim_config.camera_view[1],
