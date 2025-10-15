@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Check if environment variable is already set
+if [ -z "$PIXI_PROJECT_ROOT" ]; then
+    echo "Not running inside a Pixi environment; skipping setup_acados.sh"
+    exit 0
+fi
+
 ACADOS_DIR="${PIXI_PROJECT_ROOT}/acados"
 
 # Clone and build acados
