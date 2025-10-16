@@ -7,7 +7,7 @@ The online competition takes place every semester for the students of the "Auton
     The competition is useful to get an idea of how fast your controller is compared to other teams. It is **not** part of your grade or used to evaluate your final project submission.
 
 Leaderboard
-~~~~~~~~~~~
+-----------
 We use Kaggle to host the online competition. Students can submit their controllers to the competition by forking the repository and pushing their changes to the main branch. The best submission will be used for the team ranking in the online leaderboard.
 
 .. note::
@@ -25,6 +25,7 @@ To participate in the online competition, follow these steps:
 
 #. Go to the competition page on Kaggle and accept the rules.
 
+#. Create an API key on Kaggle in settings > API > Create New Token.
 
 Submitting Your Controller
 --------------------------

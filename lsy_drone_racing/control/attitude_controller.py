@@ -37,7 +37,7 @@ class AttitudeController(Controller):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
-        self.freq = config.env.freq
+        self._freq = config.env.freq
 
         drone_params = load_params(config.sim.physics, config.sim.drone_model)
         self.drone_mass = drone_params["mass"]  # alternatively from sim.drone_mass
@@ -48,36 +48,30 @@ class AttitudeController(Controller):
         self.ki_range = np.array([2.0, 2.0, 0.4])
         self.i_error = np.zeros(3)
         self.g = 9.81
-        self._tick = 0
 
-        # Same waypoints as in the trajectory controller. Determined by trial and error.
+        # Same waypoints as in the position controller. Determined by trial and error.
         waypoints = np.array(
             [
-                [-1.5, 1.0, 0.05],
-                [-1.0, 0.8, 0.2],
-                [0.3, 0.55, 0.5],
-                [1.3, 0.2, 0.65],
-                [0.85, 1.1, 1.1],
-                [-0.5, 0.2, 0.65],
-                [-1.15, 0.0, 0.52],
-                [-1.15, 0.0, 1.1],
-                [-0.0, -0.4, 1.1],
-                [0.5, -0.4, 1.1],
+                [-1.5, 0.75, 0.05],
+                [-1.0, 0.55, 0.4],
+                [0.3, 0.35, 0.7],
+                [1.3, -0.15, 0.9],
+                [0.85, 0.85, 1.2],
+                [-0.5, -0.05, 0.7],
+                [-1.1, -0.2, 0.7],
+                [-1.1, -0.2, 1.2],
+                [-0.0, -0.65, 1.2],
+                [0.5, -0.65, 1.2],
             ]
         )
-        # Scale trajectory between 0 and 1
-        ts = np.linspace(0, 1, np.shape(waypoints)[0])
-        cs_x = CubicSpline(ts, waypoints[:, 0])
-        cs_y = CubicSpline(ts, waypoints[:, 1])
-        cs_z = CubicSpline(ts, waypoints[:, 2])
-
-        des_completion_time = 15
-        ts = np.linspace(0, 1, int(self.freq * des_completion_time))
-
-        self.x_des = cs_x(ts)
-        self.y_des = cs_y(ts)
-        self.z_des = cs_z(ts)
+        self._t_total = 15 # s
+        t = np.linspace(0, self._t_total, len(waypoints))
+        self._des_pos_spline = CubicSpline(t, waypoints)
+        self._des_vel_spline = self._des_pos_spline.derivative()
+        
+        self._tick = 0
         self._finished = False
+        
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
@@ -90,14 +84,14 @@ class AttitudeController(Controller):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The collective thrust and orientation [t_des, r_des, p_des, y_des] as a numpy array.
+            The orientation as roll, pitch, yaw angles, and the collective thrust [r_des, p_des, y_des, t_des] as a numpy array.
         """
-        i = min(self._tick, len(self.x_des) - 1)
-        if i == len(self.x_des) - 1:  # Maximum duration reached
+        t = min(self._tick / self._freq, self._t_total)
+        if t >= self._t_total:  # Maximum duration reached
             self._finished = True
 
-        des_pos = np.array([self.x_des[i], self.y_des[i], self.z_des[i]])
-        des_vel = np.zeros(3)
+        des_pos = self._des_pos_spline(t)
+        des_vel = self._des_vel_spline(t)
         des_yaw = 0.0
 
         # Calculate the deviations from the desired trajectory
@@ -105,7 +99,7 @@ class AttitudeController(Controller):
         vel_error = des_vel - obs["vel"]
 
         # Update integral error
-        self.i_error += pos_error * (1 / self.freq)
+        self.i_error += pos_error * (1 / self._freq)
         self.i_error = np.clip(self.i_error, -self.ki_range, self.ki_range)
 
         # Compute target thrust
@@ -120,8 +114,6 @@ class AttitudeController(Controller):
 
         # update current thrust
         thrust_desired = target_thrust.dot(z_axis)
-        thrust_desired = max(thrust_desired, 0.3 * self.drone_mass * self.g)
-        thrust_desired = min(thrust_desired, 1.8 * self.drone_mass * self.g)
 
         # update z_axis_desired
         z_axis_desired = target_thrust / np.linalg.norm(target_thrust)
@@ -133,7 +125,9 @@ class AttitudeController(Controller):
         R_desired = np.vstack([x_axis_desired, y_axis_desired, z_axis_desired]).T
         euler_desired = R.from_matrix(R_desired).as_euler("xyz", degrees=False)
 
-        return np.concatenate([euler_desired, [thrust_desired]], dtype=np.float32)
+        action = np.concatenate([euler_desired, [thrust_desired]], dtype=np.float32)
+
+        return action
 
     def step_callback(
         self,
@@ -153,6 +147,6 @@ class AttitudeController(Controller):
         return self._finished
 
     def episode_callback(self):
-        """Reset the integral error."""
+        """Reset the internal state."""
         self.i_error[:] = 0
         self._tick = 0

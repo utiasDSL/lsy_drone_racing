@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Check if environment variable is already set
+if [ -z "$PIXI_PROJECT_ROOT" ]; then
+    echo "Not running inside a Pixi environment; skipping setup_acados.sh"
+    exit 0
+fi
+
 ACADOS_DIR="${PIXI_PROJECT_ROOT}/acados"
 
 # Clone and build acados
@@ -14,6 +20,13 @@ if [ ! -d ${ACADOS_DIR}/.git ]; then
   )
 fi
 
+# Check if pip is installed
+if ! command -v pip >/dev/null 2>&1; then
+  echo "[Setup Acados] ERROR: pip is not installed. Please install pip first."
+  exit 1
+fi
+
+# Build Acados
 if [ ! -f ${ACADOS_DIR}/lib/libacados.so ]; then
   echo "[Setup Acados] Building acados..."
   mkdir -p ${ACADOS_DIR}/build

@@ -103,9 +103,9 @@ def create_ocp_solver(
     # Weights (we only give pos reference anyway)
     Q = np.diag(
         [
-            10.0,  # pos
-            10.0,  # pos
             50.0,  # pos
+            50.0,  # pos
+            100.0,  # pos
             1.0,  # vel
             1.0,  # vel
             1.0,  # vel
@@ -117,10 +117,10 @@ def create_ocp_solver(
 
     R = np.diag(
         [
-            10.0,  # rpy
-            10.0,  # rpy
-            10.0,  # rpy
-            20.0,  # thrust
+            50.0,  # rpy
+            50.0,  # rpy
+            50.0,  # rpy
+            50.0,  # thrust
         ]
     )
 
@@ -143,14 +143,14 @@ def create_ocp_solver(
     # Set initial references (we will overwrite these later on to make the controller track the traj.)
     ocp.cost.yref, ocp.cost.yref_e = np.zeros((ny,)), np.zeros((ny_e,))
 
-    # Set State Constraints (rpy < 60°)
-    ocp.constraints.lbx = np.array([-1.0, -1.0, -1.0])
-    ocp.constraints.ubx = np.array([1.0, 1.0, 1.0])
+    # Set State Constraints (rpy < 30°)
+    ocp.constraints.lbx = np.array([-0.5, -0.5, -0.5])
+    ocp.constraints.ubx = np.array([0.5, 0.5, 0.5])
     ocp.constraints.idxbx = np.array([6, 7, 8])
 
-    # Set Input Constraints (rpy < 60°)
-    ocp.constraints.lbu = np.array([-1.0, -1.0, -1.0, parameters["thrust_min"] * 4])
-    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, parameters["thrust_max"] * 4])
+    # Set Input Constraints (rpy < 30°)
+    ocp.constraints.lbu = np.array([-0.5, -0.5, -0.5, parameters["thrust_min"] * 4])
+    ocp.constraints.ubu = np.array([0.5, 0.5, 0.5, parameters["thrust_max"] * 4])
     ocp.constraints.idxbu = np.array([0, 1, 2, 3])
 
     # We have to set x0 even though we will overwrite it later on.
@@ -196,44 +196,35 @@ class AttitudeMPC(Controller):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
-        self._N = 30
+        self._N = 25
         self._dt = 1 / config.env.freq
         self._T_HORIZON = self._N * self._dt
 
         # Same waypoints as in the trajectory controller. Determined by trial and error.
         waypoints = np.array(
             [
-                [-1.5, 1.0, 0.05],
-                [-1.0, 0.8, 0.2],
-                [0.3, 0.55, 0.5],
-                [1.3, 0.2, 0.65],
-                [0.85, 1.1, 1.1],
-                [-0.5, 0.2, 0.65],
-                [-1.15, 0.0, 0.52],
-                [-1.15, 0.0, 1.1],
-                [-0.0, -0.4, 1.1],
-                [0.5, -0.4, 1.1],
+                [-1.5, 0.75, 0.05],
+                [-1.0, 0.55, 0.4],
+                [0.3, 0.35, 0.7],
+                [1.3, -0.15, 0.9],
+                [0.85, 0.85, 1.2],
+                [-0.5, -0.05, 0.7],
+                [-1.1, -0.2, 0.7],
+                [-1.1, -0.2, 1.2],
+                [-0.0, -0.65, 1.2],
+                [0.5, -0.65, 1.2],
             ]
         )
 
-        des_completion_time = 15
-        ts = np.linspace(0, des_completion_time, np.shape(waypoints)[0])
-        cs_x = CubicSpline(ts, waypoints[:, 0])
-        cs_y = CubicSpline(ts, waypoints[:, 1])
-        cs_z = CubicSpline(ts, waypoints[:, 2])
+        self._t_total = 11 # s
+        t = np.linspace(0, self._t_total, len(waypoints))
+        self._des_pos_spline = CubicSpline(t, waypoints)
+        self._des_vel_spline = self._des_pos_spline.derivative()
+        self._waypoints_pos = self._des_pos_spline(np.linspace(0, self._t_total, int(config.env.freq * self._t_total)))
+        self._waypoints_vel = self._des_vel_spline(np.linspace(0, self._t_total, int(config.env.freq * self._t_total)))
+        self._waypoints_yaw = self._waypoints_pos[:, 0] * 0
 
-        ts = np.linspace(0, des_completion_time, int(config.env.freq * des_completion_time))
-        x_des = cs_x(ts)
-        y_des = cs_y(ts)
-        z_des = cs_z(ts)
-
-        x_des = np.concatenate((x_des, [x_des[-1]] * self._N))
-        y_des = np.concatenate((y_des, [y_des[-1]] * self._N))
-        z_des = np.concatenate((z_des, [z_des[-1]] * self._N))
-        self._waypoints_pos = np.stack((x_des, y_des, z_des)).T
-        self._waypoints_yaw = x_des * 0
-
-        self.drone_params = load_params(config.sim.physics, config.sim.drone_model)
+        self.drone_params = load_params("so_rpy", config.sim.drone_model)
         self._acados_ocp_solver, self._ocp = create_ocp_solver(
             self._T_HORIZON, self._N, self.drone_params
         )
@@ -243,7 +234,7 @@ class AttitudeMPC(Controller):
         self._ny_e = self._nx
 
         self._tick = 0
-        self._tick_max = len(x_des) - 1 - self._N
+        self._tick_max = len(self._waypoints_pos) - 1 - self._N
         self._config = config
         self._finished = False
 
@@ -258,7 +249,7 @@ class AttitudeMPC(Controller):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The collective thrust and orientation [t_des, r_des, p_des, y_des] as a numpy array.
+            The orientation as roll, pitch, yaw angles, and the collective thrust [r_des, p_des, y_des, t_des] as a numpy array.
         """
         i = min(self._tick, self._tick_max)
         if self._tick >= self._tick_max:
@@ -270,21 +261,26 @@ class AttitudeMPC(Controller):
         self._acados_ocp_solver.set(0, "lbx", x0)
         self._acados_ocp_solver.set(0, "ubx", x0)
 
-        # Setting reference
+        # Setting state reference
         yref = np.zeros((self._N, self._ny))
-        yref[:, 0:3] = self._waypoints_pos[i + self._N]  # position
-        yref[:, 5] = self._waypoints_yaw[i + self._N]  # yaw
-        # yref[:, 9] = (
-        #     self.drone_params["mass"] * -self.drone_params["gravity_vec"][-1]
-        # )  # hover thrust
+        yref[:, 0:3] = self._waypoints_pos[i: i + self._N]  # position
+        yref[:, 3:6] = self._waypoints_vel[i: i + self._N]  # velocity
+        yref[:, 5] = self._waypoints_yaw[i: i + self._N]  # yaw
+        
+        # Setting input reference (index > self._nx)
+        yref[:, 12] = (
+            self.drone_params["mass"] * -self.drone_params["gravity_vec"][-1]
+        )  # hover thrust
         for j in range(self._N):
             self._acados_ocp_solver.set(j, "yref", yref[j])
 
+        # Setting final state reference
         yref_e = np.zeros((self._ny_e))
         yref_e[0:3] = self._waypoints_pos[i + self._N]  # position
+        yref_e[3:6] = self._waypoints_vel[i + self._N]  # velocity
         yref_e[5] = self._waypoints_yaw[i + self._N]  # yaw
-        self._acados_ocp_solver.set(self._N, "yref", yref_e)
-
+        self._acados_ocp_solver.set(self._N, "y_ref", yref_e)
+        
         # Solving problem and getting first input
         self._acados_ocp_solver.solve()
         u0 = self._acados_ocp_solver.get(0, "u")

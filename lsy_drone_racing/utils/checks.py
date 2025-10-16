@@ -1,4 +1,4 @@
-"""Separate module for utility functions that require ROS."""
+"""Separate module for all checks used in the environments."""
 
 from __future__ import annotations
 
@@ -6,9 +6,8 @@ import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
+from drone_estimators.ros_nodes.ros2_connector import ROSConnector
 from scipy.spatial.transform import Rotation as R
-
-from lsy_drone_racing.ros.ros_connector import ROSConnector
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict

@@ -40,7 +40,6 @@ If you want to understand the ins and outs of the framework, you can explore the
 - :doc:`Drone Control <control/index>`
 - :doc:`Racing Environments <envs/index>`
 - :doc:`Utility Functions <utils/index>`
-- :doc:`ROS2 Integration <ros/index>`
 
 We hope this documentation helps you dive into the exciting world of autonomous drone racing. Good luck, and may the best algorithm win!
 
@@ -72,8 +71,6 @@ We hope this documentation helps you dive into the exciting world of autonomous 
    envs/index
 
    utils/index
-
-   ros/index
 
 
 Indices and tables

@@ -35,7 +35,7 @@ def simulate(
     config: str = "level0.toml",
     controller: str | None = None,
     n_runs: int = 1,
-    render: bool | None = None,
+    render: bool | None = True,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 

@@ -36,7 +36,7 @@ sim = [
     "packaging >= 24.0",
     "drone-models @ git+https://github.com/utiasDSL/drone-models.git",
     "drone-controllers @ git+https://github.com/utiasDSL/drone-controllers.git",
-    "crazyflow @ git+https://github.com/utiasDSL/crazyflow.git@dev", # TODO: change this after merged to main
+    "crazyflow @ git+https://github.com/utiasDSL/crazyflow.git@adr_ws25", # TODO: change this after merged to main
     "jax >= 0.7",
     "warp-lang",
 ]
@@ -142,7 +142,11 @@ scripts = ["tools/setup_mocap.sh"]
 scripts = ["tools/setup_acados.sh"]
 
 # feature[online-submission]
-[tool.pixi.feature.online-submission]
+# [tool.pixi.feature.online-submission]
+
+[tool.pixi.feature.online-submission.tasks]
+create-submission = { cmd = "python scripts/kaggle.py", description = "Create online submission" }
+export-submission = { cmd = "kaggle competitions submit -c lsy-drone-racing-ws-25 -f submission.csv -m 'Automated submission'", description = "Submit online submission" }
 
 [tool.pixi.feature.online-submission.dependencies]
 pandas = "*"

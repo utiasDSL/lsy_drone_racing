@@ -31,6 +31,7 @@ import jax.numpy as jp
 import mujoco
 import numpy as np
 from crazyflow.sim import Sim
+from crazyflow.sim.sim import use_box_collision
 
 # from crazyflow.sim.symbolic import symbolic_attitude
 from flax.struct import dataclass
@@ -273,6 +274,7 @@ class RaceCoreEnv:
             rng_key=seed,
             device=device,
         )
+        use_box_collision(self.sim, True)
         self.default_cam_config = {
             "distance": sim_config.camera_view[0],
             "azimuth": sim_config.camera_view[1],
@@ -391,7 +393,12 @@ class RaceCoreEnv:
 
     def apply_action(self, action: Array):
         """Apply the commanded state action to the simulation."""
-        action = action.reshape((self.sim.n_worlds, self.sim.n_drones, -1))
+        # Convert to a buffer that meets XLA's alginment restrictions to prevent warnings. See
+        # https://github.com/jax-ml/jax/discussions/6055
+        # Tracking issue:
+        # https://github.com/jax-ml/jax/issues/29810
+        # Forcing a copy here is less efficient, but avoids the warning.
+        action = np.reshape(action, (self.sim.n_worlds, self.sim.n_drones, -1), copy=True)
         if "action" in self.disturbances:
             key, subkey = jax.random.split(self.sim.data.core.rng_key)
             action += self.disturbances["action"](subkey, action.shape)

@@ -23,12 +23,14 @@ import rclpy
 from cflib.crazyflie import Crazyflie, Localization
 from cflib.crtp.crtpstack import CRTPPacket, CRTPPort
 from cflib.utils.power_switch import PowerSwitch
+from drone_estimators.ros_nodes.ros2_connector import ROSConnector
+from drone_models.core import load_params
+from drone_models.transform import force2pwm
 from gymnasium import Env
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
-from lsy_drone_racing.ros import ROSConnector
-from lsy_drone_racing.ros.ros_utils import check_drone_start_pos, check_race_track
+from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
@@ -40,7 +42,6 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EnvData:
     """Struct holding the data of all auxiliary variables for the environment."""
-
     target_gate: NDArray
     gates_visited: NDArray
     obstacles_visited: NDArray
@@ -95,8 +96,8 @@ class RealRaceCoreEnv:
         self.gates, self.obstacles, self.drones = load_track(track)
         self.n_gates = len(self.gates.pos)
         self.n_obstacles = len(self.obstacles.pos)
-        self.pos_limit_low = np.array([-3.0, -3.0, 0.0])
-        self.pos_limit_high = np.array([3.0, 3.0, 2.5])
+        self.pos_limit_low = np.array(track.safety_limits[0]["pos_limit_low"])
+        self.pos_limit_high = np.array(track.safety_limits[0]["pos_limit_high"])
         self.sensor_range = sensor_range
         self.drone_names = [f"cf{drone['id']}" for drone in drones]
         self.drone_name = self.drone_names[rank]
@@ -107,6 +108,7 @@ class RealRaceCoreEnv:
         assert control_mode in ["state", "attitude"], f"Invalid control mode {control_mode}"
         self.control_mode = control_mode
         self.randomizations = randomizations
+        self.drone_parameters = load_params("first_principles", drones[rank]["drone_model"])
         # Dynamic data
         self.data = EnvData.create(
             n_drones=self.n_drones, n_gates=self.n_gates, n_obstacles=self.n_obstacles
@@ -247,6 +249,12 @@ class RealRaceCoreEnv:
         """Check if the episode is terminated."""
         terminated = self.data.target_gate == -1
         terminated[self.rank] |= not self._drone_healthy.is_set()
+        terminated |= np.any(
+            (self.pos_limit_low > self.data.last_drone_pos)
+            | (self.data.last_drone_pos > self.pos_limit_high)
+        )
+
+        
         return terminated
 
     def truncated(self) -> NDArray:
@@ -260,11 +268,9 @@ class RealRaceCoreEnv:
     def send_action(self, action: NDArray):
         """Send the action to the drone."""
         if self.control_mode == "attitude":
-            # Action conversion: We currently expect controllers to send [collective thrust, roll,
-            # pitch, yaw] as input with thrust in Newton and angles in radians. The drone expects
-            # angles in degrees and thrust in PWMs.
-            # TODO: Once we fix this interface in crazyflow, we should also fix it here
-            action = (*np.rad2deg(action[1:]), int(thrust2pwm(action[0])))
+            pwm = force2pwm(action[3], self.drone_parameters["thrust_max"]*4, self.drone_parameters["pwm_max"])
+            pwm = np.clip(pwm, self.drone_parameters["pwm_min"], self.drone_parameters["pwm_max"])
+            action = (*np.rad2deg(action[:3]), int(pwm))
             self.drone.commander.send_setpoint(*action)
         else:
             pos, vel, acc = action[:3], action[3:6], action[6:9]
@@ -280,6 +286,33 @@ class RealRaceCoreEnv:
         self._ros_connector.publish_cmd(action)
 
     def _connect_to_drone(self, radio_id: int, radio_channel: int, drone_id: int) -> Crazyflie:
+        cflib.crtp.init_drivers()
+        uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
+
+        power_switch = PowerSwitch(uri)
+        power_switch.stm_power_cycle()
+        time.sleep(2)
+
+        drone = Crazyflie(rw_cache=str(Path(__file__).parent / ".cache"))
+        connected_event = mp.Event()
+
+        drone.fully_connected.add_callback(lambda _: connected_event.set())
+        drone.disconnected.add_callback(lambda _: self._drone_healthy.clear())
+        drone.connection_failed.add_callback(lambda _, msg: logger.warning(f"Connection failed: {msg}"))
+        drone.connection_lost.add_callback(lambda _, msg: logger.warning(f"Connection lost: {msg}"))
+        # drone.console.receivedChar.add_callback(
+        #     lambda msg: logger.info(f"drone: {msg.strip().replace('\n', '').replace('\r', '')}")
+        # )
+        drone.open_link(uri)
+
+        logger.info(f"Waiting for drone {drone_id} to connect...")
+        connected = connected_event.wait(5.0)
+        assert connected, f"Drone {drone_id} failed to connect to {uri}"
+        logger.info(f"Drone {drone_id} connected to {uri}")
+
+        return drone
+
+    def _connect_to_drone_old(self, radio_id: int, radio_channel: int, drone_id: int) -> Crazyflie:
         cflib.crtp.init_drivers()
         uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
 
@@ -318,6 +351,8 @@ class RealRaceCoreEnv:
         data.last_drone_pos[...] = drone_pos
 
     def _reset_drone(self):
+        # Arm the drone
+        self.drone.platform.send_arming_request(True)
         self._apply_drone_settings()
         pos = self._ros_connector.pos[self.drone_name]
         # Reset Kalman filter values
@@ -603,20 +638,3 @@ class RealMultiDroneRaceEnv(RealRaceCoreEnv, Env):
         """
         obs, reward, terminated, truncated, info = self._step(action)
         return obs, reward[self.rank], terminated[self.rank], truncated[self.rank], info
-
-
-def thrust2pwm(thrust: float) -> float:
-    """Convert thrust to pwm using a quadratic function.
-
-    TODO: Remove in favor of lsy_models
-    """
-    a_coeff = -1.1264
-    b_coeff = 2.2541
-    c_coeff = 0.0209
-    pwm_max = 65535.0
-
-    pwm = a_coeff * thrust * thrust + b_coeff * thrust + c_coeff
-    pwm = np.maximum(pwm, 0.0)
-    pwm = np.minimum(pwm, 1.0)
-    thrust_pwm = pwm * pwm_max
-    return thrust_pwm
