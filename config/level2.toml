@@ -1,10 +1,10 @@
 # Level 2
 
-# | Evaluation Scenario | Rand. Inertial Properties | Randomized Obstacles, Gates | Notes                 |
-# | :-----------------: | :-----------------------: | :-------------------------: | :-------------------: |
-# | `level2.toml`       | **Yes**                   | **Yes**                     | Learning, re-planning |
+# | Evaluation Scenario | Randomized Inertial Properties | Randomized Obstacles, Gates | Randomized Tracks | Notes                 |
+# | :-----------------: | :----------------------------: | :-------------------------: | :---------------: | :-------------------: |
+# | `level2.toml`       | *Yes*                          | *Yes*                       | *No*              | Learning, re-planning |
 [controller]
-file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+file = "position_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 
 [deploy]
 ### Settings only relevant for deployment

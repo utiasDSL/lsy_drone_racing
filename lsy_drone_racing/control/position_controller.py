@@ -22,8 +22,8 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-class TrajectoryController(Controller):
-    """Trajectory controller following a pre-defined trajectory."""
+class PositionController(Controller):
+    """Position controller following a pre-defined trajectory."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialization of the controller.
@@ -36,26 +36,29 @@ class TrajectoryController(Controller):
                 information such as disturbance configurations, randomizations, etc.
         """
         super().__init__(obs, info, config)
-        # Same waypoints as in the trajectory controller. Determined by trial and error.
+        self._freq = config.env.freq
+        
+        # Same waypoints as in the attitude controller. Determined by trial and error.
         waypoints = np.array(
             [
                 [-1.5, 0.75, 0.05],
-                [-1.0, 0.55, 0.2],
-                [0.3, 0.35, 0.5],
-                [1.3, -0.05, 0.65],
-                [0.85, 0.85, 1.1],
-                [-0.5, -0.05, 0.65],
-                [-1.1, -0.2, 0.52],
-                [-1.1, -0.2, 1.1],
-                [-0.0, -0.65, 1.1],
-                [0.5, -0.65, 1.1],
+                [-1.0, 0.55, 0.4],
+                [0.3, 0.35, 0.7],
+                [1.3, -0.15, 0.9],
+                [0.85, 0.85, 1.2],
+                [-0.5, -0.05, 0.7],
+                [-1.1, -0.2, 0.7],
+                [-1.1, -0.2, 1.2],
+                [-0.0, -0.65, 1.2],
+                [0.5, -0.65, 1.2],
             ]
         )
-        self.t_total = 15
-        t = np.linspace(0, self.t_total, len(waypoints))
-        self.trajectory = CubicSpline(t, waypoints)
+        
+        self._t_total = 15 # s
+        t = np.linspace(0, self._t_total, len(waypoints))
+        self._des_pos_spline = CubicSpline(t, waypoints)
+        
         self._tick = 0
-        self._freq = config.env.freq
         self._finished = False
 
     def compute_control(
@@ -72,11 +75,13 @@ class TrajectoryController(Controller):
             The drone state [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate] as a numpy
                 array.
         """
-        tau = min(self._tick / self._freq, self.t_total)
-        target_pos = self.trajectory(tau)
-        if tau == self.t_total:  # Maximum duration reached
+        t = min(self._tick / self._freq, self._t_total)
+        if t >= self._t_total:  # Maximum duration reached
             self._finished = True
-        return np.concatenate((target_pos, np.zeros(10)), dtype=np.float32)
+
+        des_pos = self._des_pos_spline(t)
+        action = np.concatenate((des_pos, np.zeros(10)), dtype=np.float32)
+        return action
 
     def step_callback(
         self,
@@ -94,5 +99,7 @@ class TrajectoryController(Controller):
         """
         self._tick += 1
         return self._finished
-        """Reset the time step counter."""
+
+    def episode_callback(self):
+        """Reset the internal state."""
         self._tick = 0

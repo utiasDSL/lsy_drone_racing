@@ -10,7 +10,7 @@ from lsy_drone_racing.utils import load_config, load_controller
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("controller_file", ["trajectory_controller.py"])
+@pytest.mark.parametrize("controller_file", ["position_controller.py"])
 def test_controllers(controller_file: str):
     config = load_config(Path(__file__).parents[2] / "config/level0.toml")
     config.sim.gui = False
@@ -89,7 +89,7 @@ def test_trajectory_controller_finish(yaw: float, physics: str):
     config.sim.physics = physics
     config.sim.gui = False
     ctrl_cls = load_controller(
-        Path(__file__).parents[2] / "lsy_drone_racing/control/trajectory_controller.py"
+        Path(__file__).parents[2] / "lsy_drone_racing/control/position_controller.py"
     )
     env = gymnasium.make(
         "DroneRacing-v0",
