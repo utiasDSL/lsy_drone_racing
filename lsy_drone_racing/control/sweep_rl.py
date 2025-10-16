@@ -2,14 +2,14 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import wandb
 
+import wandb
 from lsy_drone_racing.control.train_rl import Args, evaluate_ppo, train_ppo  # noqa: F401
 
 
 # 1: Define objective/training function
 def train():
-    with wandb.init(project="ADR-PPO-Figure8") as run:
+    with wandb.init(project="ADR-PPO-sweep") as run:
         args = Args.create(**dict(run.config))
         model_path = Path(__file__).parent / "ppo_drone_racing.ckpt"
         device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
@@ -35,10 +35,11 @@ sweep_configuration = {
         "ent_coef": {"min": 0.0, "max": 1e-2},
         "vf_coef": {"min": 0.3, "max": 1.0},
         "max_grad_norm": {"min": 0.5, "max": 4.0},
+        "action_scale": {"min": 1, "max": 6},
     },
 }
 
 # 3: Start the sweep
 sweep_id = wandb.sweep(sweep=sweep_configuration, project="ADR-PPO-sweep", entity="fresssack")
 
-wandb.agent(sweep_id, function=train, count=2)
+wandb.agent(sweep_id, function=train, count=50)

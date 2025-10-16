@@ -13,7 +13,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import wandb
 from crazyflow.envs.drone_env import DroneEnv
 from crazyflow.envs.norm_actions_wrapper import NormalizeActions
 from crazyflow.sim.data import SimData
@@ -30,6 +29,7 @@ from gymnasium.vector import (
     VectorWrapper,
 )
 from gymnasium.vector.utils import batch_space
+from gymnasium.wrappers.vector.array_conversion import ArrayConversion
 from gymnasium.wrappers.vector.jax_to_torch import JaxToTorch
 from jax import Array
 from jax.scipy.spatial.transform import Rotation as R
@@ -38,6 +38,7 @@ from scipy.interpolate import CubicSpline
 from torch import Tensor
 from torch.distributions.normal import Normal
 
+import wandb
 from lsy_drone_racing.envs.race_core import build_dynamics_disturbance_fn, rng_spec2fn
 from lsy_drone_racing.utils import load_config
 
@@ -61,7 +62,7 @@ class Args:
     # Algorithm specific arguments
     total_timesteps: int = 1_000_000
     """total timesteps of the experiments"""
-    learning_rate: float = 2e-3
+    learning_rate: float = 1e-3
     """the learning rate of the optimizer"""
     num_envs: int = 1024
     """the number of parallel game environments"""
@@ -91,6 +92,8 @@ class Args:
     """the maximum norm for the gradient clipping"""
     target_kl: float = None
     """the target KL divergence threshold"""
+    action_scale: float = 5
+    """scale for the action outputs"""
 
     # to be filled in runtime
     batch_size: int = 0
@@ -359,10 +362,9 @@ class RandTrajEnv(DroneEnv):
 class ActionTransform(VectorActionWrapper):
     """Wrapper to transform rotation vector to attitude commands."""
 
-    def __init__(self, env: VectorEnv):
+    def __init__(self, env: VectorEnv, action_scale: float = 5.0):
         super().__init__(env)
-        self._action_scale = (1 / super().unwrapped.freq) * 5 * jp.pi
-        self._action_scale = jp.array(0.1)
+        self._action_scale = (1 / super().unwrapped.freq) * action_scale * jp.pi
         # Compute scale and mean for rescaling
         thrust_low = self.single_action_space.low[-1]
         thrust_high = self.single_action_space.high[-1]
@@ -576,7 +578,8 @@ def make_envs(
         config: str = "level0.toml",
         num_envs: int = None,
         jax_device: str = "cpu",
-        torch_device: str = "cpu"
+        torch_device: str = "cpu",
+        action_scale: float = 5.0,
     ) -> VectorEnv:
     config = load_config(Path(__file__).parents[2] / "config" / config)
     env = RandTrajEnv(
@@ -595,7 +598,7 @@ def make_envs(
     #     env.unwrapped.sim.build_default_data()
     
     # env = NormalizeActions(env)
-    env = ActionTransform(env)
+    env = ActionTransform(env, action_scale=action_scale)
     # env = AngleReward(env)
     env = FlattenJaxObservation(env)
     # env = ObsNoise(env, noise_std=0.01)
@@ -663,7 +666,7 @@ def train_ppo(args, model_path, device, jax_device, wandb_enabled = False):
         print("Training on device:", device, "| Environment device:", jax_device)
 
         # env setup
-        envs = make_envs(num_envs=args.num_envs, jax_device=jax_device, torch_device=device)
+        envs = make_envs(num_envs=args.num_envs, jax_device=jax_device, torch_device=device, action_scale=args.action_scale)
         assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
         agent = Agent(envs.single_observation_space.shape, envs.single_action_space.shape).to(device)
@@ -829,7 +832,7 @@ def train_ppo(args, model_path, device, jax_device, wandb_enabled = False):
         return sum_rewards_hist
 
 # region Evaluate
-def evaluate_ppo(args, n_eval, model_path, device):
+def evaluate_ppo(args, n_eval, model_path):
     set_seeds(args.seed)
     device = torch.device("cpu")
     with torch.no_grad():
@@ -874,13 +877,12 @@ def main(wandb_enabled: bool = True, train: bool = True, eval: int = 1):
     model_path = Path(__file__).parent / "ppo_drone_racing.ckpt"
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
     jax_device = args.jax_device
-    print()
 
     if train: # use "--train False" to skip training
         train_ppo(args, model_path, device, jax_device, wandb_enabled)
 
     if eval > 0: # use "--eval <N>" to perform N evaluation episodes
-        fig, rmse_pos, episode_rewards, episode_lengths = evaluate_ppo(args, eval, model_path, device)
+        fig, rmse_pos, episode_rewards, episode_lengths = evaluate_ppo(args, eval, model_path)
         if wandb_enabled and train:
             wandb.log(
                 {
