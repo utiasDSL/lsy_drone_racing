@@ -20,6 +20,13 @@ if [ ! -d ${ACADOS_DIR}/.git ]; then
   )
 fi
 
+# Check if pip is installed
+if ! command -v pip >/dev/null 2>&1; then
+  echo "[Setup Acados] ERROR: pip is not installed. Please install pip first."
+  exit 1
+fi
+
+# Build Acados
 if [ ! -f ${ACADOS_DIR}/lib/libacados.so ]; then
   echo "[Setup Acados] Building acados..."
   mkdir -p ${ACADOS_DIR}/build
