@@ -12,31 +12,38 @@
     <material name="gate_mat_left" texture="gate_texture_left" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
     <material name="gate_mat_right" texture="gate_texture_right" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
     <material name="frame_mat" rgba="0.5 0.5 0.5 1" specular="0.4" shininess="0.4" reflectance="0.5"/>
+    <material name="rope_mat" rgba="0.1 0.1 0.1 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
     <material name="stand_mat" rgba="0.7 0.68 0.55 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
   </asset>
 
   <worldbody>
     <body name="gate">
       <!-- Textured front -->
-      <geom name="front_top" type="box" size=".3 .05 5e-4" pos="0 -1e-2 0.25" euler="90 0 0" material="gate_mat_top"/>
-      <geom name="front_bottom" type="box" size=".3 .05 5e-4" pos="0 -1e-2 -0.25" euler="90 0 0" material="gate_mat_bottom"/>
-      <geom name="front_left" type="box" size=".05 .2 5e-4" pos="-0.25 -1e-2 0" euler="90 0 0" material="gate_mat_left"/>
-      <geom name="front_right" type="box" size=".05 .2 5e-4" pos="0.25 -1e-2 0" euler="90 0 0" material="gate_mat_right"/>
+      <geom name="front_top" type="box" size=".3 .05 5e-4" pos="0 -1e-3 0.25" euler="90 0 0" material="gate_mat_top"/>
+      <geom name="front_bottom" type="box" size=".3 .05 5e-4" pos="0 -1e-3 -0.25" euler="90 0 0" material="gate_mat_bottom"/>
+      <geom name="front_left" type="box" size=".05 .2 5e-4" pos="-0.25 -1e-3 0" euler="90 0 0" material="gate_mat_left"/>
+      <geom name="front_right" type="box" size=".05 .2 5e-4" pos="0.25 -1e-3 0" euler="90 0 0" material="gate_mat_right"/>
 
       <!-- Textured back -->
-      <geom name="back_top" type="box" size=".3 .05 5e-4" pos="0 1e-2 0.25" euler="-90 0 180" material="gate_mat_top"/>
-      <geom name="back_bottom" type="box" size=".3 .05 5e-4" pos="0 1e-2 -0.25" euler="-90 0 180" material="gate_mat_bottom"/>
-      <geom name="back_left" type="box" size=".05 .2 5e-4" pos="-0.25 1e-2 0" euler="90 180 180" material="gate_mat_left"/>
-      <geom name="back_right" type="box" size=".05 .2 5e-4" pos="0.25 1e-2 0" euler="90 180 180" material="gate_mat_right"/>
+      <geom name="back_top" type="box" size=".3 .05 5e-4" pos="0 1e-3 0.25" euler="-90 0 180" material="gate_mat_top"/>
+      <geom name="back_bottom" type="box" size=".3 .05 5e-4" pos="0 1e-3 -0.25" euler="-90 0 180" material="gate_mat_bottom"/>
+      <geom name="back_left" type="box" size=".05 .2 5e-4" pos="-0.25 1e-3 0" euler="90 180 180" material="gate_mat_left"/>
+      <geom name="back_right" type="box" size=".05 .2 5e-4" pos="0.25 1e-3 0" euler="90 180 180" material="gate_mat_right"/>
 
       <!-- Frame -->
-      <geom name="frame_top" type="box" size=".3 .01 .01" pos="0 0 0.29" euler="90 0 0" material="frame_mat"/>
-      <geom name="frame_bottom" type="box" size=".3 .01 .01" pos="0 0 -0.29" euler="90 0 0" material="frame_mat"/>
-      <geom name="frame_left" type="box" size=".01 .29 .01" pos="-0.29 0 0" euler="90 0 0" material="frame_mat"/>
-      <geom name="frame_right" type="box" size=".01 .29 .01" pos="0.29 0 0" euler="90 0 0" material="frame_mat"/>
+      <geom name="frame_top" type="box" size=".35 .01 .01" pos="0.01 0 0.35" euler="90 0 0" material="frame_mat"/>
+      <geom name="frame_bottom" type="box" size=".35 .01 .01" pos="-0.01 0 -0.35" euler="90 0 0" material="frame_mat"/>
+      <geom name="frame_left" type="box" size=".01 .35 .01" pos="-0.35 0 0.01" euler="90 0 0" material="frame_mat"/>
+      <geom name="frame_right" type="box" size=".01 .35 .01" pos="0.35 0 -0.01" euler="90 0 0" material="frame_mat"/>
+
+      <!-- Ropes -->
+      <geom name="rope_top_left" type="capsule" fromto="-0.34 0.0 0.34  -0.29 0.0 0.29" size="0.004" material="rope_mat"/>
+      <geom name="rope_top_right" type="capsule" fromto="0.34 0.0 0.34   0.29 0.0 0.29" size="0.004" material="rope_mat"/>
+      <geom name="rope_bottom_left" type="capsule" fromto="-0.34 0.0 -0.34  -0.29 0.0 -0.29" size="0.004" material="rope_mat"/>
+      <geom name="rope_bottom_right" type="capsule" fromto="0.34 0.0 -0.34   0.29 0.0 -0.29" size="0.004" material="rope_mat"/>
 
       <!-- Stand -->
-      <geom name="gate_stand" type="box" size="0.05 0.05 0.5" pos="0 0 -0.8" material="stand_mat"/>
+      <geom name="gate_stand" type="box" size="0.05 0.05 0.5" pos="0 0 -0.86" material="stand_mat"/>
     </body>
   </worldbody>
 </mujoco>
