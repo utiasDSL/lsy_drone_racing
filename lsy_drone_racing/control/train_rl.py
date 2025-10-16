@@ -21,7 +21,13 @@ from crazyflow.sim.visualize import draw_line, draw_points
 from crazyflow.utils import leaf_replace
 from gymnasium import spaces
 from gymnasium.spaces import flatten_space
-from gymnasium.vector import VectorEnv, VectorObservationWrapper, VectorRewardWrapper, VectorWrapper
+from gymnasium.vector import (
+    VectorActionWrapper,
+    VectorEnv,
+    VectorObservationWrapper,
+    VectorRewardWrapper,
+    VectorWrapper,
+)
 from gymnasium.vector.utils import batch_space
 from gymnasium.wrappers.vector.jax_to_torch import JaxToTorch
 from jax import Array
@@ -31,6 +37,7 @@ from scipy.interpolate import CubicSpline
 from torch import Tensor
 from torch.distributions.normal import Normal
 
+import wandb
 from lsy_drone_racing.envs.race_core import build_dynamics_disturbance_fn, rng_spec2fn
 from lsy_drone_racing.utils import load_config
 
@@ -48,17 +55,11 @@ class Args:
     """environment device"""
     wandb_project_name: str = "ADR-PPO-Racing"
     """the wandb's project name"""
-    wandb_entity: str = None
+    wandb_entity: str = "fresssack"
     """the entity (team) of wandb's project"""
-    save_model: bool = True
-    """whether to save model into the `runs/{run_name}` folder"""
-    upload_model: bool = False
-    """whether to upload the saved model to huggingface"""
 
     # Algorithm specific arguments
-    env_id: str = "DroneRacing-v0"
-    """the id of the environment"""
-    total_timesteps: int = 5_000_000
+    total_timesteps: int = 1_000_000
     """total timesteps of the experiments"""
     learning_rate: float = 2e-3
     """the learning rate of the optimizer"""
@@ -68,21 +69,21 @@ class Args:
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
     """Toggle learning rate annealing for policy and value networks"""
-    gamma: float = 0.99
+    gamma: float = 0.9
     """the discount factor gamma"""
     gae_lambda: float = 0.95
     """the lambda for the general advantage estimation"""
-    num_minibatches: int = 16 * 2
+    num_minibatches: int = 16
     """the number of mini-batches"""
     update_epochs: int = 15
     """the K epochs to update the policy"""
     norm_adv: bool = True
     """Toggles advantages normalization"""
-    clip_coef: float = 0.25
+    clip_coef: float = 0.275
     """the surrogate clipping coefficient"""
     clip_vloss: bool = True
     """Toggles whether or not to use a clipped loss for the value function, as per the paper."""
-    ent_coef: float = 0.0
+    ent_coef: float = 0.0001
     """coefficient of the entropy"""
     vf_coef: float = 0.5
     """coefficient of the value function"""
@@ -99,6 +100,14 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    @staticmethod
+    def create(**kwargs: Any) -> "Args":
+        args = Args(**kwargs)
+        args.batch_size = int(args.num_envs * args.num_steps)
+        args.minibatch_size = int(args.batch_size // args.num_minibatches)
+        args.num_iterations = args.total_timesteps // args.batch_size
+        return args
+
 # region Environment
 class RandTrajEnv(DroneEnv):
     """Drone environment for following a random trajectory.
@@ -110,13 +119,13 @@ class RandTrajEnv(DroneEnv):
     def __init__(
         self,
         n_samples: int = 10,
-        trajectory_time: float = 15.0,
+        trajectory_time: float = 10.0,
         samples_dt: float = 0.1,
         *,
         num_envs: int = 1,
-        max_episode_time: float = 15.0,
+        max_episode_time: float = 10.0,
         physics: Literal["so_rpy_rotor_drag", "first_principles"] | Physics = Physics.first_principles,
-        drone_model: str = "cf2x_L250",
+        drone_model: str = "cf21B_500",
         freq: int = 500,
         disturbances: ConfigDict | None = None,
         device: str = "cpu",
@@ -152,31 +161,41 @@ class RandTrajEnv(DroneEnv):
         self.trajectory_time = trajectory_time
         self.sample_offsets = np.array(np.arange(n_samples) * self.freq * samples_dt, dtype=int)
 
-        # Set takeoff position and build default reset position
-        self.takeoff_pos = np.array([-1.5, 1.0, 0.07])
-        data = self.sim.data
-        self.sim.data = data.replace(states=data.states.replace(pos=np.broadcast_to(self.takeoff_pos, (data.core.n_worlds, data.core.n_drones, 3))))
-        self.sim.build_default_data()
+        # # Set takeoff position and build default reset position
+        # self.takeoff_pos = np.array([-1.5, 1.0, 0.07])
+        # data = self.sim.data
+        # self.sim.data = data.replace(states=data.states.replace(pos=np.broadcast_to(self.takeoff_pos, (data.core.n_worlds, data.core.n_drones, 3))))
+        # self.sim.build_default_data()
 
-        # Same waypoints as in the trajectory controller. Determined by trial and error.
-        waypoints = np.array(
-            [
-                [-1.5, 1.0, 0.05],
-                [-1.0, 0.8, 0.2],
-                [0.3, 0.55, 0.5],
-                [1.3, 0.2, 0.65],
-                [0.85, 1.1, 1.1],
-                [-0.5, 0.2, 0.65],
-                [-1.15, 0.0, 0.52],
-                [-1.15, 0.0, 1.1],
-                [-0.0, -0.4, 1.1],
-                [0.5, -0.4, 1.1],
-            ]
-        )
-        # Generate spline trajectory
-        ts = np.linspace(0, self.trajectory_time, int(self.freq * self.trajectory_time))
-        spline = CubicSpline(np.linspace(0, self.trajectory_time, waypoints.shape[0]), waypoints)
-        self.trajectory = spline(ts)  # (n_steps, 3)
+        # # Same waypoints as in the trajectory controller. Determined by trial and error.
+        # waypoints = np.array(
+        #     [
+        #         [-1.5, 1.0, 0.05],
+        #         [-1.0, 0.8, 0.2],
+        #         [0.3, 0.55, 0.5],
+        #         [1.3, 0.2, 0.65],
+        #         [0.85, 1.1, 1.1],
+        #         [-0.5, 0.2, 0.65],
+        #         [-1.15, 0.0, 0.52],
+        #         [-1.15, 0.0, 1.1],
+        #         [-0.0, -0.4, 1.1],
+        #         [0.5, -0.4, 1.1],
+        #     ]
+        # )
+        # # Generate spline trajectory
+        # ts = np.linspace(0, self.trajectory_time, int(self.freq * self.trajectory_time))
+        # spline = CubicSpline(np.linspace(0, self.trajectory_time, waypoints.shape[0]), waypoints)
+        # self.trajectory = spline(ts)  # (n_steps, 3)
+        # self.trajectories = np.tile(self.trajectory[None, :, :], (num_envs, 1, 1)) # (num_envs, n_steps, 3)
+
+        # Create the figure eight trajectory
+        n_steps = int(np.ceil(trajectory_time * self.freq))
+        t = np.linspace(0, 2 * np.pi, n_steps)
+        radius = 1  # Radius for the circles
+        x = radius * np.sin(t)  # Scale amplitude for 1-meter diameter
+        y = np.zeros_like(t)  # x is 0 everywhere
+        z = radius / 2 * np.sin(2 * t) + 1  # Scale amplitude for 1-meter diameter
+        self.trajectory = np.array([x, y, z]).T
         self.trajectories = np.tile(self.trajectory[None, :, :], (num_envs, 1, 1)) # (num_envs, n_steps, 3)
 
         # # Create a random trajectory based on spline interpolation
@@ -190,18 +209,19 @@ class RandTrajEnv(DroneEnv):
         # spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1)
         # self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
 
-        # Apply disturbances specified for racing
-        specs = {} if disturbances is None else disturbances
-        self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
-        if "dynamics" in self.disturbances:
-            disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
-            self.sim.step_pipeline = (
-                self.sim.step_pipeline[:2] + (disturbance_fn,) + self.sim.step_pipeline[2:]
-            )
-            self.sim.build_step_fn()
+        # # Apply disturbances specified for racing
+        # specs = {} if disturbances is None else disturbances
+        # self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
+        # if "dynamics" in self.disturbances:
+        #     disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
+        #     self.sim.step_pipeline = (
+        #         self.sim.step_pipeline[:2] + (disturbance_fn,) + self.sim.step_pipeline[2:]
+        #     )
+        #     self.sim.build_step_fn()
 
         # Update observation space
         spec = {k: v for k, v in self.single_observation_space.items()}
+        spec["quat"] = spaces.Box(-1.0, 1.0, shape=(9,)) # rotation matrix instead of quaternion
         spec["local_samples"] = spaces.Box(-np.inf, np.inf, shape=(3 * self.n_samples,))
         self.single_observation_space = spaces.Dict(spec)
         self.observation_space = batch_space(self.single_observation_space, self.sim.n_worlds)
@@ -240,6 +260,7 @@ class RandTrajEnv(DroneEnv):
         idx = np.clip(self.steps + self.sample_offsets[None, ...], 0, self.trajectories[0].shape[0] - 1)
         dpos = self.trajectories[np.arange(self.trajectories.shape[0])[:, None], idx] - self.sim.data.states.pos
         obs["local_samples"] = dpos.reshape(-1, 3 * self.n_samples)
+        obs["quat"] = R.from_quat(obs["quat"]).as_matrix().reshape(-1, 9)
         return obs
 
     def reward(self) -> Array:
@@ -249,7 +270,7 @@ class RandTrajEnv(DroneEnv):
         # distance to next trajectory point
         norm_distance = jp.linalg.norm(pos - goal, axis=-1)
         reward = jp.exp(-2.0 * norm_distance) # encourage flying close to goal
-        reward = jp.where(self.terminated(), -2.0, reward) # penalize drones that crash into the ground
+        reward = jp.where(self.terminated(), -1.0, reward) # penalize drones that crash into the ground
         return reward
 
     def apply_action(self, action: Array):
@@ -279,60 +300,113 @@ class RandTrajEnv(DroneEnv):
         upper_bounds = jp.array([ 4.0,  4.0, 4.0])
         terminate = jp.any((pos[:, 0, :] < lower_bounds) | (pos[:, 0, :] > upper_bounds), axis=-1)
         return terminate
-
     @staticmethod
     def _reset_randomization(data: SimData, mask: Array) -> SimData:
-        """Reload this function to disable reset randomization."""
-        """Simplified reset: randomly choose a waypoint as initial position, zero velocity."""
-        waypoints = jp.array(
-            [
-                [-1.5, 1.0, 0.07],
-                [-1.0, 0.8, 0.2],
-                [0.3, 0.55, 0.5],
-                [1.3, 0.2, 0.65],
-                [0.85, 1.1, 1.1],
-                [-0.5, 0.2, 0.65],
-                [-1.15, 0.0, 0.52],
-                [-1.15, 0.0, 1.1],
-                # [-0.0, -0.4, 1.1],
-                # [0.5, -0.4, 1.1],
-            ]
-        )
-        total_waypoints = 10
-        # random reset from waypoints
-        key, idx_key, rotor_key = jax.random.split(data.core.rng_key, 3)
+        """Randomize the initial position and velocity of the drones.
+
+        This function will get compiled into the reset function of the simulation. Therefore, it
+        must take data and mask as input arguments and must return a SimData object.
+        """
+        # Sample initial position
+        shape = (data.core.n_worlds, data.core.n_drones, 3)
+        pmin, pmax = jp.array([-0.1, -0.1, 1.1]), jp.array([0.1, 0.1, 1.3])
+        key, pos_key, vel_key = jax.random.split(data.core.rng_key, 3)
         data = data.replace(core=data.core.replace(rng_key=key))
-        rand_idx = jax.random.randint(idx_key, (data.core.n_worlds,), -5, waypoints.shape[0])
-        rand_idx = jp.clip(rand_idx, 0, waypoints.shape[0]-1)
-        pos_world = waypoints[rand_idx]  # (n_worlds, 3)
-        pos = jp.tile(pos_world[:, None, :], (1, data.core.n_drones, 1))  # (n_worlds, n_drones, 3)
-        data = data.replace(states=leaf_replace(data.states, mask, pos=pos))
-        # set steps according to the waypoint index
-        total_time = 15.0
-        total_steps = int(total_time * data.core.freq)
-        steps_mask = jp.ones((data.core.n_worlds, 1), dtype=bool) if mask is None else mask[:, None]
-        step_values = (rand_idx * total_steps // (total_waypoints-1))[:, None]
-        data = data.replace(core=data.core.replace(steps=jp.where(steps_mask, step_values, data.core.steps)))
-        # reset initial rotor velocity for easier takeoff
-        rotor_vel = jax.random.uniform(rotor_key, (data.core.n_worlds, data.core.n_drones, 1), minval=4000.0, maxval=10000.0) * jp.ones((1, 1, data.states.rotor_vel.shape[-1]))
-        data = data.replace(states=leaf_replace(data.states, mask, rotor_vel=rotor_vel))
+        pos = jax.random.uniform(key=pos_key, shape=shape, minval=pmin, maxval=pmax)
+        vel = jax.random.uniform(key=vel_key, shape=shape, minval=-0.5, maxval=0.5)
+        data = data.replace(states=leaf_replace(data.states, mask, pos=pos, vel=vel))
         return data
+
+    # @staticmethod
+    # def _reset_randomization(data: SimData, mask: Array) -> SimData:
+    #     """Reload this function to disable reset randomization."""
+    #     """Simplified reset: randomly choose a waypoint as initial position, zero velocity."""
+    #     waypoints = jp.array(
+    #         [
+    #             [-1.5, 1.0, 0.07],
+    #             [-1.0, 0.8, 0.2],
+    #             [0.3, 0.55, 0.5],
+    #             [1.3, 0.2, 0.65],
+    #             [0.85, 1.1, 1.1],
+    #             [-0.5, 0.2, 0.65],
+    #             [-1.15, 0.0, 0.52],
+    #             [-1.15, 0.0, 1.1],
+    #             # [-0.0, -0.4, 1.1],
+    #             # [0.5, -0.4, 1.1],
+    #         ]
+    #     )
+    #     total_waypoints = 10
+    #     # random reset from waypoints
+    #     key, idx_key, rotor_key = jax.random.split(data.core.rng_key, 3)
+    #     data = data.replace(core=data.core.replace(rng_key=key))
+    #     rand_idx = jax.random.randint(idx_key, (data.core.n_worlds,), -5, waypoints.shape[0])
+    #     rand_idx = jp.clip(rand_idx, 0, waypoints.shape[0]-1)
+    #     pos_world = waypoints[rand_idx]  # (n_worlds, 3)
+    #     pos = jp.tile(pos_world[:, None, :], (1, data.core.n_drones, 1))  # (n_worlds, n_drones, 3)
+    #     data = data.replace(states=leaf_replace(data.states, mask, pos=pos))
+    #     # set steps according to the waypoint index
+    #     total_time = 15.0
+    #     total_steps = int(total_time * data.core.freq)
+    #     steps_mask = jp.ones((data.core.n_worlds, 1), dtype=bool) if mask is None else mask[:, None]
+    #     step_values = (rand_idx * total_steps // (total_waypoints-1))[:, None]
+    #     data = data.replace(core=data.core.replace(steps=jp.where(steps_mask, step_values, data.core.steps)))
+    #     # reset initial rotor velocity for easier takeoff
+    #     rotor_vel = jax.random.uniform(rotor_key, (data.core.n_worlds, data.core.n_drones, 1), minval=4000.0, maxval=8000.0) * jp.ones((1, 1, data.states.rotor_vel.shape[-1]))
+    #     data = data.replace(states=leaf_replace(data.states, mask, rotor_vel=rotor_vel))
+    #     return data
     
 # region Wrappers
-class ObsNoise(VectorObservationWrapper):
-    """Simple wrapper to add noise to the observations."""
+class ActionTransform(VectorActionWrapper):
+    """Wrapper to transform rotation vector to attitude commands."""
 
-    def __init__(self, env: VectorEnv, noise_std: float = 0.01):
-        """Wrap the environment to add noise to the observations."""
+    def __init__(self, env: VectorEnv):
         super().__init__(env)
-        self.noise_std = noise_std
-        self.prng_key = jax.random.PRNGKey(0)
+        self._action_scale = (1 / super().unwrapped.freq) * 5 * jp.pi
+        self._action_scale = jp.array(0.1)
+        # Compute scale and mean for rescaling
+        thrust_low = self.single_action_space.low[-1]
+        thrust_high = self.single_action_space.high[-1]
+        self._scale = jp.array((thrust_high - thrust_low) / 2.0, device=super().unwrapped.device)
+        self._mean = jp.array((thrust_high + thrust_low) / 2.0, device=super().unwrapped.device)
+        # Modify the wrapper's action space to [-1, 1]
+        self.single_action_space.low = -np.ones_like(self.single_action_space.low)
+        self.single_action_space.high = np.ones_like(self.single_action_space.high)
+        self.action_space = batch_space(self.single_action_space, self.num_envs)
 
-    def observations(self, observation: Array) -> Array:
-        """Add noise to the observations."""
-        self.prng_key, key = jax.random.split(self.prng_key)
-        noise = jax.random.normal(key, shape=observation.shape) * self.noise_std
-        return observation + noise
+    def actions(self, actions: Array) -> Array:
+        # rpy = jp.clip(actions[..., :3], -1.0, 1.0) * jp.pi/2
+        obs = super().unwrapped.obs()
+        rpy = self._action_rot2rpy(jp.array(obs["quat"]), actions[..., :3], self._action_scale)
+        # rpy = (R.from_matrix(obs["quat"].reshape(-1,3,3)) * R.from_rotvec(jp.clip(actions[..., :3], -1.0, 1.0) * self._action_scale)).as_euler("xyz")
+        # rpy = (R.from_rotvec(jp.clip(actions[..., :3], -1.0, 1.0) * self._action_scale)).as_euler("xyz")
+        # rpy = R.from_quat(obs["quat"]).as_euler("xyz") + actions[..., :3] * self._action_scale
+        rpy = rpy.at[..., 2].set(0.0)
+        actions = actions.at[..., :3].set(rpy)
+        th = jp.clip(actions[..., -1], -1.0, 1.0) * self._scale + self._mean
+        actions = actions.at[..., -1].set(th)
+        return actions
+    
+    @staticmethod
+    @jax.jit
+    def _action_rot2rpy(rot_mat, action_rot, action_scale):
+        rpy = (R.from_matrix(rot_mat.reshape(-1, 3, 3)) * R.from_rotvec(jp.clip(action_rot, -1.0, 1.0) * action_scale)).as_euler("xyz")
+        return rpy
+    
+class AngleReward(VectorRewardWrapper):
+    """Wrapper to penalize orientation in the reward."""
+    def __init__(self, env: VectorEnv, rpy_coef: float = 0.08):
+        super().__init__(env)
+        self.rpy_coef = rpy_coef
+
+    def step(self, actions: Array) -> tuple[Array, Array, Array, Array, dict]:
+        actions = actions.at[..., 2].set(0.0) # block yaw output because we don't need it
+        observations, rewards, terminations, truncations, infos = self.env.step(actions)
+        return observations, self.rewards(rewards, observations), terminations, truncations, infos
+    def rewards(self, rewards: Array, observations: dict[str, Array]) -> Array:
+        # apply rpy penalty
+        rpy_norm = jp.linalg.norm(R.from_quat(observations["quat"]).as_euler("xyz"), axis=-1)
+        rewards -= self.rpy_coef * rpy_norm
+        return rewards
     
 class FlattenJaxObservation(VectorObservationWrapper):
     """Wrapper to flatten the observations."""
@@ -347,20 +421,20 @@ class FlattenJaxObservation(VectorObservationWrapper):
             flat_obs.append(jp.reshape(v, (v.shape[0], -1)))
         return jp.concatenate(flat_obs, axis=-1)
     
-class AngleReward(VectorRewardWrapper):
-    """Wrapper to penalize orientation in the reward."""
-    def __init__(self, env: VectorEnv):
-        super().__init__(env)
+class ObsNoise(VectorObservationWrapper):
+    """Simple wrapper to add noise to the observations."""
 
-    def step(self, actions: Array) -> tuple[Array, Array, Array, Array, dict]:
-        actions = actions.at[..., 2].set(0.0) # block yaw output because we don't need it
-        observations, rewards, terminations, truncations, infos = self.env.step(actions)
-        return observations, self.rewards(rewards, observations), terminations, truncations, infos
-    def rewards(self, rewards: Array, observations: dict[str, Array]) -> Array:
-        # apply rpy penalty
-        rpy_norm = jp.linalg.norm(R.from_quat(observations["quat"]).as_euler("xyz"), axis=-1)
-        rewards -= 0.12 * rpy_norm
-        return rewards
+    def __init__(self, env: VectorEnv, noise_std: float = 0.01):
+        """Wrap the environment to add noise to the observations."""
+        super().__init__(env)
+        self.noise_std = noise_std
+        self.prng_key = jax.random.PRNGKey(0)
+
+    def observations(self, observation: Array) -> Array:
+        """Add noise to the observations."""
+        self.prng_key, key = jax.random.split(self.prng_key)
+        noise = jax.random.normal(key, shape=observation.shape) * self.noise_std
+        return observation + noise
     
 class ActionPenalty(VectorWrapper):
     """Wrapper to apply action penalty."""
@@ -385,10 +459,10 @@ class ActionPenalty(VectorWrapper):
         obs, reward, terminated, truncated, info = super().step(action)
         action_diff = action - self._last_action
         # energy
-        reward -= 0.08 * action[..., -1] ** 2
+        reward -= 0.04 * action[..., -1] ** 2
         # smoothness
-        reward -= 0.6 * action_diff[..., -1] ** 2
-        reward -= 1.1 * jp.sum(action_diff[..., :3] ** 2, axis=-1)
+        reward -= 0.4 * action_diff[..., -1] ** 2
+        reward -= 1.0 * jp.sum(action_diff[..., :3] ** 2, axis=-1)
         self._last_action = action
         # construct new obs
         obs = jp.concat([obs, self._last_action.reshape(self.num_envs, -1)], axis=-1)
@@ -520,11 +594,12 @@ def make_envs(
     #     env.unwrapped.sim.data = data.replace(params=data.params.replace(thrust_tau = 0.03))
     #     env.unwrapped.sim.build_default_data()
     
-    env = NormalizeActions(env)
-    env = AngleReward(env)
+    # env = NormalizeActions(env)
+    env = ActionTransform(env)
+    # env = AngleReward(env)
     env = FlattenJaxObservation(env)
-    env = ObsNoise(env, noise_std=0.01)
-    env = ActionPenalty(env)
+    # env = ObsNoise(env, noise_std=0.01)
+    # env = ActionPenalty(env)
     env = JaxToTorch(env, torch_device)
     return env
 
@@ -555,8 +630,8 @@ class Agent(nn.Module):
             nn.Tanh(),
         )
         self.actor_logstd = nn.Parameter(
-            # torch.zeros(1, torch.tensor(action_shape).prod())
-            torch.Tensor([[-1, -1, -1, 1]]) # start with smaller std for roll, pitch, yaw
+            torch.zeros(1, torch.tensor(action_shape).prod())
+            # torch.Tensor([[-1, -1, -1, 1]]) # start with smaller std for roll, pitch, yaw
         )
 
     def get_value(self, x: Tensor) -> Tensor:
@@ -574,28 +649,17 @@ class Agent(nn.Module):
             action = probs.sample() if not deterministic else action_mean
         return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
 
-def main(wandb_enabled: bool = True, train: bool = True, eval: int = 1):
-    args = Args()
-    args.batch_size = int(args.num_envs * args.num_steps)
-    args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.total_timesteps // args.batch_size
-    model_path = Path(__file__).parent / "ppo_drone_racing.ckpt"
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
-    jax_device = args.jax_device
-    if train:
-        if wandb_enabled:
-            import wandb
-
+# region Train
+def train_ppo(args, model_path, device, jax_device, wandb_enabled = False):
+        # train setup
+        if wandb_enabled and wandb.run is None:
             wandb.init(
                 project=args.wandb_project_name,
                 entity=args.wandb_entity,
                 config=vars(args),
             )
-        
         train_start_time = time.time()
-        
         set_seeds(args.seed) # TRY NOT TO MODIFY: seeding
-
         print("Training on device:", device, "| Environment device:", jax_device)
 
         # env setup
@@ -620,6 +684,7 @@ def main(wandb_enabled: bool = True, train: bool = True, eval: int = 1):
         next_obs = torch.Tensor(next_obs).to(device)
         next_done = torch.zeros(args.num_envs).to(device)
         sum_rewards = torch.zeros((args.num_envs)).to(device)
+        sum_rewards_hist = []
 
         for iteration in range(1, args.num_iterations + 1):
             start_time = time.time()
@@ -653,6 +718,7 @@ def main(wandb_enabled: bool = True, train: bool = True, eval: int = 1):
                 if wandb_enabled and next_done.any():
                     for r in sum_rewards[next_done.bool()]:
                         wandb.log({"train/reward": r.item()}, step=global_step)
+                        sum_rewards_hist.append(r.item())
 
             # bootstrap value if not done
             with torch.no_grad():
@@ -755,58 +821,75 @@ def main(wandb_enabled: bool = True, train: bool = True, eval: int = 1):
             print(f"Iter {iteration}/{args.num_iterations} took {end_time - start_time:.2f} seconds")
         train_end_time = time.time()
         print(f"Training for {global_step} steps took {train_end_time - train_start_time:.2f} seconds.")
-        if args.save_model:
+        if model_path is not None:
             torch.save(agent.state_dict(), model_path)
             print(f"model saved to {model_path}")
         envs.close()
 
-    if eval > 0:
-        set_seeds(args.seed)
-        with torch.no_grad():
-            eval_env = make_envs(num_envs=1, jax_device="cpu", torch_device="cpu")
-            eval_env = RecordData(eval_env)
-            agent    = Agent(eval_env.single_observation_space.shape, eval_env.single_action_space.shape).to("cpu")
-            agent.load_state_dict(torch.load(model_path))
-            episode_rewards = []
-            episode_lengths = []
-            ep_seed = args.seed
-            # Evaluate the policy
-            for episode in range(eval):
-                obs, _ = eval_env.reset(seed=(ep_seed:=ep_seed+1))
-                done = torch.zeros(10, dtype=bool, device=device)
-                episode_reward = 0
-                steps = 0
-                while not done.any():
-                    act, _, _, _ = agent.get_action_and_value(obs, deterministic=True)
-                    obs, reward, terminated, truncated, info = eval_env.step(act)
-                    eval_env.render()
+        return sum_rewards_hist
 
-                    done = terminated | truncated
-                    episode_reward += reward[0].item()
-                    steps += 1
-                episode_rewards.append(episode_reward)
-                episode_lengths.append(steps)
-                print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Length = {steps}")
+# region Evaluate
+def evaluate_ppo(args, n_eval, model_path, device):
+    set_seeds(args.seed)
+    device = torch.device("cpu")
+    with torch.no_grad():
+        eval_env = make_envs(num_envs=1, jax_device="cpu", torch_device=device)
+        eval_env = RecordData(eval_env)
+        agent    = Agent(eval_env.single_observation_space.shape, eval_env.single_action_space.shape).to(device)
+        agent.load_state_dict(torch.load(model_path))
+        episode_rewards = []
+        episode_lengths = []
+        ep_seed = args.seed
+        # Evaluate the policy
+        for episode in range(n_eval):
+            obs, _ = eval_env.reset(seed=(ep_seed:=ep_seed+1))
+            done = torch.zeros(10, dtype=bool, device=device)
+            episode_reward = 0
+            steps = 0
+            while not done.any():
+                act, _, _, _ = agent.get_action_and_value(obs, deterministic=True)
+                obs, reward, terminated, truncated, info = eval_env.step(act)
+                eval_env.render()
 
-            print(f"Average Reward = {np.mean(episode_rewards):.2f}, Length = {np.mean(episode_lengths)}")
+                done = terminated | truncated
+                episode_reward += reward[0].item()
+                steps += 1
+            episode_rewards.append(episode_reward)
+            episode_lengths.append(steps)
+            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Length = {steps}")
 
-            # plot figures, record RMSE
-            fig, _, _ = eval_env.plot_eval()
-            rmse_pos = eval_env.calc_rmse()
+        # plot figures, record RMSE
+        fig, _, _ = eval_env.plot_eval()
+        rmse_pos = eval_env.calc_rmse()
+        print(f"Average Reward = {np.mean(episode_rewards):.2f}, Length = {np.mean(episode_lengths)}, Pos RMSE = {rmse_pos:.2f} mm")
 
-            if wandb_enabled and train:
-                wandb.log(
-                    {
-                        "eval/eval_plot": wandb.Image(fig),
-                        "eval/pos_rmse_mm": rmse_pos * 1000,
-                        "eval/mean_rewards": np.mean(episode_rewards),
-                        "eval/mean_steps": np.mean(episode_lengths),
-                    }
-                )
-                wandb.finish()
         eval_env.close()
 
+        return fig, rmse_pos, episode_rewards, episode_lengths
 
+
+# region Main
+def main(wandb_enabled: bool = True, train: bool = True, eval: int = 1):
+    args = Args.create()
+    model_path = Path(__file__).parent / "ppo_drone_racing.ckpt"
+    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    jax_device = args.jax_device
+
+    if train: # use "--train False" to skip training
+        train_ppo(args, model_path, device, jax_device, wandb_enabled)
+
+    if eval > 0: # use "--eval <N>" to perform N evaluation episodes
+        fig, rmse_pos, episode_rewards, episode_lengths = evaluate_ppo(args, eval, model_path, device)
+        if wandb_enabled and train:
+            wandb.log(
+                {
+                    "eval/eval_plot": wandb.Image(fig),
+                    "eval/pos_rmse_mm": rmse_pos,
+                    "eval/mean_rewards": np.mean(episode_rewards),
+                    "eval/mean_steps": np.mean(episode_lengths),
+                }
+            )
+            wandb.finish()
 
 if __name__ == "__main__":
     fire.Fire(main)
