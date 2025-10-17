@@ -43,7 +43,7 @@ sensor_range = 0.7      # Range at which the exact location of gates and obstacl
 control_mode = "state"  # Control mode of the environment. Can be either "state" or "attitude"
 
 [env.track]
-randomize = false       # Randomized the positions (x & y) of the given gates, obstacles and drones 
+randomize = true        # Randomized the positions (x & y) of the given gates, obstacles and drones 
 
 # Tall gates: 1.195m height. Short gates: 0.695m height. Height is measured from the ground to the center of the gate.
 [[env.track.gates]]

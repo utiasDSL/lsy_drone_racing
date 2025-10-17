@@ -46,7 +46,7 @@ from lsy_drone_racing.envs.randomize import (
     randomize_gate_rpy_fn,
     randomize_obstacle_pos_fn,
 )
-from lsy_drone_racing.envs.utils import gate_passed, load_track
+from lsy_drone_racing.envs.utils import gate_passed, generate_random_track, load_track
 
 if TYPE_CHECKING:
     from crazyflow.sim.data import SimData
@@ -292,6 +292,7 @@ class RaceCoreEnv:
         self.autoreset = True  # Can be overridden by subclasses
         self.device = jax.devices(device)[0]
         self.sensor_range = sensor_range
+        track = generate_random_track(track, seed) if track.randomize else track
         self.gates, self.obstacles, self.drone = load_track(track)
         specs = {} if disturbances is None else disturbances
         self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
