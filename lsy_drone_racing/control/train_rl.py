@@ -3,7 +3,7 @@ import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 import fire
 import gymnasium as gym
@@ -101,6 +101,13 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
+    # Reward coefficients
+    r_rpy_coef: float = 0.04
+    r_smoothness_xy_coef: float = 0.8
+    r_smoothness_th_coef: float = 0.4
+    r_energy_coef: float = 0.02
+    """reward coefficients for training"""
+
     @staticmethod
     def create(**kwargs: Any) -> "Args":
         args = Args(**kwargs)
@@ -120,11 +127,11 @@ class RandTrajEnv(DroneEnv):
     def __init__(
         self,
         n_samples: int = 10,
-        trajectory_time: float = 10.0,
+        trajectory_time: float = 15.0,
         samples_dt: float = 0.1,
         *,
         num_envs: int = 1,
-        max_episode_time: float = 10.0,
+        max_episode_time: float = 15.0,
         physics: Literal["so_rpy_rotor_drag", "first_principles"] | Physics = Physics.first_principles,
         drone_model: str = "cf21B_500",
         freq: int = 500,
@@ -144,6 +151,9 @@ class RandTrajEnv(DroneEnv):
             freq: Frequency of the simulation.
             device: Device to use for the simulation.
         """
+        # Build reset randomization function
+        self._reset_randomization = self.build_reset_randomization_fn(physics)
+
         super().__init__(
             num_envs=num_envs,
             max_episode_time=max_episode_time,
@@ -151,6 +161,7 @@ class RandTrajEnv(DroneEnv):
             drone_model=drone_model,
             freq=freq,
             device=device,
+            reset_randomization=self._reset_randomization,
         )
         if trajectory_time < self.max_episode_time:
             raise ValueError("Trajectory time must be greater than max episode time")
@@ -168,40 +179,6 @@ class RandTrajEnv(DroneEnv):
         self.sim.data = data.replace(states=data.states.replace(pos=np.broadcast_to(self.takeoff_pos, (data.core.n_worlds, data.core.n_drones, 3))))
         self.sim.build_default_data()
 
-        # # Same waypoints as in the trajectory controller. Determined by trial and error.
-        # waypoints = np.array(
-        #     [
-        #         [-1.5, 1.0, 0.05],
-        #         [-1.0, 0.8, 0.2],
-        #         [0.3, 0.55, 0.5],
-        #         [1.3, 0.2, 0.65],
-        #         [0.85, 1.1, 1.1],
-        #         [-0.5, 0.2, 0.65],
-        #         [-1.15, 0.0, 0.52],
-        #         [-1.15, 0.0, 1.1],
-        #         [-0.0, -0.4, 1.1],
-        #         [0.5, -0.4, 1.1],
-        #     ]
-        # )
-        # # Generate spline trajectory
-        # ts = np.linspace(0, self.trajectory_time, int(self.freq * self.trajectory_time))
-        # spline = CubicSpline(np.linspace(0, self.trajectory_time, waypoints.shape[0]), waypoints)
-        # self.trajectory = spline(ts)  # (n_steps, 3)
-        # self.trajectories = np.tile(self.trajectory[None, :, :], (num_envs, 1, 1)) # (num_envs, n_steps, 3)
-
-        # Create a random trajectory based on spline interpolation
-        n_steps = int(np.ceil(self.trajectory_time * self.freq))
-        t = np.linspace(0, self.trajectory_time, n_steps)
-        # Random control points
-        scale = np.array([1.2, 1.2, 0.5])
-        waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
-        waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
-        waypoints[:, :3, :] = np.array([[-1.5, 1.0, 0.05],[-1.0, 0.8, 0.2],[0.3, 0.55, 0.5]]) # set first three waypoints
-        v0 = np.tile(np.array([[0.0, 0.0, 0.4]]), (self.sim.n_worlds, 1)) # takeoff velocity
-        spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1, bc_type=((1, v0), 'not-a-knot'))
-        self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
-
-        disturbances = None
         # Apply disturbances specified for racing
         specs = {} if disturbances is None else disturbances
         self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
@@ -222,9 +199,6 @@ class RandTrajEnv(DroneEnv):
     def reset(
         self, *, seed: int | None = None, options: dict | None = None
     ) -> tuple[dict[str, Array], dict]:
-        super().reset(seed=seed)
-        if seed is not None:
-            self.sim.seed(seed)
         # Create a random trajectory based on spline interpolation
         n_steps = int(np.ceil(self.trajectory_time * self.freq))
         t = np.linspace(0, self.trajectory_time, n_steps)
@@ -232,11 +206,14 @@ class RandTrajEnv(DroneEnv):
         scale = np.array([1.2, 1.2, 0.5])
         waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
         waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
-        waypoints[:, :3, :] = np.array([[-1.5, 1.0, 0.05],[-1.0, 0.8, 0.2],[0.3, 0.55, 0.5]]) # set first three waypoints
+        waypoints[:, :3, :] = np.array([[-1.5, 1.0, 0.07],[-1.0, 0.55, 0.4],[0.3, 0.35, 0.7]]) # set first three waypoints
         v0 = np.tile(np.array([[0.0, 0.0, 0.4]]), (self.sim.n_worlds, 1)) # takeoff velocity
         spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1, bc_type=((1, v0), 'not-a-knot'))
         self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
 
+        super().reset(seed=seed)
+        if seed is not None:
+            self.sim.seed(seed)
         self._reset(options=options) # call jax rest function
         self._marked_for_reset = self._marked_for_reset.at[...].set(False)
         return self.obs(), {}
@@ -295,15 +272,25 @@ class RandTrajEnv(DroneEnv):
         terminate = jp.any((pos[:, 0, :] < lower_bounds) | (pos[:, 0, :] > upper_bounds), axis=-1)
         return terminate
 
-    @staticmethod
-    def _reset_randomization(data: SimData, mask: Array) -> SimData:
-        """Reload this function to disable reset randomization."""
-        return data
+    def build_reset_randomization_fn(self, physics: str) -> Callable[[SimData, Array], SimData]:
+        def _reset_randomization_so_rpy(data: SimData, mask: Array) -> SimData:
+            return data
+        def _reset_randomization_first_principles(data: SimData, mask: Array) -> SimData:
+            rotor_vel = 10000.0 * jp.ones((data.core.n_worlds, data.core.n_drones, data.states.rotor_vel.shape[-1]))
+            data = data.replace(states=leaf_replace(data.states, mask, rotor_vel=rotor_vel))
+            return data
+        match physics:
+            case "so_rpy" | "so_rpy_rotor" | "so_rpy_rotor_drag":
+                return _reset_randomization_so_rpy
+            case "first_principles":
+                return _reset_randomization_first_principles
+            case _:
+                return _reset_randomization_so_rpy
     
 # region Wrappers
 class AngleReward(VectorRewardWrapper):
     """Wrapper to penalize orientation in the reward."""
-    def __init__(self, env: VectorEnv, rpy_coef: float = 0.02):
+    def __init__(self, env: VectorEnv, rpy_coef: float = 0.08):
         super().__init__(env)
         self.rpy_coef = rpy_coef
 
@@ -329,21 +316,6 @@ class FlattenJaxObservation(VectorObservationWrapper):
         for k, v in observations.items():
             flat_obs.append(jp.reshape(v, (v.shape[0], -1)))
         return jp.concatenate(flat_obs, axis=-1)
-    
-class ObsNoise(VectorObservationWrapper):
-    """Simple wrapper to add noise to the observations."""
-
-    def __init__(self, env: VectorEnv, noise_std: float = 0.01):
-        """Wrap the environment to add noise to the observations."""
-        super().__init__(env)
-        self.noise_std = noise_std
-        self.prng_key = jax.random.PRNGKey(0)
-
-    def observations(self, observation: Array) -> Array:
-        """Add noise to the observations."""
-        self.prng_key, key = jax.random.split(self.prng_key)
-        noise = jax.random.normal(key, shape=observation.shape) * self.noise_std
-        return observation + noise
     
 class ActionPenalty(VectorWrapper):
     """Wrapper to apply action penalty."""
@@ -501,21 +473,15 @@ def make_envs(
         disturbances=config.env.disturbances,
         device=jax_device,
     )
-    # if config.sim.physics == "first_principles":
-    #     # increase motor time constant for more realistic motor dynamics
-    #     data = env.unwrapped.sim.data
-    #     env.unwrapped.sim.data = data.replace(params=data.params.replace(thrust_tau = 0.03))
-    #     env.unwrapped.sim.build_default_data()
     
     env = NormalizeActions(env)
-    env = AngleReward(env, rpy_coef=coefs.get("rpy_coef", 0.0))
+    env = AngleReward(env, rpy_coef=coefs.get("r_rpy_coef", 0.04))
     env = FlattenJaxObservation(env)
-    # env = ObsNoise(env, noise_std=0.01)
     env = ActionPenalty(
-        env, 
-        energy_coef=coefs.get("energy_coef", 0.04),
-        smoothness_th_coef=coefs.get("smoothness_th_coef", 0.2), 
-        smoothness_xy_coef=coefs.get("smoothness_xy_coef", 0.4)
+        env,
+        energy_coef=coefs.get("r_energy_coef", 0.04),
+        smoothness_th_coef=coefs.get("r_smoothness_th_coef", 0.4),
+        smoothness_xy_coef=coefs.get("r_smoothness_xy_coef", 1.0),
     )
     env = JaxToTorch(env, torch_device)
     return env
@@ -547,8 +513,7 @@ class Agent(nn.Module):
             nn.Tanh(),
         )
         self.actor_logstd = nn.Parameter(
-            torch.zeros(1, torch.tensor(action_shape).prod())
-            # torch.Tensor([[-1, -1, -1, 1]]) # start with smaller std for roll, pitch, yaw
+            torch.Tensor([[-1, -1, -1, 1]]) # start with smaller std for roll, pitch, yaw
         )
 
     def get_value(self, x: Tensor) -> Tensor:
@@ -580,7 +545,13 @@ def train_ppo(args, model_path, device, jax_device, wandb_enabled = False):
         print("Training on device:", device, "| Environment device:", jax_device)
 
         # env setup
-        envs = make_envs(num_envs=args.num_envs, jax_device=jax_device, torch_device=device, )
+        r_coefs = {
+            "r_rpy_coef": args.r_rpy_coef,
+            "r_smoothness_xy_coef": args.r_smoothness_xy_coef,
+            "r_smoothness_th_coef": args.r_smoothness_th_coef,
+            "r_energy_coef": args.r_energy_coef,
+        }
+        envs = make_envs(num_envs=args.num_envs, jax_device=jax_device, torch_device=device, coefs=r_coefs)
         assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
         agent = Agent(envs.single_observation_space.shape, envs.single_action_space.shape).to(device)

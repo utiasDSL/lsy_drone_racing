@@ -107,8 +107,8 @@ class AttitudeRL(Controller):
         obs_rl = torch.tensor(obs_rl, dtype=torch.float32).unsqueeze(0).to("cpu")
         with torch.no_grad():
             act, _, _, _ = self.agent.get_action_and_value(obs_rl, deterministic=True)
+            self.last_action = np.asarray(torch.asarray(act.squeeze(0))).copy()
             act[..., 2] = 0.0
-            self.last_action = act.squeeze(0).numpy()
 
         act = self._scale_actions(act.squeeze(0).numpy()).astype(np.float32)
 
