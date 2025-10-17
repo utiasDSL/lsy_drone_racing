@@ -10,16 +10,13 @@ Note that the trajectory uses pre-defined waypoints instead of dynamically gener
 
 from __future__ import annotations  # Python 3.10 type hints
 
-import math
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
-from crazyflow.sim.visualize import draw_line, draw_points
 from drone_models.core import load_params
 from scipy.interpolate import CubicSpline
-from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.control import Controller
 from lsy_drone_racing.control.train_rl import Agent

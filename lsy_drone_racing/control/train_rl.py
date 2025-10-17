@@ -1,4 +1,4 @@
-# docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_continuous_actionpy
+"""A naive RL pipeline for drone racing."""
 import random
 import time
 from dataclasses import dataclass
@@ -22,14 +22,12 @@ from crazyflow.utils import leaf_replace
 from gymnasium import spaces
 from gymnasium.spaces import flatten_space
 from gymnasium.vector import (
-    VectorActionWrapper,
     VectorEnv,
     VectorObservationWrapper,
     VectorRewardWrapper,
     VectorWrapper,
 )
 from gymnasium.vector.utils import batch_space
-from gymnasium.wrappers.vector.array_conversion import ArrayConversion
 from gymnasium.wrappers.vector.jax_to_torch import JaxToTorch
 from jax import Array
 from jax.scipy.spatial.transform import Rotation as R
@@ -46,6 +44,7 @@ from lsy_drone_racing.utils import load_config
 # region Arguments
 @dataclass
 class Args:
+    """Class to store configurations."""
     seed: int = 42
     """seed of the experiment"""
     torch_deterministic: bool = True
@@ -56,7 +55,7 @@ class Args:
     """environment device"""
     wandb_project_name: str = "ADR-PPO-Racing"
     """the wandb's project name"""
-    wandb_entity: str = "fresssack"
+    wandb_entity: str = None
     """the entity (team) of wandb's project"""
 
     # Algorithm specific arguments
@@ -110,6 +109,7 @@ class Args:
 
     @staticmethod
     def create(**kwargs: Any) -> "Args":
+        """Create arguments class."""
         args = Args(**kwargs)
         args.batch_size = int(args.num_envs * args.num_steps)
         args.minibatch_size = int(args.batch_size // args.num_minibatches)
@@ -149,6 +149,7 @@ class RandTrajEnv(DroneEnv):
             physics: Physics backend to use.
             drone_model: Drone model of the environment.
             freq: Frequency of the simulation.
+            disturbances: Disturbance configuration.
             device: Device to use for the simulation.
         """
         # Override reset randomization function
@@ -199,6 +200,7 @@ class RandTrajEnv(DroneEnv):
     def reset(
         self, *, seed: int | None = None, options: dict | None = None
     ) -> tuple[dict[str, Array], dict]:
+        """Reset."""
         # Create a random trajectory based on spline interpolation
         n_steps = int(np.ceil(self.trajectory_time * self.freq))
         t = np.linspace(0, self.trajectory_time, n_steps)
@@ -218,6 +220,7 @@ class RandTrajEnv(DroneEnv):
         return self.obs(), {}
 
     def render(self):
+        """Render."""
         idx = np.clip(self.steps + self.sample_offsets[None, ...], 0, self.trajectories[0].shape[0] - 1)
         next_trajectory = self.trajectories[np.arange(self.trajectories.shape[0])[:, None], idx]
         draw_line(self.sim, self.trajectories[0, 0:-1:2, :], rgba=np.array([1,1,1,0.4]), start_size=2.0, end_size=2.0)
@@ -226,6 +229,7 @@ class RandTrajEnv(DroneEnv):
         self.sim.render()
 
     def obs(self) -> dict[str, Array]:
+        """Observations."""
         obs = super().obs()
         idx = np.clip(self.steps + self.sample_offsets[None, ...], 0, self.trajectories[0].shape[0] - 1)
         dpos = self.trajectories[np.arange(self.trajectories.shape[0])[:, None], idx] - self.sim.data.states.pos
@@ -234,6 +238,7 @@ class RandTrajEnv(DroneEnv):
         return obs
 
     def reward(self) -> Array:
+        """Rewards."""
         obs = self.obs()
         pos = obs["pos"] # (num_envs, 3)
         goal = self.trajectories[np.arange(self.trajectories.shape[0])[:, None], self.steps][:, 0, :] # (num_envs, 3)
@@ -272,6 +277,7 @@ class RandTrajEnv(DroneEnv):
         return terminate
 
     def build_reset_randomization_fn(self, physics: str) -> Callable[[SimData, Array], SimData]:
+        """Reset randomization."""
         # Spin up rotors to help takeoff
         def _reset_randomization_so_rpy(data: SimData, mask: Array) -> SimData:
             rotor_vel = 0.05 * jp.ones((data.core.n_worlds, data.core.n_drones, data.states.rotor_vel.shape[-1]))
@@ -293,14 +299,17 @@ class RandTrajEnv(DroneEnv):
 class AngleReward(VectorRewardWrapper):
     """Wrapper to penalize orientation in the reward."""
     def __init__(self, env: VectorEnv, rpy_coef: float = 0.08):
+        """Init."""
         super().__init__(env)
         self.rpy_coef = rpy_coef
 
     def step(self, actions: Array) -> tuple[Array, Array, Array, Array, dict]:
+        """Set yaw command to zero."""
         actions = actions.at[..., 2].set(0.0) # block yaw output because we don't need it
         observations, rewards, terminations, truncations, infos = self.env.step(actions)
         return observations, self.rewards(rewards, observations), terminations, truncations, infos
     def rewards(self, rewards: Array, observations: dict[str, Array]) -> Array:
+        """Additional angular rewards."""
         # apply rpy penalty
         rpy_norm = jp.linalg.norm(R.from_quat(observations["quat"]).as_euler("xyz"), axis=-1)
         rewards -= self.rpy_coef * rpy_norm
@@ -309,11 +318,13 @@ class AngleReward(VectorRewardWrapper):
 class FlattenJaxObservation(VectorObservationWrapper):
     """Wrapper to flatten the observations."""
     def __init__(self, env: VectorEnv):
+        """Init."""
         super().__init__(env)
         self.single_observation_space = flatten_space(env.single_observation_space)
         self.observation_space = flatten_space(env.observation_space)
 
     def observations(self, observations: dict) -> dict:
+        """Flatten observations."""
         flat_obs = []
         for k, v in observations.items():
             flat_obs.append(jp.reshape(v, (v.shape[0], -1)))
@@ -321,9 +332,8 @@ class FlattenJaxObservation(VectorObservationWrapper):
     
 class ActionPenalty(VectorWrapper):
     """Wrapper to apply action penalty."""
-
     def __init__(self, env: VectorEnv, energy_coef: float = 0.01, smoothness_th_coef: float = 0.2, smoothness_xy_coef: float = 0.4):
-        """Wrap the environment to apply action penalty."""
+        """Init."""
         super().__init__(env)
         assert isinstance(env.single_action_space, spaces.Box)
         assert env.single_action_space.shape[0] == 4
@@ -336,12 +346,14 @@ class ActionPenalty(VectorWrapper):
         self.smoothness_th_coef = smoothness_th_coef
         self.smoothness_xy_coef = smoothness_xy_coef
 
-    def reset(self, *, seed: int | None = None, options: dict | None = None):
+    def reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict[str, Array], dict]:
+        """Override reset."""
         obs, info = super().reset(seed=seed, options=options)
         obs = jp.concat([obs, self._last_action.reshape(self.num_envs, -1)], axis=-1)
         return obs, info
 
     def step(self, action: Array) -> tuple[Array, Array, Array, Array, dict]:
+        """Override step."""
         obs, reward, terminated, truncated, info = super().step(action)
         action_diff = action - self._last_action
         # energy
@@ -353,100 +365,6 @@ class ActionPenalty(VectorWrapper):
         # construct new obs
         obs = jp.concat([obs, self._last_action.reshape(self.num_envs, -1)], axis=-1)
         return obs, reward, terminated, truncated, info
-    
-class RecordData(VectorWrapper):
-    """Wrapper to record usefull data for debugging."""
-
-    def __init__(self, env: VectorEnv):
-        super().__init__(env)
-        self._record_act  = []
-        self._record_pos  = []
-        self._record_goal = []
-        self._record_rpy  = []
-
-    def step(self, actions: Any):
-        obs, rewards, terminated, truncated, infos = self.env.step(actions)
-        raw_env = self.env.unwrapped
-
-        act = np.asarray(actions)
-        self._record_act.append(act.copy())
-        pos = np.asarray(raw_env.sim.data.states.pos[:, 0, :])   # shape: (n_worlds, 3)
-        self._record_pos.append(pos.copy())
-        goal = np.asarray(raw_env.trajectories[np.arange(raw_env.steps.shape[0]), raw_env.steps.squeeze(1)])
-        self._record_goal.append(goal.copy())
-        rpy = np.asarray(R.from_quat(raw_env.sim.data.states.quat[:, 0, :]).as_euler("xyz"))
-        self._record_rpy.append(rpy.copy())
-
-        return obs, rewards, terminated, truncated, infos
-    
-    def calc_rmse(self):
-        # compute rmse for all worlds
-        pos = np.array(self._record_pos)     # shape: (T, num_envs, 3)
-        goal = np.array(self._record_goal)   # shape: (T, num_envs, 3)
-        pos_err = np.linalg.norm(pos - goal, axis=-1)  # shape: (T, num_envs)
-        rmse = np.sqrt(np.mean(pos_err ** 2))*1000 # mm
-
-        return rmse
-    
-    def plot_eval(self, save_path: str = "eval_plot.png"):
-        import matplotlib
-        matplotlib.use("Agg")  # render to raster images
-        import matplotlib.pyplot as plt
-        actions = np.array(self._record_act)
-        pos = np.array(self._record_pos)
-        goal = np.array(self._record_goal)
-        rpy = np.array(self._record_rpy)
-
-        # Plot the actions over time
-        fig, axes = plt.subplots(3, 4, figsize=(18, 12))
-        axes = axes.flatten()
-
-        action_labels = ["Roll", "Pitch", "Yaw", "Thrust"]
-        for i in range(4):
-            axes[i].plot(actions[:, 0, i])
-            axes[i].set_title(f"{action_labels[i]} Command")
-            axes[i].set_xlabel("Time Step")
-            axes[i].set_ylabel("Action Value")
-            axes[i].grid(True)
-
-        # Plot position components
-        position_labels = ["X Position", "Y Position", "Z Position"]
-        for i in range(3):
-            axes[4 + i].plot(pos[:, 0, i])
-            axes[4 + i].set_title(position_labels[i])
-            axes[4 + i].set_xlabel("Time Step")
-            axes[4 + i].set_ylabel("Position (m)")
-            axes[4 + i].grid(True)
-        # Plot goal position components in same plots
-        for i in range(3):
-            axes[4 + i].plot(goal[:, 0, i], linestyle="--")
-            axes[4 + i].legend(["Position", "Goal"])
-        # Plot error in position
-        pos_err = np.linalg.norm(pos[:, 0] - goal[:, 0], axis=1)
-        axes[7].plot(pos_err)
-        axes[7].set_title("Position Error")
-        axes[7].set_xlabel("Time Step")
-        axes[7].set_ylabel("Error (m)")
-        axes[7].grid(True)
-
-        # Plot angle components (roll, pitch, yaw)
-        rpy_labels = ["Roll", "Pitch", "Yaw"]
-        for i in range(3):
-            axes[8 + i].plot(rpy[:, 0, i])
-            axes[8 + i].set_title(f"{rpy_labels[i]} Angle")
-            axes[8 + i].set_xlabel("Time Step")
-            axes[8 + i].set_ylabel("Angle (rad)")
-            axes[8 + i].grid(True)
-
-        # compute RMSE for position
-        rmse_pos = np.sqrt(np.mean(pos_err**2))
-        axes[11].text(0.1, 0.5, f"Position RMSE: {rmse_pos*1000:.3f} mm", fontsize=14)
-        axes[11].axis("off")
-
-        plt.tight_layout()
-        plt.savefig(Path(__file__).parent / save_path)
-
-        return fig, axes, rmse_pos
     
 def set_seeds(seed: int):
     """Seed everything."""
@@ -465,6 +383,7 @@ def make_envs(
         torch_device: str = "cpu",
         coefs: dict = {},
     ) -> VectorEnv:
+    """Make environments for training RL policy."""
     config = load_config(Path(__file__).parents[2] / "config" / config)
     env = RandTrajEnv(
         n_samples=10,
@@ -488,14 +407,17 @@ def make_envs(
     env = JaxToTorch(env, torch_device)
     return env
 
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+def layer_init(layer: nn.Module, std: float = np.sqrt(2), bias_const: float = 0.0) -> nn.Module:
+    """Initialize layer."""
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
 
 # region Agent
 class Agent(nn.Module):
+    """RL Agent."""
     def __init__(self, obs_shape:tuple, action_shape:tuple):
+        """Init network structures."""
         super().__init__()
         self.critic = nn.Sequential(
             layer_init(nn.Linear(torch.tensor(obs_shape).prod(), 64)),
@@ -519,11 +441,13 @@ class Agent(nn.Module):
         )
 
     def get_value(self, x: Tensor) -> Tensor:
+        """Value estimation."""
         return self.critic(x)
 
     def get_action_and_value(
         self, x: Tensor, action: Tensor | None = None, deterministic: bool = False
     ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        """Action output."""
         action_mean = self.actor_mean(x)
         action_logstd = self.actor_logstd.expand_as(action_mean)
         action_std = torch.exp(action_logstd)
@@ -534,7 +458,11 @@ class Agent(nn.Module):
         return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
 
 # region Train
-def train_ppo(args, model_path, device, jax_device, wandb_enabled = False):
+def train_ppo(args: Args, model_path: Path, device: torch.device, jax_device: str, wandb_enabled: bool = False) -> None:
+        """Train.
+
+        An implementation of PPO from cleanrl, see https://docs.cleanrl.dev/.
+        """
         # train setup
         if wandb_enabled and wandb.run is None:
             wandb.init(
@@ -719,12 +647,12 @@ def train_ppo(args, model_path, device, jax_device, wandb_enabled = False):
         return sum_rewards_hist
 
 # region Evaluate
-def evaluate_ppo(args, n_eval, model_path):
+def evaluate_ppo(args: Args, n_eval: int, model_path: Path) -> tuple[float, float]:
+    """Evaluate."""
     set_seeds(args.seed)
     device = torch.device("cpu")
     with torch.no_grad():
         eval_env = make_envs(num_envs=1, jax_device="cpu", torch_device=device)
-        eval_env = RecordData(eval_env)
         agent    = Agent(eval_env.single_observation_space.shape, eval_env.single_action_space.shape).to(device)
         agent.load_state_dict(torch.load(model_path))
         episode_rewards = []
@@ -740,7 +668,6 @@ def evaluate_ppo(args, n_eval, model_path):
                 act, _, _, _ = agent.get_action_and_value(obs, deterministic=True)
                 obs, reward, terminated, truncated, info = eval_env.step(act)
                 eval_env.render()
-
                 done = terminated | truncated
                 episode_reward += reward[0].item()
                 steps += 1
@@ -748,18 +675,14 @@ def evaluate_ppo(args, n_eval, model_path):
             episode_lengths.append(steps)
             print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Length = {steps}")
 
-        # plot figures, record RMSE
-        fig, _, _ = eval_env.plot_eval()
-        rmse_pos = eval_env.calc_rmse()
-        print(f"Average Reward = {np.mean(episode_rewards):.2f}, Length = {np.mean(episode_lengths)}, Pos RMSE = {rmse_pos:.2f} mm")
-
+        print(f"Average Reward = {np.mean(episode_rewards):.2f}, Length = {np.mean(episode_lengths)}")
         eval_env.close()
 
-        return fig, rmse_pos, episode_rewards, episode_lengths
-
+        return episode_rewards, episode_lengths
 
 # region Main
 def main(wandb_enabled: bool = True, train: bool = True, eval: int = 1):
+    """Main."""
     args = Args.create()
     model_path = Path(__file__).parent / "ppo_drone_racing.ckpt"
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
@@ -769,12 +692,10 @@ def main(wandb_enabled: bool = True, train: bool = True, eval: int = 1):
         train_ppo(args, model_path, device, jax_device, wandb_enabled)
 
     if eval > 0: # use "--eval <N>" to perform N evaluation episodes
-        fig, rmse_pos, episode_rewards, episode_lengths = evaluate_ppo(args, eval, model_path)
+        episode_rewards, episode_lengths = evaluate_ppo(args, eval, model_path)
         if wandb_enabled and train:
             wandb.log(
                 {
-                    "eval/eval_plot": wandb.Image(fig),
-                    "eval/pos_rmse_mm": rmse_pos,
                     "eval/mean_rewards": np.mean(episode_rewards),
                     "eval/mean_steps": np.mean(episode_lengths),
                 }

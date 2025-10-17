@@ -1,3 +1,4 @@
+"""Sweep it!"""
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,7 @@ from lsy_drone_racing.control.train_rl import Args, evaluate_ppo, train_ppo  # n
 
 # 1: Define objective/training function
 def train():
+    """Train."""
     with wandb.init(project="ADR-PPO-sweep-racing") as run:
         args = Args.create(**dict(run.config))
         model_path = Path(__file__).parent / "ppo_drone_racing.ckpt"
