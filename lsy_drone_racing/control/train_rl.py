@@ -60,7 +60,7 @@ class Args:
     """the entity (team) of wandb's project"""
 
     # Algorithm specific arguments
-    total_timesteps: int = 2_000_000
+    total_timesteps: int = 1_500_000
     """total timesteps of the experiments"""
     learning_rate: float = 1.5e-3
     """the learning rate of the optimizer"""
@@ -102,9 +102,9 @@ class Args:
     """the number of iterations (computed in runtime)"""
 
     # Reward coefficients
-    r_rpy_coef: float = 0.04
-    r_smoothness_xy_coef: float = 0.8
+    r_rpy_coef: float = 0.06
     r_smoothness_th_coef: float = 0.4
+    r_smoothness_xy_coef: float = 1.0
     r_energy_coef: float = 0.02
     """reward coefficients for training"""
 
@@ -151,7 +151,7 @@ class RandTrajEnv(DroneEnv):
             freq: Frequency of the simulation.
             device: Device to use for the simulation.
         """
-        # Build reset randomization function
+        # Override reset randomization function
         self._reset_randomization = self.build_reset_randomization_fn(physics)
 
         super().__init__(
@@ -202,7 +202,6 @@ class RandTrajEnv(DroneEnv):
         # Create a random trajectory based on spline interpolation
         n_steps = int(np.ceil(self.trajectory_time * self.freq))
         t = np.linspace(0, self.trajectory_time, n_steps)
-        # Random control points
         scale = np.array([1.2, 1.2, 0.5])
         waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
         waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
@@ -273,17 +272,20 @@ class RandTrajEnv(DroneEnv):
         return terminate
 
     def build_reset_randomization_fn(self, physics: str) -> Callable[[SimData, Array], SimData]:
+        # Spin up rotors to help takeoff
         def _reset_randomization_so_rpy(data: SimData, mask: Array) -> SimData:
+            rotor_vel = 0.05 * jp.ones((data.core.n_worlds, data.core.n_drones, data.states.rotor_vel.shape[-1]))
+            data = data.replace(states=leaf_replace(data.states, mask, rotor_vel=rotor_vel))
             return data
         def _reset_randomization_first_principles(data: SimData, mask: Array) -> SimData:
             rotor_vel = 10000.0 * jp.ones((data.core.n_worlds, data.core.n_drones, data.states.rotor_vel.shape[-1]))
             data = data.replace(states=leaf_replace(data.states, mask, rotor_vel=rotor_vel))
             return data
         match physics:
-            case "so_rpy" | "so_rpy_rotor" | "so_rpy_rotor_drag":
-                return _reset_randomization_so_rpy
             case "first_principles":
                 return _reset_randomization_first_principles
+            case "so_rpy" | "so_rpy_rotor" | "so_rpy_rotor_drag":
+                return _reset_randomization_so_rpy
             case _:
                 return _reset_randomization_so_rpy
     
@@ -496,19 +498,19 @@ class Agent(nn.Module):
     def __init__(self, obs_shape:tuple, action_shape:tuple):
         super().__init__()
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(torch.tensor(obs_shape).prod(), 128)),
+            layer_init(nn.Linear(torch.tensor(obs_shape).prod(), 64)),
             nn.Tanh(),
-            layer_init(nn.Linear(128, 128)),
+            layer_init(nn.Linear(64, 64)),
             nn.Tanh(),
-            layer_init(nn.Linear(128, 1), std=1.0),
+            layer_init(nn.Linear(64, 1), std=1.0),
         )
         self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(torch.tensor(obs_shape).prod(), 128)),
+            layer_init(nn.Linear(torch.tensor(obs_shape).prod(), 64)),
             nn.Tanh(),
-            layer_init(nn.Linear(128, 128)),
+            layer_init(nn.Linear(64, 64)),
             nn.Tanh(),
             layer_init(
-                nn.Linear(128, torch.tensor(action_shape).prod()), std=0.01
+                nn.Linear(64, torch.tensor(action_shape).prod()), std=0.01
             ),
             nn.Tanh(),
         )

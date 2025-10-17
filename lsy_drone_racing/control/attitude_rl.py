@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 class AttitudeRL(Controller):
     """Example of a controller using the collective thrust and attitude interface."""
 
-    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict, sim: object = None):
+    def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialize the attitude controller.
 
         Args:
@@ -83,9 +83,6 @@ class AttitudeRL(Controller):
         
         self._finished = False
 
-        self.sim = sim  # For visualization
-
-
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
     ) -> NDArray[np.floating]:
@@ -111,8 +108,6 @@ class AttitudeRL(Controller):
             act[..., 2] = 0.0
 
         act = self._scale_actions(act.squeeze(0).numpy()).astype(np.float32)
-
-        self._render()
         
         return act
     
@@ -134,14 +129,6 @@ class AttitudeRL(Controller):
         scale = np.array([np.pi/2, np.pi/2, np.pi/2, (self.thrust_max - self.thrust_min) / 2.0], dtype=np.float32)
         mean = np.array([0.0, 0.0, 0.0, (self.thrust_max + self.thrust_min) / 2.0], dtype=np.float32)
         return np.clip(actions, -1.0, 1.0) * scale + mean
-    
-    def _render(self):
-        """Render the trajectory and the next waypoints."""
-        idx = np.clip(self._tick + self.sample_offsets, 0, self.trajectory.shape[0] - 1)
-        next_trajectory = self.trajectory[idx]
-        draw_line(self.sim, self.trajectory[0:-1:2, :], rgba=np.array([1,1,1,0.4]), start_size=2.0, end_size=2.0)
-        draw_line(self.sim, next_trajectory, rgba=np.array([1,0,0,1]), start_size=3.0, end_size=3.0)
-        draw_points(self.sim, next_trajectory, rgba=np.array([1.0, 0, 0, 1]), size=0.01)
 
     def step_callback(
         self,
