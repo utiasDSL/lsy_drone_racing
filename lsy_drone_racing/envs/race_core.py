@@ -240,7 +240,7 @@ class RaceCoreEnv:
         control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
-        seed: int = 1337,
+        seed: str | int = "random",
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
     ):
@@ -256,12 +256,16 @@ class RaceCoreEnv:
             track: Track configuration.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
-            seed: Random seed of the environment.
+            seed: "random" for a generated seed or the random seed directly.
             max_episode_steps: Maximum number of steps per episode. Needs to be tracked manually for
                 vectorized environments.
             device: Device used for the environment and the simulation.
         """
         super().__init__()
+        if type(seed) is str:
+            seed: int = np.random.SeedSequence().entropy if seed == "random" else hash(seed)
+            seed &= 0xFFFFFFFF  # Limit seed to 32 bit for jax.random
+            print(seed)
         self.sim = Sim(
             n_worlds=n_envs,
             n_drones=n_drones,

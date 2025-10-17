@@ -33,7 +33,7 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
-        seed: int = 1337,
+        seed: str | int = "random",
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
     ):
@@ -47,7 +47,7 @@ class DroneRaceEnv(RaceCoreEnv, Env):
             control_mode: Control mode for the drones. See `build_action_space` for details.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
-            seed: Random seed.
+            seed: "random" for a generated seed or the random seed directly.
             max_episode_steps: Maximum number of steps per episode.
             device: Device used for the environment and the simulation.
         """
