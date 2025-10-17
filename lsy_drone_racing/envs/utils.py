@@ -137,7 +137,6 @@ def generate_random_track(
     )
 
     N_gates, N_obstacles = len(track.gates), len(track.obstacles)
-    print(track.gates, track.obstacles)
 
     H, W = grid_size
     xs = jnp.linspace(xmin, xmax, W)
