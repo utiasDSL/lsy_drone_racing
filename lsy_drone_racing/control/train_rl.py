@@ -60,40 +60,38 @@ class Args:
     """the entity (team) of wandb's project"""
 
     # Algorithm specific arguments
-    total_timesteps: int = 1_000_000
+    total_timesteps: int = 2_000_000
     """total timesteps of the experiments"""
-    learning_rate: float = 1e-3
+    learning_rate: float = 4e-4
     """the learning rate of the optimizer"""
     num_envs: int = 1024
     """the number of parallel game environments"""
-    num_steps: int = 16
+    num_steps: int = 8
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
     """Toggle learning rate annealing for policy and value networks"""
-    gamma: float = 0.9
+    gamma: float = 0.92
     """the discount factor gamma"""
-    gae_lambda: float = 0.95
+    gae_lambda: float = 0.98
     """the lambda for the general advantage estimation"""
     num_minibatches: int = 16
     """the number of mini-batches"""
-    update_epochs: int = 15
+    update_epochs: int = 10
     """the K epochs to update the policy"""
     norm_adv: bool = True
     """Toggles advantages normalization"""
-    clip_coef: float = 0.275
+    clip_coef: float = 0.26
     """the surrogate clipping coefficient"""
     clip_vloss: bool = True
     """Toggles whether or not to use a clipped loss for the value function, as per the paper."""
-    ent_coef: float = 0.0001
+    ent_coef: float = 0.005
     """coefficient of the entropy"""
     vf_coef: float = 0.5
     """coefficient of the value function"""
-    max_grad_norm: float = 1.5
+    max_grad_norm: float = 3.0
     """the maximum norm for the gradient clipping"""
     target_kl: float = None
     """the target KL divergence threshold"""
-    action_scale: float = 5
-    """scale for the action outputs"""
 
     # to be filled in runtime
     batch_size: int = 0
@@ -164,11 +162,11 @@ class RandTrajEnv(DroneEnv):
         self.trajectory_time = trajectory_time
         self.sample_offsets = np.array(np.arange(n_samples) * self.freq * samples_dt, dtype=int)
 
-        # # Set takeoff position and build default reset position
-        # self.takeoff_pos = np.array([-1.5, 1.0, 0.07])
-        # data = self.sim.data
-        # self.sim.data = data.replace(states=data.states.replace(pos=np.broadcast_to(self.takeoff_pos, (data.core.n_worlds, data.core.n_drones, 3))))
-        # self.sim.build_default_data()
+        # Set takeoff position and build default reset position
+        self.takeoff_pos = np.array([-1.5, 1.0, 0.07])
+        data = self.sim.data
+        self.sim.data = data.replace(states=data.states.replace(pos=np.broadcast_to(self.takeoff_pos, (data.core.n_worlds, data.core.n_drones, 3))))
+        self.sim.build_default_data()
 
         # # Same waypoints as in the trajectory controller. Determined by trial and error.
         # waypoints = np.array(
@@ -191,40 +189,32 @@ class RandTrajEnv(DroneEnv):
         # self.trajectory = spline(ts)  # (n_steps, 3)
         # self.trajectories = np.tile(self.trajectory[None, :, :], (num_envs, 1, 1)) # (num_envs, n_steps, 3)
 
-        # Create the figure eight trajectory
-        n_steps = int(np.ceil(trajectory_time * self.freq))
-        t = np.linspace(0, 2 * np.pi, n_steps)
-        radius = 1  # Radius for the circles
-        x = radius * np.sin(t)  # Scale amplitude for 1-meter diameter
-        y = np.zeros_like(t)  # x is 0 everywhere
-        z = radius / 2 * np.sin(2 * t) + 1  # Scale amplitude for 1-meter diameter
-        self.trajectory = np.array([x, y, z]).T
-        self.trajectories = np.tile(self.trajectory[None, :, :], (num_envs, 1, 1)) # (num_envs, n_steps, 3)
+        # Create a random trajectory based on spline interpolation
+        n_steps = int(np.ceil(self.trajectory_time * self.freq))
+        t = np.linspace(0, self.trajectory_time, n_steps)
+        # Random control points
+        scale = np.array([1.2, 1.2, 0.5])
+        waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
+        waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
+        waypoints[:, :3, :] = np.array([[-1.5, 1.0, 0.05],[-1.0, 0.8, 0.2],[0.3, 0.55, 0.5]]) # set first three waypoints
+        v0 = np.tile(np.array([[0.0, 0.0, 0.4]]), (self.sim.n_worlds, 1)) # takeoff velocity
+        spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1, bc_type=((1, v0), 'not-a-knot'))
+        self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
 
-        # # Create a random trajectory based on spline interpolation
-        # n_steps = int(np.ceil(self.trajectory_time * self.freq))
-        # t = np.linspace(0, self.trajectory_time, n_steps)
-        # # Random control points
-        # scale = np.array([1.2, 1.2, 0.5])
-        # waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
-        # waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
-        # waypoints[:, 0, :] = self.takeoff_pos # set start point to takeoff position
-        # spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1)
-        # self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
-
-        # # Apply disturbances specified for racing
-        # specs = {} if disturbances is None else disturbances
-        # self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
-        # if "dynamics" in self.disturbances:
-        #     disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
-        #     self.sim.step_pipeline = (
-        #         self.sim.step_pipeline[:2] + (disturbance_fn,) + self.sim.step_pipeline[2:]
-        #     )
-        #     self.sim.build_step_fn()
+        disturbances = None
+        # Apply disturbances specified for racing
+        specs = {} if disturbances is None else disturbances
+        self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
+        if "dynamics" in self.disturbances:
+            disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
+            self.sim.step_pipeline = (
+                self.sim.step_pipeline[:2] + (disturbance_fn,) + self.sim.step_pipeline[2:]
+            )
+            self.sim.build_step_fn()
 
         # Update observation space
         spec = {k: v for k, v in self.single_observation_space.items()}
-        spec["quat"] = spaces.Box(-1.0, 1.0, shape=(9,)) # rotation matrix instead of quaternion
+        # spec["quat"] = spaces.Box(-1.0, 1.0, shape=(9,)) # rotation matrix instead of quaternion
         spec["local_samples"] = spaces.Box(-np.inf, np.inf, shape=(3 * self.n_samples,))
         self.single_observation_space = spaces.Dict(spec)
         self.observation_space = batch_space(self.single_observation_space, self.sim.n_worlds)
@@ -235,16 +225,17 @@ class RandTrajEnv(DroneEnv):
         super().reset(seed=seed)
         if seed is not None:
             self.sim.seed(seed)
-        # # Create a random trajectory based on spline interpolation
-        # n_steps = int(np.ceil(self.trajectory_time * self.freq))
-        # t = np.linspace(0, self.trajectory_time, n_steps)
-        # # Random control points
-        # scale = np.array([1.2, 1.2, 0.5])
-        # waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
-        # waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
-        # waypoints[:, 0, :] = self.takeoff_pos # set start point to takeoff position
-        # spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1)
-        # self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
+        # Create a random trajectory based on spline interpolation
+        n_steps = int(np.ceil(self.trajectory_time * self.freq))
+        t = np.linspace(0, self.trajectory_time, n_steps)
+        # Random control points
+        scale = np.array([1.2, 1.2, 0.5])
+        waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
+        waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
+        waypoints[:, :3, :] = np.array([[-1.5, 1.0, 0.05],[-1.0, 0.8, 0.2],[0.3, 0.55, 0.5]]) # set first three waypoints
+        v0 = np.tile(np.array([[0.0, 0.0, 0.4]]), (self.sim.n_worlds, 1)) # takeoff velocity
+        spline = CubicSpline(np.linspace(0, self.trajectory_time, self.num_waypoints), waypoints, axis=1, bc_type=((1, v0), 'not-a-knot'))
+        self.trajectories = spline(t)  # (n_worlds, n_steps, 3)
 
         self._reset(options=options) # call jax rest function
         self._marked_for_reset = self._marked_for_reset.at[...].set(False)
@@ -263,7 +254,7 @@ class RandTrajEnv(DroneEnv):
         idx = np.clip(self.steps + self.sample_offsets[None, ...], 0, self.trajectories[0].shape[0] - 1)
         dpos = self.trajectories[np.arange(self.trajectories.shape[0])[:, None], idx] - self.sim.data.states.pos
         obs["local_samples"] = dpos.reshape(-1, 3 * self.n_samples)
-        obs["quat"] = R.from_quat(obs["quat"]).as_matrix().reshape(-1, 9)
+        # obs["quat"] = R.from_quat(obs["quat"]).as_matrix().reshape(-1, 9)
         return obs
 
     def reward(self) -> Array:
@@ -303,100 +294,16 @@ class RandTrajEnv(DroneEnv):
         upper_bounds = jp.array([ 4.0,  4.0, 4.0])
         terminate = jp.any((pos[:, 0, :] < lower_bounds) | (pos[:, 0, :] > upper_bounds), axis=-1)
         return terminate
+
     @staticmethod
     def _reset_randomization(data: SimData, mask: Array) -> SimData:
-        """Randomize the initial position and velocity of the drones.
-
-        This function will get compiled into the reset function of the simulation. Therefore, it
-        must take data and mask as input arguments and must return a SimData object.
-        """
-        # Sample initial position
-        shape = (data.core.n_worlds, data.core.n_drones, 3)
-        pmin, pmax = jp.array([-0.1, -0.1, 1.1]), jp.array([0.1, 0.1, 1.3])
-        key, pos_key, vel_key = jax.random.split(data.core.rng_key, 3)
-        data = data.replace(core=data.core.replace(rng_key=key))
-        pos = jax.random.uniform(key=pos_key, shape=shape, minval=pmin, maxval=pmax)
-        vel = jax.random.uniform(key=vel_key, shape=shape, minval=-0.5, maxval=0.5)
-        data = data.replace(states=leaf_replace(data.states, mask, pos=pos, vel=vel))
+        """Reload this function to disable reset randomization."""
         return data
-
-    # @staticmethod
-    # def _reset_randomization(data: SimData, mask: Array) -> SimData:
-    #     """Reload this function to disable reset randomization."""
-    #     """Simplified reset: randomly choose a waypoint as initial position, zero velocity."""
-    #     waypoints = jp.array(
-    #         [
-    #             [-1.5, 1.0, 0.07],
-    #             [-1.0, 0.8, 0.2],
-    #             [0.3, 0.55, 0.5],
-    #             [1.3, 0.2, 0.65],
-    #             [0.85, 1.1, 1.1],
-    #             [-0.5, 0.2, 0.65],
-    #             [-1.15, 0.0, 0.52],
-    #             [-1.15, 0.0, 1.1],
-    #             # [-0.0, -0.4, 1.1],
-    #             # [0.5, -0.4, 1.1],
-    #         ]
-    #     )
-    #     total_waypoints = 10
-    #     # random reset from waypoints
-    #     key, idx_key, rotor_key = jax.random.split(data.core.rng_key, 3)
-    #     data = data.replace(core=data.core.replace(rng_key=key))
-    #     rand_idx = jax.random.randint(idx_key, (data.core.n_worlds,), -5, waypoints.shape[0])
-    #     rand_idx = jp.clip(rand_idx, 0, waypoints.shape[0]-1)
-    #     pos_world = waypoints[rand_idx]  # (n_worlds, 3)
-    #     pos = jp.tile(pos_world[:, None, :], (1, data.core.n_drones, 1))  # (n_worlds, n_drones, 3)
-    #     data = data.replace(states=leaf_replace(data.states, mask, pos=pos))
-    #     # set steps according to the waypoint index
-    #     total_time = 15.0
-    #     total_steps = int(total_time * data.core.freq)
-    #     steps_mask = jp.ones((data.core.n_worlds, 1), dtype=bool) if mask is None else mask[:, None]
-    #     step_values = (rand_idx * total_steps // (total_waypoints-1))[:, None]
-    #     data = data.replace(core=data.core.replace(steps=jp.where(steps_mask, step_values, data.core.steps)))
-    #     # reset initial rotor velocity for easier takeoff
-    #     rotor_vel = jax.random.uniform(rotor_key, (data.core.n_worlds, data.core.n_drones, 1), minval=4000.0, maxval=8000.0) * jp.ones((1, 1, data.states.rotor_vel.shape[-1]))
-    #     data = data.replace(states=leaf_replace(data.states, mask, rotor_vel=rotor_vel))
-    #     return data
     
 # region Wrappers
-class ActionTransform(VectorActionWrapper):
-    """Wrapper to transform rotation vector to attitude commands."""
-
-    def __init__(self, env: VectorEnv, action_scale: float = 5.0):
-        super().__init__(env)
-        self._action_scale = (1 / super().unwrapped.freq) * action_scale * jp.pi
-        # Compute scale and mean for rescaling
-        thrust_low = self.single_action_space.low[-1]
-        thrust_high = self.single_action_space.high[-1]
-        self._scale = jp.array((thrust_high - thrust_low) / 2.0, device=super().unwrapped.device)
-        self._mean = jp.array((thrust_high + thrust_low) / 2.0, device=super().unwrapped.device)
-        # Modify the wrapper's action space to [-1, 1]
-        self.single_action_space.low = -np.ones_like(self.single_action_space.low)
-        self.single_action_space.high = np.ones_like(self.single_action_space.high)
-        self.action_space = batch_space(self.single_action_space, self.num_envs)
-
-    def actions(self, actions: Array) -> Array:
-        # rpy = jp.clip(actions[..., :3], -1.0, 1.0) * jp.pi/2
-        obs = super().unwrapped.obs()
-        rpy = self._action_rot2rpy(jp.array(obs["quat"]), actions[..., :3], self._action_scale)
-        # rpy = (R.from_matrix(obs["quat"].reshape(-1,3,3)) * R.from_rotvec(jp.clip(actions[..., :3], -1.0, 1.0) * self._action_scale)).as_euler("xyz")
-        # rpy = (R.from_rotvec(jp.clip(actions[..., :3], -1.0, 1.0) * self._action_scale)).as_euler("xyz")
-        # rpy = R.from_quat(obs["quat"]).as_euler("xyz") + actions[..., :3] * self._action_scale
-        rpy = rpy.at[..., 2].set(0.0)
-        actions = actions.at[..., :3].set(rpy)
-        th = jp.clip(actions[..., -1], -1.0, 1.0) * self._scale + self._mean
-        actions = actions.at[..., -1].set(th)
-        return actions
-    
-    @staticmethod
-    @jax.jit
-    def _action_rot2rpy(rot_mat, action_rot, action_scale):
-        rpy = (R.from_matrix(rot_mat.reshape(-1, 3, 3)) * R.from_rotvec(jp.clip(action_rot, -1.0, 1.0) * action_scale)).as_euler("xyz")
-        return rpy
-    
 class AngleReward(VectorRewardWrapper):
     """Wrapper to penalize orientation in the reward."""
-    def __init__(self, env: VectorEnv, rpy_coef: float = 0.08):
+    def __init__(self, env: VectorEnv, rpy_coef: float = 0.02):
         super().__init__(env)
         self.rpy_coef = rpy_coef
 
@@ -441,7 +348,7 @@ class ObsNoise(VectorObservationWrapper):
 class ActionPenalty(VectorWrapper):
     """Wrapper to apply action penalty."""
 
-    def __init__(self, env: VectorEnv):
+    def __init__(self, env: VectorEnv, energy_coef: float = 0.01, smoothness_th_coef: float = 0.2, smoothness_xy_coef: float = 0.4):
         """Wrap the environment to apply action penalty."""
         super().__init__(env)
         assert isinstance(env.single_action_space, spaces.Box)
@@ -451,6 +358,9 @@ class ActionPenalty(VectorWrapper):
         )
         self.observation_space = batch_space(self.single_observation_space, env.num_envs)
         self._last_action = jp.zeros((self.num_envs, 4))
+        self.energy_coef = energy_coef
+        self.smoothness_th_coef = smoothness_th_coef
+        self.smoothness_xy_coef = smoothness_xy_coef
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         obs, info = super().reset(seed=seed, options=options)
@@ -461,10 +371,10 @@ class ActionPenalty(VectorWrapper):
         obs, reward, terminated, truncated, info = super().step(action)
         action_diff = action - self._last_action
         # energy
-        reward -= 0.04 * action[..., -1] ** 2
+        reward -= self.energy_coef * action[..., -1] ** 2
         # smoothness
-        reward -= 0.4 * action_diff[..., -1] ** 2
-        reward -= 1.0 * jp.sum(action_diff[..., :3] ** 2, axis=-1)
+        reward -= self.smoothness_th_coef * action_diff[..., -1] ** 2
+        reward -= self.smoothness_xy_coef * jp.sum(action_diff[..., :3] ** 2, axis=-1)
         self._last_action = action
         # construct new obs
         obs = jp.concat([obs, self._last_action.reshape(self.num_envs, -1)], axis=-1)
@@ -579,7 +489,7 @@ def make_envs(
         num_envs: int = None,
         jax_device: str = "cpu",
         torch_device: str = "cpu",
-        action_scale: float = 5.0,
+        coefs: dict = {},
     ) -> VectorEnv:
     config = load_config(Path(__file__).parents[2] / "config" / config)
     env = RandTrajEnv(
@@ -597,12 +507,16 @@ def make_envs(
     #     env.unwrapped.sim.data = data.replace(params=data.params.replace(thrust_tau = 0.03))
     #     env.unwrapped.sim.build_default_data()
     
-    # env = NormalizeActions(env)
-    env = ActionTransform(env, action_scale=action_scale)
-    # env = AngleReward(env)
+    env = NormalizeActions(env)
+    env = AngleReward(env, rpy_coef=coefs.get("rpy_coef", 0.0))
     env = FlattenJaxObservation(env)
     # env = ObsNoise(env, noise_std=0.01)
-    # env = ActionPenalty(env)
+    env = ActionPenalty(
+        env, 
+        energy_coef=coefs.get("energy_coef", 0.04),
+        smoothness_th_coef=coefs.get("smoothness_th_coef", 0.2), 
+        smoothness_xy_coef=coefs.get("smoothness_xy_coef", 0.4)
+    )
     env = JaxToTorch(env, torch_device)
     return env
 
@@ -616,19 +530,19 @@ class Agent(nn.Module):
     def __init__(self, obs_shape:tuple, action_shape:tuple):
         super().__init__()
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(torch.tensor(obs_shape).prod(), 64)),
+            layer_init(nn.Linear(torch.tensor(obs_shape).prod(), 128)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(128, 128)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.0),
+            layer_init(nn.Linear(128, 1), std=1.0),
         )
         self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(torch.tensor(obs_shape).prod(), 64)),
+            layer_init(nn.Linear(torch.tensor(obs_shape).prod(), 128)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(128, 128)),
             nn.Tanh(),
             layer_init(
-                nn.Linear(64, torch.tensor(action_shape).prod()), std=0.01
+                nn.Linear(128, torch.tensor(action_shape).prod()), std=0.01
             ),
             nn.Tanh(),
         )
@@ -666,7 +580,7 @@ def train_ppo(args, model_path, device, jax_device, wandb_enabled = False):
         print("Training on device:", device, "| Environment device:", jax_device)
 
         # env setup
-        envs = make_envs(num_envs=args.num_envs, jax_device=jax_device, torch_device=device, action_scale=args.action_scale)
+        envs = make_envs(num_envs=args.num_envs, jax_device=jax_device, torch_device=device, )
         assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
         agent = Agent(envs.single_observation_space.shape, envs.single_action_space.shape).to(device)
