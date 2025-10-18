@@ -77,7 +77,7 @@ class AttitudeRL(Controller):
         # Load RL policy
         self.agent = Agent((13 + 3 * self.n_samples + self.n_obs*13 + 4,), (4,)).to("cpu")
         model_path = Path(__file__).parent / "ppo_drone_racing.ckpt"
-        self.agent.load_state_dict(torch.load(model_path))
+        self.agent.load_state_dict(torch.load(model_path, map_location=torch.device("cpu")))
         self.last_action = np.array([0.0, 0.0, 0.0, self.drone_mass * 9.81], dtype=np.float32)
         self.basic_obs_key = ["pos", "quat", "vel", "ang_vel"]
         basic_obs = np.concatenate([obs[k] for k in self.basic_obs_key], axis=-1)
