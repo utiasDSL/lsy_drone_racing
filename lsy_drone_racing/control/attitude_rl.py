@@ -45,6 +45,8 @@ class AttitudeRL(Controller):
         self.thrust_min = drone_params["thrust_min"] * 4  # min total thrust
         self.thrust_max = drone_params["thrust_max"] * 4  # max total thrust
 
+        # Set num of stacked obs
+        self.n_obs = 3
         # Set trajectory parameters
         self.n_samples = 10
         self.samples_dt = 0.1
@@ -73,10 +75,13 @@ class AttitudeRL(Controller):
         self.trajectory = spline(ts)  # (n_steps, 3)
 
         # Load RL policy
-        self.agent = Agent((13 + 3 * self.n_samples + 4,), (4,)).to("cpu")
+        self.agent = Agent((13 + 3 * self.n_samples + self.n_obs*13 + 4,), (4,)).to("cpu")
         model_path = Path(__file__).parent / "ppo_drone_racing.ckpt"
         self.agent.load_state_dict(torch.load(model_path))
         self.last_action = np.array([0.0, 0.0, 0.0, self.drone_mass * 9.81], dtype=np.float32)
+        self.basic_obs_key = ["pos", "quat", "vel", "ang_vel"]
+        basic_obs = np.concatenate([obs[k] for k in self.basic_obs_key], axis=-1)
+        self.prev_obs = np.tile(basic_obs[None, :], (self.n_obs, 1))
         
         self._finished = False
 
@@ -112,12 +117,14 @@ class AttitudeRL(Controller):
             self, obs: dict[str, NDArray[np.floating]]
         ) -> NDArray[np.floating]:
         """Extract the relevant parts of the observation for the RL policy."""
-        obs_rl_key = ["pos", "quat", "vel", "ang_vel"]
-        obs_rl = {k: obs[k] for k in obs_rl_key}
+        obs_rl = {}
+        obs_rl["basic_obs"] = np.concatenate([obs[k] for k in self.basic_obs_key], axis=-1)
         idx = np.clip(self._tick + self.sample_offsets, 0, self.trajectory.shape[0] - 1)
         dpos = self.trajectory[idx] - obs["pos"]  # (n_samples, 3)
         obs_rl["local_samples"] = dpos.reshape(-1)  # (n_samples*3,)
+        obs_rl["prev_obs"] = self.prev_obs.reshape(-1)  # (n_obs*13,)
         obs_rl["last_action"] = self.last_action  # (4,)
+        self.prev_obs = np.concatenate([self.prev_obs[1:, :], obs_rl["basic_obs"][None, :]], axis=0)
         
         return np.concatenate([v for v in obs_rl.values()], axis=-1).astype(np.float32)
     

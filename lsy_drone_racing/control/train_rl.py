@@ -59,7 +59,7 @@ class Args:
     """the entity (team) of wandb's project"""
 
     # Algorithm specific arguments
-    total_timesteps: int = 1_500_000
+    total_timesteps: int = 2_000_000
     """total timesteps of the experiments"""
     learning_rate: float = 1.5e-3
     """the learning rate of the optimizer"""
@@ -100,11 +100,12 @@ class Args:
     num_iterations: int = 0
     """the number of iterations (computed in runtime)"""
 
-    # Reward coefficients
-    r_rpy_coef: float = 0.06
-    r_smoothness_th_coef: float = 0.4
-    r_smoothness_xy_coef: float = 1.0
-    r_energy_coef: float = 0.02
+    # Wrapper settings
+    n_obs: int = 3
+    rpy_coef: float = 0.06
+    d_act_th_coef: float = 0.4
+    d_act_xy_coef: float = 1.0
+    act_coef: float = 0.02
     """reward coefficients for training"""
 
     @staticmethod
@@ -172,7 +173,9 @@ class RandTrajEnv(DroneEnv):
         self.n_samples = n_samples
         self.samples_dt = samples_dt
         self.trajectory_time = trajectory_time
+        self.n_steps = int(np.ceil(self.trajectory_time * self.freq))
         self.sample_offsets = np.array(np.arange(n_samples) * self.freq * samples_dt, dtype=int)
+        self.trajectories = np.zeros((self.num_envs, self.n_steps, 3))
 
         # Set takeoff position and build default reset position
         self.takeoff_pos = np.array([-1.5, 1.0, 0.07])
@@ -192,7 +195,6 @@ class RandTrajEnv(DroneEnv):
 
         # Update observation space
         spec = {k: v for k, v in self.single_observation_space.items()}
-        # spec["quat"] = spaces.Box(-1.0, 1.0, shape=(9,)) # rotation matrix instead of quaternion
         spec["local_samples"] = spaces.Box(-np.inf, np.inf, shape=(3 * self.n_samples,))
         self.single_observation_space = spaces.Dict(spec)
         self.observation_space = batch_space(self.single_observation_space, self.sim.n_worlds)
@@ -202,8 +204,7 @@ class RandTrajEnv(DroneEnv):
     ) -> tuple[dict[str, Array], dict]:
         """Reset."""
         # Create a random trajectory based on spline interpolation
-        n_steps = int(np.ceil(self.trajectory_time * self.freq))
-        t = np.linspace(0, self.trajectory_time, n_steps)
+        t = np.linspace(0, self.trajectory_time, self.n_steps)
         scale = np.array([1.2, 1.2, 0.5])
         waypoints = np.random.uniform(-1, 1, size=(self.sim.n_worlds, self.num_waypoints, 3)) * scale
         waypoints = waypoints + 0.3*self.takeoff_pos + np.array([0.0, 0.0, 0.7]) # shift up in z direction
@@ -234,7 +235,6 @@ class RandTrajEnv(DroneEnv):
         idx = np.clip(self.steps + self.sample_offsets[None, ...], 0, self.trajectories[0].shape[0] - 1)
         dpos = self.trajectories[np.arange(self.trajectories.shape[0])[:, None], idx] - self.sim.data.states.pos
         obs["local_samples"] = dpos.reshape(-1, 3 * self.n_samples)
-        # obs["quat"] = R.from_quat(obs["quat"]).as_matrix().reshape(-1, 9)
         return obs
 
     def reward(self) -> Array:
@@ -296,6 +296,46 @@ class RandTrajEnv(DroneEnv):
                 return _reset_randomization_so_rpy
     
 # region Wrappers
+class StackObs(VectorObservationWrapper):
+    """Wrapper to stack history observations."""
+    def __init__(self, env: VectorEnv, n_obs: int = 0):
+        """Init."""
+        super().__init__(env)
+        self.n_obs = n_obs
+        print(f"{n_obs=}")
+        if self.n_obs > 0:
+            # Update observation space
+            spec = {k: v for k, v in self.single_observation_space.items()}
+            spec["prev_obs"] = spaces.Box(-np.inf, np.inf, shape=(13 * self.n_obs,))
+            self.single_observation_space = spaces.Dict(spec)
+            self.observation_space = batch_space(self.single_observation_space, self.num_envs)
+            # Init obs buffer
+            init_obs = env.unwrapped.obs()
+            self._prev_obs = jp.zeros((self.num_envs, self.n_obs, 13))
+            for _ in range(n_obs):
+                self._prev_obs = self._update_prev_obs(self._prev_obs, init_obs)
+
+    def observations(self, observations: dict) -> dict:
+        """Override observation."""
+        if self.n_obs > 0:
+            observations["prev_obs"] = self._prev_obs.reshape(self.num_envs, -1)
+            self._prev_obs = self._update_prev_obs(self._prev_obs, observations)
+        return observations
+    
+    @staticmethod
+    @jax.jit
+    def _update_prev_obs(prev_obs: Array, obs: dict) -> Array:
+        """Update previous observations."""
+        basic_obs_key = ["pos", "quat", "vel", "ang_vel"]
+        basic_obs = jp.concatenate(
+            [jp.reshape(obs[k], (obs[k].shape[0], -1)) for k in basic_obs_key], axis=-1
+        )
+        prev_obs = jp.concatenate(
+            [prev_obs[:, 1:, :], basic_obs[:, None, :]], axis=1
+        )
+        return prev_obs
+
+
 class AngleReward(VectorRewardWrapper):
     """Wrapper to penalize orientation in the reward."""
     def __init__(self, env: VectorEnv, rpy_coef: float = 0.08):
@@ -308,13 +348,47 @@ class AngleReward(VectorRewardWrapper):
         actions = actions.at[..., 2].set(0.0) # block yaw output because we don't need it
         observations, rewards, terminations, truncations, infos = self.env.step(actions)
         return observations, self.rewards(rewards, observations), terminations, truncations, infos
+    
     def rewards(self, rewards: Array, observations: dict[str, Array]) -> Array:
         """Additional angular rewards."""
         # apply rpy penalty
         rpy_norm = jp.linalg.norm(R.from_quat(observations["quat"]).as_euler("xyz"), axis=-1)
         rewards -= self.rpy_coef * rpy_norm
         return rewards
+        
+class ActionPenalty(VectorObservationWrapper):
+    """Wrapper to apply action penalty."""
+    def __init__(self, env: VectorEnv, act_coef: float = 0.01, d_act_th_coef: float = 0.2, d_act_xy_coef: float = 0.4):
+        """Init."""
+        super().__init__(env)
+        # Update observation space
+        spec = {k: v for k, v in self.single_observation_space.items()}
+        spec["last_action"] = spaces.Box(-np.inf, np.inf, shape=(4,))
+        self.single_observation_space = spaces.Dict(spec)
+        self.observation_space = batch_space(self.single_observation_space, self.num_envs)
+        self._last_action = jp.zeros((self.num_envs, 4))
+        self.act_coef = act_coef
+        self.d_act_th_coef = d_act_th_coef
+        self.d_act_xy_coef = d_act_xy_coef
+
+    def step(self, action: Array) -> tuple[Array, Array, Array, Array, dict]:
+        """Override step."""
+        obs, reward, terminated, truncated, info = super().step(action)
+        # penalty on actions
+        action_diff = action - self._last_action
+        # energy
+        reward -= self.act_coef * action[..., -1] ** 2
+        # smoothness
+        reward -= self.d_act_th_coef * action_diff[..., -1] ** 2
+        reward -= self.d_act_xy_coef * jp.sum(action_diff[..., :3] ** 2, axis=-1)
+        self._last_action = action
+        return self.observations(obs), reward, terminated, truncated, info
     
+    def observations(self, observations: dict) -> dict:
+        """Override observation."""
+        observations["last_action"] = self._last_action
+        return observations
+
 class FlattenJaxObservation(VectorObservationWrapper):
     """Wrapper to flatten the observations."""
     def __init__(self, env: VectorEnv):
@@ -325,46 +399,7 @@ class FlattenJaxObservation(VectorObservationWrapper):
 
     def observations(self, observations: dict) -> dict:
         """Flatten observations."""
-        flat_obs = []
-        for k, v in observations.items():
-            flat_obs.append(jp.reshape(v, (v.shape[0], -1)))
-        return jp.concatenate(flat_obs, axis=-1)
-    
-class ActionPenalty(VectorWrapper):
-    """Wrapper to apply action penalty."""
-    def __init__(self, env: VectorEnv, energy_coef: float = 0.01, smoothness_th_coef: float = 0.2, smoothness_xy_coef: float = 0.4):
-        """Init."""
-        super().__init__(env)
-        assert isinstance(env.single_action_space, spaces.Box)
-        assert env.single_action_space.shape[0] == 4
-        self.single_observation_space = spaces.Box(
-            -np.inf, np.inf, shape=(env.single_observation_space.shape[0] + 4,)
-        )
-        self.observation_space = batch_space(self.single_observation_space, env.num_envs)
-        self._last_action = jp.zeros((self.num_envs, 4))
-        self.energy_coef = energy_coef
-        self.smoothness_th_coef = smoothness_th_coef
-        self.smoothness_xy_coef = smoothness_xy_coef
-
-    def reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict[str, Array], dict]:
-        """Override reset."""
-        obs, info = super().reset(seed=seed, options=options)
-        obs = jp.concat([obs, self._last_action.reshape(self.num_envs, -1)], axis=-1)
-        return obs, info
-
-    def step(self, action: Array) -> tuple[Array, Array, Array, Array, dict]:
-        """Override step."""
-        obs, reward, terminated, truncated, info = super().step(action)
-        action_diff = action - self._last_action
-        # energy
-        reward -= self.energy_coef * action[..., -1] ** 2
-        # smoothness
-        reward -= self.smoothness_th_coef * action_diff[..., -1] ** 2
-        reward -= self.smoothness_xy_coef * jp.sum(action_diff[..., :3] ** 2, axis=-1)
-        self._last_action = action
-        # construct new obs
-        obs = jp.concat([obs, self._last_action.reshape(self.num_envs, -1)], axis=-1)
-        return obs, reward, terminated, truncated, info
+        return jp.concatenate([jp.reshape(v, (v.shape[0], -1)) for k, v in observations.items()], axis=-1)
     
 def set_seeds(seed: int):
     """Seed everything."""
@@ -380,7 +415,7 @@ def make_envs(
         config: str = "level0.toml",
         num_envs: int = None,
         jax_device: str = "cpu",
-        torch_device: str = "cpu",
+        torch_device: torch.device = torch.device("cpu"),
         coefs: dict = {},
     ) -> VectorEnv:
     """Make environments for training RL policy."""
@@ -396,14 +431,15 @@ def make_envs(
     )
     
     env = NormalizeActions(env)
-    env = AngleReward(env, rpy_coef=coefs.get("r_rpy_coef", 0.04))
-    env = FlattenJaxObservation(env)
+    env = StackObs(env, n_obs=coefs.get("n_obs", 0))
+    env = AngleReward(env, rpy_coef=coefs.get("rpy_coef", 0.04))
     env = ActionPenalty(
         env,
-        energy_coef=coefs.get("r_energy_coef", 0.04),
-        smoothness_th_coef=coefs.get("r_smoothness_th_coef", 0.4),
-        smoothness_xy_coef=coefs.get("r_smoothness_xy_coef", 1.0),
+        act_coef=coefs.get("act_coef", 0.04),
+        d_act_th_coef=coefs.get("d_act_th_coef", 0.4),
+        d_act_xy_coef=coefs.get("d_act_xy_coef", 1.0),
     )
+    env = FlattenJaxObservation(env)
     env = JaxToTorch(env, torch_device)
     return env
 
@@ -476,10 +512,11 @@ def train_ppo(args: Args, model_path: Path, device: torch.device, jax_device: st
 
         # env setup
         r_coefs = {
-            "r_rpy_coef": args.r_rpy_coef,
-            "r_smoothness_xy_coef": args.r_smoothness_xy_coef,
-            "r_smoothness_th_coef": args.r_smoothness_th_coef,
-            "r_energy_coef": args.r_energy_coef,
+            "n_obs": args.n_obs,
+            "rpy_coef": args.rpy_coef,
+            "d_act_xy_coef": args.d_act_xy_coef,
+            "d_act_th_coef": args.d_act_th_coef,
+            "act_coef": args.act_coef,
         }
         envs = make_envs(num_envs=args.num_envs, jax_device=jax_device, torch_device=device, coefs=r_coefs)
         assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
@@ -651,10 +688,17 @@ def evaluate_ppo(args: Args, n_eval: int, model_path: Path) -> tuple[float, floa
     """Evaluate."""
     set_seeds(args.seed)
     device = torch.device("cpu")
+    r_coefs = {
+        "n_obs": args.n_obs,
+        "rpy_coef": args.rpy_coef,
+        "d_act_xy_coef": args.d_act_xy_coef,
+        "d_act_th_coef": args.d_act_th_coef,
+        "act_coef": args.act_coef,
+    }
+    eval_env = make_envs(num_envs=1, coefs=r_coefs)
+    agent = Agent(eval_env.single_observation_space.shape, eval_env.single_action_space.shape).to(device)
+    agent.load_state_dict(torch.load(model_path))
     with torch.no_grad():
-        eval_env = make_envs(num_envs=1, jax_device="cpu", torch_device=device)
-        agent    = Agent(eval_env.single_observation_space.shape, eval_env.single_action_space.shape).to(device)
-        agent.load_state_dict(torch.load(model_path))
         episode_rewards = []
         episode_lengths = []
         ep_seed = args.seed
