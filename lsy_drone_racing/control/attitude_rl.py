@@ -46,7 +46,7 @@ class AttitudeRL(Controller):
         self.thrust_max = drone_params["thrust_max"] * 4  # max total thrust
 
         # Set num of stacked obs
-        self.n_obs = 3
+        self.n_obs = 2
         # Set trajectory parameters
         self.n_samples = 10
         self.samples_dt = 0.1

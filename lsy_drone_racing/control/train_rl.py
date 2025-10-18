@@ -59,7 +59,7 @@ class Args:
     """the entity (team) of wandb's project"""
 
     # Algorithm specific arguments
-    total_timesteps: int = 2_000_000
+    total_timesteps: int = 1_500_000
     """total timesteps of the experiments"""
     learning_rate: float = 1.5e-3
     """the learning rate of the optimizer"""
@@ -101,7 +101,7 @@ class Args:
     """the number of iterations (computed in runtime)"""
 
     # Wrapper settings
-    n_obs: int = 3
+    n_obs: int = 2
     rpy_coef: float = 0.06
     d_act_th_coef: float = 0.4
     d_act_xy_coef: float = 1.0
