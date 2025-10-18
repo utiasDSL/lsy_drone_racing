@@ -51,7 +51,7 @@ deploy = [
 ]
 # option[rl]: train rl policy
 rl = [
-    "torch",
+    "torch == 2.8.0",
     "wandb",
 ]
 

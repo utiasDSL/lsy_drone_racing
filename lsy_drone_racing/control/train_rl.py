@@ -21,12 +21,7 @@ from crazyflow.sim.visualize import draw_line, draw_points
 from crazyflow.utils import leaf_replace
 from gymnasium import spaces
 from gymnasium.spaces import flatten_space
-from gymnasium.vector import (
-    VectorEnv,
-    VectorObservationWrapper,
-    VectorRewardWrapper,
-    VectorWrapper,
-)
+from gymnasium.vector import VectorEnv, VectorObservationWrapper, VectorRewardWrapper
 from gymnasium.vector.utils import batch_space
 from gymnasium.wrappers.vector.jax_to_torch import JaxToTorch
 from jax import Array
