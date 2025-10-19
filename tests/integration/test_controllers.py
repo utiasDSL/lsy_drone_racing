@@ -10,7 +10,7 @@ from lsy_drone_racing.utils import load_config, load_controller
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("controller_file", ["position_controller.py"])
+@pytest.mark.parametrize("controller_file", ["state_controller.py"])
 def test_controllers(controller_file: str):
     config = load_config(Path(__file__).parents[2] / "config/level0.toml")
     config.sim.gui = False
@@ -26,7 +26,7 @@ def test_controllers(controller_file: str):
         track=config.env.track,
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),
-        seed=config.env.seed,
+        seed=1337,
     )
     env = JaxToNumpy(env)
 
@@ -60,7 +60,7 @@ def test_attitude_controller(physics: str, controller: str):
         track=config.env.track,
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),
-        seed=config.env.seed,
+        seed=1337,
     )
     env = JaxToNumpy(env)
     obs, info = env.reset()
@@ -89,7 +89,7 @@ def test_trajectory_controller_finish(yaw: float, physics: str):
     config.sim.physics = physics
     config.sim.gui = False
     ctrl_cls = load_controller(
-        Path(__file__).parents[2] / "lsy_drone_racing/control/position_controller.py"
+        Path(__file__).parents[2] / "lsy_drone_racing/control/state_controller.py"
     )
     env = gymnasium.make(
         "DroneRacing-v0",
@@ -99,7 +99,7 @@ def test_trajectory_controller_finish(yaw: float, physics: str):
         track=config.env.track,
         disturbances=config.env.get("disturbances"),
         randomizations=config.env.get("randomizations"),
-        seed=config.env.seed,
+        seed=1337,
     )
     env = JaxToNumpy(env)
 

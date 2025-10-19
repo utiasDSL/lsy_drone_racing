@@ -35,7 +35,7 @@ def simulate(
     config: str = "level0.toml",
     controller: str | None = None,
     n_runs: int = 1,
-    render: bool | None = True,
+    render: bool | None = None,
 ) -> list[float]:
     """Evaluate the drone controller over multiple episodes.
 
@@ -88,7 +88,7 @@ def simulate(
             # https://github.com/jax-ml/jax/discussions/6055
             # Tracking issue:
             # https://github.com/jax-ml/jax/issues/29810
-            action = np.asarray(jp.asarray(action))
+            action = np.asarray(jp.asarray(action), copy=True)
 
             obs, reward, terminated, truncated, info = env.step(action)
             # Update the controller internal state and models.

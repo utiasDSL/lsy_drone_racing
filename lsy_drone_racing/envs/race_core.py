@@ -46,7 +46,7 @@ from lsy_drone_racing.envs.randomize import (
     randomize_gate_rpy_fn,
     randomize_obstacle_pos_fn,
 )
-from lsy_drone_racing.envs.utils import gate_passed, load_track
+from lsy_drone_racing.envs.utils import gate_passed, generate_random_track, load_track
 
 if TYPE_CHECKING:
     from crazyflow.sim.data import SimData
@@ -240,7 +240,7 @@ class RaceCoreEnv:
         control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
-        seed: int = 1337,
+        seed: str | int = "random",
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
     ):
@@ -256,12 +256,16 @@ class RaceCoreEnv:
             track: Track configuration.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
-            seed: Random seed of the environment.
+            seed: "random" for a generated seed or the random seed directly.
             max_episode_steps: Maximum number of steps per episode. Needs to be tracked manually for
                 vectorized environments.
             device: Device used for the environment and the simulation.
         """
         super().__init__()
+        if type(seed) is str:
+            seed: int = np.random.SeedSequence().entropy if seed == "random" else hash(seed)
+            seed &= 0xFFFFFFFF  # Limit seed to 32 bit for jax.random
+            print(seed)
         self.sim = Sim(
             n_worlds=n_envs,
             n_drones=n_drones,
@@ -292,6 +296,7 @@ class RaceCoreEnv:
         self.autoreset = True  # Can be overridden by subclasses
         self.device = jax.devices(device)[0]
         self.sensor_range = sensor_range
+        track = generate_random_track(track, seed) if track.randomize else track
         self.gates, self.obstacles, self.drone = load_track(track)
         specs = {} if disturbances is None else disturbances
         self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}

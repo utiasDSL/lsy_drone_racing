@@ -22,8 +22,8 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-class PositionController(Controller):
-    """Position controller following a pre-defined trajectory."""
+class StateController(Controller):
+    """State controller following a pre-defined trajectory."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialization of the controller.
@@ -37,7 +37,7 @@ class PositionController(Controller):
         """
         super().__init__(obs, info, config)
         self._freq = config.env.freq
-        
+
         # Same waypoints as in the attitude controller. Determined by trial and error.
         waypoints = np.array(
             [
@@ -53,11 +53,11 @@ class PositionController(Controller):
                 [0.5, -0.65, 1.2],
             ]
         )
-        
-        self._t_total = 15 # s
+
+        self._t_total = 15  # s
         t = np.linspace(0, self._t_total, len(waypoints))
         self._des_pos_spline = CubicSpline(t, waypoints)
-        
+
         self._tick = 0
         self._finished = False
 

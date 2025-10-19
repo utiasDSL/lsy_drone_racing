@@ -18,9 +18,7 @@ def test_load_config():
 
 @pytest.mark.unit
 def test_load_controller():
-    c = load_controller(
-        Path(__file__).parents[3] / "lsy_drone_racing/control/position_controller.py"
-    )
+    c = load_controller(Path(__file__).parents[3] / "lsy_drone_racing/control/state_controller.py")
     assert issubclass(c, Controller), f"Controller {c} is not a subclass of `Controller`"
 
 
