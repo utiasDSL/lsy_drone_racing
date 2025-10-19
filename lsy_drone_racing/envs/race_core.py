@@ -265,7 +265,6 @@ class RaceCoreEnv:
         if type(seed) is str:
             seed: int = np.random.SeedSequence().entropy if seed == "random" else hash(seed)
             seed &= 0xFFFFFFFF  # Limit seed to 32 bit for jax.random
-            print(seed)
         self.sim = Sim(
             n_worlds=n_envs,
             n_drones=n_drones,
