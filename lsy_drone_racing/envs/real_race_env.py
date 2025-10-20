@@ -97,8 +97,8 @@ class RealRaceCoreEnv:
         self.gates, self.obstacles, self.drones = load_track(track)
         self.n_gates = len(self.gates.pos)
         self.n_obstacles = len(self.obstacles.pos)
-        self.pos_limit_low = np.array(track.safety_limits[0]["pos_limit_low"])
-        self.pos_limit_high = np.array(track.safety_limits[0]["pos_limit_high"])
+        self.pos_limit_low = np.array(track.safety_limits["pos_limit_low"])
+        self.pos_limit_high = np.array(track.safety_limits["pos_limit_high"])
         self.sensor_range = sensor_range
         self.drone_names = [f"cf{drone['id']}" for drone in drones]
         self.drone_name = self.drone_names[rank]
