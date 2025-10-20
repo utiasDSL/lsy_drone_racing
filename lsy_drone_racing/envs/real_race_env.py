@@ -382,6 +382,8 @@ class RealRaceCoreEnv:
                 time.sleep(0.05)
                 if not self._drone_healthy.is_set():
                     raise RuntimeError("Drone connection lost")
+                if not rclpy.ok():
+                    raise RuntimeError("ROS has already stopped")
 
         pos = self._ros_connector.pos[self.drone_name]
         vel = self._ros_connector.vel[self.drone_name]
@@ -423,8 +425,9 @@ class RealRaceCoreEnv:
         """
         try:
             self._return_to_start()
-        finally:  # Kill the drone
+        finally:
             try:
+                # Kill the drone
                 pk = CRTPPacket()
                 pk.port = CRTPPort.LOCALIZATION
                 pk.channel = Localization.GENERIC_CH
