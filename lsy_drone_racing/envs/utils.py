@@ -65,10 +65,10 @@ def gate_passed(
     """Check if the drone has passed the current gate.
 
     We transform the position of the drone into the reference frame of the current gate. Gates have
-    to be crossed in the direction of the y-Axis (pointing from -y to +y). Therefore, we check if y
+    to be crossed in the direction of the x-Axis (pointing from -x to +x). Therefore, we check if x
     has changed from negative to positive. If so, the drone has crossed the plane spanned by the
-    gate frame. We then check if the drone has passed the plane within the gate frame, i.e. the x
-    and z box boundaries. First, we linearly interpolate to get the x and z coordinates of the
+    gate frame. We then check if the drone has passed the plane within the gate frame, i.e. the y
+    and z box boundaries. First, we linearly interpolate to get the y and z coordinates of the
     intersection with the gate plane. Then we check if the intersection is within the gate box.
 
     Note:
@@ -88,12 +88,12 @@ def gate_passed(
     pos_local = gate_rot.apply(drone_pos - gate_pos, inverse=True)
     # Check the plane intersection. If passed, calculate the point of the intersection and check if
     # it is within the gate box.
-    passed_plane = (last_pos_local[1] < 0) & (pos_local[1] > 0)
-    alpha = -last_pos_local[1] / (pos_local[1] - last_pos_local[1])
-    x_intersect = alpha * (pos_local[0]) + (1 - alpha) * last_pos_local[0]
+    passed_plane = (last_pos_local[0] < 0) & (pos_local[0] > 0)
+    alpha = -last_pos_local[0] / (pos_local[0] - last_pos_local[0])
+    y_intersect = alpha * (pos_local[1]) + (1 - alpha) * last_pos_local[1]
     z_intersect = alpha * (pos_local[2]) + (1 - alpha) * last_pos_local[2]
     # Divide gate size by 2 to get the distance from the center to the edges
-    in_box = (abs(x_intersect) < gate_size[0] / 2) & (abs(z_intersect) < gate_size[1] / 2)
+    in_box = (abs(y_intersect) < gate_size[0] / 2) & (abs(z_intersect) < gate_size[1] / 2)
     return passed_plane & in_box
 
 
