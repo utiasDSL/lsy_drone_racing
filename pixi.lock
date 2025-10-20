@@ -6094,7 +6094,7 @@ packages:
 - pypi: ./
   name: lsy-drone-racing
   version: 0.0.1
-  sha256: e36d46524c7e2801e0ed191a9b41e6babd3cdec318331bd36ff24261363cb54e
+  sha256: b0c2ff2c13181e08cdc405e75fe9c84f124ad329166219f377a5a943b5ee73ce
   requires_dist:
   - fire>=0.6.0
   - numpy
@@ -6109,7 +6109,7 @@ packages:
   - warp-lang ; extra == 'sim'
   - jax[cuda12] ; extra == 'gpu'
   - cfclient ; extra == 'deploy'
-  - drone-estimators @ git+https://github.com/utiasDSL/drone-estimators.git ; extra == 'deploy'
+  - drone-estimators @ git+https://github.com/utiasDSL/drone-estimators.git@adr_ws25 ; extra == 'deploy'
   - torch==2.8.0 ; extra == 'rl'
   - wandb ; extra == 'rl'
   requires_python: '>=3.10'

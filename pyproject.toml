@@ -41,7 +41,7 @@ gpu = ["jax[cuda12]"]
 # option[deploy]: deploy to real drones
 deploy = [
     "cfclient",
-    "drone-estimators @ git+https://github.com/utiasDSL/drone-estimators.git",
+    "drone-estimators @ git+https://github.com/utiasDSL/drone-estimators.git@adr_ws25",
 ]
 # option[rl]: train rl policy
 rl = ["torch == 2.8.0", "wandb"]
