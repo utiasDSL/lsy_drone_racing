@@ -22,11 +22,7 @@ classifiers = [
 ########################
 # Pip Dependencies
 ########################
-dependencies = [
-    "fire >= 0.6.0",
-    "numpy",
-    "toml >= 0.10.2",
-]
+dependencies = ["fire >= 0.6.0", "numpy", "toml >= 0.10.2"]
 
 [project.optional-dependencies]
 # option[sim]: basic simulation
@@ -34,26 +30,21 @@ sim = [
     "gymnasium[array-api] >= 1.2.0",
     "ml-collections >= 1.0",
     "packaging >= 24.0",
-    "drone-models @ git+https://github.com/utiasDSL/drone-models.git@fda7804",
+    "drone-models @ git+https://github.com/utiasDSL/drone-models.git",
     "drone-controllers @ git+https://github.com/utiasDSL/drone-controllers.git",
-    "crazyflow @ git+https://github.com/utiasDSL/crazyflow.git@adr_ws25", # TODO: change this after merged to main
+    "crazyflow @ git+https://github.com/utiasDSL/crazyflow.git@adr_ws25",
     "jax >= 0.7",
     "warp-lang",
 ]
 # option[gpu]: simulation with gpu
-gpu = [
-    "jax[cuda12]",
-]
+gpu = ["jax[cuda12]"]
 # option[deploy]: deploy to real drones
 deploy = [
-    "cfclient", 
+    "cfclient",
     "drone-estimators @ git+https://github.com/utiasDSL/drone-estimators.git",
 ]
 # option[rl]: train rl policy
-rl = [
-    "torch == 2.8.0",
-    "wandb",
-]
+rl = ["torch == 2.8.0", "wandb"]
 
 [tool.setuptools.packages]
 find = {}
@@ -162,9 +153,14 @@ pytest = "*"
 # environments
 [tool.pixi.environments]
 default = { features = ["sim"], solve-group = "default" }
-deploy = { features = ["jazzy"] } # for deploy we must install everything else with pip
+deploy = { features = [
+    "jazzy",
+] } # for deploy we must install everything else with pip
 gpu = { features = ["sim", "gpu"], solve-group = "default" }
-online-submission = { features = ["sim", "online-submission"], solve-group = "default" }
+online-submission = { features = [
+    "sim",
+    "online-submission",
+], solve-group = "default" }
 tests = { features = ["sim", "rl", "tests"], solve-group = "default" }
 gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
 

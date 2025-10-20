@@ -91,7 +91,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=adr_ws25#6b991d30dd47ff0933bf7f1cf80603b1f7ca60da
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#3b741afe0aee89462bb9011d460be3908fbc8678
-      - pypi: git+https://github.com/utiasDSL/drone-models.git?rev=fda7804#fda7804d96e0a2c7ba75aea212a8327c4cc40ca9
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#99774b927a262873228bd48a4dcbeb7ef39b6700
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -962,7 +962,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=adr_ws25#6b991d30dd47ff0933bf7f1cf80603b1f7ca60da
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#3b741afe0aee89462bb9011d460be3908fbc8678
-      - pypi: git+https://github.com/utiasDSL/drone-models.git?rev=fda7804#fda7804d96e0a2c7ba75aea212a8327c4cc40ca9
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#99774b927a262873228bd48a4dcbeb7ef39b6700
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -1113,7 +1113,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=adr_ws25#6b991d30dd47ff0933bf7f1cf80603b1f7ca60da
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#3b741afe0aee89462bb9011d460be3908fbc8678
-      - pypi: git+https://github.com/utiasDSL/drone-models.git?rev=fda7804#fda7804d96e0a2c7ba75aea212a8327c4cc40ca9
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#99774b927a262873228bd48a4dcbeb7ef39b6700
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -1284,7 +1284,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=adr_ws25#6b991d30dd47ff0933bf7f1cf80603b1f7ca60da
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#3b741afe0aee89462bb9011d460be3908fbc8678
-      - pypi: git+https://github.com/utiasDSL/drone-models.git?rev=fda7804#fda7804d96e0a2c7ba75aea212a8327c4cc40ca9
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#99774b927a262873228bd48a4dcbeb7ef39b6700
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -1437,7 +1437,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=adr_ws25#6b991d30dd47ff0933bf7f1cf80603b1f7ca60da
       - pypi: git+https://github.com/utiasDSL/drone-controllers.git#3b741afe0aee89462bb9011d460be3908fbc8678
-      - pypi: git+https://github.com/utiasDSL/drone-models.git?rev=fda7804#fda7804d96e0a2c7ba75aea212a8327c4cc40ca9
+      - pypi: git+https://github.com/utiasDSL/drone-models.git#99774b927a262873228bd48a4dcbeb7ef39b6700
       - pypi: https://files.pythonhosted.org/packages/87/62/9773de14fe6c45c23649e98b83231fffd7b9892b6cf863251dc2afa73643/einops-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
@@ -2665,7 +2665,7 @@ packages:
   - array-api-extra
   - array-api-typing @ git+https://github.com/data-apis/array-api-typing
   - scipy @ git+https://github.com/scipy/scipy.git@4cb83b6
-- pypi: git+https://github.com/utiasDSL/drone-models.git?rev=fda7804#fda7804d96e0a2c7ba75aea212a8327c4cc40ca9
+- pypi: git+https://github.com/utiasDSL/drone-models.git#99774b927a262873228bd48a4dcbeb7ef39b6700
   name: drone-models
   version: 0.0.1
   requires_dist:
@@ -6094,7 +6094,7 @@ packages:
 - pypi: ./
   name: lsy-drone-racing
   version: 0.0.1
-  sha256: c0bdb422431f9aa8d55ec8c52df024d11ec31609d412285aab399dd999440090
+  sha256: a48288e7e471279e946e884d2881a8e03dc1f7a6836b131ff5c5bf15fcd6ca12
   requires_dist:
   - fire>=0.6.0
   - numpy
@@ -6102,7 +6102,7 @@ packages:
   - gymnasium[array-api]>=1.2.0 ; extra == 'sim'
   - ml-collections>=1.0 ; extra == 'sim'
   - packaging>=24.0 ; extra == 'sim'
-  - drone-models @ git+https://github.com/utiasDSL/drone-models.git@fda7804 ; extra == 'sim'
+  - drone-models @ git+https://github.com/utiasDSL/drone-models.git ; extra == 'sim'
   - drone-controllers @ git+https://github.com/utiasDSL/drone-controllers.git ; extra == 'sim'
   - crazyflow @ git+https://github.com/utiasDSL/crazyflow.git@adr_ws25 ; extra == 'sim'
   - jax>=0.7 ; extra == 'sim'
