@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EnvData:
     """Struct holding the data of all auxiliary variables for the environment."""
+
     target_gate: NDArray
     gates_visited: NDArray
     obstacles_visited: NDArray
@@ -254,7 +255,6 @@ class RealRaceCoreEnv:
             | (self.data.last_drone_pos > self.pos_limit_high)
         )
 
-        
         return terminated
 
     def truncated(self) -> NDArray:
@@ -268,7 +268,9 @@ class RealRaceCoreEnv:
     def send_action(self, action: NDArray):
         """Send the action to the drone."""
         if self.control_mode == "attitude":
-            pwm = force2pwm(action[3], self.drone_parameters["thrust_max"]*4, self.drone_parameters["pwm_max"])
+            pwm = force2pwm(
+                action[3], self.drone_parameters["thrust_max"] * 4, self.drone_parameters["pwm_max"]
+            )
             pwm = np.clip(pwm, self.drone_parameters["pwm_min"], self.drone_parameters["pwm_max"])
             action = (*np.rad2deg(action[:3]), int(pwm))
             self.drone.commander.send_setpoint(*action)
@@ -286,33 +288,6 @@ class RealRaceCoreEnv:
         self._ros_connector.publish_cmd(action)
 
     def _connect_to_drone(self, radio_id: int, radio_channel: int, drone_id: int) -> Crazyflie:
-        cflib.crtp.init_drivers()
-        uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
-
-        power_switch = PowerSwitch(uri)
-        power_switch.stm_power_cycle()
-        time.sleep(2)
-
-        drone = Crazyflie(rw_cache=str(Path(__file__).parent / ".cache"))
-        connected_event = mp.Event()
-
-        drone.fully_connected.add_callback(lambda _: connected_event.set())
-        drone.disconnected.add_callback(lambda _: self._drone_healthy.clear())
-        drone.connection_failed.add_callback(lambda _, msg: logger.warning(f"Connection failed: {msg}"))
-        drone.connection_lost.add_callback(lambda _, msg: logger.warning(f"Connection lost: {msg}"))
-        # drone.console.receivedChar.add_callback(
-        #     lambda msg: logger.info(f"drone: {msg.strip().replace('\n', '').replace('\r', '')}")
-        # )
-        drone.open_link(uri)
-
-        logger.info(f"Waiting for drone {drone_id} to connect...")
-        connected = connected_event.wait(5.0)
-        assert connected, f"Drone {drone_id} failed to connect to {uri}"
-        logger.info(f"Drone {drone_id} connected to {uri}")
-
-        return drone
-
-    def _connect_to_drone_old(self, radio_id: int, radio_channel: int, drone_id: int) -> Crazyflie:
         cflib.crtp.init_drivers()
         uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
 
