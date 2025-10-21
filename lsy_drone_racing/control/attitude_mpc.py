@@ -102,7 +102,7 @@ def create_ocp_solver(
             1.0,  # rpy
             1.0,  # rpy
             1.0,  # rpy
-            10.0,  # thrust
+            50.0,  # thrust
         ]
     )
 
