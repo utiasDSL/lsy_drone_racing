@@ -141,8 +141,8 @@ maxval = [0.15, 0.15, 0.1]
 [env.randomizations.gate_rpy]
 fn = "uniform"
 [env.randomizations.gate_rpy.kwargs]
-minval = [-0.1, -0.1, -0.2]
-maxval = [0.1, 0.1, 0.2]
+minval = [-0.05, -0.1, -0.2]
+maxval = [0.05, 0.1, 0.2]
 
 [env.randomizations.obstacle_pos]
 fn = "uniform"
