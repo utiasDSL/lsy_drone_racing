@@ -274,6 +274,7 @@ class RealRaceCoreEnv:
             pwm = np.clip(pwm, self.drone_parameters["pwm_min"], self.drone_parameters["pwm_max"])
             action = (*np.rad2deg(action[:3]), int(pwm))
             self.drone.commander.send_setpoint(*action)
+            self._ros_connector.publish_cmd(action)
         else:
             pos, vel, acc = action[:3], action[3:6], action[6:9]
             # TODO: We currently limit ourselves to yaw rotation only because the simulation is
@@ -285,7 +286,8 @@ class RealRaceCoreEnv:
             self.drone.commander.send_full_state_setpoint(
                 pos, vel, acc, quat, rollrate, pitchrate, yawrate
             )
-        self._ros_connector.publish_cmd(action)
+            # TODO: The estimators can't handle state commands, so we simply don't send anything
+            # Make sure to use the legacy estimator with the state interface
 
     def _connect_to_drone(self, radio_id: int, radio_channel: int, drone_id: int) -> Crazyflie:
         cflib.crtp.init_drivers()
