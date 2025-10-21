@@ -51,7 +51,9 @@ class AttitudeRL(Controller):
         self.n_samples = 10
         self.samples_dt = 0.1
         self.trajectory_time = 15.0
-        self.sample_offsets = np.array(np.arange(self.n_samples) * self.freq * self.samples_dt, dtype=int)
+        self.sample_offsets = np.array(
+            np.arange(self.n_samples) * self.freq * self.samples_dt, dtype=int
+        )
         self._tick = 0
 
         # Same waypoints as in the trajectory controller. Determined by trial and error.
@@ -63,10 +65,10 @@ class AttitudeRL(Controller):
                 [1.3, -0.15, 0.9],
                 [0.85, 0.85, 1.2],
                 [-0.5, -0.05, 0.7],
-                [-1.1, -0.2, 0.7],
-                [-1.1, -0.2, 1.2],
-                [-0.0, -0.65, 1.2],
-                [0.5, -0.65, 1.2],
+                [-1.2, -0.2, 0.8],
+                [-1.2, -0.2, 1.2],
+                [-0.0, -0.7, 1.2],
+                [0.5, -0.75, 1.2],
             ]
         )
         # Generate spline trajectory
@@ -75,14 +77,14 @@ class AttitudeRL(Controller):
         self.trajectory = spline(ts)  # (n_steps, 3)
 
         # Load RL policy
-        self.agent = Agent((13 + 3 * self.n_samples + self.n_obs*13 + 4,), (4,)).to("cpu")
+        self.agent = Agent((13 + 3 * self.n_samples + self.n_obs * 13 + 4,), (4,)).to("cpu")
         model_path = Path(__file__).parent / "ppo_drone_racing.ckpt"
         self.agent.load_state_dict(torch.load(model_path, map_location=torch.device("cpu")))
         self.last_action = np.array([0.0, 0.0, 0.0, self.drone_mass * 9.81], dtype=np.float32)
         self.basic_obs_key = ["pos", "quat", "vel", "ang_vel"]
         basic_obs = np.concatenate([obs[k] for k in self.basic_obs_key], axis=-1)
         self.prev_obs = np.tile(basic_obs[None, :], (self.n_obs, 1))
-        
+
         self._finished = False
 
     def compute_control(
@@ -110,12 +112,10 @@ class AttitudeRL(Controller):
             act[..., 2] = 0.0
 
         act = self._scale_actions(act.squeeze(0).numpy()).astype(np.float32)
-        
+
         return act
-    
-    def _obs_rl(
-            self, obs: dict[str, NDArray[np.floating]]
-        ) -> NDArray[np.floating]:
+
+    def _obs_rl(self, obs: dict[str, NDArray[np.floating]]) -> NDArray[np.floating]:
         """Extract the relevant parts of the observation for the RL policy."""
         obs_rl = {}
         obs_rl["basic_obs"] = np.concatenate([obs[k] for k in self.basic_obs_key], axis=-1)
@@ -125,13 +125,18 @@ class AttitudeRL(Controller):
         obs_rl["prev_obs"] = self.prev_obs.reshape(-1)  # (n_obs*13,)
         obs_rl["last_action"] = self.last_action  # (4,)
         self.prev_obs = np.concatenate([self.prev_obs[1:, :], obs_rl["basic_obs"][None, :]], axis=0)
-        
+
         return np.concatenate([v for v in obs_rl.values()], axis=-1).astype(np.float32)
-    
+
     def _scale_actions(self, actions: NDArray) -> NDArray:
         """Rescale and clip actions from [-1, 1] to [action_sim_low, action_sim_high]."""
-        scale = np.array([np.pi/2, np.pi/2, np.pi/2, (self.thrust_max - self.thrust_min) / 2.0], dtype=np.float32)
-        mean = np.array([0.0, 0.0, 0.0, (self.thrust_max + self.thrust_min) / 2.0], dtype=np.float32)
+        scale = np.array(
+            [np.pi / 2, np.pi / 2, np.pi / 2, (self.thrust_max - self.thrust_min) / 2.0],
+            dtype=np.float32,
+        )
+        mean = np.array(
+            [0.0, 0.0, 0.0, (self.thrust_max + self.thrust_min) / 2.0], dtype=np.float32
+        )
         return np.clip(actions, -1.0, 1.0) * scale + mean
 
     def step_callback(
