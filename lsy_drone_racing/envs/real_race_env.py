@@ -124,7 +124,7 @@ class RealRaceCoreEnv:
 
         self._ros_connector = ROSConnector(
             estimator_names=self.drone_names,
-            cmd_topic=f"/estimator/{self.drone_name}/cmd",
+            cmd_topic=f"/drones/{self.drone_name}/command",
             timeout=10.0,
         )
         self._jit()
@@ -377,13 +377,13 @@ class RealRaceCoreEnv:
             tstart = time.perf_counter()
             # Wait for the action to be completed and send the current position to the drone
             while time.perf_counter() - tstart < dt:
+                if not rclpy.ok():
+                    raise RuntimeError("ROS has already stopped")
+                if not self._drone_healthy.is_set():
+                    raise RuntimeError("Drone connection lost")
                 obs = self.obs()
                 self.drone.extpos.send_extpose(*obs["pos"][self.rank], *obs["quat"][self.rank])
                 time.sleep(0.05)
-                if not self._drone_healthy.is_set():
-                    raise RuntimeError("Drone connection lost")
-                if not rclpy.ok():
-                    raise RuntimeError("ROS has already stopped")
 
         pos = self._ros_connector.pos[self.drone_name]
         vel = self._ros_connector.vel[self.drone_name]
