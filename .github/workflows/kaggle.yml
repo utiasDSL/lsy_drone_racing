@@ -7,7 +7,6 @@ on:
       - main
   workflow_dispatch:
 
-
 jobs:
   online-competition:
     # Skip this job if running on the main repo to prevent failing CI/CD. Only run on student forks.
@@ -20,18 +19,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: mamba-org/setup-micromamba@v1
+
+      - name: Setup Pixi (installs pixi + caches envs) # https://github.com/marketplace/actions/setup-pixi
+        uses: prefix-dev/setup-pixi@v0.9.0            # pin the action version
         with:
-          micromamba-version: '2.1.0-0' # any version from https://github.com/mamba-org/micromamba-releases
-          environment-name: test-env
-          init-shell: bash
-          create-args: python=3.12
-          cache-environment: true
-      - run: pip install .[online_submission,test]
-        shell: micromamba-shell {0}
-      - name: Run simulation tests
-        run: python scripts/kaggle.py
-        shell: micromamba-shell {0}
+          pixi-version: v0.49.0                       # pin the pixi binary version (optional)
+          cache: true                                 # enable caching of installed envs
+          # only write new caches on main pushes (optional)
+          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+          # ensure the 'tests' environment(s) are installed
+          environments: online-submission
+          # don't activate env (we'll call pixi run -e test explicitly)
+          activate-environment: false
+          # prefer using existing lockfile if present (faster, deterministic)
+          locked: true
+
+      - name: Create online-submission times
+        run: pixi run create-submission
+
       - name: Export with kaggle
-        run: kaggle competitions submit -c lsy-drone-racing-ss-25 -f submission.csv -m "Automated submission"
-        shell: micromamba-shell {0}
+        run: pixi run export-submission

@@ -3,13 +3,14 @@ from pathlib import Path
 import gymnasium
 import jax
 import pytest
+from drone_models import available_models
 
 import lsy_drone_racing  # noqa: F401, environment registrations
 from lsy_drone_racing.utils import load_config
 
 CONFIG_FILES = {
     "DroneRacing-v0": ["level0.toml", "level1.toml", "level2.toml"],
-    "MultiDroneRacing-v0": ["multi_level0.toml", "multi_level3.toml"],
+    "MultiDroneRacing-v0": ["multi_level0.toml", "multi_level2.toml"],
 }
 DEVICES = ["cpu", "gpu"]
 
@@ -32,7 +33,7 @@ def skip_unavailable_device(device: str):
         pytest.skip(f"{device} device not available")
 
 
-@pytest.mark.parametrize("physics", ["analytical", "sys_id"])
+@pytest.mark.parametrize("physics", available_models.keys())
 @pytest.mark.parametrize("config_file", CONFIG_FILES["DroneRacing-v0"])
 @pytest.mark.parametrize("device", DEVICES)
 @pytest.mark.integration
@@ -74,7 +75,7 @@ def test_single_drone_envs(config_file: str, physics: str, device: str):
     env.close()
 
 
-@pytest.mark.parametrize("physics", ["analytical", "sys_id"])
+@pytest.mark.parametrize("physics", available_models.keys())
 @pytest.mark.parametrize("config_file", CONFIG_FILES["MultiDroneRacing-v0"])
 @pytest.mark.parametrize("device", DEVICES)
 @pytest.mark.integration

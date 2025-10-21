@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0.0", "wheel", "numpy"]
+requires = ["setuptools>=61.0.0", "wheel", "numpy>=2.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,29 +13,38 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
 ]
 
-dependencies = [
-    "fire >= 0.6.0",
-    "numpy >= 2.0.0",
-    "scipy >= 1.10.1",
-    "gymnasium >= 1.1.0",
-    "toml >= 0.10.2",
-    "ml-collections >= 1.0",
-    "packaging >= 24.0",
-    "crazyflow == 0.0.1",
-    "jax >0.5,<0.6",
-]
+
+########################
+# Pip Dependencies
+########################
+dependencies = ["fire >= 0.6.0", "numpy", "toml >= 0.10.2"]
 
 [project.optional-dependencies]
-test = ["pytest>=8.0.0", "pyinstrument"]
-online_submission = ["pandas", "kaggle"]
-gpu = ["crazyflow[gpu]"]
-deploy = ["cflib"]
+# option[sim]: basic simulation
+sim = [
+    "gymnasium[array-api] >= 1.2.0",
+    "ml-collections >= 1.0",
+    "packaging >= 24.0",
+    "drone-models @ git+https://github.com/utiasDSL/drone-models.git@adr_ws25",
+    "drone-controllers @ git+https://github.com/utiasDSL/drone-controllers.git@adr_ws25",
+    "crazyflow @ git+https://github.com/utiasDSL/crazyflow.git@adr_ws25",
+    "jax >= 0.7",
+    "warp-lang",
+]
+# option[gpu]: simulation with gpu
+gpu = ["jax[cuda12]"]
+# option[deploy]: deploy to real drones
+deploy = [
+    "cfclient",
+    "drone-estimators @ git+https://github.com/utiasDSL/drone-estimators.git@adr_ws25",
+]
+# option[rl]: train rl policy
+rl = ["torch == 2.8.0", "wandb"]
 
 [tool.setuptools.packages]
 find = {}
@@ -96,3 +105,77 @@ skip-magic-trailing-comma = true
 line-ending = "auto"
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
+
+########################
+# Pixi Sessions
+########################
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-dependencies]
+lsy_drone_racing = { path = ".", editable = true }
+
+# feature[jazzy]
+[tool.pixi.feature.jazzy]
+channels = ["https://prefix.dev/robostack-jazzy"]
+
+[tool.pixi.feature.jazzy.dependencies]
+ros-jazzy-desktop = "*"
+colcon-common-extensions = "*"
+rosdep = "*"
+
+[tool.pixi.feature.jazzy.activation]
+scripts = ["tools/setup_mocap.sh"]
+
+[tool.pixi.activation]
+scripts = ["tools/setup_acados.sh"]
+
+# feature[online-submission]
+# [tool.pixi.feature.online-submission]
+
+[tool.pixi.feature.online-submission.tasks]
+create-submission = { cmd = "python scripts/kaggle.py", description = "Create online submission" }
+export-submission = { cmd = "kaggle competitions submit -c lsy-drone-racing-ws-25 -f submission.csv -m 'Automated submission'", description = "Submit online submission" }
+
+[tool.pixi.feature.online-submission.dependencies]
+pandas = "*"
+kaggle = "*"
+
+# feature[tests]
+[tool.pixi.feature.tests.tasks]
+tests = { cmd = "pytest -v tests", description = "Run tests" }
+
+[tool.pixi.feature.tests.dependencies]
+pytest = "*"
+
+# environments
+[tool.pixi.environments]
+default = { features = ["sim"], solve-group = "default" }
+deploy = { features = [
+    "jazzy",
+] } # for deploy we must install everything else with pip
+gpu = { features = ["sim", "gpu"], solve-group = "default" }
+online-submission = { features = [
+    "sim",
+    "online-submission",
+], solve-group = "default" }
+tests = { features = ["sim", "rl", "tests"], solve-group = "default" }
+gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
+
+[tool.pixi.dependencies]
+# TODO: Remove compilers once scipy 1.17 is released and drone-models have been updated.
+# gcc = ">=15.1.0,<15.2"
+# cxx-compiler = ">=1.0.0,<2"
+# gfortran = ">=15.1.0,<15.2"
+# pkg-config = "*"
+# ninja = "*"
+# rosbags = ">=0.10.9,<0.11"
+openblas = ">=0.3.30,<0.4"
+ruff = "*"
+python = ">=3.11.12,<3.14"
+pip = ">=25.0.1,<26"
+cmake = "*"
+compilers = ">=1.9.0, <1.11.0"
+make = "*"

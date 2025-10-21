@@ -4,9 +4,9 @@
 # | :-----------------: | :-----------------------: | :-------------------------: | :--------------------: | :---------------: |
 # | `level0.toml`       | *No*                      | *No*                        | *No*                   | Perfect knowledge |
 [[controller]]
-file = "trajectory_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+file = "state_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 [[controller]]
-file = "attitude_controller.py"
+file = "state_controller.py"
 
 [deploy]
 ### Settings only relevant for deployment
@@ -20,25 +20,31 @@ real_track_objects = true
 [[deploy.drones]]
 id = 91
 channel = 80
+drone_model = "cf21B_500"                        # Model of the drone, i.e., cf2x_L250, cf2x_P250, cf2x_T500, cf21B_500. For this course, we use cf21B_500
+
 [[deploy.drones]]
 id = 6
 channel = 80
+drone_model = "cf21B_500"                        # Model of the drone, i.e., cf2x_L250, cf2x_P250, cf2x_T500, cf21B_500. For this course, we use cf21B_500
+
 
 [sim]
 # Physics options:
-# "analytical": Analytical, simplified dynamics model
-# "mujoco": Mujoco dynamics. May take longer to compile at startup.
-# "sys_id": System identification model.
-physics = "analytical"
-
-camera_view = [5.0, -40.0, -40.0, 0.5, -1.0, 0.5]
+# "first_principles": first_principles (physics based) model
+# "so_rpy": Simplified identified model.
+# "so_rpy_rotor": Simplified identified model with rotor dynamics.
+# "so_rpy_rotor_drag": Simplified identified model with rotor dynamics and drag.
+physics = "first_principles"
+drone_model = "cf21B_500"                        # Model of the drone, i.e., cf2x_L250, cf2x_P250, cf2x_T500, cf21B_500. For this course, we use cf21B_500
+camera_view = [5.0, 180.0, -25.0, 0.0, 0.0, 0.0] # Camera view [distance, azimuth, elevation, lookat_x, lookat_y, lookat_z]
 freq = 500                                        # Simulation frequency, in Hz
 attitude_freq = 500                               # Controller frequency, in Hz. This frequency is used to simulate the onboard controller, NOT for the environment's step function
-gui = false                                       # Enable/disable PyBullet's GUI
+render = false                                       # Enable/disable PyBullet's GUI
+
 
 [env]
 id = "MultiDroneRacing-v0"
-seed = 1337             # Random seed
+seed = "random"         # Either "random" for a random behavior or an integer for reproducibility
 [[env.kwargs]]
 freq = 50               # Frequency of the environment's step function, in Hz
 sensor_range = 0.7      # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
@@ -50,41 +56,47 @@ control_mode = "attitude"
 
 
 [env.track]
-# Tall gates: 1.0m height. Short gates: 0.525m height. Height is measured from the ground to the
-# center of the gate.
+randomize = false       # Randomized the positions (x & y) of the given gates, obstacles and drones 
+
+# Tall gates: 1.195m height. Short gates: 0.695m height. Height is measured from the ground to the center of the gate.
 [[env.track.gates]]
-pos = [0.45, -1.0, 0.56]
-rpy = [0.0, 0.0, 2.35]
-[[env.track.gates]]
-pos = [1.0, -1.55, 1.11]
+pos = [0.5 , 0.25, 0.7]
 rpy = [0.0, 0.0, -0.78]
 [[env.track.gates]]
-pos = [0.0, 0.5, 0.56]
-rpy = [0.0, 0.0, 0.0]
+pos = [1.05, 0.75, 1.2]
+rpy = [0.0, 0.0, 2.35]
 [[env.track.gates]]
-pos = [-0.5, -0.5, 1.11]
+pos = [-1.0, -0.25, 0.7]
 rpy = [0.0, 0.0, 3.14]
+[[env.track.gates]]
+pos = [0.0, -0.75, 1.2]
+rpy = [0.0, 0.0, 0.0]
 
-# Obstacle height: 1.4m. Height is measured from the ground to the top of the obstacle.
+# Obstacle height: 1.52m + reflective marker on top. Height is measured from the ground to the top of the obstacle.
 [[env.track.obstacles]]
-pos = [1.0, -0.5, 1.4]
+pos = [0.0, 0.75, 1.55]
 [[env.track.obstacles]]
-pos = [0.5, -1.5, 1.4]
+pos = [1.0, 0.25, 1.55]
 [[env.track.obstacles]]
-pos = [-0.5, 0.0, 1.4]
+pos = [-1.5, -0.25, 1.55]
 [[env.track.obstacles]]
-pos = [0.0, 1.0, 1.4]
+pos = [-0.5, -0.75, 1.55]
 
 [[env.track.drones]]
-pos = [1.0, 1.0, 0.05]
+pos = [-1.5, 0.75, 0.01]
 rpy = [0, 0, 0]
 vel = [0, 0, 0]
 ang_vel = [0, 0, 0]
 [[env.track.drones]]
-pos = [1.2, 1.2, 0.05]
+pos = [-1.3, 0.75, 0.01]
 rpy = [0, 0, 0]
 vel = [0, 0, 0]
 ang_vel = [0, 0, 0]
+
+# If the drones exceed those bounds in real, the run will be stopped and the drone will safely be returned to the starting position
+[env.track.safety_limits]
+pos_limit_low = [-2.5, -1.5, -1e-3]
+pos_limit_high = [2.5, 1.5, 2.0]
 
 [env.disturbances.action]
 fn = "normal"
@@ -111,8 +123,8 @@ maxval = [0.1, 0.1, 0.1]
 [env.randomizations.drone_mass]
 fn = "uniform"
 [env.randomizations.drone_mass.kwargs]
-minval = -0.01
-maxval = 0.01
+minval = -0.005
+maxval = 0.005
 
 [env.randomizations.drone_inertia]
 fn = "uniform"
@@ -129,8 +141,8 @@ maxval = [0.15, 0.15, 0.1]
 [env.randomizations.gate_rpy]
 fn = "uniform"
 [env.randomizations.gate_rpy.kwargs]
-minval = [0.0, 0.0, -0.1]
-maxval = [0.0, 0.0, 0.1]
+minval = [-0.05, -0.1, -0.2]
+maxval = [0.05, 0.1, 0.2]
 
 [env.randomizations.obstacle_pos]
 fn = "uniform"

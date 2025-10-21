@@ -39,7 +39,7 @@ Project Structure
 -----------------
 The project is organized as follows:
 
-The :mod:`lsy_drone_racing` package contains all the code for the project. In :mod:`lsy_drone_racing.control`, we define the interface for the controllers and include example controllers to get you up to speed. The racing environments are implemented in :mod:`lsy_drone_racing.envs`. Deploying the controllers on real drones requires integration with ``ros2`` and the communication library ``cflib`` for our drones. All ROS-specific code is implemented in :mod:`lsy_drone_racing.ros`.
+The :mod:`lsy_drone_racing` package contains all the code for the project. In :mod:`lsy_drone_racing.control`, we define the interface for the controllers and include example controllers to get you up to speed. The racing environments are implemented in :mod:`lsy_drone_racing.envs`. Deploying the controllers on real drones requires integration with ``ros2`` and the communication library ``cflib`` for our drones. For more details check out the :doc:`Installation and Setup <../getting_started/setup>` section.
 
 The levels are defined in the config files contained in the `config` folder. You can have a look at the configuration options to understand how exactly they differ from each other. 
 

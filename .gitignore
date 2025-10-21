@@ -11,3 +11,10 @@ saves
 **/*.csv
 plots/
 c_generated_code/
+/build
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+ros_ws/
+acados/

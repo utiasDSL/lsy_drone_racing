@@ -6,4 +6,5 @@ lsy_drone_racing.utils
 .. toctree::
     :hidden:
 
+    checks
     utils

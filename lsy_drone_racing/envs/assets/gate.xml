@@ -1,12 +1,49 @@
 <mujoco>
   <compiler angle="degree"/>
+
+  <!-- Assets section -->
+  <asset>
+    <texture name="gate_texture_top" type="2d" file="gate_top.png" />
+    <texture name="gate_texture_bottom" type="2d" file="gate_bottom.png" />
+    <texture name="gate_texture_left" type="2d" file="gate_left.png" />
+    <texture name="gate_texture_right" type="2d" file="gate_right.png" />
+    <material name="gate_mat_top" texture="gate_texture_top" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
+    <material name="gate_mat_bottom" texture="gate_texture_bottom" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
+    <material name="gate_mat_left" texture="gate_texture_left" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
+    <material name="gate_mat_right" texture="gate_texture_right" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
+    <material name="frame_mat" rgba="0.5 0.5 0.5 1" specular="0.4" shininess="0.4" reflectance="0.5"/>
+    <material name="rope_mat" rgba="0.1 0.1 0.1 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
+    <material name="stand_mat" rgba="0.7 0.68 0.55 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
+  </asset>
+
   <worldbody>
     <body name="gate">
-      <geom name="red_edge" type="box" size=".29 .0125 .045" pos="-0.245 0 0" euler="0 90 0" rgba="0.059 0.161 0.42 1"/>
-      <geom name="blue_edge" type="box" size=".29 .0125 .045" pos="0 0 0.245" rgba="0.059 0.161 0.42 1"/>
-      <geom name="green_edge" type="box" size=".29 .0125 .045" pos="0.245 0 0" euler="0 90 0" rgba="0.059 0.161 0.42 1"/>
-      <geom name="grey_edge" type="box" size=".29 .0125 .045" pos="0 0 -0.245" rgba="0.059 0.161 0.42 1"/>
-      <geom name="gate_stand" type="box" size="0.05 0.05 0.5" pos="0 0 -0.79" rgba="0.7 0.68 0.55 1"/>
+      <!-- Textured front -->
+      <geom name="front_top" type="box" size=".3 .05 5e-4" pos="-1e-3 0.0 0.25" euler="-90 -90 180" material="gate_mat_top"/>
+      <geom name="front_bottom" type="box" size=".3 .05 5e-4" pos="-1e-3 0.0 -0.25" euler="-90 -90 180" material="gate_mat_bottom"/>
+      <geom name="front_left" type="box" size=".05 .2 5e-4" pos="-1e-3 -0.25 0" euler="90 90 180" material="gate_mat_left"/>
+      <geom name="front_right" type="box" size=".05 .2 5e-4" pos="-1e-3 0.25 0" euler="90 90 180" material="gate_mat_right"/>
+
+      <!-- Textured back -->
+      <geom name="back_top" type="box" size=".3 .05 5e-4" pos="1e-3 0.0 0.25" euler="90 90 0" material="gate_mat_top"/>
+      <geom name="back_bottom" type="box" size=".3 .05 5e-4" pos="1e-3 0.0 -0.25" euler="90 90 0" material="gate_mat_bottom"/>
+      <geom name="back_left" type="box" size=".05 .2 5e-4" pos="1e-3 -0.25 0" euler="90 90 0" material="gate_mat_left"/>
+      <geom name="back_right" type="box" size=".05 .2 5e-4" pos="1e-3 0.25 0" euler="90 90 0" material="gate_mat_right"/>
+
+      <!-- Frame -->
+      <geom name="frame_top" type="box" size=".35 .01 .01" pos="0.0 0.01 0.35" euler="90 90 0" material="frame_mat"/>
+      <geom name="frame_bottom" type="box" size=".35 .01 .01" pos="0.0 -0.01 -0.35" euler="90 90 0" material="frame_mat"/>
+      <geom name="frame_left" type="box" size=".01 .35 .01" pos="0.0 -0.35 0.01" euler="90 90 0" material="frame_mat"/>
+      <geom name="frame_right" type="box" size=".01 .35 .01" pos="0.0 0.35 -0.01" euler="90 90 0" material="frame_mat"/>
+
+      <!-- Ropes -->
+      <geom name="rope_top_left" type="capsule" fromto="0.0 -0.34 0.34  0.0 -0.29 0.29" size="0.004" material="rope_mat"/>
+      <geom name="rope_top_right" type="capsule" fromto="0.0 0.34 0.34   0.0 0.29 0.29" size="0.004" material="rope_mat"/>
+      <geom name="rope_bottom_left" type="capsule" fromto="0.0 -0.34 -0.34  0.0 -0.29 -0.29" size="0.004" material="rope_mat"/>
+      <geom name="rope_bottom_right" type="capsule" fromto="0.0 0.34 -0.34   0.0 0.29 -0.29" size="0.004" material="rope_mat"/>
+
+      <!-- Stand -->
+      <geom name="gate_stand" type="box" size="0.05 0.05 0.5" pos="0 0 -0.86" material="stand_mat"/>
     </body>
   </worldbody>
 </mujoco>
