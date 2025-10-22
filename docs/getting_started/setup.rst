@@ -10,7 +10,7 @@ Before you begin, ensure you have the following:
 
 - Git installed on your system
 - A GitHub account
-- A `Robostack <https://robostack.github.io/index.html/>`_ environment with `pixi <https://robostack.github.io/GettingStarted.html#__tabbed_1_3/>`_ running ROS2 Jazzy. 
+- A `Robostack <https://robostack.github.io/index.html/>`_ environment with `pixi running ROS2 Jazzy <https://robostack.github.io/GettingStarted.html#__tabbed_1_3/>`_. 
 - Optional: `Docker <https://docs.docker.com/>`_ installed on your system
 
 .. note::
@@ -62,7 +62,7 @@ Setting up your environment
 Pixi package manager (Recommended)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-We recommend using `Pixi <https://pixi.sh>`_ to manage dependencies  and virtual environments for this project. Pixi creates a dedicated .pixi directory in the project root, which contains the isolated virtual environment. We use Pixi in combination with `RoboStack <https://robostack.github.io>`_. Robostack lets you install your favorite ROS version independent of your OS. Installed packages are cached globally under ~/.cache/rattler/ to speed up subsequent environment setups across projects.
+We recommend using `Pixi <https://pixi.sh>`_ to manage dependencies  and virtual environments for this project. Pixi creates a dedicated .pixi directory in the project root, which contains the isolated virtual environment. We use Pixi in combination with RoboStack. Robostack lets you install your favorite ROS version independent of your OS. Installed packages are cached globally under ~/.cache/rattler/ to speed up subsequent environment setups across projects.
 
 Install Pixi:
 
@@ -118,7 +118,7 @@ First, clone your fork from your own account and create a new environment by run
 
 
 Install simulation environment (developing & testing controllers)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Stay in the repository and run the following command to activate your pixi shell with the default (sim) environment:
 
@@ -164,7 +164,7 @@ or by first activating the correct environment
    pytest tests
 
 Install deployment environment (deploy controller to real drones)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This is for the deployment in the lab, either on your own machine or on the lab PC. With a fresh terminal, stay in the repository and run:
 
@@ -300,7 +300,7 @@ Common errors
 ---------------
 
 LIBUSB_ERROR_ACCESS (deployment only)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you encounter USB access permission issues, change the permissions with the following command. You might need help from a TA to get sudo rights.
 
@@ -310,7 +310,7 @@ If you encounter USB access permission issues, change the permissions with the f
 
 
 Drone won't start (deployment only)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Usually, the error messages should give you a good idea of what is going wrong. If you have no idea, check the following before asking your TA:
 
@@ -324,11 +324,12 @@ Usually, the error messages should give you a good idea of what is going wrong. 
 
 
 libdecor Warning
-^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~
 
 If you encounter warnings like
 
-.. code-block:: bash
+.. code-block:: text
+
    libdecor-gtk-WARNING: Failed to initialize GTK
    Failed to load plugin 'libdecor-gtk.so': failed to init
    No plugins found, falling back on no decorations
@@ -337,7 +338,7 @@ Note that starting the simulation with `-r` from a terminal inside VSCode might 
 
 
 GLIBCXX Error
-^^^^^^^^^^^^^
+~~~~~~~~~~~~~
 
 If you encounter errors related to `LIBGL` and `GLIBCXX_3.4.30` when running the simulation, try the following steps:
 
