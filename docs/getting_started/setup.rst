@@ -130,7 +130,7 @@ Stay in the repository and run the following command to activate your pixi shell
    Some subpackages currently depend on a prerelease version of `scipy <https://github.com/scipy/scipy>`_, which needs to be built from source. This might take more than 10 minutes on older hardware.
 
 .. note::
-   By running the commands above, our automated scripts will install and activate **acados** by default. This might cause the terminal to freeze for several minutes. `Acados installation guide <https://docs.acados.org/index.html>`_ is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller. If something does not work out of the box, we refer the reader to the `official installation guide <https://docs.acados.org/installation/>`_.
+   By running the commands above, our automated scripts will install and activate **acados** by default. This might cause the terminal to freeze for several minutes. `Acados <https://docs.acados.org/index.html>`_ is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller. If something does not work out of the box, we refer the reader to the `official installation guide <https://docs.acados.org/installation/>`_.
 
 To speed up simulation with GPU (optional), run:
 
@@ -147,7 +147,11 @@ Finally, you can test if the installation was successful by running
 
 If everything is installed correctly, this opens the simulator and simulates a drone flying through four gates.
 
-(Optional) If you want to train RL policies, we recommend you to use `PyTorch <https://pytorch.org/>`_. After choosing the correct hardware setup, you can install torch based on the pip command shown `here <https://pytorch.org/get-started/locally/>`_.
+(Optional) If you want to train RL policies, we recommend using a GPU-enabled environment for optimal performance. To install additional dependencies including `PyTorch <https://pytorch.org/>`_ and `Wandb <https://wandb.ai/>`_, stay in the gpu shell and run:
+
+.. code-block:: bash
+
+   pip install -e .[rl]
 
 (Optional) You can also run the tests by directly running either
 
