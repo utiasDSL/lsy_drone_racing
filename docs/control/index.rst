@@ -7,5 +7,6 @@ lsy_drone_racing.control
     :hidden:
 
     controller
-    trajectory_controller
+    state_controller
     attitude_controller
+    attitude_mpc
