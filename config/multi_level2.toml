@@ -6,7 +6,7 @@
 [[controller]]
 file = "state_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 [[controller]]
-file = "state_controller.py"
+file = "attitude_controller.py"
 
 [deploy]
 ### Settings only relevant for deployment
@@ -54,9 +54,11 @@ freq = 100
 sensor_range = 0.7
 control_mode = "attitude"
 
-
 [env.track]
-randomize = false       # Randomized the positions (x & y) of the given gates, obstacles and drones 
+# Full track radomization. When activated, the position (x & y) and orientation (yaw) 
+# of the below given gates, obstacles and drones is randomized inside the safety limits. 
+# Note: The order and therefore also height is not randomized!
+randomize = false
 
 # Tall gates: 1.195m height. Short gates: 0.695m height. Height is measured from the ground to the center of the gate.
 [[env.track.gates]]
