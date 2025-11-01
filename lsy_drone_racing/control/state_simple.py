@@ -74,7 +74,7 @@ class StateController(Controller):
         self._integral_limit = 2.0  # Anti-windup limit
         
         # Timing
-        self._t_total = 25.0  # Total flight time
+        self._t_total = 20.0  # Total flight time
         
         # Initialize tick counter BEFORE building trajectory
         self._tick = 0
