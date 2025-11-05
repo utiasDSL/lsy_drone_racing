@@ -76,6 +76,7 @@ pos = [0.0, -0.75, 1.2]
 rpy = [0.0, 0.0, 0.0]
 
 # Obstacle height: 1.52m + reflective marker on top. Height is measured from the ground to the top of the obstacle.
+# Obstacles are cylinders with a diameter of 0.03m.
 [[env.track.obstacles]]
 pos = [0.0, 0.75, 1.55]
 [[env.track.obstacles]]
