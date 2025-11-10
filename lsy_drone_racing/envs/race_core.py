@@ -326,7 +326,6 @@ class RaceCoreEnv:
             device=self.device,
         )
         self.randomize_track = build_track_randomization_fn(randomizations, gate_ids, obstacle_ids)
-        self.track_gen_key = jax.random.PRNGKey(seed)
 
     def _reset(
         self, *, seed: int | None = None, options: dict | None = None, mask: Array | None = None
@@ -347,32 +346,38 @@ class RaceCoreEnv:
         # Randomization of the drone is compiled into the sim reset pipeline, so we don't need to
         # explicitly do it here
         self.sim.reset(mask=mask)
-        key, subkey = jax.random.split(self.sim.data.core.rng_key)
+        key, subkey, subkey2 = jax.random.split(self.sim.data.core.rng_key, 3)
         # Generate random track
-        self.track_gen_key, track_sub_key = jax.random.split(self.track_gen_key)
-        track = (
-            generate_random_track(self.track, track_sub_key) if self.track.randomize else self.track
-        )
+        track = generate_random_track(self.track, subkey2) if self.track.randomize else self.track
         self.gates, self.obstacles, self.drone = load_track(track)
         # Randomize the track
         self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
 
-        # Randomized drone pos
-        pos = self.sim.data.states.pos.at[...].set(self.drone["pos"])
-        self.sim.data = self.sim.data.replace(states=self.sim.data.states.replace(pos=pos))
+        @jax.jit
+        def update_sim_data(
+            data: SimData, mjx_data: Data, key: jax.random.PRNGKey
+        ) -> tuple[SimData, Data]:
+            # Randomized drone pos
+            pos = data.states.pos.at[...].set(self.drone["pos"])
+            data = data.replace(states=data.states.replace(pos=pos))
 
-        self.sim.mjx_data = self.randomize_track(
-            self.sim.mjx_data,
-            mask,
-            self.gates["nominal_pos"],
-            self.gates["nominal_quat"],
-            self.obstacles["nominal_pos"],
-            subkey,
-        )
+            mjx_data = self.randomize_track(
+                mjx_data,
+                mask,
+                self.gates["nominal_pos"],
+                self.gates["nominal_quat"],
+                self.obstacles["nominal_pos"],
+                key,
+            )
+            return data, mjx_data
+
+        self.sim.data, self.sim.mjx_data = update_sim_data(self.sim.data, self.sim.mjx_data, subkey)
+
         # Reset the environment data
         self.data = self._reset_env_data(
             self.data, self.sim.data.states.pos, self.sim.mjx_data.mocap_pos, mask
         )
+
         return self.obs(), self.info()
 
     def _step(self, action: Array) -> tuple[dict[str, Array], float, bool, bool, dict]:

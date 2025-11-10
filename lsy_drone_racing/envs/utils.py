@@ -114,7 +114,7 @@ def generate_random_track(
 
     Args:
         track: default track layout (n_gates, n_obs, start pos etc)
-        seed: for randomization
+        key: for randomization
         border_safety_margin: min distance [m] of all objects fom the border
         start_pos_min_r: exclusion radius around inital drone position
         gates_min_r: exclusion radius around gates
