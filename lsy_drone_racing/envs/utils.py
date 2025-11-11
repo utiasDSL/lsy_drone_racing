@@ -99,7 +99,7 @@ def gate_passed(
 
 def generate_random_track(
     track: ConfigDict,
-    seed: int = 1337,
+    key: jax.random.PRNGKey,
     border_safety_margin: float = 0.5,
     start_pos_min_r: float = 1.0,
     gates_min_r: float = 1.0,
@@ -114,7 +114,7 @@ def generate_random_track(
 
     Args:
         track: default track layout (n_gates, n_obs, start pos etc)
-        seed: for randomization
+        key: for randomization
         border_safety_margin: min distance [m] of all objects fom the border
         start_pos_min_r: exclusion radius around inital drone position
         gates_min_r: exclusion radius around gates
@@ -128,12 +128,14 @@ def generate_random_track(
     Returns:
         New track layout with randomized tracks
     """
-    key = jax.random.PRNGKey(seed)
     # Get infos from track
     xmin, ymin = jnp.array(track.safety_limits["pos_limit_low"][:2]) + border_safety_margin
     xmax, ymax = jnp.array(track.safety_limits["pos_limit_high"][:2]) - border_safety_margin
     start_pos = jax.random.uniform(
-        key, (2,), minval=jnp.array([xmin, ymin]), maxval=jnp.array([xmax, ymax])
+        key,
+        (2,),
+        minval=jnp.array([xmin - border_safety_margin, ymin - border_safety_margin]),
+        maxval=jnp.array([xmax + border_safety_margin, ymax + border_safety_margin]),
     )
 
     N_gates, N_obstacles = len(track.gates), len(track.obstacles)
