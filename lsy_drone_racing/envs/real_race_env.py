@@ -113,53 +113,13 @@ class RealRaceCoreEnv:
         self.data = EnvData.create(
             n_drones=self.n_drones, n_gates=self.n_gates, n_obstacles=self.n_obstacles
         )
-        # Establish drone connection
-        self._drone_healthy = mp.Event()
-        self._drone_healthy.set()
-        self.drone = self._connect_to_drone(
-            radio_id=rank, radio_channel=drones[rank]["channel"], drone_id=drones[rank]["id"]
-        )
-        self._last_drone_pos_update = 0  # Last time a position was sent to the drone estimator
-
-        self._ros_connector = ROSConnector(
-            estimator_names=self.drone_names,
-            cmd_topic=f"/drones/{self.drone_name}/command",
-            timeout=10.0,
-        )
         self._jit()
     
         
     def _reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment and return the initial observation and info."""
-        options = {} if options is None else options
-        # Update the position of gates and obstacles with the real positions measured from Mocap. If
-        # disabled, they are equal to the nominal positions defined in the track config.
-        if options.get("real_track_objects", True):
-            # Update the ground truth position and orientation of the gates and obstacles
-            tf_names = [f"gate{i}" for i in range(1, self.n_gates + 1)]
-            tf_names += [f"obstacle{i}" for i in range(1, self.n_obstacles + 1)]
-            ros_connector = ROSConnector(tf_names=tf_names, timeout=5.0)
-            try:  # Make sure to close the connection if anything goes wrong
-                pos, quat = ros_connector.pos, ros_connector.quat
-            finally:
-                ros_connector.close()
-            for i in range(self.n_gates):
-                self.gates.pos[i, ...] = pos[f"gate{i + 1}"]
-                self.gates.quat[i, ...] = quat[f"gate{i + 1}"]
-            for i in range(self.n_obstacles):
-                self.obstacles.pos[i, ...] = pos[f"obstacle{i + 1}"]
-            ros_connector.close()
-
-            if options.get("check_race_track", True):  # If no track objects are used, skip this
-                check_race_track(
-                    self.gates.nominal_pos,
-                    self.gates.nominal_quat,
-                    self.obstacles.nominal_pos,
-                    self.randomizations,
-                )
-        if options.get("check_drone_start_pos", True):
-            pos = self.drones.pos[self.rank, ...]
-            check_drone_start_pos(pos, self.randomizations, self.drone_name)
+        self._prepare_track(deploy_config = options.deploy, track = options.env.track)
+        self._prepare_drones(deploy_config = options.deploy, track = options.env.track)
 
         self._reset_env_data(self.data)
         self._reset_drone()
