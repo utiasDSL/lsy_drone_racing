@@ -70,7 +70,7 @@ def check_race_track(
     
     low, high = rng_config.gate_pos.kwargs.minval, rng_config.gate_pos.kwargs.maxval
     for i, (pos, nominal_pos) in enumerate(zip(gates.pos, gates.nominal_pos)):
-        check_bounds(f"gate{i + 1}", pos, nominal_pos, low, high)
+        check_bounds(f"gate{i + 1}", np.array(pos), np.array(nominal_pos), np.array(low), np.array(high))
     
     # TODO: Now the gate check should consider rotation in roll and pitch as well.
     ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
@@ -81,7 +81,7 @@ def check_race_track(
 
     low, high = rng_config.obstacle_pos.kwargs.minval, rng_config.obstacle_pos.kwargs.maxval
     for i, (pos, nominal_pos) in enumerate(zip(obstacles.pos, obstacles.nominal_pos)):
-        check_bounds(f"obstacle{i + 1}", pos[:2], nominal_pos[:2], low[:2], high[:2])
+        check_bounds(f"obstacle{i + 1}", np.array(pos[:2]), np.array(nominal_pos[:2]), np.array(low[:2]), np.array(high[:2]))
 
 
 def check_drone_start_pos(nominal_pos: NDArray, real_pos: NDArray, rng_config: ConfigDict, drone_name: str):
@@ -96,7 +96,8 @@ def check_drone_start_pos(nominal_pos: NDArray, real_pos: NDArray, rng_config: C
         "Drone start position check expects uniform distributions"
     )
     tol_min, tol_max = rng_config.drone_pos.kwargs.minval, rng_config.drone_pos.kwargs.maxval
-    check_bounds(drone_name, real_pos[:2], nominal_pos[:2], tol_min[:2], tol_max[:2])
+   
+    check_bounds(drone_name, np.array(real_pos[:2]), np.array(nominal_pos[:2]), np.array(tol_min[:2]), np.array(tol_max[:2]))
 
 
 def check_bounds(name: str, actual: NDArray, desired: NDArray, low: NDArray, high: NDArray):

@@ -32,8 +32,9 @@ from scipy.spatial.transform import Rotation as R
 from lsy_drone_racing.envs.utils import gate_passed, load_track
 from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track, randomize_track, check_gates_layout
 
+from ml_collections import ConfigDict
+
 if TYPE_CHECKING:
-    from ml_collections import ConfigDict
     from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
@@ -101,7 +102,9 @@ class RealRaceCoreEnv:
         self.pos_limit_high = np.array(track.safety_limits["pos_limit_high"])
         self.sensor_range = sensor_range
         self.drone_names = [f"cf{drone['id']}" for drone in drones]
-        self.drone_name = self.drone_names[rank]  
+        self.drone_name = self.drone_names[rank] 
+        self.drone_ch = drones[rank]["channel"] 
+        self.drone_id = drones[rank]["id"] 
         self.rank = rank
         self.freq = freq
         self.device = jax.devices("cpu")[0]
@@ -113,6 +116,9 @@ class RealRaceCoreEnv:
         self.data = EnvData.create(
             n_drones=self.n_drones, n_gates=self.n_gates, n_obstacles=self.n_obstacles
         )
+        self.drone = None
+        self._ros_connector = None
+
         self._jit()
     
         
@@ -289,8 +295,8 @@ class RealRaceCoreEnv:
                 # TODO: The gate safety limits are now hardcoded: 0.5 meters inside the drone safety limits.
                 gate_safety_limits = ConfigDict(
                     {
-                        'pos_limit_low' : np.array(track.safety_limits.pos_limit_low[:2] + 0.5),
-                        'pos_limit_high' : np.array(track.safety_limits.pos_limit_high[:2] - 0.5)
+                        'pos_limit_low' : np.array(track.safety_limits.pos_limit_low[:2]) + 0.5,
+                        'pos_limit_high' : np.array(track.safety_limits.pos_limit_high[:2]) - 0.5
                     }
                 )
                 check_gates_layout(
@@ -317,12 +323,12 @@ class RealRaceCoreEnv:
 
         else:
             if deploy_config.get("check_drone_start_pos", True):
-                real_pos = self._query_drone_pose()
-                nominal_pos = self.drones.pos[self.rank, ...]
+                real_pos, real_quat = self._query_drone_pose()
+                nominal_pos = np.array(self.drones.pos[self.rank])
                 check_drone_start_pos(nominal_pos=nominal_pos, real_pos=real_pos, rng_config=self.randomizations, drone_name=self.drone_name)
-
+        
         self._establish_drone_connection(
-            radio_channel=self.drones[self.rank]["channel"], drone_id=self.drones[self.rank]["id"]
+            radio_channel=self.drone_ch, drone_id=self.drone_id
         )
 
     def _establish_drone_connection(self, radio_channel: int, drone_id: int):
@@ -493,19 +499,22 @@ class RealRaceCoreEnv:
         case of errors, and close the connections to the ROSConnector.
         """
         try:
-            self._return_to_start()
+            if self.drone is not None:
+                self._return_to_start()
         finally:
             try:
-                # Kill the drone
-                pk = CRTPPacket()
-                pk.port = CRTPPort.LOCALIZATION
-                pk.channel = Localization.GENERIC_CH
-                pk.data = struct.pack("<B", Localization.EMERGENCY_STOP)
-                self.drone.send_packet(pk)
-                self.drone.close_link()
+                if self.drone is not None:
+                    # Kill the drone
+                    pk = CRTPPacket()
+                    pk.port = CRTPPort.LOCALIZATION
+                    pk.channel = Localization.GENERIC_CH
+                    pk.data = struct.pack("<B", Localization.EMERGENCY_STOP)
+                    self.drone.send_packet(pk)
+                    self.drone.close_link()
             finally:
-                # Close all ROS connections
-                self._ros_connector.close()
+                if self._ros_connector is not None:
+                    # Close all ROS connections
+                    self._ros_connector.close()
 
 
 # region Single Drone Env
