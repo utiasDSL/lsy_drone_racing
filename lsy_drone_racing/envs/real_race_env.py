@@ -27,12 +27,16 @@ from drone_estimators.ros_nodes.ros2_connector import ROSConnector
 from drone_models.core import load_params
 from drone_models.transform import force2pwm
 from gymnasium import Env
+from ml_collections import ConfigDict
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
-from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track, randomize_track, check_gates_layout
-
-from ml_collections import ConfigDict
+from lsy_drone_racing.utils.checks import (
+    check_drone_start_pos,
+    check_gates_layout,
+    check_race_track,
+    randomize_track,
+)
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
