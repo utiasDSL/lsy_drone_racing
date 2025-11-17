@@ -30,7 +30,7 @@ from gymnasium import Env
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
-from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track
+from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track, randomize_track, check_gates_layout
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
@@ -101,8 +101,7 @@ class RealRaceCoreEnv:
         self.pos_limit_high = np.array(track.safety_limits["pos_limit_high"])
         self.sensor_range = sensor_range
         self.drone_names = [f"cf{drone['id']}" for drone in drones]
-        self.drone_name = self.drone_names[rank]
-        self.channel = drones[rank]["channel"]
+        self.drone_name = self.drone_names[rank]  
         self.rank = rank
         self.freq = freq
         self.device = jax.devices("cpu")[0]
@@ -128,7 +127,8 @@ class RealRaceCoreEnv:
             timeout=10.0,
         )
         self._jit()
-
+    
+        
     def _reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment and return the initial observation and info."""
         options = {} if options is None else options
@@ -265,6 +265,31 @@ class RealRaceCoreEnv:
         """Return an info dictionary containing additional information about the environment."""
         return {}
 
+    def _query_track_obj_pose(self) -> tuple[NDArray, NDArray, NDArray]:
+        # Get the ground truth position and orientation of the gates and obstacles
+        tf_names = [f"gate{i}" for i in range(1, self.n_gates + 1)]
+        tf_names += [f"obstacle{i}" for i in range(1, self.n_obstacles + 1)]
+
+        ros_connector = ROSConnector(tf_names=tf_names, timeout=5.0)
+        gate_pos = np.zeros_like(self.gates.pos)
+        gate_quat = np.zeros_like(self.gates.quat)
+        obstacle_pos = np.zeros_like(self.obstacles.pos)
+
+        try:
+            pos, quat = ros_connector.pos, ros_connector.quat
+        finally:
+            ros_connector.close()
+        try:
+            for i in range(self.n_gates):
+                gate_pos[i, ...] = pos[f"gate{i + 1}"]
+                gate_quat[i, ...] = quat[f"gate{i + 1}"]
+            for i in range(self.n_obstacles):
+                obstacle_pos[i, ...] = pos[f"obstacle{i + 1}"]
+        except KeyError as e:
+            logger.error(f"Could not find track objects in the ROS TF tree: {e}. Have you enabled the track objects in Vicon/ started the motion capture tracking node?")
+            raise
+        return gate_pos, gate_quat, obstacle_pos
+
     def send_action(self, action: NDArray):
         """Send the action to the drone."""
         if self.control_mode == "attitude":
@@ -289,7 +314,73 @@ class RealRaceCoreEnv:
             # TODO: The estimators can't handle state commands, so we simply don't send anything
             # Make sure to use the legacy estimator with the state interface
 
-    def _connect_to_drone(self, radio_id: int, radio_channel: int, drone_id: int) -> Crazyflie:
+    def _prepare_track(self, deploy_config: ConfigDict, track: ConfigDict):
+        assert (not track.get("randomize", False)) or (track.get("randomize", False) and deploy_config.get("real_track_objects", True)), "With a randomly generated track, the deploy.real_track_objects must be set to true."
+
+        if deploy_config.get("real_track_objects", True):
+            self.gates.pos, self.gates.quat, self.obstacles.pos = self._query_track_obj_pose()
+            if track.randomize:
+                self.gates.nominal_pos, self.gates.nominal_quat, self.obstacles.nominal_pos = randomize_track(
+                    gates_pos=self.gates.pos,
+                    gates_quat=self.gates.quat,
+                    obstacles_pos=self.obstacles.pos,
+                    rng_config=self.randomizations
+                )
+                # TODO: The gate safety limits are now hardcoded: 0.5 meters inside the drone safety limits.
+                gate_safety_limits = ConfigDict(
+                    {
+                        'pos_limit_low' : np.array(track.safety_limits.pos_limit_low[:2] + 0.5),
+                        'pos_limit_high' : np.array(track.safety_limits.pos_limit_high[:2] - 0.5)
+                    }
+                )
+                check_gates_layout(
+                    gates=self.gates,
+                    limits=gate_safety_limits
+                )
+
+            # With generated track, the track objects are by nature in the randomization tolerance —— no need to check track!
+            else:
+                if deploy_config.get("check_race_track", True):
+                    check_race_track(
+                        gates=self.gates,
+                        obstacles=self.obstacles,
+                        rng_config=self.randomizations,
+                )
+    
+    def _prepare_drones(self, deploy_config: ConfigDict, track: ConfigDict):
+        if track.randomize:
+            # The starting position drones.pos has must be set here even though they are not used in _step(). Since they are the target pose for return controller.
+            drone_pos, drone_quat = self._query_drone_pose()
+            drone_pos[2] = 0.01  # Set z to ground level
+            drone_rpy = R.from_quat(drone_quat).as_euler("xyz", degrees=False)
+            self.drones.pos[self.rank], self.drones.rpy[self.rank] = drone_pos, drone_rpy
+
+        else:
+            if deploy_config.get("check_drone_start_pos", True):
+                real_pos = self._query_drone_pose()
+                nominal_pos = self.drones.pos[self.rank, ...]
+                check_drone_start_pos(nominal_pos=nominal_pos, real_pos=real_pos, rng_config=self.randomizations, drone_name=self.drone_name)
+
+        self._establish_drone_connection(
+            radio_channel=self.drones[self.rank]["channel"], drone_id=self.drones[self.rank]["id"]
+        )
+
+    def _establish_drone_connection(self, radio_channel: int, drone_id: int):
+        """Establish connection to the drone."""
+        self._drone_healthy = mp.Event()
+        self._drone_healthy.set()
+        self.drone = self._connect_radio(
+            radio_id=self.rank, radio_channel=radio_channel, drone_id=drone_id
+        )
+        self._last_drone_pos_update = 0  # Last time a position was sent to the drone estimator
+
+        self._ros_connector = ROSConnector(
+            estimator_names=self.drone_names,
+            cmd_topic=f"/drones/{self.drone_name}/command",
+            timeout=10.0,
+        )
+
+    def _connect_radio(self, radio_id: int, radio_channel: int, drone_id: int) -> Crazyflie:
         cflib.crtp.init_drivers()
         uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
 
@@ -361,6 +452,22 @@ class RealRaceCoreEnv:
         self.drone.param.set_value("flightmode.stabModePitch", 1)
         self.drone.param.set_value("flightmode.stabModeYaw", 1)
         time.sleep(0.1)  # Wait for settings to be applied
+
+    def _query_drone_pose(self) -> tuple[NDArray, NDArray]:
+        ros_connector = ROSConnector(
+            tf_names=[self.drone_name],
+            timeout=5.0,
+        )
+        try:  # Make sure to close the connection if anything goes wrong
+            pos = ros_connector.pos[self.drone_name]
+            
+            quat = ros_connector.quat[self.drone_name]
+        except KeyError as e:
+            logger.error(f"Could not find estimated drone pose in the ROS TF tree: {e}. Have you enabled the track objects in Vicon/ started the motion capture tracking node/ started the estimator node?")
+            raise
+        finally:
+            ros_connector.close()
+        return pos, quat
 
     def _return_to_start(self):
         # Enable high-level functions of the drone and disable low-level control access

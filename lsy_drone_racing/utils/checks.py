@@ -15,46 +15,76 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("rosout." + __name__)
 
+def randomize_track(gates_pos: ArrayLike, gates_quat: ArrayLike, obstacles_pos: ArrayLike, rng_config: ConfigDict) -> tuple[NDArray, NDArray, NDArray]:
+    assert rng_config.gate_pos.fn == "uniform", "Race track checks expect uniform distributions"
+    assert rng_config.obstacle_pos.fn == "uniform", "Race track checks expect uniform distributions"
+    gates_pos, gates_quat = np.array(gates_pos), np.array(gates_quat)
+    gates_rot = R.from_quat(gates_quat).as_euler("xyz")
+    obstacles_pos = np.array(obstacles_pos)
+    n_gates, n_obstacles = len(gates_pos), len(obstacles_pos)
+
+    gate_rpy_rand = rng_config.gate_rpy.kwargs
+    gate_pos_rand = rng_config.gate_pos.kwargs
+    sample_rpy = np.random.uniform(gate_rpy_rand.minval, gate_rpy_rand.maxval, size=(n_gates, 3))
+    sample_pos = np.random.uniform(gate_pos_rand.minval, gate_pos_rand.maxval, size=(n_gates, 3))
+    randomized_gate_pos = gates_pos + sample_pos
+    randomized_gate_rot = gates_rot + sample_rpy
+    randomized_gate_quat = R.from_euler("xyz", randomized_gate_rot).as_quat()
+
+    obstacle_pos_rand = rng_config.obstacle_pos.kwargs
+    sample_obs_pos = np.random.uniform(obstacle_pos_rand.minval, obstacle_pos_rand.maxval, size=(n_obstacles, 3))
+    randomized_obstacle_pos = obstacles_pos + sample_obs_pos
+    return randomized_gate_pos, randomized_gate_quat, randomized_obstacle_pos
+
+
+def check_gates_layout(gates: ConfigDict, limits: ConfigDict):
+    """Check if the gates layout is within the specified limits.
+
+    Args:
+        gates: A ConfigDict containing gate positions.
+        limits: A ConfigDict containing min and max limits for gate positions.
+    """   
+    for i, pos in enumerate(gates.pos):
+        if np.any(pos[:2] < limits.pos_limit_low):
+            raise RuntimeError(
+                f"gate{i + 1} position {pos[:2]} is below the minimum limit {limits.pos_limit_low}"
+            )
+        if np.any(pos[:2] > limits.pos_limit_high):
+            raise RuntimeError(
+                f"gate{i + 1} position {pos[:2]} is above the maximum limit {limits.pos_limit_high}"
+            )
+
 
 def check_race_track(
-    gates_pos: ArrayLike, gates_quat: ArrayLike, obstacles_pos: ArrayLike, rng_config: ConfigDict
+    gates: ConfigDict, obstacles: ConfigDict, rng_config: ConfigDict
 ):
     """Check if the race track's gates and obstacles are within tolerances.
 
     Args:
-        gates_pos: An Nx3 ArrayLike with all nominal gate positions.
-        gates_quat: An Nx4 ArrayLike with all nominal gate quaternions.
-        obstacles_pos: An Mx3 ArrayLike with all nominal obstacle positions.
+        gates: A ConfigDict containing gate positions and orientations, and their nominal values.
+        obstacles: A ConfigDict containing obstacle positions, and their nominal values.
         rng_config: Environment randomization config.
     """
     assert rng_config.gate_pos.fn == "uniform", "Race track checks expect uniform distributions"
     assert rng_config.obstacle_pos.fn == "uniform", "Race track checks expect uniform distributions"
-    gates_pos, gates_quat = np.array(gates_pos), np.array(gates_quat)
-    obstacles_pos = np.array(obstacles_pos)
-    n_gates, n_obstacles = len(gates_pos), len(obstacles_pos)
-    gate_names = [f"gate{i}" for i in range(1, n_gates + 1)]
-    obstacle_names = [f"obstacle{i}" for i in range(1, n_obstacles + 1)]
-    ros_connector = ROSConnector(tf_names=gate_names + obstacle_names, timeout=5.0)
-    try:
-        ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
-        for i in range(n_gates):
-            name = f"gate{i + 1}"
-            nominal_pos, nominal_rot = gates_pos[i, ...], R.from_quat(gates_quat[i, ...])
-            gate_pos, gate_rot = ros_connector.pos[name], R.from_quat(ros_connector.quat[name])
-            low, high = rng_config.gate_pos.kwargs.minval, rng_config.gate_pos.kwargs.maxval
-            check_bounds(name, gate_pos, nominal_pos, low, high)
-            check_rotation(name, gate_rot, nominal_rot, ang_tol)
+    
+    low, high = rng_config.gate_pos.kwargs.minval, rng_config.gate_pos.kwargs.maxval
+    for i, (pos, nominal_pos) in enumerate(zip(gates.pos, gates.nominal_pos)):
+        check_bounds(f"gate{i + 1}", pos, nominal_pos, low, high)
+    
+    # TODO: Now the gate check should consider rotation in roll and pitch as well.
+    ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
+    for i, (quat, nominal_quat) in enumerate(zip(gates.quat, gates.nominal_quat)):
+        gate_rot = R.from_quat(quat)
+        nominal_rot = R.from_quat(nominal_quat)
+        check_rotation(f"gate{i + 1}", gate_rot, nominal_rot, ang_tol)
 
-        for i in range(n_obstacles):
-            name = f"obstacle{i + 1}"
-            nominal_pos = obstacles_pos[i, ...]
-            low, high = rng_config.obstacle_pos.kwargs.minval, rng_config.obstacle_pos.kwargs.maxval
-            check_bounds(name, ros_connector.pos[name][:2], nominal_pos[:2], low[:2], high[:2])
-    finally:
-        ros_connector.close()
+    low, high = rng_config.obstacle_pos.kwargs.minval, rng_config.obstacle_pos.kwargs.maxval
+    for i, (pos, nominal_pos) in enumerate(zip(obstacles.pos, obstacles.nominal_pos)):
+        check_bounds(f"obstacle{i + 1}", pos[:2], nominal_pos[:2], low[:2], high[:2])
 
 
-def check_drone_start_pos(pos: NDArray, rng_config: ConfigDict, drone_name: str):
+def check_drone_start_pos(nominal_pos: NDArray, real_pos: NDArray, rng_config: ConfigDict, drone_name: str):
     """Check if the real drone start position matches the settings.
 
     Args:
@@ -66,12 +96,7 @@ def check_drone_start_pos(pos: NDArray, rng_config: ConfigDict, drone_name: str)
         "Drone start position check expects uniform distributions"
     )
     tol_min, tol_max = rng_config.drone_pos.kwargs.minval, rng_config.drone_pos.kwargs.maxval
-    ros_connector = ROSConnector(estimator_names=[drone_name], timeout=5.0)
-    try:
-        real_pos = ros_connector.pos[drone_name]
-    finally:
-        ros_connector.close()
-    check_bounds(drone_name, real_pos[:2], pos[:2], tol_min[:2], tol_max[:2])
+    check_bounds(drone_name, real_pos[:2], nominal_pos[:2], tol_min[:2], tol_max[:2])
 
 
 def check_bounds(name: str, actual: NDArray, desired: NDArray, low: NDArray, high: NDArray):
