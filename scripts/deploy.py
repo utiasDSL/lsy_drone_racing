@@ -17,7 +17,7 @@ import fire
 import gymnasium
 import rclpy
 
-from lsy_drone_racing.utils import load_config, load_controller
+from lsy_drone_racing.utils import load_config, load_controller, save_track_layout
 
 if TYPE_CHECKING:
     from lsy_drone_racing.envs.real_race_env import RealDroneRaceEnv
@@ -25,16 +25,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def main(config: str = "level2.toml", controller: str | None = None):
+def main(config: str = "level2.toml", controller: str | None = None, save_track: str | None = None):
     """Deployment script to run the controller on the real drone.
 
     Args:
         config: Path to the competition configuration. Assumes the file is in `config/`.
         controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
             the controller specified in the config file is used.
+        save_track: Path to store the current competition configuration. The file is stored in `config/`. If None, the configuration will not be saved.
     """
     rclpy.init()
     config = load_config(Path(__file__).parents[1] / "config" / config)
+    # Overwrite the config file controller
+    config.controller.file = controller or config.controller.file
     env: RealDroneRaceEnv = gymnasium.make(
         "RealDroneRacing-v0",
         drones=config.deploy.drones,
@@ -44,12 +47,19 @@ def main(config: str = "level2.toml", controller: str | None = None):
         sensor_range=config.env.sensor_range,
         control_mode=config.env.control_mode,
     )
+    
     try:
         obs, info = env.reset(options = config)
+        if save_track is not None:
+           save_track_layout(env = env,
+                            config=config,
+                            output_path=Path(__file__).parents[1] / "config" / save_track,
+                            real_pos=True)
+
         next_obs = obs  # Set next_obs to avoid errors when the loop never enters
 
         control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
-        controller_path = control_path / (controller or config.controller.file)
+        controller_path = control_path / config.controller.file
         controller_cls = load_controller(controller_path)
         controller = controller_cls(obs, info, config)
         start_time = time.perf_counter()

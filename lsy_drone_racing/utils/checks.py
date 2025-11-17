@@ -15,6 +15,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger("rosout." + __name__)
 
 def randomize_track(gates_pos: ArrayLike, gates_quat: ArrayLike, obstacles_pos: ArrayLike, rng_config: ConfigDict) -> tuple[NDArray, NDArray, NDArray]:
+    """A numpy implementation to randomize the track.
+
+    Args:
+        gates_pos: An array that stores the gate positions and is expected to be [N,3].
+        gates_quat: An array that stores the gate quaternions and is expected to be [N,4].
+        obstacles_pos: An array that stores the obstacle positions and is expected to be [M,3].
+        rng_config: Environment randomization config.
+
+    Returns:
+        A tuple that contains 3 NDArrays: randomized gate positions([N,3]), gate quaternions([N,4]), obstacle positions([M,3])
+    """  
     assert rng_config.gate_pos.fn == "uniform", "Race track checks expect uniform distributions"
     assert rng_config.obstacle_pos.fn == "uniform", "Race track checks expect uniform distributions"
     gates_pos, gates_quat = np.array(gates_pos), np.array(gates_quat)
@@ -87,7 +98,8 @@ def check_drone_start_pos(nominal_pos: NDArray, real_pos: NDArray, rng_config: C
     """Check if the real drone start position matches the settings.
 
     Args:
-        pos: Current drone position.
+        nominal_pos: Nominal drone position.
+        real_pos: Current drone position.
         rng_config: Environment randomization config.
         drone_name: Name of the drone (e.g. cf10).
     """
