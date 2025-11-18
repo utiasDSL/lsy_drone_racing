@@ -36,8 +36,8 @@ def main(config: str = "level2.toml", controller: str | None = None, save_track:
     """
     rclpy.init()
     config = load_config(Path(__file__).parents[1] / "config" / config)
-    # Overwrite the config file controller
-    config.controller.file = controller or config.controller.file
+    if controller is not None:
+        config.controller.file = controller
     env: RealDroneRaceEnv = gymnasium.make(
         "RealDroneRacing-v0",
         drones=config.deploy.drones,

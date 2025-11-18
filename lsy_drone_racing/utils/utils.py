@@ -80,7 +80,7 @@ def load_config(path: Path) -> ConfigDict:
         return ConfigDict(toml.load(f))
 
 
-def save_track_layout(env: RealDroneRaceEnv, config : ConfigDict, output_path : Path, real_pos : bool = True):
+def save_track_layout(env: RealDroneRaceEnv, config: ConfigDict, output_path: Path):
     """Save the track objects poses in the real race environment to a toml file.
 
     Args:
@@ -91,48 +91,30 @@ def save_track_layout(env: RealDroneRaceEnv, config : ConfigDict, output_path : 
     
     """
     assert output_path.suffix == ".toml", f"Configuration file has to be a TOML file: {output_path}"
-    dict_to_store : dict = {
-            'controller' : config.controller.to_dict(),
-            'deploy' : config.deploy.to_dict(),
-            'env' : config.env.to_dict(),
-            'sim' : config.sim.to_dict()
+    keys_to_copy = ['controller', 'deploy', 'env', 'sim']
+    config_dict = config.to_dict()
+    output_dict = {
+        key: config_dict[key].to_dict() for key in keys_to_copy
     }
-    # Now the randomized generation should be set to false
-    dict_to_store['env']['track']['randomize'] = False
-    if real_pos:
-        dict_to_store['env']['track']['gates'] = [
-            {'pos' : (env.unwrapped.gates.pos[i]).tolist(),
-            'rpy' : (R.from_quat(env.unwrapped.gates.quat[i]).as_euler('xyz', degrees = False)).tolist()
-            }
-            for i in range(env.unwrapped.gates.pos.shape[0])
-        ]
-        dict_to_store['env']['track']['obstacles'] = [
-            {'pos' : (env.unwrapped.obstacles.pos[i]).tolist(),
-            }
-            for i in range(env.unwrapped.obstacles.pos.shape[0])
-        ]
-    else:
-        dict_to_store['env']['track']['gates'] = [
-            {'pos' : (env.unwrapped.gates.nominal_pos[i]).tolist(),
-            'rpy' : (R.from_quat(env.unwrapped.gates.nominal_quat[i]).as_euler('xyz', degrees = False)).tolist()
-            }
-            for i in range(env.unwrapped.gates.nominal_pos.shape[0])
-        ]
-        dict_to_store['env']['track']['obstacles'] = [
-            {'pos' : (env.unwrapped.obstacles.nominal_pos[i]).tolist(),
-            }
-            for i in range(env.unwrapped.obstacles.nominal_pos.shape[0])
-        ]
-    dict_to_store['env']['track']['drones'] = [
-        {
-            'pos' : env.unwrapped.drones.pos[0].tolist(),
-            'rpy' : env.unwrapped.drones.rpy[0].tolist(),
-            'vel' : [0.0, 0.0, 0.0],
-            'ang_vel' : [0.0, 0.0, 0.0]
+
+    # Now the track.randomize needs be set to false,
+    # since we are storing a layout from real-world placement
+    output_dict['env']['track']['randomize'] = False
+    # Overwrite the original field with the actual positions from the env
+    output_dict['env']['track']['gates'] = [
+        {'pos' : (env.unwrapped.gates.pos[i]).tolist(),
+        'rpy' : (R.from_quat(env.unwrapped.gates.quat[i]).as_euler('xyz', degrees = False)).tolist()
         }
+        for i in range(env.unwrapped.gates.pos.shape[0])
     ]
+    output_dict['env']['track']['obstacles'] = [
+        {'pos' : (env.unwrapped.obstacles.pos[i]).tolist(),
+        }
+        for i in range(env.unwrapped.obstacles.pos.shape[0])
+    ]
+    
     with open(output_path, "w") as f:
-        toml.dump(dict_to_store, f)
+        toml.dump(output_dict, f)
 
 def draw_line(
     env: RaceCoreEnv,
