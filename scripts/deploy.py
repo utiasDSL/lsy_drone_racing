@@ -16,8 +16,9 @@ from typing import TYPE_CHECKING
 import fire
 import gymnasium
 import rclpy
+import toml
 
-from lsy_drone_racing.utils import load_config, load_controller, save_track_layout
+from lsy_drone_racing.utils import load_config, load_controller
 
 if TYPE_CHECKING:
     from lsy_drone_racing.envs.real_race_env import RealDroneRaceEnv
@@ -38,6 +39,7 @@ def main(config: str = "level2.toml", controller: str | None = None, save_track:
     config = load_config(Path(__file__).parents[1] / "config" / config)
     if controller is not None:
         config.controller.file = controller
+
     env: RealDroneRaceEnv = gymnasium.make(
         "RealDroneRacing-v0",
         drones=config.deploy.drones,
@@ -47,14 +49,16 @@ def main(config: str = "level2.toml", controller: str | None = None, save_track:
         sensor_range=config.env.sensor_range,
         control_mode=config.env.control_mode,
     )
-    
+
     try:
-        obs, info = env.reset(options = config)
+        obs, info = env.reset(options=config)
         if save_track is not None:
-           save_track_layout(env = env,
-                            config=config,
-                            output_path=Path(__file__).parents[1] / "config" / save_track,
-                            real_pos=True)
+            output_path = Path(__file__).parents[1] / "config" / save_track
+            assert output_path.suffix == ".toml", (
+                f"Configuration file has to be a TOML file: {output_path}"
+            )
+            with open(output_path, "w") as f:
+                toml.dump(env.update_level_config(config=config).to_dict(), f)
 
         next_obs = obs  # Set next_obs to avoid errors when the loop never enters
 

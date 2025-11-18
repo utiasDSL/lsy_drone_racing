@@ -106,15 +106,16 @@ class RealRaceCoreEnv:
         self.pos_limit_high = np.array(track.safety_limits["pos_limit_high"])
         self.sensor_range = sensor_range
         self.drone_names = [f"cf{drone['id']}" for drone in drones]
-        self.drone_name = self.drone_names[rank] 
-        self.drone_ch = drones[rank]["channel"] 
-        self.drone_id = drones[rank]["id"] 
+        self.drone_name = self.drone_names[rank]
+        self.drone_ch = drones[rank]["channel"]
+        self.drone_id = drones[rank]["id"]
         self.rank = rank
         self.freq = freq
         self.device = jax.devices("cpu")[0]
         assert control_mode in ["state", "attitude"], f"Invalid control mode {control_mode}"
         self.control_mode = control_mode
         self.randomizations = randomizations
+        self._connected_to_drone = False
         self.drone_parameters = load_params("first_principles", drones[rank]["drone_model"])
         self.drone = Crazyflie(rw_cache=str(Path(__file__).parent / ".cache"))
         self._drone_healthy = mp.Event()
@@ -132,12 +133,10 @@ class RealRaceCoreEnv:
 
     def _reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment and return the initial observation and info."""
-        self._update_track_poses(deploy_config= options.deploy, track=options.env.track)
-        self._check_track_layout(deploy_config= options.deploy, track=options.env.track)
-        self._check_drones(deploy_config = options.deploy, track = options.env.track)
-        self._connect_radio(
-            radio_id=self.rank, radio_channel=self.drone_ch, drone_id=self.drone_id
-        )
+        self._update_track_poses(deploy_config=options.deploy, track=options.env.track)
+        self._check_track_layout(deploy_config=options.deploy, track=options.env.track)
+        self._check_drones(deploy_config=options.deploy, track=options.env.track)
+        self._connect_radio(radio_id=self.rank, radio_channel=self.drone_ch, drone_id=self.drone_id)
         self._last_drone_pos_update = 0  # Last time a position was sent to the drone estimator
         self._reset_env_data(self.data)
         self._reset_drone()
@@ -271,13 +270,8 @@ class RealRaceCoreEnv:
         if deploy_config.get("real_track_objects", True):
             tf_names = [f"gate{i}" for i in range(1, self.n_gates + 1)]
             tf_names += [f"obstacle{i}" for i in range(1, self.n_obstacles + 1)]
-
-            ros_connector = ROSConnector(tf_names=tf_names, timeout=5.0)
-            gate_pos = np.zeros_like(self.gates.pos)
-            gate_quat = np.zeros_like(self.gates.quat)
-            obstacle_pos = np.zeros_like(self.obstacles.pos)
-
             try:
+                ros_connector = ROSConnector(tf_names=tf_names, timeout=5.0)
                 pos, quat = ros_connector.pos, ros_connector.quat
             finally:
                 ros_connector.close()
@@ -288,63 +282,74 @@ class RealRaceCoreEnv:
                 for i in range(self.n_obstacles):
                     self.obstacles.pos[i, ...] = pos[f"obstacle{i + 1}"]
             except KeyError as e:
-                logger.error(f"Could not find track objects in the ROS TF tree: {e}. \
-                             Have you enabled the track objects in Vicon/ started the motion capture tracking node?")
+                logger.error(
+                    f"Could not find track objects in the ROS TF tree: {e}. \
+                             Have you enabled the track objects in Vicon/ \
+                             started the motion capture tracking node?"
+                )
                 raise
         if track.randomize:
-            self.gates.nominal_pos, self.gates.nominal_quat, self.obstacles.nominal_pos = randomize_track(
-                gates_pos=self.gates.pos,
-                gates_quat=self.gates.quat,
-                obstacles_pos=self.obstacles.pos,
-                rng_config=self.randomizations
+            self.gates.nominal_pos, self.gates.nominal_quat, self.obstacles.nominal_pos = (
+                randomize_track(
+                    gates_pos=self.gates.pos,
+                    gates_quat=self.gates.quat,
+                    obstacles_pos=self.obstacles.pos,
+                    rng_config=self.randomizations,
+                )
             )
 
     def _check_track_layout(self, deploy_config: ConfigDict, track: ConfigDict):
         if track.randomize:
             # TODO: The gate safety limits are now hardcoded: 0.5 meters inside the drone safety limits.
             gate_safety_limits = ConfigDict(
-                    {
-                        'pos_limit_low' : np.array(track.safety_limits.pos_limit_low[:2]) + 0.5,
-                        'pos_limit_high' : np.array(track.safety_limits.pos_limit_high[:2]) - 0.5
-                    }
-                )
-            check_gates_in_bound(
-                gates=self.gates,
-                limits=gate_safety_limits
+                {
+                    "pos_limit_low": np.array(track.safety_limits.pos_limit_low[:2]) + 0.5,
+                    "pos_limit_high": np.array(track.safety_limits.pos_limit_high[:2]) - 0.5,
+                }
             )
+            check_gates_in_bound(gates=self.gates, limits=gate_safety_limits)
         if deploy_config.get("check_race_track", True):
-                    check_race_track(
-                        gates=self.gates,
-                        obstacles=self.obstacles,
-                        rng_config=self.randomizations,
-                )
-    
+            check_race_track(
+                gates=self.gates, obstacles=self.obstacles, rng_config=self.randomizations
+            )
+
     def _check_drones(self, deploy_config: ConfigDict, track: ConfigDict):
         if track.randomize:
             # The starting position drones.pos has must be set here even though they are not used in _step().
             # They are the target pose for return controller.
-            drone_pos, drone_quat = self._ros_connector.pos[self.drone_name], self._ros_connector.quat[self.drone_name]
+            drone_pos, drone_quat = (
+                self._ros_connector.pos[self.drone_name],
+                self._ros_connector.quat[self.drone_name],
+            )
             drone_pos[2] = 0.01  # Set z to ground level
             drone_rpy = R.from_quat(drone_quat).as_euler("xyz", degrees=False)
             self.drones.pos[self.rank], self.drones.rpy[self.rank] = drone_pos, drone_rpy
 
         if deploy_config.get("check_drone_start_pos", True):
-            real_pos, real_quat = self._ros_connector.pos[self.drone_name], self._ros_connector.quat[self.drone_name]
+            real_pos, _ = (
+                self._ros_connector.pos[self.drone_name],
+                self._ros_connector.quat[self.drone_name],
+            )
             nominal_pos = np.array(self.drones.pos[self.rank])
-            check_drone_start_pos(nominal_pos=nominal_pos, real_pos=real_pos, rng_config=self.randomizations, drone_name=self.drone_name)
+            check_drone_start_pos(
+                nominal_pos=nominal_pos,
+                real_pos=real_pos,
+                rng_config=self.randomizations,
+                drone_name=self.drone_name,
+            )
 
     def _connect_radio(self, radio_id: int, radio_channel: int, drone_id: int):
-        self._drone_healthy.set()
         cflib.crtp.init_drivers()
         uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
 
         power_switch = PowerSwitch(uri)
         power_switch.stm_power_cycle()
         time.sleep(2)
-        
+
         event = mp.Event()
 
         def connect_callback(_: str):
+            self._drone_healthy.set()
             event.set()
 
         self.drone.fully_connected.add_callback(connect_callback)
@@ -352,15 +357,17 @@ class RealRaceCoreEnv:
         self.drone.connection_failed.add_callback(
             lambda _, msg: logger.warning(f"Connection failed: {msg}")
         )
-        self.drone.connection_lost.add_callback(lambda _, msg: logger.warning(f"Connection lost: {msg}"))
+        self.drone.connection_lost.add_callback(
+            lambda _, msg: logger.warning(f"Connection lost: {msg}")
+        )
         self.drone.open_link(uri)
 
         logger.info(f"Waiting for drone {drone_id} to connect...")
         connected = event.wait(10.0)
         if not connected:
             raise TimeoutError("Timed out while waiting for the drone.")
+        self._connected_to_drone = True
         logger.info(f"Drone {drone_id} connected to {uri}")
-
 
     def _reset_env_data(self, data: EnvData):
         """Reset the environment data."""
@@ -461,6 +468,42 @@ class RealRaceCoreEnv:
                 gate_passed(drone_pos, drone_pos, gate_pos, gate_quat, (0.45, 0.45))
             )
 
+    def update_level_config(self, config: ConfigDict) -> ConfigDict:
+        """Update the level config with the real track objects poses.
+
+        Args:
+            config: A ConfigDict storing the original level configuration.
+
+        Returns:
+            A ConfigDict object, with updated pose
+        """
+        result_config = config.to_dict()
+
+        # Now the track.randomize needs be set to false,
+        # since we are storing a layout from real-world placement
+        result_config["env"]["track"]["randomize"] = False
+        # Overwrite the original field with the actual positions from the env
+        result_config["env"]["track"]["gates"] = [
+            {
+                "pos": (self.gates.pos[i]).tolist(),
+                "rpy": (R.from_quat(self.gates.quat[i]).as_euler("xyz", degrees=False)).tolist(),
+            }
+            for i in range(self.gates.pos.shape[0])
+        ]
+        result_config["env"]["track"]["obstacles"] = [
+            {"pos": (self.obstacles.pos[i]).tolist()} for i in range(self.obstacles.pos.shape[0])
+        ]
+        result_config["track"]["drones"] = [
+            {
+                "pos": (self.drones.pos[i]).tolist(),
+                "rpy": (R.from_quat(self.drones.quat[i]).as_euler("xyz", degrees=False)).tolist(),
+                "vel": [0.0, 0.0, 0.0],
+                "ang_vel": [0.0, 0.0, 0.0],
+            }
+            for i in range(self.drones.pos.shape[0])
+        ]
+        return ConfigDict(result_config)
+
     def close(self):
         """Close the environment.
 
@@ -469,17 +512,18 @@ class RealRaceCoreEnv:
         case of errors, and close the connections to the ROSConnector.
         """
         try:
-            if self._drone_healthy.is_set():
+            if self._connected_to_drone:
                 self._return_to_start()
         finally:
             try:
-                # Kill the drone
-                pk = CRTPPacket()
-                pk.port = CRTPPort.LOCALIZATION
-                pk.channel = Localization.GENERIC_CH
-                pk.data = struct.pack("<B", Localization.EMERGENCY_STOP)
-                self.drone.send_packet(pk)
-                self.drone.close_link()
+                if self._connected_to_drone:
+                    # Kill the drone
+                    pk = CRTPPacket()
+                    pk.port = CRTPPort.LOCALIZATION
+                    pk.channel = Localization.GENERIC_CH
+                    pk.data = struct.pack("<B", Localization.EMERGENCY_STOP)
+                    self.drone.send_packet(pk)
+                    self.drone.close_link()
             finally:
                 # Close all ROS connections
                 self._ros_connector.close()

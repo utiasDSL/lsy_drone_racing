@@ -14,7 +14,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("rosout." + __name__)
 
-def randomize_track(gates_pos: ArrayLike, gates_quat: ArrayLike, obstacles_pos: ArrayLike, rng_config: ConfigDict) -> tuple[NDArray, NDArray, NDArray]:
+
+def randomize_track(
+    gates_pos: ArrayLike, gates_quat: ArrayLike, obstacles_pos: ArrayLike, rng_config: ConfigDict
+) -> tuple[NDArray, NDArray, NDArray]:
     """A numpy implementation to randomize the track.
 
     Args:
@@ -25,7 +28,7 @@ def randomize_track(gates_pos: ArrayLike, gates_quat: ArrayLike, obstacles_pos: 
 
     Returns:
         A tuple that contains 3 NDArrays: randomized gate positions([N,3]), gate quaternions([N,4]), obstacle positions([M,3])
-    """  
+    """
     assert rng_config.gate_pos.fn == "uniform", "Race track checks expect uniform distributions"
     assert rng_config.obstacle_pos.fn == "uniform", "Race track checks expect uniform distributions"
     gates_pos, gates_quat = np.array(gates_pos), np.array(gates_quat)
@@ -42,7 +45,9 @@ def randomize_track(gates_pos: ArrayLike, gates_quat: ArrayLike, obstacles_pos: 
     randomized_gate_quat = R.from_euler("xyz", randomized_gate_rot).as_quat()
 
     obstacle_pos_rand = rng_config.obstacle_pos.kwargs
-    sample_obs_pos = np.random.uniform(obstacle_pos_rand.minval, obstacle_pos_rand.maxval, size=(n_obstacles, 3))
+    sample_obs_pos = np.random.uniform(
+        obstacle_pos_rand.minval, obstacle_pos_rand.maxval, size=(n_obstacles, 3)
+    )
     randomized_obstacle_pos = obstacles_pos + sample_obs_pos
     return randomized_gate_pos, randomized_gate_quat, randomized_obstacle_pos
 
@@ -53,7 +58,7 @@ def check_gates_in_bound(gates: ConfigDict, limits: ConfigDict):
     Args:
         gates: A ConfigDict containing gate positions.
         limits: A ConfigDict containing min and max limits for gate positions.
-    """   
+    """
     for i, pos in enumerate(gates.pos):
         if np.any(pos[:2] < limits.pos_limit_low):
             raise RuntimeError(
@@ -65,9 +70,7 @@ def check_gates_in_bound(gates: ConfigDict, limits: ConfigDict):
             )
 
 
-def check_race_track(
-    gates: ConfigDict, obstacles: ConfigDict, rng_config: ConfigDict
-):
+def check_race_track(gates: ConfigDict, obstacles: ConfigDict, rng_config: ConfigDict):
     """Check if the race track's gates and obstacles are within tolerances.
 
     Args:
@@ -77,11 +80,11 @@ def check_race_track(
     """
     assert rng_config.gate_pos.fn == "uniform", "Race track checks expect uniform distributions"
     assert rng_config.obstacle_pos.fn == "uniform", "Race track checks expect uniform distributions"
-    
+
     low, high = rng_config.gate_pos.kwargs.minval, rng_config.gate_pos.kwargs.maxval
     for i, (pos, nominal_pos) in enumerate(zip(gates.pos, gates.nominal_pos)):
         check_bounds(f"gate{i + 1}", pos, nominal_pos, np.array(low), np.array(high))
-    
+
     # TODO: Now the gate check should consider rotation in roll and pitch as well.
     ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
     for i, (quat, nominal_quat) in enumerate(zip(gates.quat, gates.nominal_quat)):
@@ -91,10 +94,14 @@ def check_race_track(
 
     low, high = rng_config.obstacle_pos.kwargs.minval, rng_config.obstacle_pos.kwargs.maxval
     for i, (pos, nominal_pos) in enumerate(zip(obstacles.pos, obstacles.nominal_pos)):
-        check_bounds(f"obstacle{i + 1}", pos[:2], nominal_pos[:2], np.array(low[:2]), np.array(high[:2]))
+        check_bounds(
+            f"obstacle{i + 1}", pos[:2], nominal_pos[:2], np.array(low[:2]), np.array(high[:2])
+        )
 
 
-def check_drone_start_pos(nominal_pos: NDArray, real_pos: NDArray, rng_config: ConfigDict, drone_name: str):
+def check_drone_start_pos(
+    nominal_pos: NDArray, real_pos: NDArray, rng_config: ConfigDict, drone_name: str
+):
     """Check if the real drone start position matches the settings.
 
     Args:
@@ -107,8 +114,10 @@ def check_drone_start_pos(nominal_pos: NDArray, real_pos: NDArray, rng_config: C
         "Drone start position check expects uniform distributions"
     )
     tol_min, tol_max = rng_config.drone_pos.kwargs.minval, rng_config.drone_pos.kwargs.maxval
-   
-    check_bounds(drone_name, real_pos[:2], nominal_pos[:2], np.array(tol_min[:2]), np.array(tol_max[:2]))
+
+    check_bounds(
+        drone_name, real_pos[:2], nominal_pos[:2], np.array(tol_min[:2]), np.array(tol_max[:2])
+    )
 
 
 def check_bounds(name: str, actual: NDArray, desired: NDArray, low: NDArray, high: NDArray):

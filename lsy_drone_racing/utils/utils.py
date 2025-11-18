@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from lsy_drone_racing.envs.race_core import RaceCoreEnv
-    from lsy_drone_racing.envs.real_race_env import RealDroneRaceEnv
 
 
 logger = logging.getLogger(__name__)
@@ -79,42 +78,6 @@ def load_config(path: Path) -> ConfigDict:
     with open(path, "r") as f:
         return ConfigDict(toml.load(f))
 
-
-def save_track_layout(env: RealDroneRaceEnv, config: ConfigDict, output_path: Path):
-    """Save the track objects poses in the real race environment to a toml file.
-
-    Args:
-        env: The RealDroneRaceEnv, which stores actual gates, objstacles and drone positions from MoCap
-        config: The original ConfigDict to copy
-        output_path: Path object to the output toml config file.
-        real_pos: Boolean. If set to True, the real poses of track objects are stored. Otherwise the nominal poses are stored.
-    
-    """
-    assert output_path.suffix == ".toml", f"Configuration file has to be a TOML file: {output_path}"
-    keys_to_copy = ['controller', 'deploy', 'env', 'sim']
-    config_dict = config.to_dict()
-    output_dict = {
-        key: config_dict[key].to_dict() for key in keys_to_copy
-    }
-
-    # Now the track.randomize needs be set to false,
-    # since we are storing a layout from real-world placement
-    output_dict['env']['track']['randomize'] = False
-    # Overwrite the original field with the actual positions from the env
-    output_dict['env']['track']['gates'] = [
-        {'pos' : (env.unwrapped.gates.pos[i]).tolist(),
-        'rpy' : (R.from_quat(env.unwrapped.gates.quat[i]).as_euler('xyz', degrees = False)).tolist()
-        }
-        for i in range(env.unwrapped.gates.pos.shape[0])
-    ]
-    output_dict['env']['track']['obstacles'] = [
-        {'pos' : (env.unwrapped.obstacles.pos[i]).tolist(),
-        }
-        for i in range(env.unwrapped.obstacles.pos.shape[0])
-    ]
-    
-    with open(output_path, "w") as f:
-        toml.dump(output_dict, f)
 
 def draw_line(
     env: RaceCoreEnv,
