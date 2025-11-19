@@ -1,7 +1,0 @@
-cd ~/repos/lsy_drone_racing_ws26
-
-pixi shell -e gpu
-
-python scripts/sim.py -r --config level2.toml -controller state_mpc.py -n 3
-python scripts/sim_test.py -r --config level2.toml -controller state_simple.py -n 3
-python scripts/sim_test.py -r --config level3.toml -controller state_test.py -n 3
