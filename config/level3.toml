@@ -1,8 +1,8 @@
-# Level 2
+# Level 3
 
-# | Evaluation Scenario | Randomized Inertial Properties | Randomized Obstacles, Gates | Randomized Tracks | Notes                 |
-# | :-----------------: | :----------------------------: | :-------------------------: | :---------------: | :-------------------: |
-# | `level2.toml`       | *Yes*                          | *Yes*                       | *No*              | Learning, re-planning |
+# | Evaluation Scenario | Randomized Inertial Properties | Randomized Obstacles, Gates | Randomized Tracks | Notes           |
+# | :-----------------: | :----------------------------: | :-------------------------: | :---------------: | :-------------: |
+# | `level3.toml`       | *Yes*                          | *Yes*                       | *Yes*             | Online planning |
 [controller]
 file = "state_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 
@@ -43,34 +43,37 @@ sensor_range = 0.7      # Range at which the exact location of gates and obstacl
 control_mode = "state"  # Control mode of the environment. Can be either "state" or "attitude"
 
 [env.track]
-randomize = true        # Randomized the positions (x & y) of the given gates, obstacles and drones 
+# Full track radomization. When activated, the position (x & y) and orientation (yaw) 
+# of the below given gates, obstacles and drones is randomized inside the safety limits. 
+# Note: The order and therefore also height is not randomized!
+randomize = true
 
 # Tall gates: 1.195m height. Short gates: 0.695m height. Height is measured from the ground to the center of the gate.
 [[env.track.gates]]
-pos = [0.5 , 0.25, 0.7]
-rpy = [0.0, 0.0, -0.78]
+pos = [0.0, 0.0, 0.7]
+rpy = [0.0, 0.0, 0.0]
 [[env.track.gates]]
-pos = [1.05, 0.75, 1.2]
-rpy = [0.0, 0.0, 2.35]
+pos = [0.0, 0.0, 1.2]
+rpy = [0.0, 0.0, 0.0]
 [[env.track.gates]]
-pos = [-1.0, -0.25, 0.7]
-rpy = [0.0, 0.0, 3.14]
+pos = [0.0, 0.0, 0.7]
+rpy = [0.0, 0.0, 0.0]
 [[env.track.gates]]
-pos = [0.0, -0.75, 1.2]
+pos = [0.0, 0.0, 1.2]
 rpy = [0.0, 0.0, 0.0]
 
 # Obstacle height: 1.52m + reflective marker on top. Height is measured from the ground to the top of the obstacle.
 [[env.track.obstacles]]
-pos = [0.0, 0.75, 1.55]
+pos = [0.0, 0.0, 1.55]
 [[env.track.obstacles]]
-pos = [1.0, 0.25, 1.55]
+pos = [0.0, 0.0, 1.55]
 [[env.track.obstacles]]
-pos = [-1.5, -0.25, 1.55]
+pos = [0.0, 0.0, 1.55]
 [[env.track.obstacles]]
-pos = [-0.5, -0.75, 1.55]
+pos = [0.0, 0.0, 1.55]
 
 [[env.track.drones]]
-pos = [-1.5, 0.75, 0.01]
+pos = [0.0, 0.0, 0.0]
 rpy = [0.0, 0.0, 0.0]
 vel = [0, 0, 0]
 ang_vel = [0, 0, 0]

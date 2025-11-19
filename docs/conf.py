@@ -26,10 +26,8 @@ add_module_names = False
 # Autodoc config
 autodoc_member_order = "bysource"
 
-# Mock imports on ReadTheDocs that are not available with pip or that we do not want to install (mainly for ROS2)
-if on_rtd:
-    autodoc_mock_imports = ["cflib", "tf2_msgs", "rclpy", "std_msgs", "geometry_msgs"]
-
+# Mock imports on ReadTheDocs that are not available with pip or that we do not want to install
+autodoc_mock_imports = ["cflib", "crazyflow", "drone_models", "drone_estimators", "torch", "rclpy", "mujoco", "acados_template"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
