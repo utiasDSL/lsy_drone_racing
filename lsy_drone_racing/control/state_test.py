@@ -93,7 +93,7 @@ class MyController(Controller):
         self.initial_position = obs['pos']
         
         # Enable visualization (trajectory plotting)
-        self.visualization = True
+        self.visualization = False
 
         # Calculate waypoints 
         waypoints = self.calc_waypoints_from_gates(
