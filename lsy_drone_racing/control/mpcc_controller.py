@@ -39,8 +39,8 @@ if TYPE_CHECKING:
 class MPCCConfig:
     """Configuration for MPCC controller."""
     # MPC Horizon
-    N_horizon: int = 50                    # Number of horizon steps
-    T_horizon: float = 0.7                 # Horizon time (seconds)
+    N_horizon: int = 30                    # Number of horizon steps
+    T_horizon: float = 0.42                 # Horizon time (seconds)
     
     # Arc-length model
     model_arc_step: float = 0.05            # Arc length discretization
@@ -62,8 +62,8 @@ class MPCCConfig:
     r_yaw: float = 0.50                     # Yaw rate penalty
     
     # Speed incentive
-    mu_speed: float = 3.0                   # Progress reward
-    w_speed_gate: float = 0.3               # Speed penalty at gates
+    mu_speed: float = 1.0                   # Progress reward
+    w_speed_gate: float = 0.5               # Speed penalty at gates
     
     # Safety bounds
     pos_bounds: tuple = (
@@ -255,7 +255,7 @@ class MPCCController(Controller):
         # Input constraints
         # [df_cmd, dr_cmd, dp_cmd, dy_cmd, v_theta_cmd]
         ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, 0.0])
-        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 4.0])
+        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 2.0])
         ocp.constraints.idxbu = np.array([0, 1, 2, 3, 4])
         
         # Initial state (will be overwritten)
@@ -785,4 +785,5 @@ class MPCCController(Controller):
     
     def is_visualization_enabled(self) -> bool:
         """Check if visualization is currently enabled."""
+
         return self.visualizer is not None and self.visualizer.is_available
