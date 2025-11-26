@@ -34,7 +34,7 @@ def check_race_track(
     n_gates, n_obstacles = len(gates_pos), len(obstacles_pos)
     gate_names = [f"gate{i}" for i in range(1, n_gates + 1)]
     obstacle_names = [f"obstacle{i}" for i in range(1, n_obstacles + 1)]
-    ros_connector = ROSConnector(tf_names=gate_names + obstacle_names, timeout=5.0)
+    ros_connector = ROSConnector(tf_names=gate_names + obstacle_names, timeout=20.0)
     try:
         ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
         for i in range(n_gates):
@@ -66,7 +66,7 @@ def check_drone_start_pos(pos: NDArray, rng_config: ConfigDict, drone_name: str)
         "Drone start position check expects uniform distributions"
     )
     tol_min, tol_max = rng_config.drone_pos.kwargs.minval, rng_config.drone_pos.kwargs.maxval
-    ros_connector = ROSConnector(estimator_names=[drone_name], timeout=5.0)
+    ros_connector = ROSConnector(estimator_names=[drone_name], timeout=20.0)
     try:
         real_pos = ros_connector.pos[drone_name]
     finally:
