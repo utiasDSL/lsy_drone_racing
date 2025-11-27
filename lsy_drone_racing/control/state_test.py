@@ -109,7 +109,7 @@ class MyController(Controller):
         # === DEBUG: Save initial waypoints ===
         self._debug_waypoints_initial = waypoints.copy()
         
-        # Step 2: Add detour waypoints for backtracking gates (NEW!)
+        # Step 2: Add detour waypoints for backtracking gates
         waypoints = self._add_detour_waypoints(
             waypoints,
             self.gate_positions,
@@ -811,19 +811,3 @@ class MyController(Controller):
             self.visualizer.save_trajectory_data(filepath, format=format)
         except Exception as e:
             print(f"Error saving trajectory data: {e}")
-    
-    def export_demo(self, base_name: str = "race_demo") -> None:
-        """Export both HTML visualization and trajectory data.
-        
-        This convenience method saves both the interactive visualization
-        and the trajectory data with a common base name.
-        
-        Args:
-            base_name: Base name for output files (without extension).
-        
-        Example:
-            controller.export_demo("my_race")
-            # Creates: my_race.html and my_race.json
-        """
-        self.save_visualization_html(f"{base_name}.html")
-        self.save_trajectory_data(f"{base_name}.json", format='json')
