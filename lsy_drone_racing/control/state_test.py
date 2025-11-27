@@ -7,6 +7,7 @@ It supports dynamic replanning when gates or obstacles change position during fl
 from the LSY Drone Racing project by Yuming Li (TUM).
 It is used solely for learning and research purposes.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -38,11 +39,19 @@ class MyController(Controller):
     """
 
     # Class constants
-    TRAJECTORY_DURATION = 15.0  # Total trajectory duration in seconds
+    TRAJECTORY_DURATION = 20.0  # Total trajectory duration in seconds
     STATE_DIMENSION = 13  # [x, y, z, vx, vy, vz, ax, ay, az, yaw, rrate, prate, yrate]
     OBSTACLE_SAFETY_DISTANCE = 0.3  # Minimum distance to obstacles in meters
     VISUALIZATION_SAMPLES = 100  # Number of points for trajectory visualization
     LOG_INTERVAL = 100  # Print debug info every N ticks
+
+    # Waypoint generation parameters
+    APPROACH_DISTANCE = 0.6  # Distance before/after gate center for waypoints
+    NUM_INTERMEDIATE_POINTS = 5  # Number of waypoints around each gate
+
+    # Detour parameters
+    ANGLE_THRESHOLD = 120.0  # Angle threshold in degrees for detecting backtracking
+    DETOUR_DISTANCE = 0.65  # Distance from gate center for detour waypoint
 
     def __init__(
         self, 
@@ -100,8 +109,8 @@ class MyController(Controller):
             self.initial_position,
             self.gate_positions,
             self.gate_normals,
-            approach_distance=0.5,
-            num_intermediate_points=5
+            approach_distance=self.APPROACH_DISTANCE,
+            num_intermediate_points=self.NUM_INTERMEDIATE_POINTS
         )
         print(f"Initial waypoints count: {len(waypoints)}")
         print(f"Initial waypoints:\n{waypoints}")
@@ -116,9 +125,9 @@ class MyController(Controller):
             self.gate_normals,
             self.gate_y_axes,
             self.gate_z_axes,
-            num_intermediate_points=5,
-            angle_threshold=120.0,
-            detour_distance=0.65
+            num_intermediate_points=self.NUM_INTERMEDIATE_POINTS,
+            angle_threshold=self.ANGLE_THRESHOLD,
+            detour_distance=self.DETOUR_DISTANCE
         )
         print(f"Waypoints after detour: {len(waypoints)}")
 
@@ -383,8 +392,8 @@ class MyController(Controller):
             self.initial_position,
             self.gate_positions,
             self.gate_normals,
-            approach_distance=0.5,
-            num_intermediate_points=5
+            approach_distance=self.APPROACH_DISTANCE,
+            num_intermediate_points=self.NUM_INTERMEDIATE_POINTS
         )
         print(f"New waypoints count: {len(waypoints)}")
         
@@ -395,9 +404,9 @@ class MyController(Controller):
             self.gate_normals,
             self.gate_y_axes,
             self.gate_z_axes,
-            num_intermediate_points=5,
-            angle_threshold=120.0,
-            detour_distance=0.65
+            num_intermediate_points=self.NUM_INTERMEDIATE_POINTS,
+            angle_threshold=self.ANGLE_THRESHOLD,
+            detour_distance=self.DETOUR_DISTANCE
         )
         
         # Step 3: Apply collision avoidance
