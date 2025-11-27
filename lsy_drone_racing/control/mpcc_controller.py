@@ -40,7 +40,7 @@ class MPCCConfig:
     """Configuration for MPCC controller."""
     # MPC Horizon
     N_horizon: int = 30                    # Number of horizon steps
-    T_horizon: float = 0.42                 # Horizon time (seconds)
+    T_horizon: float = 0.7                 # Horizon time (seconds)
     
     # Arc-length model
     model_arc_step: float = 0.05            # Arc length discretization
@@ -49,21 +49,21 @@ class MPCCConfig:
     # Cost function weights (tunable for speed/stability trade-off)
     # Higher values = more tracking accuracy (stability)
     # Lower values = more speed
-    q_lag: float = 140.0                   # Lag error weight
-    q_lag_peak: float = 200.0              # Lag error weight at gates
-    q_contour: float = 160.0               # Contour error weight
-    q_contour_peak: float = 230.0          # Contour error weight at gates
-    q_attitude: float = 1.0                # Attitude regularization
+    q_lag: float = 160.0                   # Lag error weight
+    q_lag_peak: float = 230.0              # Lag error weight at gates
+    q_contour: float = 185.0               # Contour error weight
+    q_contour_peak: float = 165.0          # Contour error weight at gates
+    q_attitude: float = 1.2                # Attitude regularization
     
     # Control smoothness
-    r_thrust: float = 0.08                  # Thrust rate penalty
-    r_roll: float = 0.40                    # Roll rate penalty
-    r_pitch: float = 0.40                   # Pitch rate penalty
-    r_yaw: float = 0.50                     # Yaw rate penalty
+    r_thrust: float = 0.11                  # Thrust rate penalty
+    r_roll: float = 0.55                    # Roll rate penalty
+    r_pitch: float = 0.55                   # Pitch rate penalty
+    r_yaw: float = 0.65                     # Yaw rate penalty
     
     # Speed incentive
     mu_speed: float = 1.0                   # Progress reward
-    w_speed_gate: float = 0.5               # Speed penalty at gates
+    w_speed_gate: float = 0.45               # Speed penalty at gates
     
     # Safety bounds
     pos_bounds: tuple = (
@@ -71,7 +71,7 @@ class MPCCConfig:
         (-2.0, 1.8),                        # Y bounds
         (-0.1, 2.0),                        # Z bounds
     )
-    vel_bounds: tuple = (-1.0, 5.0)         # Velocity bounds (m/s)
+    vel_bounds: tuple = (-1.0, 4.0)         # Velocity bounds (m/s)
     
     # Path planning
     planned_duration: float = 30.0          # Nominal trajectory duration
@@ -255,7 +255,7 @@ class MPCCController(Controller):
         # Input constraints
         # [df_cmd, dr_cmd, dp_cmd, dy_cmd, v_theta_cmd]
         ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, 0.0])
-        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 2.0])
+        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 4.0])
         ocp.constraints.idxbu = np.array([0, 1, 2, 3, 4])
         
         # Initial state (will be overwritten)
@@ -785,5 +785,4 @@ class MPCCController(Controller):
     
     def is_visualization_enabled(self) -> bool:
         """Check if visualization is currently enabled."""
-
         return self.visualizer is not None and self.visualizer.is_available
