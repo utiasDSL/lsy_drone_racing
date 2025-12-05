@@ -21,8 +21,8 @@
       <!-- Textured front -->
       <geom name="front_top" type="box" size=".3 .05 5e-4" pos="-1e-3 0.0 0.25" euler="-90 -90 180" material="gate_mat_top"/>
       <geom name="front_bottom" type="box" size=".3 .05 5e-4" pos="-1e-3 0.0 -0.25" euler="-90 -90 180" material="gate_mat_bottom"/>
-      <geom name="front_left" type="box" size=".05 .2 5e-4" pos="-1e-3 -0.25 0" euler="90 90 180" material="gate_mat_left"/>
-      <geom name="front_right" type="box" size=".05 .2 5e-4" pos="-1e-3 0.25 0" euler="90 90 180" material="gate_mat_right"/>
+      <geom name="front_left" type="box" size=".05 .2 5e-4" pos="-1e-3 -0.25 0" euler="90 -90 180" material="gate_mat_left"/>
+      <geom name="front_right" type="box" size=".05 .2 5e-4" pos="-1e-3 0.25 0" euler="90 -90 180" material="gate_mat_right"/>
 
       <!-- Textured back -->
       <geom name="back_top" type="box" size=".3 .05 5e-4" pos="1e-3 0.0 0.25" euler="90 90 0" material="gate_mat_top"/>
