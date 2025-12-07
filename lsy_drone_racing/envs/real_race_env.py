@@ -475,13 +475,14 @@ class RealRaceCoreEnv:
             config: A ConfigDict storing the original level configuration.
 
         Returns:
-            A ConfigDict object, with updated pose
+            A ConfigDict object, with updated starting pose of gates, obstacles and drones
         """
         result_config = config.to_dict()
 
         # Now the track.randomize needs be set to false,
-        # since we are storing a layout from real-world placement
+        # since we are storing the layout from a real-world placement
         result_config["env"]["track"]["randomize"] = False
+        
         # Overwrite the original field with the actual positions from the env
         result_config["env"]["track"]["gates"] = [
             {
