@@ -332,6 +332,13 @@ class RealRaceCoreEnv:
             )
 
     def _check_drones(self, deploy_config: ConfigDict, track: ConfigDict):
+        """Check the drone starting position for validity.
+
+        Note:
+        If the randomly generation mode is set to true,
+        the function will only overwrite the current drone position with real position.
+        Otherwise, the function will check whether the drone position is within the tolerance limits.
+        """
         if track.randomize:
             # The starting position drones.pos has must be set here even though they are not used in _step().
             # They are the target pose for return controller.
