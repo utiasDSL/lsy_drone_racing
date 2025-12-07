@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -62,11 +62,11 @@ def check_gates_in_bound(gates: ConfigDict, limits: ConfigDict):
     for i, pos in enumerate(gates.pos):
         if np.any(pos[:2] < limits.pos_limit_low):
             raise RuntimeError(
-                f"gate{i + 1} position {pos[:2]} is below the minimum limit {limits.pos_limit_low}"
+                f"gate{i + 1} position {pos[:2]} is below the predefined minimum limit {limits.pos_limit_low}"
             )
         if np.any(pos[:2] > limits.pos_limit_high):
             raise RuntimeError(
-                f"gate{i + 1} position {pos[:2]} is above the maximum limit {limits.pos_limit_high}"
+                f"gate{i + 1} position {pos[:2]} is above the predefined maximum limit {limits.pos_limit_high}"
             )
 
 
@@ -86,11 +86,13 @@ def check_race_track(gates: ConfigDict, obstacles: ConfigDict, rng_config: Confi
         check_bounds(f"gate{i + 1}", pos, nominal_pos, np.array(low), np.array(high))
 
     # TODO: Now the gate check should consider rotation in roll and pitch as well.
-    ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
+    high_tol = np.array(rng_config.gate_rpy.kwargs.maxval)
+    low_tol = np.array(rng_config.gate_rpy.kwargs.minval)
+    # ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
     for i, (quat, nominal_quat) in enumerate(zip(gates.quat, gates.nominal_quat)):
         gate_rot = R.from_quat(quat)
         nominal_rot = R.from_quat(nominal_quat)
-        check_rotation(f"gate{i + 1}", gate_rot, nominal_rot, ang_tol)
+        check_rotation(f"gate{i + 1}", gate_rot, nominal_rot, low=low_tol, high=high_tol)
 
     low, high = rng_config.obstacle_pos.kwargs.minval, rng_config.obstacle_pos.kwargs.maxval
     for i, (pos, nominal_pos) in enumerate(zip(obstacles.pos, obstacles.nominal_pos)):
@@ -121,15 +123,16 @@ def check_drone_start_pos(
 
 
 def check_bounds(name: str, actual: NDArray, desired: NDArray, low: NDArray, high: NDArray):
-    """Check if the actual value is within the specified bounds of the desired value.\
-        Raise error when the actual value exceeds the low or high boundaries.
+    """Check if the actual value is within the specified bounds of the desired value.
+
+    Raise error when the actual value exceeds the low or high boundaries.
 
     Args:
         name: Name of the object being checked.
         actual: NDArray of real value and is expected to be [N, ].
         desired: NDArray of nominal value and is expected to be [N, ].
         low: NDArray of the minimum value of (actual - desired) and is expected to be [N, ]
-        high: NDArray of the maximum value of (actual - desired) and is expected to be [N, ]    
+        high: NDArray of the maximum value of (actual - desired) and is expected to be [N, ]
     """
     if np.any(actual - desired < low):
         raise RuntimeError(
@@ -141,11 +144,46 @@ def check_bounds(name: str, actual: NDArray, desired: NDArray, low: NDArray, hig
         )
 
 
-def check_rotation(name: str, actual_rot: R, desired_rot: R, ang_tol: float):
-    """Check if the actual rotation is within the specified tolerance of the desired rotation."""
-    if (actual_rot.inv() * desired_rot).magnitude() > ang_tol:
-        actual, desired = actual_rot.as_euler("xyz"), desired_rot.as_euler("xyz")
-        raise RuntimeError(
-            f"{name} exceeds rotation tolerances ({ang_tol}).\n"
-            f"Rotation is: {actual}, should be: {desired}"
-        )
+def check_rotation(
+    name: str,
+    actual_rot: R,
+    desired_rot: R,
+    low: Union[np.ndarray, float],
+    high: Union[np.ndarray, float],
+):
+    """Compare gate orientations in world-frame Euler XYZ if the ang_tol is an array. Otherwise, check the overall magnitude of the rotation.
+
+    Args:
+        name: Name of the object being checked.
+        actual_rot: scipy.spatial.transform.R object describing rotation of the real object.
+        desired_rot:  scipy.spatial.transform.R object describing rotation of the nominal object.
+        low: A float indicating the overall magnitude lower limit or a NDArray designating the per axis rotation lower limit
+        high: A float indicating the overall magnitude higher limit or a NDArray designating the per axis rotation higher limit
+
+    """
+    assert not np.isscalar(low) ^ np.isscalar(high), (
+        f"Lower and higher bound should be all scalar or array, got low={low} and high={high}"
+    )
+    actual = actual_rot.as_euler("xyz", degrees=False)
+    desired = desired_rot.as_euler("xyz", degrees=False)
+
+    if isinstance(low, float) and isinstance(high, float):
+        if (actual_rot.inv() * desired_rot).magnitude() > max(abs(low), abs(high)):
+            raise RuntimeError(
+                f"{name} exceeds rotation tolerances ({max(abs(low), abs(high))}).\n"
+                f"Rotation is: {actual}, should be: {desired}"
+            )
+    else:
+        # Angle difference with wrap-around
+        diff = (actual - desired + np.pi) % (2 * np.pi) - np.pi
+
+        if np.any(diff < low):
+            raise RuntimeError(
+                f"{name} exceeds lower rotation tolerances ({low}).\n"
+                f"Rotation is: {actual}, should be: {desired}"
+            )
+        elif np.any(diff > high):
+            raise RuntimeError(
+                f"{name} exceeds higher rotation tolerances ({high}).\n"
+                f"Rotation is: {actual}, should be: {desired}"
+            )

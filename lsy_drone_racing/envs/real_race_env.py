@@ -127,7 +127,7 @@ class RealRaceCoreEnv:
         )
         # A hatched indicator whether the drone has taken off at least once
         # Used to prevent the return controller from engaging before takeoff
-        self.taken_off = False
+        self._taken_off = False
         # Dynamic data
         self.data = EnvData.create(
             n_drones=self.n_drones, n_gates=self.n_gates, n_obstacles=self.n_obstacles
@@ -175,7 +175,7 @@ class RealRaceCoreEnv:
         self.data.target_gate += np.asarray(passed)
         self.data.target_gate[self.data.target_gate >= self.n_gates] = -1
         self.data.last_drone_pos[...] = drone_pos
-        self.taken_off |= (drone_pos[self.rank, 2] > 0.2)
+        self._taken_off |= drone_pos[self.rank, 2] > 0.2
         # Send vicon position updates to the drone at a fixed frequency irrespective of the env freq
         # Sending too many updates may deteriorate the performance of the drone, hence the limiter
         if (t := time.perf_counter()) - self._last_drone_pos_update > 1 / self.POS_UPDATE_FREQ:
@@ -188,11 +188,13 @@ class RealRaceCoreEnv:
         # If gates/obstacles are in sensor range use the actual pose, otherwise use the nominal pose
         # The actual pose is measured at the beginning of the episode and is not updated during the
         # episode. If we want to use dynamic gates/obstacles, we need to update the poses here.
-        mask = self.data.gates_visited[..., None]
-        gates_pos = np.where(mask, self.gates.pos, self.gates.nominal_pos).astype(np.float32)
-        gates_quat = np.where(mask, self.gates.quat, self.gates.nominal_quat).astype(np.float32)
-        mask = self.data.obstacles_visited[..., None]
-        obstacles_pos = np.where(mask, self.obstacles.pos, self.obstacles.nominal_pos).astype(
+        mask_gate = self.data.gates_visited[..., None]
+        gates_pos = np.where(mask_gate, self.gates.pos, self.gates.nominal_pos).astype(np.float32)
+        gates_quat = np.where(mask_gate, self.gates.quat, self.gates.nominal_quat).astype(
+            np.float32
+        )
+        mask_obs = self.data.obstacles_visited[..., None]
+        obstacles_pos = np.where(mask_obs, self.obstacles.pos, self.obstacles.nominal_pos).astype(
             np.float32
         )
         drone_pos = np.stack([self._ros_connector.pos[drone] for drone in self.drone_names])
@@ -275,7 +277,7 @@ class RealRaceCoreEnv:
             tf_names = [f"gate{i}" for i in range(1, self.n_gates + 1)]
             tf_names += [f"obstacle{i}" for i in range(1, self.n_obstacles + 1)]
             try:
-                ros_connector = ROSConnector(tf_names=tf_names, timeout=5.0)
+                ros_connector = ROSConnector(tf_names=tf_names, timeout=10.0)
                 pos, quat = ros_connector.pos, ros_connector.quat
             finally:
                 ros_connector.close()
@@ -293,6 +295,11 @@ class RealRaceCoreEnv:
                 )
                 raise
         if track.randomize:
+            if not deploy_config.get("real_track_objects", True):
+                raise ValueError(
+                    "With randomizely generated track (env.track.randomize=True), "
+                    "the deploy.real_track_objects should always be set to True."
+                )
             self.gates.nominal_pos, self.gates.nominal_quat, self.obstacles.nominal_pos = (
                 randomize_track(
                     gates_pos=self.gates.pos,
@@ -454,8 +461,6 @@ class RealRaceCoreEnv:
         pos = self._ros_connector.pos[self.drone_name]
         vel = self._ros_connector.vel[self.drone_name]
         # This quick check prevents us from engaging the return controller if we havent even started yet.
-        if not self.taken_off:
-            return
         break_pos = pos + vel / np.linalg.norm(vel) * BREAKING_DISTANCE
         break_pos[2] = RETURN_HEIGHT
         self.drone.high_level_commander.go_to(*break_pos, 0, BREAKING_DURATION)
@@ -496,7 +501,7 @@ class RealRaceCoreEnv:
         # Now the track.randomize needs be set to false,
         # since we are storing the layout from a real-world placement
         result_config["env"]["track"]["randomize"] = False
-        
+
         # Overwrite the original field with the actual positions from the env
         result_config["env"]["track"]["gates"] = [
             {
@@ -508,7 +513,7 @@ class RealRaceCoreEnv:
         result_config["env"]["track"]["obstacles"] = [
             {"pos": (self.obstacles.pos[i]).tolist()} for i in range(self.obstacles.pos.shape[0])
         ]
-        result_config["track"]["drones"] = [
+        result_config["env"]["track"]["drones"] = [
             {
                 "pos": (self.drones.pos[i]).tolist(),
                 "rpy": (R.from_quat(self.drones.quat[i]).as_euler("xyz", degrees=False)).tolist(),
@@ -527,7 +532,7 @@ class RealRaceCoreEnv:
         case of errors, and close the connections to the ROSConnector.
         """
         try:
-            if self._connected_to_drone:
+            if self._connected_to_drone and self._taken_off:
                 self._return_to_start()
         finally:
             try:

@@ -58,7 +58,7 @@ def main(config: str = "level2.toml", controller: str | None = None, save_track:
                 f"Configuration file has to be a TOML file: {output_path}"
             )
             with open(output_path, "w") as f:
-                toml.dump(env.update_level_config(config=config).to_dict(), f)
+                toml.dump(env.unwrapped.update_level_config(config=config).to_dict(), f)
 
         next_obs = obs  # Set next_obs to avoid errors when the loop never enters
 
