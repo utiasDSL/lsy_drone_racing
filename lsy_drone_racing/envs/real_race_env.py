@@ -125,6 +125,9 @@ class RealRaceCoreEnv:
             cmd_topic=f"/drones/{self.drone_name}/command",
             timeout=10.0,
         )
+        # A hatched indicator whether the drone has taken off at least once
+        # Used to prevent the return controller from engaging before takeoff
+        self.taken_off = False
         # Dynamic data
         self.data = EnvData.create(
             n_drones=self.n_drones, n_gates=self.n_gates, n_obstacles=self.n_obstacles
@@ -172,7 +175,7 @@ class RealRaceCoreEnv:
         self.data.target_gate += np.asarray(passed)
         self.data.target_gate[self.data.target_gate >= self.n_gates] = -1
         self.data.last_drone_pos[...] = drone_pos
-
+        self.taken_off |= (drone_pos[self.rank, 2] > 0.2)
         # Send vicon position updates to the drone at a fixed frequency irrespective of the env freq
         # Sending too many updates may deteriorate the performance of the drone, hence the limiter
         if (t := time.perf_counter()) - self._last_drone_pos_update > 1 / self.POS_UPDATE_FREQ:
@@ -267,6 +270,7 @@ class RealRaceCoreEnv:
             # Make sure to use the legacy estimator with the state interface
 
     def _update_track_poses(self, deploy_config: ConfigDict, track: ConfigDict):
+        """Update the track poses from the motion capture system."""
         if deploy_config.get("real_track_objects", True):
             tf_names = [f"gate{i}" for i in range(1, self.n_gates + 1)]
             tf_names += [f"obstacle{i}" for i in range(1, self.n_obstacles + 1)]
@@ -299,6 +303,13 @@ class RealRaceCoreEnv:
             )
 
     def _check_track_layout(self, deploy_config: ConfigDict, track: ConfigDict):
+        """Check the track layout for validity.
+
+        Note:
+            If the randomly generation mode is set to true,
+            the function will check whether the gates are within the safety limits.
+            Otherwise, the function will check whether the track is within the tolerance limits.
+        """
         if track.randomize:
             # TODO: The gate safety limits are now hardcoded: 0.5 meters inside the drone safety limits.
             gate_safety_limits = ConfigDict(
@@ -339,6 +350,7 @@ class RealRaceCoreEnv:
             )
 
     def _connect_radio(self, radio_id: int, radio_channel: int, drone_id: int):
+        """Connect to the drone via radio. If the drone is not reachable, a TimeoutError is raised."""
         cflib.crtp.init_drivers()
         uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
 
@@ -378,6 +390,7 @@ class RealRaceCoreEnv:
         data.last_drone_pos[...] = drone_pos
 
     def _reset_drone(self):
+        """Arm the drone, reset estimation."""
         # Arm the drone
         self.drone.platform.send_arming_request(True)
         self._apply_drone_settings()
@@ -413,6 +426,7 @@ class RealRaceCoreEnv:
         time.sleep(0.1)  # Wait for settings to be applied
 
     def _return_to_start(self):
+        """Returning controller to fly the drone back to the starting position."""
         # Enable high-level functions of the drone and disable low-level control access
         self.drone.commander.send_stop_setpoint()
         self.drone.commander.send_notify_setpoint_stop()
@@ -440,7 +454,7 @@ class RealRaceCoreEnv:
         pos = self._ros_connector.pos[self.drone_name]
         vel = self._ros_connector.vel[self.drone_name]
         # This quick check prevents us from engaging the return controller if we havent even started yet.
-        if pos[2] < 0.2:
+        if not self.taken_off:
             return
         break_pos = pos + vel / np.linalg.norm(vel) * BREAKING_DISTANCE
         break_pos[2] = RETURN_HEIGHT
