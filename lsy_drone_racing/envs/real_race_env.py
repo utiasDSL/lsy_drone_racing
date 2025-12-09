@@ -343,7 +343,7 @@ class RealRaceCoreEnv:
 
     def _connect_radio(self, radio_id: int, radio_channel: int, drone_id: int):
         """Connect to the drone via radio.
-        
+
         If the drone is not reachable, a TimeoutError is raised.
         """
         cflib.crtp.init_drivers()
