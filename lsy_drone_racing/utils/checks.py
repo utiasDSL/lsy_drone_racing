@@ -89,14 +89,15 @@ def check_drone_start_pos(
 def check_bounds(name: str, actual: NDArray, desired: NDArray, low: NDArray, high: NDArray):
     """Check if the actual value is within the specified bounds of the desired value.
 
-    Raise error when the actual value exceeds the low or high boundaries.
-
     Args:
         name: Name of the object being checked.
-        actual: NDArray of real value and is expected to be [N, ].
-        desired: NDArray of nominal value and is expected to be [N, ].
-        low: NDArray of the minimum value of (actual - desired) and is expected to be [N, ]
-        high: NDArray of the maximum value of (actual - desired) and is expected to be [N, ]
+        actual: Values to check.
+        desired: Reference values.
+        low: Lower bound. Minimum permissible value of (actual - desired).
+        high: Upper bound. Maximum value of (actual - desired).
+    
+    Raises:
+            RuntimeError: The values are not in the permissible interval.
     """
     if np.any(actual - desired < low):
         raise RuntimeError(
