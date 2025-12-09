@@ -543,7 +543,9 @@ class Agent(nn.Module):
         action_mean = self.actor_mean(x)
         action_logstd = self.actor_logstd.expand_as(action_mean)
         action_std = torch.exp(action_logstd)
-        # During learning the agent explores the environment by sampling actions from a Normal distribution. The standard deviation is a learnable parameter that should decrease during training as the agent gets more confident in its actions.
+        # During learning the agent explores the environment by sampling actions from a Normal
+        # distribution. The standard deviation is a learnable parameter that should decrease during
+        # training as the agent gets more confident in its actions.
         probs = Normal(action_mean, action_std)
         if action is None:
             action = probs.sample() if not deterministic else action_mean

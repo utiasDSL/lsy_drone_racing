@@ -83,7 +83,8 @@ class AttitudeController(Controller):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The orientation as roll, pitch, yaw angles, and the collective thrust [r_des, p_des, y_des, t_des] as a numpy array.
+            The orientation as roll, pitch, yaw angles, and the collective thrust
+            [r_des, p_des, y_des, t_des] as a numpy array.
         """
         t = min(self._tick / self._freq, self._t_total)
         if t >= self._t_total:  # Maximum duration reached

@@ -122,7 +122,7 @@ def create_ocp_solver(
     Vx_e[0:nx, 0:nx] = np.eye(nx)  # Select all states
     ocp.cost.Vx_e = Vx_e
 
-    # Set initial references (we will overwrite these later on to make the controller track the traj.)
+    # Set initial references. We will overwrite these later to track the trajectory
     ocp.cost.yref, ocp.cost.yref_e = np.zeros((ny,)), np.zeros((ny_e,))
 
     # Set State Constraints (rpy < 30°)
@@ -234,7 +234,8 @@ class AttitudeMPC(Controller):
             info: Optional additional information as a dictionary.
 
         Returns:
-            The orientation as roll, pitch, yaw angles, and the collective thrust [r_des, p_des, y_des, t_des] as a numpy array.
+            The orientation as roll, pitch, yaw angles, and the collective thrust
+            [r_des, p_des, y_des, t_des] as a numpy array.
         """
         i = min(self._tick, self._tick_max)
         if self._tick >= self._tick_max:
