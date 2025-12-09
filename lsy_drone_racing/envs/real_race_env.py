@@ -107,7 +107,7 @@ class RealRaceCoreEnv:
         self.sensor_range = sensor_range
         self.drone_names = [f"cf{drone['id']}" for drone in drones]
         self.drone_name = self.drone_names[rank]
-        self.drone_ch = drones[rank]["channel"]
+        self.drone_channel = drones[rank]["channel"]
         self.drone_id = drones[rank]["id"]
         self.rank = rank
         self.freq = freq
@@ -119,7 +119,7 @@ class RealRaceCoreEnv:
         self.drone_parameters = load_params("first_principles", drones[rank]["drone_model"])
         self.drone = Crazyflie(rw_cache=str(Path(__file__).parent / ".cache"))
         self._drone_healthy = mp.Event()
-        self._drone_healthy.clear()
+        self._drone_healthy.set()
         self._ros_connector = ROSConnector(
             estimator_names=self.drone_names,
             cmd_topic=f"/drones/{self.drone_name}/command",
@@ -139,7 +139,7 @@ class RealRaceCoreEnv:
         self._update_track_poses(deploy_config=options.deploy, track=options.env.track)
         self._check_track_layout(deploy_config=options.deploy, track=options.env.track)
         self._check_drones(deploy_config=options.deploy, track=options.env.track)
-        self._connect_radio(radio_id=self.rank, radio_channel=self.drone_ch, drone_id=self.drone_id)
+        self._connect_radio(radio_id=self.rank, radio_channel=self.drone_channel, drone_id=self.drone_id)
         self._last_drone_pos_update = 0  # Last time a position was sent to the drone estimator
         self._reset_env_data(self.data)
         self._reset_drone()
@@ -188,13 +188,13 @@ class RealRaceCoreEnv:
         # If gates/obstacles are in sensor range use the actual pose, otherwise use the nominal pose
         # The actual pose is measured at the beginning of the episode and is not updated during the
         # episode. If we want to use dynamic gates/obstacles, we need to update the poses here.
-        mask_gate = self.data.gates_visited[..., None]
-        gates_pos = np.where(mask_gate, self.gates.pos, self.gates.nominal_pos).astype(np.float32)
-        gates_quat = np.where(mask_gate, self.gates.quat, self.gates.nominal_quat).astype(
+        mask = self.data.gates_visited[..., None]
+        gates_pos = np.where(mask, self.gates.pos, self.gates.nominal_pos).astype(np.float32)
+        gates_quat = np.where(mask, self.gates.quat, self.gates.nominal_quat).astype(
             np.float32
         )
-        mask_obs = self.data.obstacles_visited[..., None]
-        obstacles_pos = np.where(mask_obs, self.obstacles.pos, self.obstacles.nominal_pos).astype(
+        mask = self.data.obstacles_visited[..., None]
+        obstacles_pos = np.where(mask, self.obstacles.pos, self.obstacles.nominal_pos).astype(
             np.float32
         )
         drone_pos = np.stack([self._ros_connector.pos[drone] for drone in self.drone_names])
@@ -288,12 +288,12 @@ class RealRaceCoreEnv:
                 for i in range(self.n_obstacles):
                     self.obstacles.pos[i, ...] = pos[f"obstacle{i + 1}"]
             except KeyError as e:
-                logger.error(
-                    f"Could not find track objects in the ROS TF tree: {e}. \
+                raise ValueError(
+                    f"Could not find all track objects in the ROS TF tree: {e}. \
                              Have you enabled the track objects in Vicon/ \
                              started the motion capture tracking node?"
-                )
-                raise
+                ) from e  
+                
         if track.randomize:
             if not deploy_config.get("real_track_objects", True):
                 raise ValueError(
@@ -351,10 +351,7 @@ class RealRaceCoreEnv:
             self.drones.pos[self.rank], self.drones.rpy[self.rank] = drone_pos, drone_rpy
 
         if deploy_config.get("check_drone_start_pos", True):
-            real_pos, _ = (
-                self._ros_connector.pos[self.drone_name],
-                self._ros_connector.quat[self.drone_name],
-            )
+            real_pos = self._ros_connector.pos[self.drone_name]
             nominal_pos = np.array(self.drones.pos[self.rank])
             check_drone_start_pos(
                 nominal_pos=nominal_pos,
