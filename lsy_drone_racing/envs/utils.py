@@ -15,6 +15,7 @@ from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from jax import Array
+    from numpy.typing import ArrayLike, NDArray
 
 
 def load_track(track: ConfigDict) -> tuple[ConfigDict, ConfigDict, ConfigDict]:
@@ -314,3 +315,40 @@ def generate_random_track(
         o["pos"][:2] = obstacles_final[i, :2].tolist()
 
     return track
+
+
+def randomize_track(
+    gates_pos: ArrayLike, gates_quat: ArrayLike, obstacles_pos: ArrayLike, rng_config: ConfigDict
+) -> tuple[NDArray, NDArray, NDArray]:
+    """A numpy implementation to randomize the track.
+
+    Args:
+        gates_pos: An array that stores the gate positions and is expected to be [N,3].
+        gates_quat: An array that stores the gate quaternions and is expected to be [N,4].
+        obstacles_pos: An array that stores the obstacle positions and is expected to be [M,3].
+        rng_config: Environment randomization config.
+
+    Returns:
+        A tuple that contains 3 NDArrays: randomized gate positions([N,3]), gate quaternions([N,4]), obstacle positions([M,3])
+    """
+    assert rng_config.gate_pos.fn == "uniform", "Race track checks expect uniform distributions"
+    assert rng_config.obstacle_pos.fn == "uniform", "Race track checks expect uniform distributions"
+    gates_pos, gates_quat = np.array(gates_pos), np.array(gates_quat)
+    gates_rot = R.from_quat(gates_quat).as_euler("xyz")
+    obstacles_pos = np.array(obstacles_pos)
+    n_gates, n_obstacles = len(gates_pos), len(obstacles_pos)
+
+    gate_rpy_rand = rng_config.gate_rpy.kwargs
+    gate_pos_rand = rng_config.gate_pos.kwargs
+    sample_rpy = np.random.uniform(gate_rpy_rand.minval, gate_rpy_rand.maxval, size=(n_gates, 3))
+    sample_pos = np.random.uniform(gate_pos_rand.minval, gate_pos_rand.maxval, size=(n_gates, 3))
+    randomized_gate_pos = gates_pos + sample_pos
+    randomized_gate_rot = gates_rot + sample_rpy
+    randomized_gate_quat = R.from_euler("xyz", randomized_gate_rot).as_quat()
+
+    obstacle_pos_rand = rng_config.obstacle_pos.kwargs
+    sample_obs_pos = np.random.uniform(
+        obstacle_pos_rand.minval, obstacle_pos_rand.maxval, size=(n_obstacles, 3)
+    )
+    randomized_obstacle_pos = obstacles_pos + sample_obs_pos
+    return randomized_gate_pos, randomized_gate_quat, randomized_obstacle_pos

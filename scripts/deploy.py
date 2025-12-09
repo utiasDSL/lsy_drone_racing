@@ -26,14 +26,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def main(config: str = "level2.toml", controller: str | None = None, save_track: str | None = None):
+def main(
+    config: str = "level2.toml",
+    controller: str | None = None,
+    config_backup_path: str | None = None,
+):
     """Deployment script to run the controller on the real drone.
 
     Args:
         config: Path to the competition configuration. Assumes the file is in `config/`.
         controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
             the controller specified in the config file is used.
-        save_track: Path to store the current competition configuration. The file is stored in `config/`. If None, the configuration will not be saved.
+        config_backup_path: Path to store the current competition configuration. The file is stored in `config/`. If None, the configuration will not be saved.
     """
     rclpy.init()
     config = load_config(Path(__file__).parents[1] / "config" / config)
@@ -51,12 +55,11 @@ def main(config: str = "level2.toml", controller: str | None = None, save_track:
     )
 
     try:
-        obs, info = env.reset(options=config)
-        if save_track is not None:
-            output_path = Path(__file__).parents[1] / "config" / save_track
-            assert output_path.suffix == ".toml", (
-                f"Configuration file has to be a TOML file: {output_path}"
-            )
+        obs, info = env.reset(options=config.deploy)
+        if config_backup_path is not None:
+            output_path = Path(__file__).parents[1] / "config" / config_backup_path
+            if not output_path.suffix == ".toml":
+                raise ValueError(f"Configuration file has to be a TOML file: {output_path}")
             with open(output_path, "w") as f:
                 toml.dump(env.unwrapped.update_level_config(config=config).to_dict(), f)
 
