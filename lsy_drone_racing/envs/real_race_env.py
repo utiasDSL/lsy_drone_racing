@@ -500,33 +500,21 @@ class RealRaceCoreEnv:
         Returns:
             A ConfigDict object, with updated starting pose of gates, obstacles and drones
         """
-        result_config = config.to_dict()
-
-        # Now the track.randomize needs be set to false,
-        # since we are storing the layout from a real-world placement
-        result_config["env"]["track"]["randomize"] = False
-
-        # Overwrite the original field with the actual positions from the env
-        result_config["env"]["track"]["gates"] = [
-            {
-                "pos": (self.gates.pos[i]).tolist(),
-                "rpy": (R.from_quat(self.gates.quat[i]).as_euler("xyz", degrees=False)).tolist(),
-            }
-            for i in range(self.gates.pos.shape[0])
-        ]
-        result_config["env"]["track"]["obstacles"] = [
-            {"pos": (self.obstacles.pos[i]).tolist()} for i in range(self.obstacles.pos.shape[0])
-        ]
-        result_config["env"]["track"]["drones"] = [
-            {
-                "pos": (self.drones.pos[i]).tolist(),
-                "rpy": (R.from_quat(self.drones.quat[i]).as_euler("xyz", degrees=False)).tolist(),
-                "vel": [0.0, 0.0, 0.0],
-                "ang_vel": [0.0, 0.0, 0.0],
-            }
-            for i in range(self.drones.pos.shape[0])
-        ]
-        return ConfigDict(result_config)
+        config = config.copy()
+        # We store the real-world track layout, so randomization must be disabled
+        config.env.track.randomize = False
+        # Overwrite the original positions and orientations with the measured ones
+        for i in range(self.gates.pos.shape[0]):
+            config.env.track.gates.pos[i] = self.gates.pos[i].tolist()
+            config.env.track.gates.rpy[i] = R.from_quat(self.gates.quat[i]).as_euler("xyz").tolist()
+        for i in range(self.obstacles.pos.shape[0]):
+            config.env.track.obstacles.pos[i] = self.obstacles.pos[i].tolist()
+        for i in range(self.drones.pos.shape[0]):
+            config.env.track.drones.pos[i] = self.drones.pos[i].tolist()
+            config.env.track.drones.rpy[i] = (
+                R.from_quat(self.drones.quat[i]).as_euler("xyz").tolist()
+            )
+        return ConfigDict(config)
 
     def close(self):
         """Close the environment.
