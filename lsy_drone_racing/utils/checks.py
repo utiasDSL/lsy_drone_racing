@@ -148,8 +148,8 @@ def check_rotation(
     name: str,
     actual_rot: R,
     desired_rot: R,
-    low: Union[np.ndarray, float],
-    high: Union[np.ndarray, float],
+    low: NDArray | float,
+    high: NDArray | float,
 ):
     """Compare gate orientations in world-frame Euler XYZ if the ang_tol is an array. Otherwise, check the overall magnitude of the rotation.
 
