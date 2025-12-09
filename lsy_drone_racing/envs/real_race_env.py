@@ -407,7 +407,7 @@ class RealRaceCoreEnv:
         Note:
             These settings are also required to make the high-level drone commander work properly.
         """
-        # Estimator setting;  1: complementary, 2: kalman -> Manual test: kalman significantly better!
+        # Estimators: 1: complementary, 2: kalman. We recommend kalman based on real-world tests
         self.drone.param.set_value("stabilizer.estimator", 2)
         time.sleep(0.1)  # TODO: Maybe remove
         # enable/disable tumble control. Required 0 for agressive maneuvers
