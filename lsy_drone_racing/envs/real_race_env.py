@@ -142,7 +142,8 @@ class RealRaceCoreEnv:
 
         if (not self.predefined_track) and (not real_track):
             raise ValueError(
-                "Randomly generated track requires real_track_objects to be True to get the actual track poses."
+                "Randomly generated track requires real_track_objects "
+                "to be True to get the actual track poses."
             )
 
         if not self.predefined_track:
@@ -154,7 +155,8 @@ class RealRaceCoreEnv:
                 obstacles_pos=self.obstacles.pos,
                 rng_config=self.randomizations,
             )
-            # TODO: The gate safety limits are now hardcoded: 0.5 meters inside the drone safety limits.
+            # TODO: The gate safety limits are now hardcoded
+            # 0.5 meters inside the drone safety limits.
             track_safety_limits = ConfigDict(
                 {"pos_limit_low": self.pos_limit_low[:2], "pos_limit_high": self.pos_limit_high[:2]}
             )
@@ -340,7 +342,10 @@ class RealRaceCoreEnv:
         self.drones.pos[self.rank], self.drones.rpy[self.rank] = drone_pos, drone_rpy
 
     def _connect_radio(self, radio_id: int, radio_channel: int, drone_id: int):
-        """Connect to the drone via radio. If the drone is not reachable, a TimeoutError is raised."""
+        """Connect to the drone via radio.
+        
+        If the drone is not reachable, a TimeoutError is raised.
+        """
         cflib.crtp.init_drivers()
         uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
 

@@ -26,11 +26,13 @@ def check_gates_in_bound(gates: ConfigDict, limits: ConfigDict, tolerance: float
     for i, pos in enumerate(gates.pos):
         if np.any(pos[:2] < np.array(limits.pos_limit_low) - tolerance):
             raise RuntimeError(
-                f"gate{i + 1} position {pos[:2]} is below the predefined minimum limit {np.array(limits.pos_limit_low) - tolerance}"
+                f"gate{i + 1} position {pos[:2]} is below the "
+                f"predefined minimum limit {np.array(limits.pos_limit_low) - tolerance}"
             )
         if np.any(pos[:2] > np.array(limits.pos_limit_high) + tolerance):
             raise RuntimeError(
-                f"gate{i + 1} position {pos[:2]} is above the predefined maximum limit {np.array(limits.pos_limit_high) + tolerance}"
+                f"gate{i + 1} position {pos[:2]} is above the "
+                f"predefined maximum limit {np.array(limits.pos_limit_high) + tolerance}"
             )
 
 
@@ -95,7 +97,7 @@ def check_bounds(name: str, actual: NDArray, desired: NDArray, low: NDArray, hig
         desired: Reference values.
         low: Lower bound. Minimum permissible value of (actual - desired).
         high: Upper bound. Maximum value of (actual - desired).
-    
+
     Raises:
             RuntimeError: The values are not in the permissible interval.
     """

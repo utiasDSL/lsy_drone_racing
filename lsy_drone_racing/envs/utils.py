@@ -329,7 +329,10 @@ def randomize_track(
         rng_config: Environment randomization config.
 
     Returns:
-        A tuple that contains 3 NDArrays: randomized gate positions([N,3]), gate quaternions([N,4]), obstacle positions([M,3])
+        A tuple that contains 3 NDArrays:
+        randomized gate positions([N,3]),
+        gate quaternions([N,4]),
+        obstacle positions([M,3])
     """
     assert rng_config.gate_pos.fn == "uniform", "Race track checks expect uniform distributions"
     assert rng_config.obstacle_pos.fn == "uniform", "Race track checks expect uniform distributions"

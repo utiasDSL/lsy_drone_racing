@@ -36,8 +36,9 @@ def main(
     Args:
         config: Path to the competition configuration. Assumes the file is in `config/`.
         controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
-            the controller specified in the config file is used.
-        config_backup_path: Path to store the current competition configuration. The file is stored in `config/`. If None, the configuration will not be saved.
+         the controller specified in the config file is used.
+        config_backup_path: Path to store the current competition configuration.
+         The file is stored in `config/`. If None, the configuration will not be saved.
     """
     rclpy.init()
     config = load_config(Path(__file__).parents[1] / "config" / config)
