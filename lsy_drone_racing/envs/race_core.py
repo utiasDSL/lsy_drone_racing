@@ -32,8 +32,7 @@ import mujoco
 import numpy as np
 from crazyflow.sim import Sim
 from crazyflow.sim.sim import use_box_collision
-
-# from crazyflow.sim.symbolic import symbolic_attitude
+from drone_controllers.mellinger.params import ForceTorqueParams
 from flax.struct import dataclass
 from gymnasium import spaces
 
@@ -139,12 +138,13 @@ class EnvData:
         )
 
 
-def build_action_space(control_mode: Literal["state", "attitude"]) -> spaces.Box:
+def build_action_space(control_mode: Literal["state", "attitude"], drone_model: str) -> spaces.Box:
     """Create the action space for the environment.
 
     Args:
         control_mode: The control mode to use. Either "state" for full-state control
             or "attitude" for attitude control.
+        drone_model: Drone model of the environment.
 
     Returns:
         A Box space representing the action space for the specified control mode.
@@ -152,8 +152,12 @@ def build_action_space(control_mode: Literal["state", "attitude"]) -> spaces.Box
     if control_mode == "state":
         return spaces.Box(low=-1, high=1, shape=(13,))
     elif control_mode == "attitude":
-        lim = np.array([1, np.pi, np.pi, np.pi], dtype=np.float32)
-        return spaces.Box(low=-lim, high=lim)
+        params = ForceTorqueParams.load(drone_model)
+        thrust_min, thrust_max = params.thrust_min * 4, params.thrust_max * 4
+        return spaces.Box(
+            np.array([-np.pi / 2, -np.pi / 2, -np.pi / 2, thrust_min], dtype=np.float32),
+            np.array([np.pi / 2, np.pi / 2, np.pi / 2, thrust_max], dtype=np.float32),
+        )
     else:
         raise ValueError(f"Invalid control mode: {control_mode}")
 
