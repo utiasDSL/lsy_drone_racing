@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+from drone_controllers.mellinger.params import ForceTorqueParams
 from drone_models.core import load_params
 from scipy.interpolate import CubicSpline
 
@@ -42,8 +43,9 @@ class AttitudeRL(Controller):
 
         drone_params = load_params(config.sim.physics, config.sim.drone_model)
         self.drone_mass = drone_params["mass"]  # alternatively from sim.drone_mass
-        self.thrust_min = drone_params["thrust_min"] * 4  # min total thrust
-        self.thrust_max = drone_params["thrust_max"] * 4  # max total thrust
+        params = ForceTorqueParams.load(config.sim.drone_model)
+        self.thrust_min = params.thrust_min * 4  # min total thrust
+        self.thrust_max = params.thrust_max * 4  # max total thrust
 
         # Set num of stacked obs
         self.n_obs = 2
