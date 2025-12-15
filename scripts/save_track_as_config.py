@@ -1,6 +1,5 @@
 """Script for generating .toml configuration files from a real race track."""
 
-
 import logging
 from pathlib import Path
 
@@ -34,7 +33,7 @@ def main(config: str = "level2.toml", save_config_to: str = "real_track.toml"):
     gates["pos"], gates["quat"], obstacles["pos"] = query_track_poses(
         n_gates=n_gates, n_obstacles=n_obstacles
     )
-    drones["pos"], drones["quat"] = update_drone_poses(drone_names=drone_names)
+    drones["pos"], drones["quat"] = query_drone_poses(drone_names=drone_names)
 
     config_output = update_level_config(
         config, gates=ConfigDict(gates), obstacles=ConfigDict(obstacles), drones=ConfigDict(drones)
@@ -90,8 +89,8 @@ def query_track_poses(n_gates: int, n_obstacles: int) -> tuple[NDArray, NDArray,
     return gate_pos, gate_quat, obstacle_pos
 
 
-def update_drone_poses(drone_names: list[str]) -> tuple[NDArray, NDArray]:
-    """Update the drone positions from the motion capture system.
+def query_drone_poses(drone_names: list[str]) -> tuple[NDArray, NDArray]:
+    """Query the drone positions from the motion capture system and estimator node.
 
     Args:
         drone_names: List of drone estimator names.

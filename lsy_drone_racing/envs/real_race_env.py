@@ -51,7 +51,6 @@ class EnvData:
     taken_off: bool = False
     drone_connected: bool = False
 
-
     @classmethod
     def create(cls, n_drones: int, n_gates: int, n_obstacles: int) -> EnvData:
         """Create an instance of the EnvData class."""
