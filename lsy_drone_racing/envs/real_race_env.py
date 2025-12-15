@@ -27,18 +27,15 @@ from drone_estimators.ros_nodes.ros2_connector import ROSConnector
 from drone_models.core import load_params
 from drone_models.transform import force2pwm
 from gymnasium import Env
-from ml_collections import ConfigDict
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.envs.utils import gate_passed, load_track, randomize_track
-from lsy_drone_racing.utils.checks import (
-    check_drone_start_pos,
-    check_gates_in_bound,
-    check_race_track,
-)
+from lsy_drone_racing.envs.utils import gate_passed, load_track
+from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track
 
 if TYPE_CHECKING:
+    from ml_collections import ConfigDict
     from numpy.typing import NDArray
+
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +110,6 @@ class RealRaceCoreEnv:
         self.device = jax.devices("cpu")[0]
         assert control_mode in ["state", "attitude"], f"Invalid control mode {control_mode}"
         self.control_mode = control_mode
-        self.predefined_track = not (track.get("randomize", False))
         self.randomizations = randomizations
         self._connected_to_drone = False
         self.drone_parameters = load_params("first_principles", drones[rank]["drone_model"])
@@ -140,29 +136,7 @@ class RealRaceCoreEnv:
         check_track = options.get("check_race_track", True)
         check_drone = options.get("check_drone_start_pos", True)
 
-        if (not self.predefined_track) and (not real_track):
-            raise ValueError(
-                "Randomly generated track requires real_track_objects "
-                "to be True to get the actual track poses."
-            )
-
-        if not self.predefined_track:
-            self._update_track_poses()
-            self._update_drone_starting_pos()
-            self.gates.pos, self.gates.quat, self.obstacles.pos = randomize_track(
-                gates_pos=self.gates.pos,
-                gates_quat=self.gates.quat,
-                obstacles_pos=self.obstacles.pos,
-                rng_config=self.randomizations,
-            )
-            # TODO: The gate safety limits are now hardcoded
-            # 0.5 meters inside the drone safety limits.
-            track_safety_limits = ConfigDict(
-                {"pos_limit_low": self.pos_limit_low[:2], "pos_limit_high": self.pos_limit_high[:2]}
-            )
-            check_gates_in_bound(gates=self.gates, limits=track_safety_limits, tolerance=-0.5)
-
-        elif real_track:
+        if real_track:
             self._update_track_poses()
             if check_track:
                 check_race_track(
@@ -333,14 +307,6 @@ class RealRaceCoreEnv:
                             started the motion capture tracking node?"
             ) from e
 
-    def _update_drone_starting_pos(self):
-        """Update the starting position of the drone from the motion capture system."""
-        drone_pos = self._ros_connector.pos[self.drone_name]
-        drone_quat = self._ros_connector.quat[self.drone_name]
-        drone_pos[2] = 0.01  # Set z to ground level
-        drone_rpy = R.from_quat(drone_quat).as_euler("xyz", degrees=False)
-        self.drones.pos[self.rank], self.drones.rpy[self.rank] = drone_pos, drone_rpy
-
     def _connect_radio(self, radio_id: int, radio_channel: int, drone_id: int):
         """Connect to the drone via radio.
 
@@ -473,31 +439,6 @@ class RealRaceCoreEnv:
             jax.block_until_ready(
                 gate_passed(drone_pos, drone_pos, gate_pos, gate_quat, (0.45, 0.45))
             )
-
-    def update_level_config(self, config: ConfigDict) -> ConfigDict:
-        """Update the level config with the real track objects poses.
-
-        Args:
-            config: A ConfigDict storing the original level configuration.
-
-        Returns:
-            A ConfigDict object, with updated starting pose of gates, obstacles and drones
-        """
-        config = config.copy()
-        # We store the real-world track layout, so randomization must be disabled
-        config.env.track.randomize = False
-        # Overwrite the original positions and orientations with the measured ones
-        for i in range(self.gates.pos.shape[0]):
-            config.env.track.gates.pos[i] = self.gates.pos[i].tolist()
-            config.env.track.gates.rpy[i] = R.from_quat(self.gates.quat[i]).as_euler("xyz").tolist()
-        for i in range(self.obstacles.pos.shape[0]):
-            config.env.track.obstacles.pos[i] = self.obstacles.pos[i].tolist()
-        for i in range(self.drones.pos.shape[0]):
-            config.env.track.drones.pos[i] = self.drones.pos[i].tolist()
-            config.env.track.drones.rpy[i] = (
-                R.from_quat(self.drones.quat[i]).as_euler("xyz").tolist()
-            )
-        return ConfigDict(config)
 
     def close(self):
         """Close the environment.

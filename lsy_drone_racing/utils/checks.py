@@ -15,27 +15,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("rosout." + __name__)
 
 
-def check_gates_in_bound(gates: ConfigDict, limits: ConfigDict, tolerance: float = 0.0):
-    """Check if the gates layout is within the specified limits.
-
-    Args:
-        gates: A ConfigDict containing gate positions.
-        limits: A ConfigDict containing min and max limits for gate positions.
-        tolerance: A float value representing the tolerance for the position checks.
-    """
-    for i, pos in enumerate(gates.pos):
-        if np.any(pos[:2] < np.array(limits.pos_limit_low) - tolerance):
-            raise RuntimeError(
-                f"gate{i + 1} position {pos[:2]} is below the "
-                f"predefined minimum limit {np.array(limits.pos_limit_low) - tolerance}"
-            )
-        if np.any(pos[:2] > np.array(limits.pos_limit_high) + tolerance):
-            raise RuntimeError(
-                f"gate{i + 1} position {pos[:2]} is above the "
-                f"predefined maximum limit {np.array(limits.pos_limit_high) + tolerance}"
-            )
-
-
 def check_race_track(gates: ConfigDict, obstacles: ConfigDict, rng_config: ConfigDict):
     """Check if the race track's gates and obstacles are within tolerances.
 
@@ -51,7 +30,6 @@ def check_race_track(gates: ConfigDict, obstacles: ConfigDict, rng_config: Confi
     for i, (pos, nominal_pos) in enumerate(zip(gates.pos, gates.nominal_pos)):
         check_bounds(f"gate{i + 1}", pos, nominal_pos, np.array(low), np.array(high))
 
-    # TODO: Now the gate check should consider rotation in roll and pitch as well.
     high_tol = np.array(rng_config.gate_rpy.kwargs.maxval)
     low_tol = np.array(rng_config.gate_rpy.kwargs.minval)
     # ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
