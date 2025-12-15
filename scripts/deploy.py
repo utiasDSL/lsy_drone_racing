@@ -47,7 +47,6 @@ def main(config: str = "level2.toml", controller: str | None = None):
         sensor_range=config.env.sensor_range,
         control_mode=config.env.control_mode,
     )
-
     try:
         obs, info = env.reset(options=config.deploy)
         next_obs = obs  # Set next_obs to avoid errors when the loop never enters

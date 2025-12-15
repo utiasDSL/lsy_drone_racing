@@ -48,6 +48,9 @@ class EnvData:
     gates_visited: NDArray
     obstacles_visited: NDArray
     last_drone_pos: NDArray[np.float32]
+    taken_off: bool = False
+    drone_connected: bool = False
+
 
     @classmethod
     def create(cls, n_drones: int, n_gates: int, n_obstacles: int) -> EnvData:
@@ -58,6 +61,15 @@ class EnvData:
             obstacles_visited=np.zeros((n_drones, n_obstacles), dtype=bool),
             last_drone_pos=np.zeros((n_drones, 3), dtype=np.float32),
         )
+
+    def reset(self, last_drone_pos: NDArray[np.float32]):
+        """Reset the environment data."""
+        self.target_gate[...] = 0
+        self.gates_visited[...] = False
+        self.obstacles_visited[...] = False
+        self.last_drone_pos[...] = last_drone_pos
+        self.taken_off = False
+        self.drone_connected = False
 
 
 # region CoreEnv
@@ -111,7 +123,6 @@ class RealRaceCoreEnv:
         assert control_mode in ["state", "attitude"], f"Invalid control mode {control_mode}"
         self.control_mode = control_mode
         self.randomizations = randomizations
-        self._connected_to_drone = False
         self.drone_parameters = load_params("first_principles", drones[rank]["drone_model"])
         self.drone = Crazyflie(rw_cache=str(Path(__file__).parent / ".cache"))
         self._drone_healthy = mp.Event()
@@ -121,9 +132,6 @@ class RealRaceCoreEnv:
             cmd_topic=f"/drones/{self.drone_name}/command",
             timeout=10.0,
         )
-        # A hatched indicator whether the drone has taken off at least once
-        # Used to prevent the return controller from engaging before takeoff
-        self._taken_off = False
         # Dynamic data
         self.data = EnvData.create(
             n_drones=self.n_drones, n_gates=self.n_gates, n_obstacles=self.n_obstacles
@@ -132,23 +140,25 @@ class RealRaceCoreEnv:
 
     def _reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment and return the initial observation and info."""
-        real_track = options.get("real_track_objects", True)
-        check_track = options.get("check_race_track", True)
-        check_drone = options.get("check_drone_start_pos", True)
-
-        if real_track:
+        options = {} if options is None else options
+        # Update the position of gates and obstacles with the real positions measured from Mocap. If
+        # disabled, they are equal to the nominal positions defined in the track config.
+        if options.get("real_track_objects", True):
             self._update_track_poses()
-            if check_track:
-                check_race_track(
-                    gates=self.gates, obstacles=self.obstacles, rng_config=self.randomizations
-                )
-
-        if check_drone:
-            real_pos = self._ros_connector.pos[self.drone_name]
-            nominal_pos = np.array(self.drones.pos[self.rank])
+        if options.get("check_race_track", True):
+            check_race_track(
+                gates_pos=self.gates.pos,
+                nominal_gates_pos=self.gates.nominal_pos,
+                gates_quat=self.gates.quat,
+                nominal_gates_quat=self.gates.nominal_quat,
+                obstacles_pos=self.obstacles.pos,
+                nominal_obstacles_pos=self.obstacles.nominal_pos,
+                rng_config=self.randomizations,
+            )
+        if options.get("check_drone_start_pos", True):
             check_drone_start_pos(
-                nominal_pos=nominal_pos,
-                real_pos=real_pos,
+                nominal_pos=self.drones.pos[self.rank],
+                real_pos=self._ros_connector.pos[self.drone_name],
                 rng_config=self.randomizations,
                 drone_name=self.drone_name,
             )
@@ -157,7 +167,7 @@ class RealRaceCoreEnv:
             radio_id=self.rank, radio_channel=self.drone_channel, drone_id=self.drone_id
         )
         self._last_drone_pos_update = 0  # Last time a position was sent to the drone estimator
-        self._reset_env_data(self.data)
+        self.data.reset(np.stack([self._ros_connector.pos[n] for n in self.drone_names]))
         self._reset_drone()
 
         if self.control_mode == "attitude":
@@ -191,7 +201,7 @@ class RealRaceCoreEnv:
         self.data.target_gate += np.asarray(passed)
         self.data.target_gate[self.data.target_gate >= self.n_gates] = -1
         self.data.last_drone_pos[...] = drone_pos
-        self._taken_off |= drone_pos[self.rank, 2] > 0.2
+        self.data.taken_off |= drone_pos[self.rank, 2] > 0.2
         # Send vicon position updates to the drone at a fixed frequency irrespective of the env freq
         # Sending too many updates may deteriorate the performance of the drone, hence the limiter
         if (t := time.perf_counter()) - self._last_drone_pos_update > 1 / self.POS_UPDATE_FREQ:
@@ -301,16 +311,16 @@ class RealRaceCoreEnv:
             for i in range(self.n_obstacles):
                 self.obstacles.pos[i, ...] = pos[f"obstacle{i + 1}"]
         except KeyError as e:
-            raise ValueError(
-                f"Could not find all track objects in the ROS TF tree: {e}. \
-                            Have you enabled the track objects in Vicon/ \
-                            started the motion capture tracking node?"
+            raise KeyError(
+                f"Could not find all track objects in the ROS TF tree: {e}. Have you enabled the "
+                "track objects in Vicon and started the motion capture tracking node?"
             ) from e
 
     def _connect_radio(self, radio_id: int, radio_channel: int, drone_id: int):
         """Connect to the drone via radio.
 
-        If the drone is not reachable, a TimeoutError is raised.
+        Raises:
+            TimeoutError: If the drone is not reachable within 10 seconds.
         """
         cflib.crtp.init_drivers()
         uri = f"radio://{radio_id}/{radio_channel}/2M/E7E7E7E7" + f"{drone_id:02x}".upper()
@@ -339,16 +349,8 @@ class RealRaceCoreEnv:
         connected = event.wait(10.0)
         if not connected:
             raise TimeoutError("Timed out while waiting for the drone.")
-        self._connected_to_drone = True
+        self.data.drone_connected = True
         logger.info(f"Drone {drone_id} connected to {uri}")
-
-    def _reset_env_data(self, data: EnvData):
-        """Reset the environment data."""
-        data.target_gate[...] = 0
-        data.gates_visited[...] = False
-        data.obstacles_visited[...] = False
-        drone_pos = np.stack([self._ros_connector.pos[n] for n in self.drone_names])
-        data.last_drone_pos[...] = drone_pos
 
     def _reset_drone(self):
         """Arm the drone, reset estimation."""
@@ -447,19 +449,20 @@ class RealRaceCoreEnv:
         Irrespective of succeeding or not, the drone will be stopped immediately afterwards or in
         case of errors, and close the connections to the ROSConnector.
         """
+        if not self.data.drone_connected or not self.data.taken_off:
+            self._ros_connector.close()
+            return
         try:
-            if self._connected_to_drone and self._taken_off:
-                self._return_to_start()
+            self._return_to_start()
         finally:
             try:
-                if self._connected_to_drone:
-                    # Kill the drone
-                    pk = CRTPPacket()
-                    pk.port = CRTPPort.LOCALIZATION
-                    pk.channel = Localization.GENERIC_CH
-                    pk.data = struct.pack("<B", Localization.EMERGENCY_STOP)
-                    self.drone.send_packet(pk)
-                    self.drone.close_link()
+                # Kill the drone
+                pk = CRTPPacket()
+                pk.port = CRTPPort.LOCALIZATION
+                pk.channel = Localization.GENERIC_CH
+                pk.data = struct.pack("<B", Localization.EMERGENCY_STOP)
+                self.drone.send_packet(pk)
+                self.drone.close_link()
             finally:
                 # Close all ROS connections
                 self._ros_connector.close()
