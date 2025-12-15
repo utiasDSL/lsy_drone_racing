@@ -15,53 +15,42 @@ if TYPE_CHECKING:
 logger = logging.getLogger("rosout." + __name__)
 
 
-def check_gates_in_bound(gates: ConfigDict, limits: ConfigDict, tolerance: float = 0.0):
-    """Check if the gates layout is within the specified limits.
-
-    Args:
-        gates: A ConfigDict containing gate positions.
-        limits: A ConfigDict containing min and max limits for gate positions.
-        tolerance: A float value representing the tolerance for the position checks.
-    """
-    for i, pos in enumerate(gates.pos):
-        if np.any(pos[:2] < np.array(limits.pos_limit_low) - tolerance):
-            raise RuntimeError(
-                f"gate{i + 1} position {pos[:2]} is below the "
-                f"predefined minimum limit {np.array(limits.pos_limit_low) - tolerance}"
-            )
-        if np.any(pos[:2] > np.array(limits.pos_limit_high) + tolerance):
-            raise RuntimeError(
-                f"gate{i + 1} position {pos[:2]} is above the "
-                f"predefined maximum limit {np.array(limits.pos_limit_high) + tolerance}"
-            )
-
-
-def check_race_track(gates: ConfigDict, obstacles: ConfigDict, rng_config: ConfigDict):
+def check_race_track(
+    gates_pos: NDArray,
+    nominal_gates_pos: NDArray,
+    gates_quat: NDArray,
+    nominal_gates_quat: NDArray,
+    obstacles_pos: NDArray,
+    nominal_obstacles_pos: NDArray,
+    rng_config: ConfigDict,
+):
     """Check if the race track's gates and obstacles are within tolerances.
 
     Args:
-        gates: A ConfigDict containing gate positions and orientations, and their nominal values.
-        obstacles: A ConfigDict containing obstacle positions, and their nominal values.
+        gates_pos: The positions of the gates.
+        nominal_gates_pos: The nominal positions of the gates.
+        gates_quat: The orientations of the gates as quaternions.
+        nominal_gates_quat: The nominal orientations of the gates as quaternions.
+        obstacles_pos: The positions of the obstacles.
+        nominal_obstacles_pos: The nominal positions of the obstacles.
         rng_config: Environment randomization config.
     """
     assert rng_config.gate_pos.fn == "uniform", "Race track checks expect uniform distributions"
     assert rng_config.obstacle_pos.fn == "uniform", "Race track checks expect uniform distributions"
-
     low, high = rng_config.gate_pos.kwargs.minval, rng_config.gate_pos.kwargs.maxval
-    for i, (pos, nominal_pos) in enumerate(zip(gates.pos, gates.nominal_pos)):
+    for i, (pos, nominal_pos) in enumerate(zip(gates_pos, nominal_gates_pos)):
         check_bounds(f"gate{i + 1}", pos, nominal_pos, np.array(low), np.array(high))
 
     # TODO: Now the gate check should consider rotation in roll and pitch as well.
     high_tol = np.array(rng_config.gate_rpy.kwargs.maxval)
     low_tol = np.array(rng_config.gate_rpy.kwargs.minval)
-    # ang_tol = rng_config.gate_rpy.kwargs.maxval[2]  # Only check yaw rotation
-    for i, (quat, nominal_quat) in enumerate(zip(gates.quat, gates.nominal_quat)):
+    for i, (quat, nominal_quat) in enumerate(zip(gates_quat, nominal_gates_quat)):
         gate_rot = R.from_quat(quat)
         nominal_rot = R.from_quat(nominal_quat)
         check_rotation(f"gate{i + 1}", gate_rot, nominal_rot, low=low_tol, high=high_tol)
 
     low, high = rng_config.obstacle_pos.kwargs.minval, rng_config.obstacle_pos.kwargs.maxval
-    for i, (pos, nominal_pos) in enumerate(zip(obstacles.pos, obstacles.nominal_pos)):
+    for i, (pos, nominal_pos) in enumerate(zip(obstacles_pos, nominal_obstacles_pos)):
         check_bounds(
             f"obstacle{i + 1}", pos[:2], nominal_pos[:2], np.array(low[:2]), np.array(high[:2])
         )
@@ -82,7 +71,6 @@ def check_drone_start_pos(
         "Drone start position check expects uniform distributions"
     )
     tol_min, tol_max = rng_config.drone_pos.kwargs.minval, rng_config.drone_pos.kwargs.maxval
-
     check_bounds(
         drone_name, real_pos[:2], nominal_pos[:2], np.array(tol_min[:2]), np.array(tol_max[:2])
     )
@@ -112,7 +100,7 @@ def check_bounds(name: str, actual: NDArray, desired: NDArray, low: NDArray, hig
 
 
 def check_rotation(name: str, actual_rot: R, desired_rot: R, low: NDArray, high: NDArray):
-    """Compare gate orientations in world-frame Euler XYZ.
+    """Compare gate orientations in world-frame Euler xyz.
 
     Args:
         name: Name of the object being checked.
