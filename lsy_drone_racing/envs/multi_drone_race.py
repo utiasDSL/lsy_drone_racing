@@ -71,7 +71,9 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
             max_episode_steps=max_episode_steps,
             device=device,
         )
-        self.action_space = batch_space(build_action_space(control_mode), n_drones)
+        self.action_space = batch_space(
+            build_action_space(control_mode, sim_config.drone_model), n_drones
+        )
         self.observation_space = batch_space(
             build_observation_space(n_gates, n_obstacles), n_drones
         )
@@ -162,7 +164,9 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
             device=device,
         )
         self.num_envs = num_envs
-        self.single_action_space = batch_space(build_action_space(control_mode), n_drones)
+        self.single_action_space = batch_space(
+            build_action_space(control_mode, sim_config.drone_model), n_drones
+        )
         self.action_space = batch_space(batch_space(self.single_action_space), num_envs)
         self.single_observation_space = batch_space(
             build_observation_space(n_gates, n_obstacles), n_drones
