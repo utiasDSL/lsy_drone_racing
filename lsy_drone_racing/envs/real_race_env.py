@@ -161,12 +161,12 @@ class RealRaceCoreEnv:
                 rng_config=self.randomizations,
                 drone_name=self.drone_name,
             )
+        self.data.reset(np.stack([self._ros_connector.pos[n] for n in self.drone_names]))
 
         self._connect_radio(
             radio_id=self.rank, radio_channel=self.drone_channel, drone_id=self.drone_id
         )
         self._last_drone_pos_update = 0  # Last time a position was sent to the drone estimator
-        self.data.reset(np.stack([self._ros_connector.pos[n] for n in self.drone_names]))
         self._reset_drone()
 
         if self.control_mode == "attitude":
@@ -200,7 +200,7 @@ class RealRaceCoreEnv:
         self.data.target_gate += np.asarray(passed)
         self.data.target_gate[self.data.target_gate >= self.n_gates] = -1
         self.data.last_drone_pos[...] = drone_pos
-        self.data.taken_off |= drone_pos[self.rank, 2] > 0.2
+        self.data.taken_off |= drone_pos[self.rank, 2] > 0.1
         # Send vicon position updates to the drone at a fixed frequency irrespective of the env freq
         # Sending too many updates may deteriorate the performance of the drone, hence the limiter
         if (t := time.perf_counter()) - self._last_drone_pos_update > 1 / self.POS_UPDATE_FREQ:
