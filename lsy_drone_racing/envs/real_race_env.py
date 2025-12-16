@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from ml_collections import ConfigDict
     from numpy.typing import NDArray
 
-
 logger = logging.getLogger(__name__)
 
 
