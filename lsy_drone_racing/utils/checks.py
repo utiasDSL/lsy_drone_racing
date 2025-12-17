@@ -105,7 +105,7 @@ def check_rotation(name: str, actual_rot: R, desired_rot: R, low: NDArray, high:
         Comparing Euler angles is tricky. While we try to sanitize the comparison as best as we
         can, edge cases may still cause failures.
 
-    TODO:
+    Todo:
         Switch to a more sane rotation check method.
 
     Args:
