@@ -27,9 +27,7 @@ def main(config: str = "level2.toml"):
     nominal_obstacles_pos = [o["pos"] for o in config.env.track.obstacles]
     n_gates = len(nominal_gates_pos)
     n_obstacles = len(nominal_obstacles_pos)
-    gates_pos, gates_quat, obstacles_pos = track_poses(
-        n_gates=n_gates, n_obstacles=n_obstacles
-    )
+    gates_pos, gates_quat, obstacles_pos = track_poses(n_gates=n_gates, n_obstacles=n_obstacles)
     check_race_track(
         gates_pos=gates_pos,
         nominal_gates_pos=nominal_gates_pos,
