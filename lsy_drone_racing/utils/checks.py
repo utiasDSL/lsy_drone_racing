@@ -101,6 +101,13 @@ def check_bounds(name: str, actual: NDArray, desired: NDArray, low: NDArray, hig
 def check_rotation(name: str, actual_rot: R, desired_rot: R, low: NDArray, high: NDArray):
     """Compare gate orientations in world-frame Euler xyz.
 
+    Warning:
+        Comparing Euler angles is tricky. While we try to sanitize the comparison as best as we
+        can, edge cases may still cause failures.
+
+    TODO:
+        Switch to a more sane rotation check method.
+
     Args:
         name: Name of the object being checked.
         actual_rot: R object describing rotation of the real object.
