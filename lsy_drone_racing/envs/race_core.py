@@ -282,7 +282,7 @@ class RaceCoreEnv:
             device=device,
         )
         use_box_collision(self.sim, True)
-        self.default_cam_config = {
+        self.cam_config = {
             "distance": sim_config.camera_view[0],
             "azimuth": sim_config.camera_view[1],
             "elevation": sim_config.camera_view[2],
@@ -438,7 +438,7 @@ class RaceCoreEnv:
 
     def render(self):
         """Render the environment."""
-        self.sim.render(default_cam_config=self.default_cam_config)
+        self.sim.render(cam_config=self.cam_config)
 
     def close(self):
         """Close the environment by stopping the drone and landing back at the starting position."""
