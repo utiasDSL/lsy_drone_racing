@@ -178,16 +178,6 @@ This is for the deployment in the lab, either on your own machine or on the lab 
 
 This will automatically create a ros2 workspace with RoboStack, clone the motion_capture_tracking package, and build it. Thus, the terminal might freeze for 1 minute after regular installation.
 
-Then we still have to install extra packages with pip. For that, stay in the deploy shell, run one of the commands below:
-
-.. code-block:: bash
-
-   pip install -e .[sim,deploy]
-   pip install -e .[sim,gpu,deploy]
-
-.. note::
-   Some subpackages currently depend on a prerelease version of `scipy <https://github.com/scipy/scipy>`_, which needs to be built from source. This might take more than 10 minutes on older hardware.
-
 .. note::
    By running the commands above, our automated scripts will install and activate **acados** by default. This might cause the terminal to freeze for several minutes. `Acados installation guide <https://docs.acados.org/index.html>`_ is an Optimal Control Framework that can be used to control the quadrotor using a Model Predictive Controller. If something does not work out of the box, we refer the reader to the `official installation guide <https://docs.acados.org/installation/>`_.
 
@@ -228,7 +218,7 @@ Second, start another deploy shell and run the estimator node. Please check the 
 
 .. code-block:: bash
 
-   python -m drone_estimators.ros_nodes.ros2_node --drone_name cf52
+   python -m drone_estimators.ros_nodes.ros2_node --drone_name cf10
 
 Lastly, run the deployment script with the correct configuration and controller.
 

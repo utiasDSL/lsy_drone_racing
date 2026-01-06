@@ -16,8 +16,8 @@ check_drone_start_pos = true
 real_track_objects = true
 
 [[deploy.drones]]
-id = 52
-channel = 80
+id = 10
+channel = 100
 drone_model = "cf21B_500"                        # Model of the drone, i.e., cf2x_L250, cf2x_P250, cf2x_T500, cf21B_500. For this course, we use cf21B_500
 
 

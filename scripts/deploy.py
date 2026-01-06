@@ -31,10 +31,13 @@ def main(config: str = "level2.toml", controller: str | None = None):
     Args:
         config: Path to the competition configuration. Assumes the file is in `config/`.
         controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
-            the controller specified in the config file is used.
+         the controller specified in the config file is used.
     """
     rclpy.init()
     config = load_config(Path(__file__).parents[1] / "config" / config)
+    if controller is not None:
+        config.controller.file = controller
+
     env: RealDroneRaceEnv = gymnasium.make(
         "RealDroneRacing-v0",
         drones=config.deploy.drones,
@@ -45,16 +48,11 @@ def main(config: str = "level2.toml", controller: str | None = None):
         control_mode=config.env.control_mode,
     )
     try:
-        options = {
-            "check_drone_start_pos": config.deploy.check_drone_start_pos,
-            "check_race_track": config.deploy.check_race_track,
-            "real_track_objects": config.deploy.real_track_objects,
-        }
-        obs, info = env.reset(options=options)
+        obs, info = env.reset(options=config.deploy)
         next_obs = obs  # Set next_obs to avoid errors when the loop never enters
 
         control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
-        controller_path = control_path / (controller or config.controller.file)
+        controller_path = control_path / config.controller.file
         controller_cls = load_controller(controller_path)
         controller = controller_cls(obs, info, config)
         start_time = time.perf_counter()

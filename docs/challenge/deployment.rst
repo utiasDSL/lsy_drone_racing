@@ -27,6 +27,15 @@ The second terminal is used to launch the estimator for the drone. If you want t
     pixi shell -e deploy
     python -m drone_estimators.ros_nodes.ros2_node --drone_name cf52
 
+Generating Tracks for Level 3 Deployment
+------------------------------------------
+For level 3 deployment, you need to generate new configuration file with a track layout based on the real-world positions of the gates and obstacles. To do so, use the ``save_track_as_config.py`` script in the ``lsy_drone_racing/scripts`` folder. 
+
+.. code-block:: bash
+
+    python scripts/save_track_as_config.py --config <config_name> --save_config_to <config_output_path>
+
+The script will query the Vicon system for the current positions of all gates and obstacles, and generate a new deploy-ready TOML configuration file with the specified name.
 
 Deploying Your Controller
 -------------------------
@@ -37,6 +46,6 @@ To deploy your controller on the real drone, use the deployment script in the ``
 
 .. code-block:: bash
 
-    python scripts/deploy_controller.py --controller <controller_name>
+    python scripts/deploy.py --config <config_name> --controller <controller_name>
 
 The deployment script will first check if the real track poses and the drone starting pose is within acceptable bounds of the configured track. If not, the script will print an error message and terminate. If the poses are correct, the drone will take off, fly through the track, print out the final lap time, and land automatically.
