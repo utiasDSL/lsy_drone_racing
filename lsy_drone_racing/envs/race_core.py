@@ -777,11 +777,11 @@ def build_track_randomization_fn(
         gate_quat = jp.roll(nominal_gate_quat, 1, axis=-1)  # Convert from scipy to MuJoCo order
 
         # Reset to default track positions first
-        data = data.replace(mocap_pos=data.mocap_pos.at[:, gate_mocap_ids].set(nominal_gate_pos))
-        data = data.replace(mocap_quat=data.mocap_quat.at[:, gate_mocap_ids].set(gate_quat))
-        data = data.replace(
-            mocap_pos=data.mocap_pos.at[:, obstacle_mocap_ids].set(nominal_obstacle_pos)
-        )
+        nominal_mocap_pos = data.mocap_pos.at[:, gate_mocap_ids].set(nominal_gate_pos)
+        nominal_mocap_pos = nominal_mocap_pos.at[:, obstacle_mocap_ids].set(nominal_obstacle_pos)
+        nominal_mocap_quat = data.mocap_quat.at[:, gate_mocap_ids].set(gate_quat)
+        data = leaf_replace(data, mask, mocap_pos=nominal_mocap_pos, mocap_quat=nominal_mocap_quat)
+        
         keys = jax.random.split(key, len(randomization_fns))
         for key, randomize_fn in zip(keys, randomization_fns, strict=True):
             data = randomize_fn(data, mask, key)
