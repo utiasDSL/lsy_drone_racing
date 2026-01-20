@@ -2,10 +2,12 @@ from pathlib import Path
 
 import gymnasium
 import jax
+import jax.numpy as jp
 import pytest
 from drone_models import available_models
 
 import lsy_drone_racing  # noqa: F401, environment registrations
+from lsy_drone_racing.envs.drone_race import DroneRaceEnv
 from lsy_drone_racing.utils import load_config
 
 CONFIG_FILES = {
@@ -113,4 +115,104 @@ def test_multi_drone_envs(config_file: str, physics: str, device: str):
     for _ in range(2):
         obs, _, _, _, _ = env.step(env.action_space.sample())
     assert obs["pos"].device == device, f"Expected device {device}, but got {obs['pos'].device}"
+    env.close()
+
+
+@pytest.mark.parametrize("config_file", ["level2.toml", "level3.toml"])
+def test_vector_envs_randomization(config_file: str):
+    """Test track randomization works correctly with vectorized environments."""
+    config = load_config(Path(__file__).parents[2] / "config" / config_file)
+
+    kwargs = {
+        "num_envs": 2,
+        "control_mode": "attitude",
+        "freq": config.env.freq,
+        "sim_config": config.sim,
+        "sensor_range": config.env.sensor_range,
+        "track": config.env.track,
+        "disturbances": config.env.get("disturbances"),
+        "randomizations": config.env.get("randomizations"),
+        "seed": config.env.seed,
+    }
+
+    env: DroneRaceEnv = gymnasium.make_vec("DroneRacing-v0", **kwargs)
+    env.autoreset = True
+
+    def get_obj_mocap(env: DroneRaceEnv) -> jax.Array:
+        gate_mocap_ids = env.data.gate_mj_ids
+        obstacle_mocap_ids = env.data.obstacle_mj_ids
+        gates_mocap_pos = env.sim.mjx_data.mocap_pos[:, gate_mocap_ids].copy()
+        gates_mocap_quat = env.sim.mjx_data.mocap_quat[:, gate_mocap_ids][..., [1, 2, 3, 0]].copy()
+        obstacles_mocap_pos = env.sim.mjx_data.mocap_pos[:, obstacle_mocap_ids].copy()
+        return gates_mocap_pos, gates_mocap_quat, obstacles_mocap_pos
+
+    # Backup nominal track mocap data
+    nominal_gates_pos, nominal_gates_quat, nominal_obstacles_pos = get_obj_mocap(env)
+
+    env.reset()
+
+    # Check if track is randomized
+    gates_pos, gates_quat, obstacles_pos = get_obj_mocap(env)
+    drone_pos = env.sim.data.states.pos[:, 0, :].copy()
+    nominal_drone_pos = env.sim.default_data.states.pos[:, 0, :].copy()
+    assert not jp.allclose(gates_pos, nominal_gates_pos), (
+        "Track should be randomized, but gates_pos remains default."
+    )
+    assert not jp.allclose(gates_quat, nominal_gates_quat), (
+        "Track should be randomized, but gates_quat remains default."
+    )
+    assert not jp.allclose(obstacles_pos, nominal_obstacles_pos), (
+        "Track should be randomized, but obstacles_pos remains default."
+    )
+    assert not jp.allclose(drone_pos, nominal_drone_pos), (
+        "Drone takeoff pos should be randomized, but it remains default."
+    )
+
+    action = jp.tile(jp.array([0.0, 0.0, 0.0, 0.6]), (2, 1, 1))  # ensure drone doesn't crash
+    env.step(action)
+    gates_pos_1, gates_quat_1, obstacles_pos_1 = get_obj_mocap(env)
+
+    # Force reset 2nd world
+    env.data = env.data.replace(marked_for_reset=jp.array([0, 1]))
+
+    # Step once to trigger autoreset
+    env.step(action)
+    gates_pos_2, gates_quat_2, obstacles_pos_2 = get_obj_mocap(env)
+    drone_pos = env.sim.data.states.pos[:, 0, :].copy()
+    nominal_drone_pos = env.sim.default_data.states.pos[:, 0, :].copy()
+
+    # Check if track is re-randomized for the 2nd world but not for the 1st world
+    assert jp.allclose(gates_pos_2[0], gates_pos_1[0]), (
+        "World 0 should not be reset, but gates_pos is now changed."
+    )
+    assert jp.allclose(gates_quat_2[0], gates_quat_1[0]), (
+        "World 0 should not be reset, but gates_quat is now changed."
+    )
+    assert jp.allclose(obstacles_pos_2[0], obstacles_pos_1[0]), (
+        "World 0 should not be reset, but obstacles_pos is now changed."
+    )
+
+    assert not jp.allclose(gates_pos_2[1], nominal_gates_pos[1]), (
+        "World 1 should be randomized, but gates_pos is now default."
+    )
+    assert not jp.allclose(gates_quat_2[1], nominal_gates_quat[1]), (
+        "World 1 should be randomized, but gates_quat is now default."
+    )
+    assert not jp.allclose(obstacles_pos_2[1], nominal_obstacles_pos[1]), (
+        "World 1 should be randomized, but obstacles_pos is now default."
+    )
+    assert not jp.allclose(drone_pos[1], nominal_drone_pos[1]), (
+        "World 1 drone takeoff pos should be randomized, but it remains default."
+    )
+
+    assert not jp.allclose(gates_pos_2[1], gates_pos_1[1]), (
+        "World 1 should be re-randomized, but gates_pos remain unchanged."
+    )
+    assert not jp.allclose(gates_quat_2[1], gates_quat_1[1]), (
+        "World 1 should be re-randomized, but gates_quat remain unchanged."
+    )
+    assert not jp.allclose(obstacles_pos_2[1], obstacles_pos_1[1]), (
+        "World 1 should be re-randomized, but obstacles_pos remain unchanged."
+    )
+
     env.close()
