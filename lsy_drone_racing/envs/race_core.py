@@ -32,6 +32,7 @@ import mujoco
 import numpy as np
 from crazyflow.sim import Sim
 from crazyflow.sim.sim import use_box_collision
+from crazyflow.utils import leaf_replace
 from drone_controllers.mellinger.params import ForceTorqueParams
 from flax.struct import dataclass
 from gymnasium import spaces
@@ -347,9 +348,6 @@ class RaceCoreEnv:
         if seed is not None:
             self.sim.seed(seed)
             self._np_random = np.random.default_rng(seed)  # Also update gymnasium's rng
-        # Randomization of the drone is compiled into the sim reset pipeline, so we don't need to
-        # explicitly do it here
-        self.sim.reset(mask=mask)
         key, subkey, subkey2 = jax.random.split(self.sim.data.core.rng_key, 3)
         # Generate random track
         track = generate_random_track(self.track, subkey2) if self.track.randomize else self.track
@@ -359,11 +357,11 @@ class RaceCoreEnv:
 
         @jax.jit
         def update_sim_data(
-            data: SimData, mjx_data: Data, key: jax.random.PRNGKey
+            data: SimData, mjx_data: Data, mask: Array, key: jax.random.PRNGKey
         ) -> tuple[SimData, Data]:
-            # Randomized drone pos
+            # Write randomized takeoff pos to default data
             pos = data.states.pos.at[...].set(self.drone["pos"])
-            data = data.replace(states=data.states.replace(pos=pos))
+            data = data.replace(states=leaf_replace(data.states, mask, pos=pos))
 
             mjx_data = self.randomize_track(
                 mjx_data,
@@ -375,7 +373,13 @@ class RaceCoreEnv:
             )
             return data, mjx_data
 
-        self.sim.data, self.sim.mjx_data = update_sim_data(self.sim.data, self.sim.mjx_data, subkey)
+        self.sim.default_data, self.sim.mjx_data = update_sim_data(
+            self.sim.default_data, self.sim.mjx_data, mask, subkey
+        )
+
+        # Randomization of the drone is compiled into the sim reset pipeline, so we don't need to
+        # explicitly do it here
+        self.sim.reset(mask=mask)
 
         # Reset the environment data
         self.data = self._reset_env_data(
@@ -773,11 +777,11 @@ def build_track_randomization_fn(
         gate_quat = jp.roll(nominal_gate_quat, 1, axis=-1)  # Convert from scipy to MuJoCo order
 
         # Reset to default track positions first
-        data = data.replace(mocap_pos=data.mocap_pos.at[:, gate_mocap_ids].set(nominal_gate_pos))
-        data = data.replace(mocap_quat=data.mocap_quat.at[:, gate_mocap_ids].set(gate_quat))
-        data = data.replace(
-            mocap_pos=data.mocap_pos.at[:, obstacle_mocap_ids].set(nominal_obstacle_pos)
-        )
+        nominal_mocap_pos = data.mocap_pos.at[:, gate_mocap_ids].set(nominal_gate_pos)
+        nominal_mocap_pos = nominal_mocap_pos.at[:, obstacle_mocap_ids].set(nominal_obstacle_pos)
+        nominal_mocap_quat = data.mocap_quat.at[:, gate_mocap_ids].set(gate_quat)
+        data = leaf_replace(data, mask, mocap_pos=nominal_mocap_pos, mocap_quat=nominal_mocap_quat)
+
         keys = jax.random.split(key, len(randomization_fns))
         for key, randomize_fn in zip(keys, randomization_fns, strict=True):
             data = randomize_fn(data, mask, key)
