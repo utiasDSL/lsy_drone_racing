@@ -28,6 +28,7 @@ def track_poses(n_gates: int, n_obstacles: int) -> tuple[NDArray, NDArray, NDArr
 
     tf_names = [f"gate{i}" for i in range(1, n_gates + 1)]
     tf_names += [f"obstacle{i}" for i in range(1, n_obstacles + 1)]
+    ros_connector = None
     try:
         ros_connector = ROSConnector(tf_names=tf_names, timeout=10.0)
         pos, quat = ros_connector.pos, ros_connector.quat
@@ -42,7 +43,8 @@ def track_poses(n_gates: int, n_obstacles: int) -> tuple[NDArray, NDArray, NDArr
             "objects in Vicon and started the motion capture tracking node?"
         ) from e
     finally:
-        ros_connector.close()
+        if ros_connector is not None:
+            ros_connector.close()
     return gate_pos, gate_quat, obstacle_pos
 
 

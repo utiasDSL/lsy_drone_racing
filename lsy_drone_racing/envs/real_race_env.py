@@ -297,11 +297,13 @@ class RealRaceCoreEnv:
         """Update the track poses from the motion capture system."""
         tf_names = [f"gate{i}" for i in range(1, self.n_gates + 1)]
         tf_names += [f"obstacle{i}" for i in range(1, self.n_obstacles + 1)]
+        ros_connector = None
         try:
             ros_connector = ROSConnector(tf_names=tf_names, timeout=10.0)
             pos, quat = ros_connector.pos, ros_connector.quat
         finally:
-            ros_connector.close()
+            if ros_connector is not None:
+                ros_connector.close()
         try:
             for i in range(self.n_gates):
                 self.gates.pos[i, ...] = pos[f"gate{i + 1}"]
