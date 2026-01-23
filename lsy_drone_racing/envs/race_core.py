@@ -151,7 +151,7 @@ def build_action_space(control_mode: Literal["state", "attitude"], drone_model: 
         A Box space representing the action space for the specified control mode.
     """
     if control_mode == "state":
-        return spaces.Box(low=-1, high=1, shape=(13,))
+        return spaces.Box(low=-np.inf, high=np.inf, shape=(13,))
     elif control_mode == "attitude":
         params = ForceTorqueParams.load(drone_model)
         thrust_min, thrust_max = params.thrust_min * 4, params.thrust_max * 4
