@@ -440,6 +440,14 @@ class RaceCoreEnv:
             case _:
                 raise ValueError(f"Unsupported control mode: {self.sim.control}")
 
+    @staticmethod
+    @partial(jax.jit, static_argnames=["n_worlds", "device"])
+    def _sanitize_action(
+        action: Array, low: NDArray, high: NDArray, n_worlds: int, device: str
+    ) -> Array:
+        action = jp.clip(action, low.reshape(action.shape), high.reshape(action.shape))
+        return jp.array(action, device=device).reshape((n_worlds, 1, -1))
+
     def render(self):
         """Render the environment."""
         self.sim.render(cam_config=self.cam_config)

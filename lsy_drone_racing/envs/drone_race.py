@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 import gymnasium
-import jax.numpy as jp
 from gymnasium import Env
 from gymnasium.vector import VectorEnv
 from gymnasium.vector.utils import batch_space
@@ -95,7 +94,9 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             Observation, reward, terminated, truncated, and info.
         """
-        action = jp.clip(action, self.action_space.low, self.action_space.high)
+        action = self._sanitize_action(
+            action, self.action_space.low, self.action_space.high, self.num_envs, self.device
+        )
         obs, reward, terminated, truncated, info = self._step(action)
         obs = {k: v[0, 0] for k, v in obs.items()}
         info = {k: v[0, 0] for k, v in info.items()}
@@ -181,7 +182,9 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
         Returns:
             Observation, reward, terminated, truncated, and info.
         """
-        action = jp.clip(action, self.action_space.low, self.action_space.high)
+        action = self._sanitize_action(
+            action, self.action_space.low, self.action_space.high, self.num_envs, self.device
+        )
         obs, reward, terminated, truncated, info = self._step(action)
         obs = {k: v[:, 0] for k, v in obs.items()}
         info = {k: v[:, 0] for k, v in info.items()}
