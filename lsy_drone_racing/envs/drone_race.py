@@ -94,6 +94,7 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             Observation, reward, terminated, truncated, and info.
         """
+        assert action.shape == self.action_space.shape, "Action shape mismatch."
         action = self._sanitize_action(
             action, self.action_space.low, self.action_space.high, 1, 1, self.device
         )
@@ -182,6 +183,7 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
         Returns:
             Observation, reward, terminated, truncated, and info.
         """
+        assert action.shape == self.action_space.shape, "Action shape mismatch."
         action = self._sanitize_action(
             action, self.action_space.low, self.action_space.high, self.num_envs, 1, self.device
         )

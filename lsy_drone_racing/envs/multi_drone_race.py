@@ -71,7 +71,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
             max_episode_steps=max_episode_steps,
             device=device,
         )
-        self.num_drones = n_drones
+        self.n_drones = n_drones
         self.action_space = batch_space(
             build_action_space(control_mode, sim_config.drone_model), n_drones
         )
@@ -104,8 +104,9 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             Observation, reward, terminated, truncated, and info for all drones.
         """
+        assert action.shape == self.action_space.shape, "Action shape mismatch."
         action = self._sanitize_action(
-            action, self.action_space.low, self.action_space.high, 1, self.num_drones, self.device
+            action, self.action_space.low, self.action_space.high, 1, self.n_drones, self.device
         )
         obs, reward, terminated, truncated, info = self._step(action)
         obs = {k: v[0] for k, v in obs.items()}
@@ -168,11 +169,11 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
             device=device,
         )
         self.num_envs = num_envs
-        self.num_drones = n_drones
+        self.n_drones = n_drones
         self.single_action_space = batch_space(
             build_action_space(control_mode, sim_config.drone_model), n_drones
         )
-        self.action_space = batch_space(batch_space(self.single_action_space), num_envs)
+        self.action_space = batch_space(batch_space(self.single_action_space, n_drones), num_envs)
         self.single_observation_space = batch_space(
             build_observation_space(n_gates, n_obstacles), n_drones
         )
@@ -196,12 +197,13 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
         Args:
             action: Action for all drones, i.e., a batch of (n_drones, action_dim) arrays.
         """
+        assert action.shape == self.action_space.shape, "Action shape mismatch."
         action = self._sanitize_action(
             action,
             self.action_space.low,
             self.action_space.high,
             self.num_envs,
-            self.num_drones,
+            self.n_drones,
             self.device,
         )
         return self._step(action)
