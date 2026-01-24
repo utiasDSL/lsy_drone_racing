@@ -71,6 +71,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
             max_episode_steps=max_episode_steps,
             device=device,
         )
+        self.num_drones = n_drones
         self.action_space = batch_space(
             build_action_space(control_mode, sim_config.drone_model), n_drones
         )
@@ -103,6 +104,9 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             Observation, reward, terminated, truncated, and info for all drones.
         """
+        action = self._sanitize_action(
+            action, self.action_space.low, self.action_space.high, 1, self.num_drones, self.device
+        )
         obs, reward, terminated, truncated, info = self._step(action)
         obs = {k: v[0] for k, v in obs.items()}
         info = {k: v[0] for k, v in info.items()}
@@ -164,6 +168,7 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
             device=device,
         )
         self.num_envs = num_envs
+        self.num_drones = n_drones
         self.single_action_space = batch_space(
             build_action_space(control_mode, sim_config.drone_model), n_drones
         )
@@ -191,4 +196,12 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
         Args:
             action: Action for all drones, i.e., a batch of (n_drones, action_dim) arrays.
         """
+        action = self._sanitize_action(
+            action,
+            self.action_space.low,
+            self.action_space.high,
+            self.num_envs,
+            self.num_drones,
+            self.device,
+        )
         return self._step(action)
