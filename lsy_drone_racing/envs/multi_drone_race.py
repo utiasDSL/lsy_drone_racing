@@ -106,7 +106,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         """
         assert action.shape == self.action_space.shape, "Action shape mismatch."
         action = self._sanitize_action(
-            action, self.action_space.low, self.action_space.high, 1, self.n_drones, self.device
+            action, self.action_space.low, self.action_space.high, self.device
         )
         obs, reward, terminated, truncated, info = self._step(action)
         obs = {k: v[0] for k, v in obs.items()}
@@ -199,11 +199,6 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
         """
         assert action.shape == self.action_space.shape, "Action shape mismatch."
         action = self._sanitize_action(
-            action,
-            self.action_space.low,
-            self.action_space.high,
-            self.num_envs,
-            self.n_drones,
-            self.device,
+            action, self.action_space.low, self.action_space.high, self.device
         )
         return self._step(action)
