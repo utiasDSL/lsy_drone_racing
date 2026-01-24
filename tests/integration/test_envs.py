@@ -155,7 +155,7 @@ def test_vector_envs_randomization(config_file: str):
     assert not jp.allclose(obstacles_pos, nominal_obstacles_pos), "obstacles_pos not randomized"
     assert not jp.allclose(drone_pos, nominal_drone_pos), "drone_pos not randomized"
 
-    action = jp.tile(jp.array([0.0, 0.0, 0.0, 0.6]), (2, 1, 1))  # ensure drone doesn't crash
+    action = jp.tile(jp.array([0.0, 0.0, 0.0, 0.6]), (2, 1))  # ensure drone doesn't crash
     env.step(action)
     gates_pos_1, gates_quat_1, obstacles_pos_1 = get_obj_mocap(env)
 
