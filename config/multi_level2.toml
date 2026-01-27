@@ -16,6 +16,22 @@ check_race_track = true
 check_drone_start_pos = true
 # Lets you practice your controller without putting up gates & obstacles, assumes nominal positions given below.
 real_track_objects = true
+# Enable synchronized takeoff barrier (default: true)
+sync_start_barrier = true
+
+[deploy.takeoff_barrier]
+# Authentication key for barrier (must be same across all nodes)
+authkey = "lsy-drone-barrier-v1"
+# Timeout in seconds for barrier wait
+timeout_s = 30.0
+# Metadata filename for barrier discovery
+filename = "start_barrier.json"
+# Port for barrier manager
+port = 56000
+# Bind host (interface to listen on, use 0.0.0.0 for all interfaces)
+bind_host = "0.0.0.0"
+# Public host (IP address that other machines use to reach this barrier)
+public_host = "127.0.0.1"
 
 [[deploy.drones]]
 id = 10
