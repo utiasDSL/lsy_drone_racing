@@ -17,7 +17,7 @@ import fire
 import gymnasium
 import rclpy
 
-from lsy_drone_racing.utils import load_config, load_controller
+from lsy_drone_racing.utils import extract_config_for_rank, load_config, load_controller
 
 if TYPE_CHECKING:
     from lsy_drone_racing.envs.real_race_env import RealMultiDroneRaceEnv
@@ -62,9 +62,10 @@ def main(config: str = "multi_level0.toml",
         next_obs = obs  # Set next_obs to avoid errors when the loop never enters
 
         control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
-        controller_path = control_path / config.controller.file
+        controller_path = control_path / config.controller[drone_rank]['file']
         controller_cls = load_controller(controller_path)
-        controller = controller_cls(obs, info, config)
+        config_extracted = extract_config_for_rank(config, drone_rank)
+        controller = controller_cls(obs, info, config_extracted)
         start_time = time.perf_counter()
         while rclpy.ok():
             t_loop = time.perf_counter()
@@ -76,14 +77,14 @@ def main(config: str = "multi_level0.toml",
             )
             if terminated or truncated or controller_finished:
                 break
-            if (dt := (time.perf_counter() - t_loop)) < (1 / config.env.freq):
-                time.sleep(1 / config.env.freq - dt)
+            if (dt := (time.perf_counter() - t_loop)) < (1 / config.env.kwargs[drone_rank]['freq']):
+                time.sleep(1 / config.env.kwargs[drone_rank]['freq'] - dt)
             else:
-                exc = dt - 1 / config.env.freq
+                exc = dt - 1 / config.env.kwargs[drone_rank]['freq']
                 logger.warning(f"Controller execution time exceeded loop frequency by {exc:.3f}s.")
         ep_time = time.perf_counter() - start_time
         finished_track = next_obs["target_gate"] == -1
-        logger.info(f"Track time: {ep_time:.3f}s" if finished_track else "Task not completed")
+        logger.info(f"Track time: {ep_time:.3f}s" if finished_track[drone_rank] else "Task not completed")
     finally:
         env.close()
 
