@@ -95,6 +95,7 @@ class EnvData:
     marked_for_reset: Array
     disabled_drones: Array
     steps: Array
+    takeoff_pos: Array
     # Static variables
     contact_masks: Array
     pos_limit_low: Array
@@ -130,6 +131,7 @@ class EnvData:
             disabled_drones=jp.zeros((n_envs, n_drones), dtype=bool, device=device),
             contact_masks=jp.array(contact_masks, dtype=bool, device=device),
             steps=jp.zeros(n_envs, dtype=int, device=device),
+            takeoff_pos=jp.zeros((n_envs, n_drones, 3), dtype=np.float32, device=device),
             pos_limit_low=jp.array(pos_limit_low, dtype=np.float32, device=device),
             pos_limit_high=jp.array(pos_limit_high, dtype=np.float32, device=device),
             gate_mj_ids=jp.array(gate_mj_ids, dtype=int, device=device),
@@ -413,7 +415,7 @@ class RaceCoreEnv:
         marked_for_reset = self.data.marked_for_reset
         # Apply the environment logic with updated simulation data.
         self.data = self._step_env(
-            self.data, drone_pos, mocap_pos, mocap_quat, contacts, self.sim.default_data.states.pos
+            self.data, drone_pos, mocap_pos, mocap_quat, contacts
         )
         # Auto-reset envs. Add configuration option to disable for single-world envs
         if self.autoreset and marked_for_reset.any():
@@ -542,6 +544,7 @@ class RaceCoreEnv:
             gates_visited=gates_visited,
             obstacles_visited=obstacles_visited,
             steps=steps,
+            takeoff_pos=jp.where(mask[..., None, None], drone_pos, data.takeoff_pos),
             marked_for_reset=jp.where(mask, 0, data.marked_for_reset),  # Unmark after env reset
         )
 
@@ -553,11 +556,10 @@ class RaceCoreEnv:
         mocap_pos: Array,
         mocap_quat: Array,
         contacts: Array,
-        takeoff_pos: Array,
     ) -> EnvData:
         """Step the environment data."""
         n_gates = len(data.gate_mj_ids)
-        disabled_drones = RaceCoreEnv._disabled_drones(drone_pos, contacts, data, takeoff_pos)
+        disabled_drones = RaceCoreEnv._disabled_drones(drone_pos, contacts, data)
         gates_pos = mocap_pos[:, data.gate_mj_ids]
         obstacles_pos = mocap_pos[:, data.obstacle_mj_ids]
         # We need to convert the mocap quat from MuJoCo order to scipy order
@@ -619,11 +621,11 @@ class RaceCoreEnv:
         return jp.tile((steps >= max_episode_steps)[..., None], (1, n_drones))
 
     @staticmethod
-    def _disabled_drones(pos: Array, contacts: Array, data: EnvData, takeoff_pos: Array) -> Array:
+    def _disabled_drones(pos: Array, contacts: Array, data: EnvData) -> Array:
         disabled = data.disabled_drones | jp.any(pos < data.pos_limit_low, axis=-1)
         disabled = disabled | jp.any(pos > data.pos_limit_high, axis=-1)
-        not_in_platform = jp.any(pos[..., :2] < takeoff_pos[..., :2] - 0.05, axis=-1)
-        not_in_platform |= jp.any(pos[..., :2] > takeoff_pos[..., :2] + 0.05, axis=-1)
+        not_in_platform = jp.any(pos[..., :2] < data.takeoff_pos[..., :2] - 0.02, axis=-1)
+        not_in_platform |= jp.any(pos[..., :2] > data.takeoff_pos[..., :2] + 0.02, axis=-1)
         disabled = disabled & not_in_platform
         disabled = disabled | (data.target_gate == -1)
         contacts = jp.any(contacts[:, None, :] & data.contact_masks, axis=-1)
