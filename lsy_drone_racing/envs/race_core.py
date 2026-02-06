@@ -414,9 +414,7 @@ class RaceCoreEnv:
         # previous flags, not the ones from the current step
         marked_for_reset = self.data.marked_for_reset
         # Apply the environment logic with updated simulation data.
-        self.data = self._step_env(
-            self.data, drone_pos, mocap_pos, mocap_quat, contacts
-        )
+        self.data = self._step_env(self.data, drone_pos, mocap_pos, mocap_quat, contacts)
         # Auto-reset envs. Add configuration option to disable for single-world envs
         if self.autoreset and marked_for_reset.any():
             self._reset(mask=marked_for_reset)
@@ -551,11 +549,7 @@ class RaceCoreEnv:
     @staticmethod
     @jax.jit
     def _step_env(
-        data: EnvData,
-        drone_pos: Array,
-        mocap_pos: Array,
-        mocap_quat: Array,
-        contacts: Array,
+        data: EnvData, drone_pos: Array, mocap_pos: Array, mocap_quat: Array, contacts: Array
     ) -> EnvData:
         """Step the environment data."""
         n_gates = len(data.gate_mj_ids)
