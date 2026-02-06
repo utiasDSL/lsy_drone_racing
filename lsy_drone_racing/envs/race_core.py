@@ -326,7 +326,7 @@ class RaceCoreEnv:
             obstacle_mj_ids=obstacle_ids,
             max_episode_steps=max_episode_steps,
             sensor_range=sensor_range,
-            pos_limit_low=[-3, -3, -1e-3],
+            pos_limit_low=[-3, -3, 0.0],
             pos_limit_high=[3, 3, 2.5],
             device=self.device,
         )
@@ -413,7 +413,7 @@ class RaceCoreEnv:
         marked_for_reset = self.data.marked_for_reset
         # Apply the environment logic with updated simulation data.
         self.data = self._step_env(
-            self.data, drone_pos, mocap_pos, mocap_quat, contacts, self.sim.freq
+            self.data, drone_pos, mocap_pos, mocap_quat, contacts, self.sim.default_data.states.pos
         )
         # Auto-reset envs. Add configuration option to disable for single-world envs
         if self.autoreset and marked_for_reset.any():
@@ -553,12 +553,11 @@ class RaceCoreEnv:
         mocap_pos: Array,
         mocap_quat: Array,
         contacts: Array,
-        freq: int,
+        takeoff_pos: Array,
     ) -> EnvData:
         """Step the environment data."""
         n_gates = len(data.gate_mj_ids)
-        taken_off_drones = (data.steps > freq // 5)[:, None]  # Only activate check after 0.2s
-        disabled_drones = taken_off_drones & RaceCoreEnv._disabled_drones(drone_pos, contacts, data)
+        disabled_drones = RaceCoreEnv._disabled_drones(drone_pos, contacts, data, takeoff_pos)
         gates_pos = mocap_pos[:, data.gate_mj_ids]
         obstacles_pos = mocap_pos[:, data.obstacle_mj_ids]
         # We need to convert the mocap quat from MuJoCo order to scipy order
@@ -620,9 +619,12 @@ class RaceCoreEnv:
         return jp.tile((steps >= max_episode_steps)[..., None], (1, n_drones))
 
     @staticmethod
-    def _disabled_drones(pos: Array, contacts: Array, data: EnvData) -> Array:
+    def _disabled_drones(pos: Array, contacts: Array, data: EnvData, takeoff_pos: Array) -> Array:
         disabled = data.disabled_drones | jp.any(pos < data.pos_limit_low, axis=-1)
         disabled = disabled | jp.any(pos > data.pos_limit_high, axis=-1)
+        not_in_platform = jp.any(pos[..., :2] < takeoff_pos[..., :2] - 0.05, axis=-1)
+        not_in_platform |= jp.any(pos[..., :2] > takeoff_pos[..., :2] + 0.05, axis=-1)
+        disabled = disabled & not_in_platform
         disabled = disabled | (data.target_gate == -1)
         contacts = jp.any(contacts[:, None, :] & data.contact_masks, axis=-1)
         disabled = disabled | contacts
@@ -699,6 +701,8 @@ class RaceCoreEnv:
         geom_count = sim.mj_model.body_geomnum[sim.mj_model.body("world").id]
         geom1_valid = (geom1 >= geom_start) & (geom1 < geom_start + geom_count)
         geom2_valid = (geom2 >= geom_start) & (geom2 < geom_start + geom_count)
+        floor_mask = geom1_valid | geom2_valid
+        masks = masks & ~floor_mask  # Disable contacts with the floor
 
         masks = np.tile(masks[None, ...], (sim.n_worlds, 1, 1))
         return masks
