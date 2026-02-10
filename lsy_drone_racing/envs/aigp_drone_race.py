@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 import jax.numpy as jp
 import numpy as np
 
+from lsy_drone_racing.aigp.rewards import RewardCalculator, RewardConfig
 from lsy_drone_racing.envs.drone_race import DroneRaceEnv, VecDroneRaceEnv
 
 if TYPE_CHECKING:
@@ -50,37 +51,86 @@ def _pad_track_gates(track: "ConfigDict", *, max_gates: int) -> "ConfigDict":
 
 
 class _AIGPRewardMixin:
-    """Reward definition for AIGP environments.
+    """Reward and bookkeeping helpers for AIGP environments."""
 
-    This is a minimal, dense reward intended to bootstrap learning:
-    - gate passage reward
-    - progress towards current target gate
-    - time penalty
-    - crash penalty
-    - completion bonus
+    def _init_aigp_rewards(self, reward_config: RewardConfig | dict | str | None = "swift") -> None:
+        """Initialize modular rewards and stateful reward bookkeeping."""
+        self.reward_calculator = RewardCalculator(reward_config)
+        self._aigp_prev_action: np.ndarray | None = None
+        self._aigp_has_prev_action: np.ndarray | None = None
+        self._aigp_action_diff: np.ndarray | None = None
+        self._last_reward_components: dict[str, Array] | None = None
 
-    The full DronePrix reward system can be ported on top of this mixin later.
-    """
+    def _aigp_on_reset(self, mask: Array | None) -> None:
+        """Clear any per-episode reward bookkeeping state (e.g. previous action)."""
+        if self._aigp_has_prev_action is None:
+            return
+        if mask is None:
+            self._aigp_has_prev_action[...] = False
+            if self._aigp_prev_action is not None:
+                self._aigp_prev_action[...] = 0.0
+            if self._aigp_action_diff is not None:
+                self._aigp_action_diff[...] = 0.0
+            return
 
-    gate_passage_reward: float = 10.0
-    progress_weight: float = 2.0
-    crash_penalty: float = -30.0
-    time_penalty: float = -0.01
-    completion_bonus: float = 10.0
+        m = np.asarray(mask, dtype=bool)
+        self._aigp_has_prev_action[m, :] = False
+        if self._aigp_prev_action is not None:
+            self._aigp_prev_action[m, :, :] = 0.0
+        if self._aigp_action_diff is not None:
+            self._aigp_action_diff[m, :] = 0.0
 
     def reward(self) -> Array:
-        """Compute a dense reward for early-stage learning."""
-        passed = self.data.passed_gate.astype(jp.float32)
-        completed = self.data.completed.astype(jp.float32)
-        crashed = (self.data.disabled_drones & ~self.data.completed).astype(jp.float32)
-        reward = (
-            self.gate_passage_reward * passed
-            + self.progress_weight * self.data.progress
-            + self.time_penalty
-            + self.crash_penalty * crashed
-            + self.completion_bonus * completed
+        """Compute the modular DronePrix-style reward for the current state."""
+        gates_pos = self.sim.mjx_data.mocap_pos[:, self.data.gate_mj_ids]
+
+        action_diff = None if self._aigp_action_diff is None else jp.asarray(self._aigp_action_diff)
+        has_prev_action = (
+            None
+            if self._aigp_has_prev_action is None
+            else jp.asarray(self._aigp_has_prev_action)
         )
+
+        reward, components = self.reward_calculator.compute(
+            pos=self.sim.data.states.pos,
+            vel=self.sim.data.states.vel,
+            quat=self.sim.data.states.quat,
+            target_gate=self.data.target_gate,
+            active_gate_count=self.data.active_gate_count,
+            gates_pos=gates_pos,
+            passed_gate=self.data.passed_gate,
+            progress=self.data.progress,
+            disabled_drones=self.data.disabled_drones,
+            completed=self.data.completed,
+            truncated=self.truncated(),
+            steps=self.data.steps,
+            max_episode_steps=self.data.max_episode_steps,
+            freq=self.freq,
+            pos_limit_low=self.data.pos_limit_low,
+            pos_limit_high=self.data.pos_limit_high,
+            action_diff=action_diff,
+            has_prev_action=has_prev_action,
+        )
+        self._last_reward_components = components
         return reward
+
+    def apply_action(self, action: Array) -> None:
+        """Apply action and update reward bookkeeping (e.g. action smoothness)."""
+        # NOTE: We keep a NumPy copy for smoothness; the simulator path itself still uses JAX.
+        action_buf = np.reshape(action, (self.sim.n_worlds, self.sim.n_drones, -1), copy=True)
+        if self._aigp_prev_action is None or self._aigp_prev_action.shape != action_buf.shape:
+            self._aigp_prev_action = np.zeros_like(action_buf, dtype=np.float32)
+            self._aigp_has_prev_action = np.zeros(action_buf.shape[:2], dtype=bool)
+            self._aigp_action_diff = np.zeros(action_buf.shape[:2], dtype=np.float32)
+
+        action_diff = np.linalg.norm(action_buf - self._aigp_prev_action, axis=-1)
+        action_diff = np.where(self._aigp_has_prev_action, action_diff, 0.0)
+
+        self._aigp_action_diff = action_diff.astype(np.float32, copy=False)
+        self._aigp_prev_action = action_buf
+        self._aigp_has_prev_action[...] = True
+
+        super().apply_action(action)
 
 
 class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
@@ -97,6 +147,7 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
         control_mode: Literal["state", "attitude"] = "state",
         disturbances: "ConfigDict | None" = None,
         randomizations: "ConfigDict | None" = None,
+        reward_config: RewardConfig | dict | str | None = "swift",
         seed: str | int = "random",
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
@@ -113,6 +164,7 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
             control_mode: Control mode for the drones. See `build_action_space` for details.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
+            reward_config: Reward configuration (preset name, config dict, RewardConfig, or None).
             seed: "random" for a generated seed or the random seed directly.
             max_episode_steps: Maximum number of steps per episode.
             device: Device used for the environment and the simulation.
@@ -135,6 +187,7 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
         )
         self._track_pool: list["ConfigDict"] | None = None
         self._track_pool_probs: np.ndarray | None = None
+        self._init_aigp_rewards(reward_config)
 
     def set_track_pool(
         self,
@@ -178,7 +231,9 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
                 rng = np.random.default_rng(self.seed)
             idx = int(rng.choice(len(self._track_pool), p=self._track_pool_probs))
             self.track = self._track_pool[idx]
-        return super()._reset(seed=seed, options=options, mask=mask)
+        obs, info = super()._reset(seed=seed, options=options, mask=mask)
+        self._aigp_on_reset(mask)
+        return obs, info
 
 
 class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
@@ -196,6 +251,7 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
         control_mode: Literal["state", "attitude"] = "state",
         disturbances: "ConfigDict | None" = None,
         randomizations: "ConfigDict | None" = None,
+        reward_config: RewardConfig | dict | str | None = "swift",
         seed: int = 1337,
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
@@ -213,6 +269,7 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
             control_mode: Control mode for the drones. See `build_action_space` for details.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
+            reward_config: Reward configuration (preset name, config dict, RewardConfig, or None).
             seed: Random seed.
             max_episode_steps: Maximum number of steps per episode.
             device: Device used for the environment and the simulation.
@@ -236,6 +293,7 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
         )
         self._track_pool: list["ConfigDict"] | None = None
         self._track_pool_probs: np.ndarray | None = None
+        self._init_aigp_rewards(reward_config)
 
     def set_track_pool(
         self,
@@ -274,4 +332,6 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
                 rng = np.random.default_rng(self.seed)
             idx = int(rng.choice(len(self._track_pool), p=self._track_pool_probs))
             self.track = self._track_pool[idx]
-        return super()._reset(seed=seed, options=options, mask=mask)
+        obs, info = super()._reset(seed=seed, options=options, mask=mask)
+        self._aigp_on_reset(mask)
+        return obs, info
