@@ -23,7 +23,15 @@ Obs = dict[str, NDArray[np.generic]]
 
 
 def _as_numpy_obs(obs: dict[str, Any]) -> Obs:
-    return {k: np.asarray(v) for k, v in obs.items()}
+    out: Obs = {}
+    for k, v in obs.items():
+        arr = np.asarray(v)
+        # JAX-to-NumPy conversions can yield read-only views. SB3/PyTorch expects writable buffers
+        # (and we also mutate obs in-place when applying partial resets).
+        if not arr.flags.writeable:
+            arr = arr.copy()
+        out[k] = arr
+    return out
 
 
 def _split_info(info: dict[str, Any], *, num_envs: int) -> list[dict[str, Any]]:
