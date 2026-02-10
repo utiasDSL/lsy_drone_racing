@@ -26,6 +26,14 @@ register(
 )
 
 register(
+    id="AIGPDroneRacing-v0",
+    entry_point="lsy_drone_racing.envs.aigp_drone_race:AIGPDroneRaceEnv",
+    vector_entry_point="lsy_drone_racing.envs.aigp_drone_race:VecAIGPDroneRaceEnv",
+    max_episode_steps=1500,
+    disable_env_checker=True,
+)
+
+register(
     id="MultiDroneRacing-v0",
     entry_point="lsy_drone_racing.envs.multi_drone_race:MultiDroneRaceEnv",
     vector_entry_point="lsy_drone_racing.envs.multi_drone_race:VecMultiDroneRaceEnv",

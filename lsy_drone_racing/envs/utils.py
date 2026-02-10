@@ -33,7 +33,7 @@ def load_track(track: ConfigDict) -> tuple[ConfigDict, ConfigDict, ConfigDict]:
     assert "gates" in track, "Track must contain gates field."
     assert "obstacles" in track, "Track must contain obstacles field."
     assert "drones" in track, "Track must contain drones field."
-    gate_pos = np.array([g["pos"] for g in track.gates], dtype=np.float32)
+    gate_pos = np.asarray([g["pos"] for g in track.gates], dtype=np.float32).reshape(-1, 3)
     gate_quat = (
         R.from_euler("xyz", np.array([g["rpy"] for g in track.gates])).as_quat().astype(np.float32)
     )
@@ -43,7 +43,7 @@ def load_track(track: ConfigDict) -> tuple[ConfigDict, ConfigDict, ConfigDict]:
         "nominal_pos": gate_pos.copy(),
         "nominal_quat": gate_quat.copy(),
     }
-    obstacle_pos = np.array([o["pos"] for o in track.obstacles], dtype=np.float32)
+    obstacle_pos = np.asarray([o["pos"] for o in track.obstacles], dtype=np.float32).reshape(-1, 3)
     obstacles = {"pos": obstacle_pos, "nominal_pos": obstacle_pos.copy()}
     drones = {
         k: np.array([drone.get(k) for drone in track.drones], dtype=np.float32)

@@ -3,6 +3,7 @@ from pathlib import Path
 import gymnasium
 import numpy as np
 import pytest
+from importlib.util import find_spec
 from drone_models import available_models
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 
@@ -45,6 +46,11 @@ def test_controllers(controller_file: str):
 @pytest.mark.parametrize("controller", ["controller", "mpc", "rl"])  # TODO add rl when available
 @pytest.mark.parametrize("physics", available_models.keys())
 def test_attitude_controller(physics: str, controller: str):
+    if controller == "mpc" and find_spec("acados_template") is None:
+        pytest.skip("acados_template not installed")
+    if controller == "rl" and find_spec("torch") is None:
+        pytest.skip("torch not installed")
+
     config = load_config(Path(__file__).parents[2] / "config/level0.toml")
     config.sim.gui = False
     config.sim.physics = physics

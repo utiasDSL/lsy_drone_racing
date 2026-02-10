@@ -1,0 +1,63 @@
+[controller]
+file = "state_controller.py"
+
+[sim]
+physics = "first_principles"
+drone_model = "cf21B_500"
+camera_view = [ 5.0, 180.0, -25.0, 0.0, 0.0, 0.0,]
+freq = 500
+attitude_freq = 500
+render = false
+
+[env]
+id = "AIGPDroneRacing-v0"
+seed = "random"
+freq = 50
+sensor_range = 100.0
+control_mode = "attitude"
+
+[env.track]
+randomize = false
+obstacles = []
+[[env.track.gates]]
+pos = [ 5.0, 0.0, 1.5,]
+rpy = [ 0.0, 0.0, 0.0,]
+
+[[env.track.gates]]
+pos = [ 12.0, 0.0, 1.5,]
+rpy = [ 0.0, 0.0, 0.0,]
+
+[[env.track.gates]]
+pos = [ 20.0, 4.0, 1.6,]
+rpy = [ 0.0, 0.0, 0.35,]
+
+[[env.track.gates]]
+pos = [ 28.0, 6.0, 1.5,]
+rpy = [ 0.0, 0.0, 0.25,]
+
+[[env.track.gates]]
+pos = [ 36.0, 3.0, 1.4,]
+rpy = [ 0.0, 0.0, -0.15,]
+
+[[env.track.gates]]
+pos = [ 44.0, -1.0, 1.5,]
+rpy = [ 0.0, 0.0, -0.2,]
+
+[[env.track.gates]]
+pos = [ 52.0, 0.0, 1.5,]
+rpy = [ 0.0, 0.0, 0.0,]
+
+[[env.track.drones]]
+pos = [ 0.0, 0.0, 1.5,]
+rpy = [ 0.0, 0.0, 0.0,]
+vel = [ 0.0, 0.0, 0.0,]
+ang_vel = [ 0.0, 0.0, 0.0,]
+
+[env.track.safety_limits]
+pos_limit_low = [ -2.0, -6.0, 0.0,]
+pos_limit_high = [ 58.0, 10.0, 4.0,]
+
+[env.track.gate_size]
+width = 0.75
+height = 0.75
+tolerance = 0.2

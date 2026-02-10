@@ -6,7 +6,16 @@ import pytest
 from lsy_drone_racing.utils import load_config
 
 
-@pytest.mark.parametrize("config_file", ["level0.toml", "level1.toml", "level2.toml"])
+@pytest.mark.parametrize(
+    "config_file",
+    [
+        "level0.toml",
+        "level1.toml",
+        "level2.toml",
+        "aigp_stage0_single_gate.toml",
+        "aigp_tracks/competition_swift.toml",
+    ],
+)
 @pytest.mark.unit
 def test_config_load_and_env_creation(config_file: str):
     """Test if config files can be loaded and used to create a functioning environment."""
