@@ -14,7 +14,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import wandb
 from crazyflow.envs.drone_env import DroneEnv
 from crazyflow.envs.norm_actions_wrapper import NormalizeActions
 from crazyflow.sim.data import SimData
@@ -35,6 +34,11 @@ from torch.distributions.normal import Normal
 
 from lsy_drone_racing.envs.race_core import build_dynamics_disturbance_fn, rng_spec2fn
 from lsy_drone_racing.utils import load_config
+
+try:
+    import wandb  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - optional dependency
+    wandb = None  # type: ignore[assignment]
 
 
 # region Arguments
@@ -561,8 +565,15 @@ def train_ppo(
     An implementation of PPO from cleanrl, see https://docs.cleanrl.dev/.
     """
     # train setup
-    if wandb_enabled and wandb.run is None:
-        wandb.init(project=args.wandb_project_name, entity=args.wandb_entity, config=vars(args))
+    if wandb_enabled:
+        if wandb is None:
+            raise ImportError("wandb is required when wandb_enabled=True")
+        if wandb.run is None:
+            wandb.init(
+                project=args.wandb_project_name,
+                entity=args.wandb_entity,
+                config=vars(args),
+            )
     train_start_time = time.time()
     set_seeds(args.seed)  # TRY NOT TO MODIFY: seeding
     print("Training on device:", device, "| Environment device:", jax_device)
