@@ -21,9 +21,18 @@ import yaml
 
 @dataclass(frozen=True)
 class BaseSimConfig:
+    """Default simulation config for converted track files."""
+
     physics: str = "first_principles"
     drone_model: str = "cf21B_500"
-    camera_view: tuple[float, float, float, float, float, float] = (5.0, 180.0, -25.0, 0.0, 0.0, 0.0)
+    camera_view: tuple[float, float, float, float, float, float] = (
+        5.0,
+        180.0,
+        -25.0,
+        0.0,
+        0.0,
+        0.0,
+    )
     freq: int = 500
     attitude_freq: int = 500
     render: bool = False
@@ -31,6 +40,8 @@ class BaseSimConfig:
 
 @dataclass(frozen=True)
 class BaseEnvConfig:
+    """Default environment config for converted track files."""
+
     env_id: str = "AIGPDroneRacing-v0"
     seed: str = "random"
     freq: int = 50
@@ -93,6 +104,7 @@ def _convert_track(yaml_data: dict[str, Any]) -> dict[str, Any]:
 
 
 def convert_file(src_yaml: Path, out_toml: Path, *, sim: BaseSimConfig, env: BaseEnvConfig) -> None:
+    """Convert a single DronePrix YAML track file into a TOML environment config."""
     data = _load_yaml(src_yaml)
     track = _convert_track(data)
 
@@ -122,6 +134,7 @@ def convert_file(src_yaml: Path, out_toml: Path, *, sim: BaseSimConfig, env: Bas
 
 
 def main() -> None:
+    """CLI entrypoint."""
     repo_root = Path(__file__).resolve().parents[2]
     droneprix_tracks = repo_root / "droneprix_reference" / "configs" / "tracks"
     if not droneprix_tracks.exists():
@@ -147,4 +160,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

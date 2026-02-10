@@ -1,9 +1,9 @@
+from importlib.util import find_spec
 from pathlib import Path
 
 import gymnasium
 import numpy as np
 import pytest
-from importlib.util import find_spec
 from drone_models import available_models
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 
