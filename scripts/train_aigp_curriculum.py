@@ -15,6 +15,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import time
 from dataclasses import asdict
 from importlib.util import find_spec
 from pathlib import Path
@@ -225,9 +226,12 @@ def train(
     eval_envs: int = 32,
     eval_every_timesteps: int = 50_000,
     timesteps_per_stage: int = 300_000,
+    max_walltime_s: int | None = None,
     seed: int = 0,
     device: str = "auto",
     net_arch: str | tuple[int, ...] | list[int] = "256,128",
+    ppo_n_steps: int = 2048,
+    ppo_batch_size: int = 64,
 ) -> None:
     """Train PPO with a curriculum.
 
@@ -239,9 +243,12 @@ def train(
         eval_envs: Number of parallel evaluation environments.
         eval_every_timesteps: Train this many timesteps between evals.
         timesteps_per_stage: Maximum timesteps to spend in each stage before forcing advance.
+        max_walltime_s: Optional walltime budget in seconds (stops after the next eval+checkpoint).
         seed: Random seed.
         device: Torch device for SB3 ("cpu", "cuda", "mps", or "auto").
         net_arch: MLP architecture as comma-separated ints (e.g. "256,128").
+        ppo_n_steps: PPO rollout length per env (affects update cadence and min learn chunk size).
+        ppo_batch_size: PPO minibatch size.
     """
     sb3 = _require_sb3()
     from stable_baselines3.common.callbacks import BaseCallback  # type: ignore[import-not-found]
@@ -250,6 +257,11 @@ def train(
     out_dir.mkdir(parents=True, exist_ok=True)
     log_path = out_dir / "curriculum_log.jsonl"
     tb_log = str(out_dir / "tb") if find_spec("tensorboard") is not None else None
+
+    walltime_start = time.monotonic()
+    walltime_deadline = (
+        (walltime_start + float(max_walltime_s)) if max_walltime_s is not None else None
+    )
 
     config_dir = Path(__file__).parents[1] / "config"
     base_cfg = load_config(config_dir / config)
@@ -268,6 +280,20 @@ def train(
             dones = self.locals.get("dones")
             if dones is not None:
                 self.episodes += int(np.sum(dones))
+            return True
+
+    class _WalltimeLimit(BaseCallback):
+        def __init__(self, *, deadline_s: float | None):
+            super().__init__()
+            self.deadline_s = deadline_s
+            self.reached = False
+
+        def _on_step(self) -> bool:  # noqa: ANN101
+            if self.deadline_s is None:
+                return True
+            if time.monotonic() >= float(self.deadline_s):
+                self.reached = True
+                return False
             return True
 
     def _build_vec_env_for_stage(
@@ -346,6 +372,8 @@ def train(
                 tensorboard_log=tb_log,
                 device=device,
                 policy_kwargs={"net_arch": list(arch)},
+                n_steps=int(ppo_n_steps),
+                batch_size=int(ppo_batch_size),
             )
         else:
             model.set_env(sb3_env)
@@ -362,15 +390,19 @@ def train(
         counter = _EpisodeCounter()
         stage_start_timesteps = int(model.num_timesteps)
         eval_round = 0
+        stop_after_checkpoint = False
 
         while True:
             # Train a chunk.
+            walltime_cb = _WalltimeLimit(deadline_s=walltime_deadline)
             model.learn(
                 total_timesteps=int(eval_every_timesteps),
                 reset_num_timesteps=False,
-                callback=counter,
+                callback=[counter, walltime_cb],
             )
             eval_round += 1
+            if walltime_cb.reached:
+                stop_after_checkpoint = True
 
             # Evaluate with a fresh env to avoid leaked state.
             eval_env = _build_vec_env_for_stage(
@@ -413,6 +445,22 @@ def train(
             )
             ckpt.parent.mkdir(parents=True, exist_ok=True)
             model.save(str(ckpt))
+
+            if stop_after_checkpoint:
+                elapsed_s = float(time.monotonic() - walltime_start)
+                _save_jsonl(
+                    log_path,
+                    {
+                        "event": "walltime_exit",
+                        "timesteps": int(model.num_timesteps),
+                        "elapsed_s": elapsed_s,
+                        "max_walltime_s": (
+                            int(max_walltime_s) if max_walltime_s is not None else None
+                        ),
+                        "checkpoint": str(ckpt),
+                    },
+                )
+                break
 
             # Forgetting detection: periodically re-evaluate the previous stage.
             if (
@@ -510,6 +558,9 @@ def train(
                 break
 
         sb3_env.close()
+
+        if stop_after_checkpoint:
+            break
 
         # Stop once the final stage has been trained for its budget.
         if int(mgr.stage_idx) >= final_stage_idx and stage_idx >= final_stage_idx:
