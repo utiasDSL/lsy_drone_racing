@@ -1,0 +1,37 @@
+# AIGP smoke-test curriculum: single stage only (Stage 0).
+#
+# Use this to verify end-to-end PPO wiring (env + rewards + SB3 adapter + eval harness)
+# without running the full 10-stage curriculum.
+
+[curriculum]
+name = "aigp_stage0_smoke"
+max_gates = 11
+
+stability_window = 1
+stability_threshold = 1.0
+eval_episodes = 10
+
+[curriculum.panic]
+enable = false
+
+[curriculum.adaptive]
+enable = false
+
+[curriculum.recovery]
+enable = false
+
+[[curriculum.stages]]
+name = "stage0_single_gate"
+description = "1 gate, very large, swift reward (smoke)"
+tracks = ["aigp_stage0_single_gate.toml"]
+track_weights = [1.0]
+active_gate_count = 1
+gate_width = 2.0
+gate_height = 2.0
+gate_tolerance = 1.5
+reward_preset = "swift"
+dr_tier = "none"
+success_rate_threshold = 0.70
+min_episodes = 0
+max_episode_steps = 300
+
