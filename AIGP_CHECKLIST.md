@@ -34,11 +34,11 @@ Legend:
 - [~] Add track pools (sample 1 track per episode from a weighted set)
   - [x] Env API (`set_track_pool`) + weighted sampling per reset
   - [ ] Per-world sampling for vector envs (currently global-per-reset)
-- [ ] Add richer `info` metrics:
-  - [ ] `success` / `completed`
-  - [ ] `gates_passed`, `num_gates_active`
-  - [ ] `lap_time_s` / `lap_time_steps`
-  - [ ] `crash_reason` (bounds/contact/timeout/etc)
+- [x] Add richer `info` metrics (used by curriculum + eval):
+  - [x] `success` / `completed`
+  - [x] `gates_passed`, `num_gates_active`
+  - [x] `lap_time_s` / `lap_time_steps`
+  - [x] `crash_reason` (bounds/contact/timeout/etc)
 
 ## Reward System (Port From DronePrix)
 - [x] Port RewardConfig + presets (`swift`, `grandprix`, `grandprix_lite`, `minimal`, `minimal_curiosity`)
@@ -69,46 +69,51 @@ Legend:
   - [ ] Add monotonicity tests for progress and caps (progress_velocity_max, speed_bonus_max)
 
 ## Curriculum (Port From DronePrix)
-- [ ] Create compressed 10-stage curriculum spec (TOML/YAML)
-- [ ] Port CurriculumManager logic:
-  - [ ] binary success gates (prevents fake advancement)
-  - [ ] stability requirements (variance gate)
-  - [ ] prevent force-advance "participation award"
-  - [ ] rollback-on-stall + stage patience
-- [ ] Panic mode controller:
-  - [ ] reduce DR multiplier
-  - [ ] increase assist multiplier/budget
-  - [ ] hard-lock detection (zero success)
-  - [ ] action on hard-lock: rollback stage (configurable)
-- [ ] Forgetting detection:
-  - [ ] after advancing, periodically evaluate stage N-1
-  - [ ] rollback if catastrophic forgetting is detected
-- [ ] Curriculum logging:
-  - [ ] stage transition log (JSONL/CSV)
-  - [ ] per-stage eval summaries
-- [ ] Unit tests for progression + rollback rules
+- [x] Create compressed 10-stage curriculum spec (`config/aigp_curriculum_10stage.toml`)
+- [x] Port CurriculumManager logic:
+  - [x] binary success gates (prevents fake advancement)
+  - [x] stability requirements (variance gate)
+  - [x] prevent force-advance "participation award" (min_episodes + SR + stability + recovery gate)
+  - [x] rollback-on-stall + stage patience (hard-lock rollback)
+- [x] Panic mode controller:
+  - [x] reduce DR multiplier (trainer scales DR specs)
+  - [x] increase assist multiplier/budget (trainer scales gate geometry)
+  - [x] hard-lock detection (zero success)
+  - [x] action on hard-lock: rollback stage (configurable)
+- [~] Forgetting detection:
+  - [x] baseline tracked on advance
+  - [~] periodic stage N-1 eval + rollback in trainer (needs tuning + config knobs)
+- [~] Curriculum logging:
+  - [x] stage/eval log (JSONL)
+  - [~] stage transition summaries (add explicit transition events + per-stage best checkpoints)
+- [~] Unit tests for progression + rollback rules
+  - [x] config load + basic gating tests
+  - [ ] add tests for panic/recovery state transitions and forgetting baseline bookkeeping
 
 ## Domain Randomization (Merge DronePrix + crazyflow)
 - [ ] Physics randomization integrated into crazyflow reset pipeline (JAX):
-  - [ ] mass range
-  - [ ] inertia perturbation
-  - [~] thrust scaling (first_principles: `rpm2thrust`; TODO: sys-id models)
-  - [~] motor time constant scaling (first_principles: `rotor_dyn_coef`; TODO: sys-id models)
+  - [x] mass range
+  - [x] inertia perturbation
+  - [x] thrust scaling (first_principles: `rpm2thrust`; TODO: sys-id models)
+  - [x] motor time constant scaling (first_principles: `rotor_dyn_coef`; TODO: sys-id models)
   - [ ] motor degradation / battery discharge (thrust scaling schedule)
-- [ ] Wind OU process (time-correlated) as a JAX step hook (disturbance)
-- [ ] Sensor randomization as wrappers (VIO/IMU failures + bias + noise)
-- [ ] Action latency wrapper (N-step delay; vectorized)
+- [x] Wind OU process (time-correlated) as a JAX step hook (disturbance)
+- [x] Sensor randomization as wrappers (VIO/IMU failures + bias + noise)
+- [x] Action latency wrapper (N-step delay; vectorized)
 - [ ] Optional motor dynamics wrapper (if needed beyond crazyflow rotor dynamics)
-- [ ] Adaptive DR tiers (stage->tier) + panic-mode multiplier
-- [ ] Unit tests for DR parameter ranges + deterministic seeding
+- [~] Adaptive DR tiers (stage->tier) + panic/adaptive multipliers (implemented in trainer; needs config + validation)
+- [~] Unit tests for DR parameter ranges + deterministic seeding
+  - [x] wrapper behavior tests
+  - [ ] add tests for OU spec validation + RNG determinism (seeded rollouts)
 
 ## Training Pipeline
-- [ ] SB3-compatible VecEnv adapter for gymnasium.vector envs
-- [ ] `train_curriculum.py` (new) that:
-  - [ ] loads env base TOML + curriculum config
-  - [ ] runs PPO with evaluation-driven stage progression
-  - [ ] saves checkpoints per stage
-  - [ ] logs metrics locally (and optionally wandb)
+- [x] SB3-compatible VecEnv adapter for gymnasium.vector envs (`lsy_drone_racing/aigp/sb3_vec_env.py`)
+- [x] Eval harness for curriculum gating (`lsy_drone_racing/aigp/eval.py`)
+- [~] `scripts/train_aigp_curriculum.py` that:
+  - [x] loads env base TOML + curriculum config
+  - [~] runs PPO with evaluation-driven stage progression (needs real run verification)
+  - [x] saves checkpoints per eval
+  - [~] logs metrics locally (and optionally wandb; not wired yet)
 - [ ] Minimal smoke test: learns 1-gate policy in < ~10 minutes on CPU
 - [ ] Scale test: 128-1024 envs on GPU (if available) without python bottlenecks
 
