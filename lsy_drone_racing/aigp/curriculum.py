@@ -456,6 +456,12 @@ class CurriculumManager:
         """Return the current stage spec."""
         return self.cfg.stages[self.stage_idx]
 
+    def stage_by_idx(self, stage_idx: int) -> CurriculumStage:
+        """Return the stage spec for an explicit index."""
+        if stage_idx < 0 or stage_idx >= len(self.cfg.stages):
+            raise IndexError("stage_idx out of range")
+        return self.cfg.stages[int(stage_idx)]
+
     def reset_stage_state(self, stage_idx: int) -> None:
         """Reset controller state for a stage."""
         self.panic.reset_stage(stage_idx)
@@ -545,6 +551,10 @@ class CurriculumManager:
         self.stage_idx -= 1
         self.reset_stage_state(self.stage_idx)
 
+    def set_forgetting_baseline(self, *, success_rate: float) -> None:
+        """Store baseline success rate for the stage we just advanced from."""
+        self.forgetting.baseline_success_rate = float(success_rate)
+
     @staticmethod
     def _load_track(path: Path) -> ConfigDict:
         """Load a track from a TOML env config file (returns `env.track`)."""
@@ -553,11 +563,11 @@ class CurriculumManager:
             raise ValueError(f"Track file does not look like an env config: {path}")
         return copy.deepcopy(cfg.env.track)
 
-    def build_stage_tracks(
-        self, *, config_dir: Path
+    def build_tracks_for_stage(
+        self, *, stage_idx: int, config_dir: Path
     ) -> tuple[list[ConfigDict], list[float] | None]:
-        """Load and stage-adjust tracks (gate size, active gate count)."""
-        stage = self.current_stage()
+        """Load and stage-adjust tracks (gate size, active gate count) for a given stage."""
+        stage = self.stage_by_idx(stage_idx)
         tracks = [self._load_track(config_dir / t) for t in stage.tracks]
         weights = stage.track_weights if stage.track_weights else None
 
@@ -576,3 +586,9 @@ class CurriculumManager:
             t["gate_size"] = gate_size
 
         return tracks, weights
+
+    def build_stage_tracks(
+        self, *, config_dir: Path
+    ) -> tuple[list[ConfigDict], list[float] | None]:
+        """Load and stage-adjust tracks (gate size, active gate count) for the current stage."""
+        return self.build_tracks_for_stage(stage_idx=int(self.stage_idx), config_dir=config_dir)
