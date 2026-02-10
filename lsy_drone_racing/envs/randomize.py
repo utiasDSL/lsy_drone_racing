@@ -74,6 +74,42 @@ def randomize_drone_inertia_fn(
     return randomize_drone_inertia
 
 
+def randomize_drone_rpm2thrust_fn(
+    randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array],
+) -> Callable[[SimData, Array], SimData]:
+    """Create a function that randomizes the thrust coefficient (first_principles only)."""
+
+    def randomize_drone_rpm2thrust(data: SimData, mask: Array) -> SimData:
+        if not hasattr(data.params, "rpm2thrust"):
+            return data
+        key, subkey = jax.random.split(data.core.rng_key)
+        rpm2thrust = data.params.rpm2thrust + randomize_fn(
+            subkey, shape=data.params.rpm2thrust.shape
+        )
+        params = leaf_replace(data.params, mask, rpm2thrust=rpm2thrust)
+        return data.replace(core=data.core.replace(rng_key=key), params=params)
+
+    return randomize_drone_rpm2thrust
+
+
+def randomize_drone_rotor_dyn_coef_fn(
+    randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array],
+) -> Callable[[SimData, Array], SimData]:
+    """Create a function that randomizes rotor dynamics time constants (first_principles only)."""
+
+    def randomize_drone_rotor_dyn_coef(data: SimData, mask: Array) -> SimData:
+        if not hasattr(data.params, "rotor_dyn_coef"):
+            return data
+        key, subkey = jax.random.split(data.core.rng_key)
+        rotor_dyn_coef = data.params.rotor_dyn_coef + randomize_fn(
+            subkey, shape=data.params.rotor_dyn_coef.shape
+        )
+        params = leaf_replace(data.params, mask, rotor_dyn_coef=rotor_dyn_coef)
+        return data.replace(core=data.core.replace(rng_key=key), params=params)
+
+    return randomize_drone_rotor_dyn_coef
+
+
 def randomize_gate_pos_fn(
     randomize_fn: Callable[[jax.random.PRNGKey, tuple[int]], jax.Array], gate_ids: list[int]
 ) -> Callable[[Data, Array | None, jax.random.PRNGKey], Data]:
