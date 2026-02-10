@@ -48,7 +48,14 @@ def make_predict_policy(model: Any, *, deterministic: bool = True) -> PolicyFn:
 
 def _as_numpy_obs(obs: dict[str, Any]) -> Obs:
     """Convert (possibly JAX) batched observations into NumPy arrays."""
-    return {k: np.asarray(v) for k, v in obs.items()}
+    out: Obs = {}
+    for k, v in obs.items():
+        arr = np.asarray(v)
+        # JAX-to-NumPy conversions can yield read-only views; we patch done lanes in-place.
+        if not arr.flags.writeable:
+            arr = arr.copy()
+        out[k] = arr
+    return out
 
 
 def _squeeze_single_drone(batch: dict[str, Any], *, num_envs: int) -> dict[str, Any]:
