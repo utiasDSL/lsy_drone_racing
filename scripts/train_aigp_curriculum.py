@@ -38,6 +38,19 @@ from lsy_drone_racing.utils import load_config
 logger = logging.getLogger(__name__)
 
 
+def _parse_net_arch(net_arch: str | tuple[int, ...] | list[int]) -> tuple[int, ...]:
+    """Parse `net_arch` from Fire.
+
+    Fire will interpret comma-separated CLI values like `--net_arch 64,64` as a Python tuple.
+    Accept both formats to avoid surprising runtime errors.
+    """
+    if isinstance(net_arch, str):
+        return tuple(int(x) for x in net_arch.split(",") if x.strip())
+    if isinstance(net_arch, (tuple, list)):
+        return tuple(int(x) for x in net_arch)
+    raise TypeError("net_arch must be a comma-separated string or a list/tuple of ints")
+
+
 def _require_sb3() -> Any:  # noqa: ANN401
     try:
         import stable_baselines3  # type: ignore[import-not-found]
@@ -213,7 +226,7 @@ def train(
     timesteps_per_stage: int = 300_000,
     seed: int = 0,
     device: str = "auto",
-    net_arch: str = "256,128",
+    net_arch: str | tuple[int, ...] | list[int] = "256,128",
 ) -> None:
     """Train PPO with a curriculum.
 
@@ -242,7 +255,7 @@ def train(
     mgr = CurriculumManager(cur_cfg)
     final_stage_idx = len(cur_cfg.stages) - 1
 
-    arch = tuple(int(x) for x in net_arch.split(",") if x.strip())
+    arch = _parse_net_arch(net_arch)
 
     class _EpisodeCounter(BaseCallback):
         def __init__(self):
