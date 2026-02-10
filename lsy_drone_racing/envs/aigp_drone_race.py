@@ -41,7 +41,10 @@ def _pad_track_gates(track: "ConfigDict", *, max_gates: int) -> "ConfigDict":
     if n_gates > max_gates:
         raise ValueError(f"track has {n_gates} gates, exceeds max_gates={max_gates}")
 
-    track["active_gate_count"] = n_gates
+    active_gate_count = int(track.get("active_gate_count", n_gates))
+    if active_gate_count < 1 or active_gate_count > n_gates:
+        raise ValueError(f"Invalid active_gate_count={active_gate_count} for n_gates={n_gates}")
+    track["active_gate_count"] = active_gate_count
     if n_gates == max_gates:
         return track
 

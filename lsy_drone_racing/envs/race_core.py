@@ -78,6 +78,8 @@ class EnvData:
         passed_gate: Boolean flags indicating if the current target gate was passed this step
         progress: Signed progress towards the current target gate (prev_dist - dist) in meters
         completed: Boolean flags indicating if all gates have been passed (episode success)
+        crash_reason: Reason code for crashes
+            (0=none, 1=bounds_low, 2=bounds_high, 3=contact, 4=unknown)
         gates_visited: Boolean flags indicating which gates have been visited by each drone
         obstacles_visited: Boolean flags indicating which obstacles have been detected
         last_drone_pos: Previous positions of drones, used for gate passing detection
@@ -99,6 +101,7 @@ class EnvData:
     passed_gate: Array
     progress: Array
     completed: Array
+    crash_reason: Array
     gates_visited: Array
     obstacles_visited: Array
     last_drone_pos: Array
@@ -142,6 +145,7 @@ class EnvData:
             passed_gate=jp.zeros((n_envs, n_drones), dtype=bool, device=device),
             progress=jp.zeros((n_envs, n_drones), dtype=jp.float32, device=device),
             completed=jp.zeros((n_envs, n_drones), dtype=bool, device=device),
+            crash_reason=jp.zeros((n_envs, n_drones), dtype=int, device=device),
             gates_visited=jp.zeros((n_envs, n_drones, n_gates), dtype=bool, device=device),
             obstacles_visited=jp.zeros((n_envs, n_drones, n_obstacles), dtype=bool, device=device),
             last_drone_pos=jp.zeros((n_envs, n_drones, 3), dtype=np.float32, device=device),
@@ -569,8 +573,45 @@ class RaceCoreEnv:
         return self._truncated(self.data.steps, self.data.max_episode_steps, self.sim.n_drones)
 
     def info(self) -> dict:
-        """Return an info dictionary containing additional information about the environment."""
-        return {}
+        """Return an info dictionary containing additional information about the environment.
+
+        Note:
+            For compatibility with both single-agent and vectorized environments, all returned
+            arrays are shaped as `(n_worlds, n_drones, ...)` so wrappers can consistently index the
+            per-drone values.
+        """
+        n_worlds, n_drones = self.sim.n_worlds, self.sim.n_drones
+        steps = jp.tile(self.data.steps[:, None], (1, n_drones))
+        completed = self.data.completed
+        truncated = self.truncated()
+        terminated = self.terminated()
+
+        gates_passed = jp.where(
+            self.data.target_gate == -1, self.data.active_gate_count, self.data.target_gate
+        )
+        completion_fraction = gates_passed.astype(jp.float32) / (
+            self.data.active_gate_count.astype(jp.float32) + 1e-8
+        )
+
+        return {
+            "success": completed,
+            "completed": completed,
+            "terminated": terminated,
+            "truncated": truncated,
+            "crashed": (self.data.disabled_drones & ~completed),
+            "crash_reason": self.data.crash_reason,
+            "gates_passed": gates_passed,
+            "num_gates_active": self.data.active_gate_count,
+            "num_gates_total": jp.full(
+                (n_worlds, n_drones),
+                len(self.data.gate_mj_ids),
+                dtype=int,
+                device=self.device,
+            ),
+            "completion_fraction": completion_fraction,
+            "lap_time_steps": steps,
+            "lap_time_s": steps.astype(jp.float32) / float(self.freq),
+        }
 
     @property
     def drone_mass(self) -> NDArray[np.floating]:
@@ -590,6 +631,7 @@ class RaceCoreEnv:
         passed_gate = jp.where(mask[..., None], False, data.passed_gate)
         progress = jp.where(mask[..., None], 0.0, data.progress)
         completed = jp.where(mask[..., None], False, data.completed)
+        crash_reason = jp.where(mask[..., None], 0, data.crash_reason)
         steps = jp.where(mask, 0, data.steps)
         # Check which gates are in range of the drone
         gates_pos = mocap_pos[:, data.gate_mj_ids]
@@ -610,6 +652,7 @@ class RaceCoreEnv:
             passed_gate=passed_gate,
             progress=progress,
             completed=completed,
+            crash_reason=crash_reason,
             gates_visited=gates_visited,
             obstacles_visited=obstacles_visited,
             steps=steps,
@@ -629,6 +672,11 @@ class RaceCoreEnv:
         """Step the environment data."""
         n_gates = len(data.gate_mj_ids)
         active_gate_count = data.active_gate_count
+        # Crash reason codes (kept stable for downstream logging):
+        # 0=none, 1=bounds_low, 2=bounds_high, 3=contact, 4=unknown.
+        out_low = jp.any(drone_pos < data.pos_limit_low, axis=-1)
+        out_high = jp.any(drone_pos > data.pos_limit_high, axis=-1)
+        contact = jp.any(contacts[:, None, :] & data.contact_masks, axis=-1)
         # Only activate crash checks after an initial grace period (helps with takeoff transients).
         # `freq` is the simulation frequency passed in from the caller.
         taken_off_drones = (data.steps > freq // 5)[:, None]
@@ -657,6 +705,11 @@ class RaceCoreEnv:
         completed = target_gate == -1
         # Mark drones as disabled immediately when the episode is successfully completed.
         disabled_drones = disabled_drones | completed
+        # Update crash reasons for newly crashed drones (do not overwrite prior reasons).
+        newly_disabled = disabled_drones & ~data.disabled_drones
+        newly_crashed = newly_disabled & ~completed
+        reason = jp.where(contact, 3, jp.where(out_low, 1, jp.where(out_high, 2, 4)))
+        crash_reason = jp.where(newly_crashed & (data.crash_reason == 0), reason, data.crash_reason)
         steps = data.steps + 1
         truncated = steps >= data.max_episode_steps
         marked_for_reset = jp.all(disabled_drones | truncated[..., None], axis=-1)
@@ -674,6 +727,7 @@ class RaceCoreEnv:
             passed_gate=passed,
             progress=progress,
             completed=completed,
+            crash_reason=crash_reason,
             gates_visited=gates_visited,
             obstacles_visited=obstacles_visited,
             steps=steps,
