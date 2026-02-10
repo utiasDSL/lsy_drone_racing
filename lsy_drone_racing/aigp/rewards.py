@@ -568,7 +568,11 @@ class RewardCalculator:
             perception_awareness = cfg.perception_awareness_weight * jp.maximum(
                 0.0, camera_alignment
             )
-            perception_awareness = jp.where(has_gate, perception_awareness, 0.0)
+            # Avoid a degenerate "hover and stare at the gate" policy: only reward alignment when
+            # making forward progress toward the current target.
+            perception_awareness = jp.where(
+                has_gate & (vel_toward_gate > 0.1), perception_awareness, 0.0
+            )
         else:
             perception_awareness = 0.0
 
