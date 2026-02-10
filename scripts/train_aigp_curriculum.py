@@ -16,6 +16,7 @@ import copy
 import json
 import logging
 from dataclasses import asdict
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 
@@ -248,6 +249,7 @@ def train(
     out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
     log_path = out_dir / "curriculum_log.jsonl"
+    tb_log = str(out_dir / "tb") if find_spec("tensorboard") is not None else None
 
     config_dir = Path(__file__).parents[1] / "config"
     base_cfg = load_config(config_dir / config)
@@ -341,7 +343,7 @@ def train(
                 policy="MultiInputPolicy",
                 env=sb3_env,
                 verbose=1,
-                tensorboard_log=str(out_dir / "tb"),
+                tensorboard_log=tb_log,
                 device=device,
                 policy_kwargs={"net_arch": list(arch)},
             )
