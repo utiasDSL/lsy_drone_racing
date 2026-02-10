@@ -41,6 +41,8 @@ from lsy_drone_racing.envs.randomize import (
     randomize_drone_mass_fn,
     randomize_drone_pos_fn,
     randomize_drone_quat_fn,
+    randomize_drone_rotor_dyn_coef_fn,
+    randomize_drone_rpm2thrust_fn,
     randomize_gate_pos_fn,
     randomize_gate_rpy_fn,
     randomize_obstacle_pos_fn,
@@ -821,6 +823,10 @@ def build_reset_fn(randomizations: dict) -> Callable[[SimData, Array], SimData]:
                 randomization_fns += (randomize_drone_mass_fn(rng),)
             case "drone_inertia":
                 randomization_fns += (randomize_drone_inertia_fn(rng),)
+            case "drone_rpm2thrust":
+                randomization_fns += (randomize_drone_rpm2thrust_fn(rng),)
+            case "drone_rotor_dyn_coef":
+                randomization_fns += (randomize_drone_rotor_dyn_coef_fn(rng),)
             case "gate_pos" | "gate_rpy" | "obstacle_pos":
                 pass
             case _:
