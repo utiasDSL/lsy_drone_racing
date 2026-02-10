@@ -115,7 +115,7 @@ Legend:
   - [~] runs PPO with evaluation-driven stage progression (needs real run verification)
   - [x] saves checkpoints per eval
   - [~] logs metrics locally (and optionally wandb; not wired yet)
-- [ ] Minimal smoke test: learns 1-gate policy in < ~10 minutes on CPU
+- [x] Minimal smoke test: learns 1-gate policy in < ~10 minutes on CPU
 - [ ] Scale test: 128-1024 envs on GPU (if available) without python bottlenecks
 
 ## Competition Readiness (Later Phases)
