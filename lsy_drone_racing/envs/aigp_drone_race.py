@@ -23,17 +23,29 @@ if TYPE_CHECKING:
 
 
 AIGP_MAX_GATES = 11
+AIGP_MAX_OBSTACLES = 1
 
 
-def _pad_track_gates(track: "ConfigDict", *, max_gates: int) -> "ConfigDict":
-    """Pad a track's gate list to a fixed maximum size.
+def _pad_track_assets(
+    track: "ConfigDict", *, max_gates: int, max_obstacles: int
+) -> "ConfigDict":
+    """Pad a track's gates/obstacles to fixed maximum sizes.
 
     We keep the observation/action space constant across curriculum stages by ensuring the
-    environment always contains `max_gates` gate bodies. Shorter tracks store their true gate count
-    in `track.active_gate_count` and pad the remaining gates with unreachable dummy poses.
+    environment always contains `max_gates` gate bodies and `max_obstacles` obstacle bodies.
+    Shorter tracks store their true gate count in `track.active_gate_count` and pad the remaining
+    gates/obstacles with unreachable dummy poses.
+
+    Notes:
+        Stable-Baselines3 cannot reliably handle dict observations that contain zero-sized
+        dimensions (e.g. `obstacles_pos` with shape `(0, 3)`). Padding obstacles to at least 1
+        avoids this issue.
     """
     if "gates" not in track:
         raise KeyError("track must contain gates")
+    if "obstacles" not in track:
+        track = copy.deepcopy(track)
+        track["obstacles"] = []
     track = copy.deepcopy(track)
     n_gates = len(track.gates)
     if n_gates < 1:
@@ -50,6 +62,18 @@ def _pad_track_gates(track: "ConfigDict", *, max_gates: int) -> "ConfigDict":
 
     dummy_gate = {"pos": [1e6, 1e6, 1e6], "rpy": [0.0, 0.0, 0.0]}
     track["gates"] = list(track.gates) + [dummy_gate] * (max_gates - n_gates)
+
+    n_obstacles = len(track.obstacles)
+    if n_obstacles > max_obstacles:
+        raise ValueError(
+            f"track has {n_obstacles} obstacles, exceeds max_obstacles={max_obstacles}"
+        )
+    if n_obstacles < max_obstacles:
+        dummy_obstacle = {"pos": [1e6, 1e6, 1e6]}
+        track["obstacles"] = list(track.obstacles) + [dummy_obstacle] * (
+            max_obstacles - n_obstacles
+        )
+
     return track
 
 
@@ -156,6 +180,7 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
         device: Literal["cpu", "gpu"] = "cpu",
         *,
         max_gates: int = AIGP_MAX_GATES,
+        max_obstacles: int = AIGP_MAX_OBSTACLES,
     ):
         """Initialize the single-agent AIGP drone racing environment.
 
@@ -174,8 +199,10 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
             max_gates: Maximum gate bodies to include in the simulation. Tracks with fewer gates are
                 padded with dummy gates and store their true gate count in
                 `track.active_gate_count`.
+            max_obstacles: Maximum obstacle bodies to include in the simulation. Tracks with fewer
+                obstacles are padded with dummy obstacles to avoid zero-sized observation shapes.
         """
-        track = _pad_track_gates(track, max_gates=max_gates)
+        track = _pad_track_assets(track, max_gates=max_gates, max_obstacles=max_obstacles)
         super().__init__(
             freq=freq,
             sim_config=sim_config,
@@ -198,6 +225,7 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
         *,
         probs: list[float] | None = None,
         max_gates: int = AIGP_MAX_GATES,
+        max_obstacles: int = AIGP_MAX_OBSTACLES,
     ) -> None:
         """Set a pool of tracks to sample from at each reset.
 
@@ -209,7 +237,9 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
             self._track_pool = None
             self._track_pool_probs = None
             return
-        padded = [_pad_track_gates(t, max_gates=max_gates) for t in tracks]
+        padded = [
+            _pad_track_assets(t, max_gates=max_gates, max_obstacles=max_obstacles) for t in tracks
+        ]
         self._track_pool = padded
         if probs is None:
             self._track_pool_probs = None
@@ -260,6 +290,7 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
         device: Literal["cpu", "gpu"] = "cpu",
         *,
         max_gates: int = AIGP_MAX_GATES,
+        max_obstacles: int = AIGP_MAX_OBSTACLES,
     ):
         """Initialize the vectorized AIGP drone racing environment.
 
@@ -279,8 +310,10 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
             max_gates: Maximum gate bodies to include in the simulation. Tracks with fewer gates are
                 padded with dummy gates and store their true gate count in
                 `track.active_gate_count`.
+            max_obstacles: Maximum obstacle bodies to include in the simulation. Tracks with fewer
+                obstacles are padded with dummy obstacles to avoid zero-sized observation shapes.
         """
-        track = _pad_track_gates(track, max_gates=max_gates)
+        track = _pad_track_assets(track, max_gates=max_gates, max_obstacles=max_obstacles)
         super().__init__(
             num_envs=num_envs,
             freq=freq,
@@ -304,13 +337,16 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
         *,
         probs: list[float] | None = None,
         max_gates: int = AIGP_MAX_GATES,
+        max_obstacles: int = AIGP_MAX_OBSTACLES,
     ) -> None:
         """Set a pool of tracks to sample from at each reset."""
         if not tracks:
             self._track_pool = None
             self._track_pool_probs = None
             return
-        padded = [_pad_track_gates(t, max_gates=max_gates) for t in tracks]
+        padded = [
+            _pad_track_assets(t, max_gates=max_gates, max_obstacles=max_obstacles) for t in tracks
+        ]
         self._track_pool = padded
         if probs is None:
             self._track_pool_probs = None
