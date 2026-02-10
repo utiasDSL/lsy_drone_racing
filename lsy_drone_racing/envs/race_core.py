@@ -327,7 +327,16 @@ class RaceCoreEnv:
         self.track = track
         self.gates, self.obstacles, self.drone = load_track(track)
         specs = {} if disturbances is None else disturbances
-        self.disturbances = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
+        # Disturbances can be either:
+        # - RNG specs (fn/scale/offset/kwargs) for i.i.d. noise
+        # - OU-process specs for time-correlated wind/force disturbances
+        # We keep them in a single dict but allow "dynamics" to be non-callable for OU configs.
+        self.disturbances: dict[str, Any] = {}
+        for mode, spec in specs.items():
+            if mode == "dynamics" and isinstance(spec, dict) and spec.get("process") == "ou":
+                self.disturbances[mode] = dict(spec)
+            else:
+                self.disturbances[mode] = rng_spec2fn(spec)
         specs = {} if randomizations is None else randomizations
         randomizations = {mode: rng_spec2fn(spec) for mode, spec in specs.items()}
 
@@ -794,7 +803,11 @@ class RaceCoreEnv:
         self.sim.reset_pipeline = self.sim.reset_pipeline + (build_reset_fn(randomizations),)
         self.sim.build_reset_fn()
         if "dynamics" in self.disturbances:
-            disturbance_fn = build_dynamics_disturbance_fn(self.disturbances["dynamics"])
+            disturbance_spec = self.disturbances["dynamics"]
+            if callable(disturbance_spec):
+                disturbance_fn = build_dynamics_disturbance_fn(disturbance_spec)
+            else:
+                disturbance_fn = build_ou_dynamics_disturbance_fn(disturbance_spec)
             self.sim.step_pipeline = (
                 self.sim.step_pipeline[:2] + (disturbance_fn,) + self.sim.step_pipeline[2:]
             )
@@ -949,3 +962,45 @@ def build_dynamics_disturbance_fn(
         return data.replace(states=states, core=data.core.replace(rng_key=key))
 
     return dynamics_disturbance
+
+
+def build_ou_dynamics_disturbance_fn(spec: dict[str, Any]) -> Callable[[SimData], SimData]:
+    """Build an Ornstein-Uhlenbeck (OU) disturbance process for world-frame forces.
+
+    The resulting function is inserted into the crazyflow step pipeline and updates
+    `data.states.force` every simulation tick.
+
+    Expected spec keys:
+        - process: must be "ou"
+        - theta: mean reversion rate
+        - sigma: noise scale (float or length-3 list)
+        - mean: long-term mean force (length-3 list), default [0, 0, 0]
+        - clip: optional absolute clip value applied per-axis
+    """
+    if str(spec.get("process")) != "ou":
+        raise ValueError("OU disturbance spec must set process='ou'")
+
+    theta = float(spec.get("theta", 1.0))
+    mean = jp.array(spec.get("mean", [0.0, 0.0, 0.0]), dtype=jp.float32)[None, None, :]
+    sigma_raw = spec.get("sigma", 0.0)
+    sigma = jp.array(sigma_raw, dtype=jp.float32)
+    if sigma.ndim == 0:
+        sigma = jp.full((3,), float(sigma), dtype=jp.float32)
+    if sigma.shape != (3,):
+        raise ValueError("OU disturbance sigma must be a float or length-3 list")
+    sigma = sigma[None, None, :]
+    clip = spec.get("clip")
+    clip_val = None if clip is None else float(clip)
+
+    def ou_disturbance(data: SimData) -> SimData:
+        key, subkey = jax.random.split(data.core.rng_key)
+        dt = 1.0 / float(data.core.freq)
+        force = data.states.force
+        noise = jax.random.normal(subkey, shape=force.shape)
+        next_force = force + theta * (mean - force) * dt + sigma * jp.sqrt(dt) * noise
+        if clip_val is not None:
+            next_force = jp.clip(next_force, -clip_val, clip_val)
+        states = data.states.replace(force=next_force)
+        return data.replace(states=states, core=data.core.replace(rng_key=key))
+
+    return ou_disturbance
