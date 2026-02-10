@@ -32,6 +32,7 @@ import mujoco
 import numpy as np
 from crazyflow.sim import Sim
 from crazyflow.sim.sim import use_box_collision
+from crazyflow.utils import leaf_replace
 from drone_controllers.mellinger.params import ForceTorqueParams
 from flax.struct import dataclass
 from gymnasium import spaces
@@ -432,9 +433,15 @@ class RaceCoreEnv:
         def update_sim_data(
             data: SimData, mjx_data: Data, key: jax.random.PRNGKey
         ) -> tuple[SimData, Data]:
-            # Randomized drone pos
-            pos = data.states.pos.at[...].set(self.drone["pos"])
-            data = data.replace(states=data.states.replace(pos=pos))
+            # Update the drone initial state for *only* the worlds being reset.
+            # Note: the simulation reset itself is mask-aware, but these track-dependent overrides
+            # must also respect the mask to avoid resetting all worlds when autoreset is enabled.
+            pos = jp.broadcast_to(jp.asarray(self.drone["pos"]), data.states.pos.shape)
+            quat = jp.broadcast_to(jp.asarray(self.drone["quat"]), data.states.quat.shape)
+            vel = jp.broadcast_to(jp.asarray(self.drone["vel"]), data.states.vel.shape)
+            ang_vel = jp.broadcast_to(jp.asarray(self.drone["ang_vel"]), data.states.ang_vel.shape)
+            states = leaf_replace(data.states, mask, pos=pos, quat=quat, vel=vel, ang_vel=ang_vel)
+            data = data.replace(states=states)
 
             mjx_data = self.randomize_track(
                 mjx_data,
@@ -937,11 +944,10 @@ def build_track_randomization_fn(
         gate_quat = jp.roll(nominal_gate_quat, 1, axis=-1)  # Convert from scipy to MuJoCo order
 
         # Reset to default track positions first
-        data = data.replace(mocap_pos=data.mocap_pos.at[:, gate_mocap_ids].set(nominal_gate_pos))
-        data = data.replace(mocap_quat=data.mocap_quat.at[:, gate_mocap_ids].set(gate_quat))
-        data = data.replace(
-            mocap_pos=data.mocap_pos.at[:, obstacle_mocap_ids].set(nominal_obstacle_pos)
-        )
+        mocap_pos = data.mocap_pos.at[:, gate_mocap_ids].set(nominal_gate_pos)
+        mocap_quat = data.mocap_quat.at[:, gate_mocap_ids].set(gate_quat)
+        mocap_pos = mocap_pos.at[:, obstacle_mocap_ids].set(nominal_obstacle_pos)
+        data = leaf_replace(data, mask, mocap_pos=mocap_pos, mocap_quat=mocap_quat)
         keys = jax.random.split(key, len(randomization_fns))
         for key, randomize_fn in zip(keys, randomization_fns, strict=True):
             data = randomize_fn(data, mask, key)

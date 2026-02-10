@@ -3,6 +3,7 @@ from pathlib import Path
 
 import gymnasium
 import jax.numpy as jp
+import numpy as np
 import pytest
 from gymnasium.utils.env_checker import check_env
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
@@ -159,3 +160,48 @@ def test_contact_mask():
     )
     mask = env.unwrapped.data.contact_masks
     assert not jp.all(mask == 0), "Contact mask is all zeros."
+
+
+@pytest.mark.unit
+def test_masked_reset_only_resets_masked_worlds():
+    """Regression test: `RaceCoreEnv._reset(mask=...)` must not overwrite unmasked worlds."""
+    config = load_config(Path(__file__).parents[3] / "config/level0.toml")
+    env = gymnasium.make_vec(
+        "DroneRacing-v0",
+        num_envs=2,
+        freq=config.env.freq,
+        sim_config=config.sim,
+        sensor_range=config.env.sensor_range,
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=0,
+    )
+    env.reset(seed=0)
+
+    # Overwrite world 1 with sentinel values. A buggy masked reset would clobber all worlds.
+    data = env.unwrapped.sim.data
+    sentinel_pos = data.states.pos.at[1].set(
+        jp.asarray([[9.0, 8.0, 7.0]], dtype=data.states.pos.dtype)
+    )
+    env.unwrapped.sim.data = data.replace(states=data.states.replace(pos=sentinel_pos))
+
+    mjx_data = env.unwrapped.sim.mjx_data
+    sentinel_mocap_pos = mjx_data.mocap_pos.at[1, 0].set(
+        jp.asarray([6.0, 5.0, 4.0], dtype=mjx_data.mocap_pos.dtype)
+    )
+    env.unwrapped.sim.mjx_data = mjx_data.replace(mocap_pos=sentinel_mocap_pos)
+
+    pos_before = np.asarray(env.unwrapped.sim.data.states.pos[1])
+    mocap_before = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[1, 0])
+
+    env.unwrapped._reset(mask=jp.asarray([True, False]))
+
+    pos_after = np.asarray(env.unwrapped.sim.data.states.pos[1])
+    mocap_after = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[1, 0])
+    assert np.array_equal(pos_after, pos_before), "Unmasked world state changed on masked reset."
+    assert np.array_equal(mocap_after, mocap_before), (
+        "Unmasked world track changed on masked reset."
+    )
+    env.close()
