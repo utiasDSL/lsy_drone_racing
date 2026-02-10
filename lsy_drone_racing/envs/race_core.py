@@ -72,6 +72,7 @@ class EnvData:
 
     Args:
         target_gate: Current target gate index for each drone in each environment
+        active_gate_count: Number of active gates for each drone in each environment
         passed_gate: Boolean flags indicating if the current target gate was passed this step
         progress: Signed progress towards the current target gate (prev_dist - dist) in meters
         completed: Boolean flags indicating if all gates have been passed (episode success)
@@ -92,6 +93,7 @@ class EnvData:
 
     # Dynamic variables
     target_gate: Array
+    active_gate_count: Array
     passed_gate: Array
     progress: Array
     completed: Array
@@ -124,6 +126,7 @@ class EnvData:
         max_episode_steps: int,
         sensor_range: float,
         gate_size: tuple[float, float],
+        active_gate_count: int,
         pos_limit_low: Array,
         pos_limit_high: Array,
         device: Device,
@@ -131,6 +134,9 @@ class EnvData:
         """Create a new environment data struct with default values."""
         return cls(
             target_gate=jp.zeros((n_envs, n_drones), dtype=int, device=device),
+            active_gate_count=jp.full(
+                (n_envs, n_drones), active_gate_count, dtype=int, device=device
+            ),
             passed_gate=jp.zeros((n_envs, n_drones), dtype=bool, device=device),
             progress=jp.zeros((n_envs, n_drones), dtype=jp.float32, device=device),
             completed=jp.zeros((n_envs, n_drones), dtype=bool, device=device),
@@ -324,6 +330,9 @@ class RaceCoreEnv:
 
         # Create the environment data struct.
         n_gates, n_obstacles = len(track.gates), len(track.obstacles)
+        active_gate_count = int(track.get("active_gate_count", n_gates))
+        if active_gate_count < 1 or active_gate_count > n_gates:
+            raise ValueError(f"Invalid active_gate_count={active_gate_count} for n_gates={n_gates}")
         contact_masks = self._load_contact_masks(self.sim)
         m = self.sim.mj_model
         gate_ids = [int(m.body(f"gate:{i}").mocapid.squeeze()) for i in range(n_gates)]
@@ -370,6 +379,7 @@ class RaceCoreEnv:
             max_episode_steps=max_episode_steps,
             sensor_range=sensor_range,
             gate_size=gate_size,
+            active_gate_count=active_gate_count,
             pos_limit_low=pos_limit_low,
             pos_limit_high=pos_limit_high,
             device=self.device,
@@ -399,6 +409,7 @@ class RaceCoreEnv:
         # Generate random track
         track = generate_random_track(self.track, subkey2) if self.track.randomize else self.track
         self.gates, self.obstacles, self.drone = load_track(track)
+        active_gate_count = int(track.get("active_gate_count", len(track.gates)))
         # Randomize the track
         self.sim.data = self.sim.data.replace(core=self.sim.data.core.replace(rng_key=key))
 
@@ -426,6 +437,18 @@ class RaceCoreEnv:
         self.data = self._reset_env_data(
             self.data, self.sim.data.states.pos, self.sim.mjx_data.mocap_pos, mask
         )
+        # Track-dependent settings: active gate count can change between resets (e.g. track pools).
+        active_gate_count_arr = jp.full(
+            (self.sim.n_worlds, self.sim.n_drones), active_gate_count, dtype=int, device=self.device
+        )
+        if mask is None:
+            self.data = self.data.replace(active_gate_count=active_gate_count_arr)
+        else:
+            self.data = self.data.replace(
+                active_gate_count=jp.where(
+                    mask[:, None], active_gate_count_arr, self.data.active_gate_count
+                )
+            )
 
         return self.obs(), self.info()
 
@@ -603,6 +626,7 @@ class RaceCoreEnv:
     ) -> EnvData:
         """Step the environment data."""
         n_gates = len(data.gate_mj_ids)
+        active_gate_count = data.active_gate_count
         # Only activate crash checks after an initial grace period (helps with takeoff transients).
         # `freq` is the simulation frequency passed in from the caller.
         taken_off_drones = (data.steps > freq // 5)[:, None]
@@ -613,17 +637,21 @@ class RaceCoreEnv:
         gates_quat = mocap_quat[:, data.gate_mj_ids][..., [1, 2, 3, 0]]
         # Extract the gate poses of the current target gates and check if the drones have passed
         # them between the last and current position
-        gate_ids = data.gate_mj_ids[data.target_gate % n_gates]
-        gate_pos = gates_pos[jp.arange(gates_pos.shape[0])[:, None], gate_ids]
-        gate_quat = gates_quat[jp.arange(gates_quat.shape[0])[:, None], gate_ids]
+        target_gate = jp.clip(data.target_gate, 0, n_gates - 1)
+        target_gate = jp.minimum(target_gate, active_gate_count - 1)
+        env_idx = jp.arange(gates_pos.shape[0])[:, None]
+        gate_pos = gates_pos[env_idx, target_gate]
+        gate_quat = gates_quat[env_idx, target_gate]
         passed = gate_passed(drone_pos, data.last_drone_pos, gate_pos, gate_quat, data.gate_size)
+        # Ignore gate passing for already completed drones (target_gate == -1).
+        passed = passed & (data.target_gate != -1) & (data.target_gate < active_gate_count)
         # Signed progress towards the current target gate (prev_dist - dist).
         dist_prev = jp.linalg.norm(data.last_drone_pos - gate_pos, axis=-1)
         dist_curr = jp.linalg.norm(drone_pos - gate_pos, axis=-1)
-        progress = jp.where(passed, 0.0, dist_prev - dist_curr)
+        progress = jp.where(passed | (data.target_gate == -1), 0.0, dist_prev - dist_curr)
         # Update the target gate index. Increment by one if drones have passed a gate
         target_gate = data.target_gate + passed * ~disabled_drones
-        target_gate = jp.where(target_gate >= n_gates, -1, target_gate)
+        target_gate = jp.where(target_gate >= active_gate_count, -1, target_gate)
         completed = target_gate == -1
         # Mark drones as disabled immediately when the episode is successfully completed.
         disabled_drones = disabled_drones | completed
