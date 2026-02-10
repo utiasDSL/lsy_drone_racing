@@ -16,7 +16,7 @@ Legend:
 ## Repo / Infra
 - [x] Create AIGP branches + worktrees (`codex/aigp-*`)
 - [x] Add bootstrap AIGP env id (`AIGPDroneRacing-v0`)
-- [~] Add a dedicated `lsy_drone_racing/aigp/` package (instead of scattering code in `envs/`)
+- [x] Add a dedicated `lsy_drone_racing/aigp/` package (instead of scattering code in `envs/`)
 - [ ] Add `pixi` env / `requirements` notes for AIGP training stack (jax+mujoco+sb3)
 - [ ] Add CI job subset for AIGP unit tests (reward/curriculum/DR)
 
@@ -29,9 +29,11 @@ Legend:
   - [x] `tii_real_track2`
   - [x] `tii_real_track3`
 - [x] Add stage-0 single-gate smoke config (`config/aigp_stage0_single_gate.toml`)
-- [~] Pad tracks to a fixed max gate count (needed for SB3 curriculum without changing obs space)
-- [~] Add per-episode active gate count (7/8/11 etc) without rebuilding the MJX model
-- [ ] Add track pools (sample 1 track per episode from a weighted set)
+- [x] Pad tracks to a fixed max gate count (needed for SB3 curriculum without changing obs space)
+- [x] Add per-episode active gate count (7/8/11 etc) without rebuilding the MJX model
+- [~] Add track pools (sample 1 track per episode from a weighted set)
+  - [x] Env API (`set_track_pool`) + weighted sampling per reset
+  - [ ] Per-world sampling for vector envs (currently global-per-reset)
 - [ ] Add richer `info` metrics:
   - [ ] `success` / `completed`
   - [ ] `gates_passed`, `num_gates_active`
@@ -39,31 +41,32 @@ Legend:
   - [ ] `crash_reason` (bounds/contact/timeout/etc)
 
 ## Reward System (Port From DronePrix)
-- [~] Port RewardConfig + presets (`swift`, `grandprix`, `grandprix_lite`, `minimal`, `minimal_curiosity`)
-- [ ] Implement full modular reward components in JAX (vectorized over `n_envs`)
-  - [ ] gate passage
-  - [ ] progress (distance delta)
-  - [ ] progress-velocity (capped)
-  - [ ] speed bonus (with attenuation near gates)
-  - [ ] speed efficiency
-  - [ ] orientation alignment (quat-based forward vector)
-  - [ ] smoothness penalty (action delta)
-  - [ ] altitude maintenance
-  - [ ] boundary proximity penalty
-  - [ ] crash penalty
-  - [ ] timeout penalty
-  - [ ] time penalty
-  - [ ] completion bonus (time-based)
-  - [ ] approach angle
-  - [ ] hover penalty
-  - [ ] upward velocity penalty
-  - [ ] perception awareness (forward-vector alignment)
-  - [ ] lookahead alignment (next gate)
-  - [ ] racing line rewards (optional; can be stubbed initially)
-  - [ ] gate-approach curiosity (gated by success rate)
-- [ ] NaN/Inf guard: clamp/replace non-finite reward components
+- [x] Port RewardConfig + presets (`swift`, `grandprix`, `grandprix_lite`, `minimal`, `minimal_curiosity`)
+- [~] Implement full modular reward components in JAX (vectorized over `n_envs`)
+  - [x] gate passage
+  - [x] progress (distance delta)
+  - [x] progress-velocity (capped)
+  - [x] speed bonus (with attenuation near gates)
+  - [x] speed efficiency
+  - [x] orientation alignment (quat-based forward vector)
+  - [x] smoothness penalty (action delta)
+  - [x] altitude maintenance
+  - [x] boundary proximity penalty
+  - [x] crash penalty
+  - [x] timeout penalty
+  - [x] time penalty
+  - [x] completion bonus (time-based)
+  - [x] approach angle
+  - [x] hover penalty
+  - [x] upward velocity penalty
+  - [x] perception awareness (forward-vector alignment)
+  - [x] lookahead alignment (next gate)
+  - [~] racing line rewards (stubbed as 0.0 components)
+  - [x] gate-approach curiosity (gated by success rate)
+- [x] NaN/Inf guard: clamp/replace non-finite reward components
 - [ ] Reward tapering across curriculum stages (preset + weight scaling)
-- [ ] Unit tests for reward invariants (finite, shape, monotonicity for progress, etc)
+- [~] Unit tests for reward invariants (finite, shape, component presence)
+  - [ ] Add monotonicity tests for progress and caps (progress_velocity_max, speed_bonus_max)
 
 ## Curriculum (Port From DronePrix)
 - [ ] Create compressed 10-stage curriculum spec (TOML/YAML)
@@ -89,8 +92,8 @@ Legend:
 - [ ] Physics randomization integrated into crazyflow reset pipeline (JAX):
   - [ ] mass range
   - [ ] inertia perturbation
-  - [ ] thrust scaling (maps to `rpm2thrust` / `cmd_f_coef`)
-  - [ ] motor time constant scaling (`rotor_dyn_coef` / `thrust_time_coef`)
+  - [~] thrust scaling (first_principles: `rpm2thrust`; TODO: sys-id models)
+  - [~] motor time constant scaling (first_principles: `rotor_dyn_coef`; TODO: sys-id models)
   - [ ] motor degradation / battery discharge (thrust scaling schedule)
 - [ ] Wind OU process (time-correlated) as a JAX step hook (disturbance)
 - [ ] Sensor randomization as wrappers (VIO/IMU failures + bias + noise)
@@ -115,4 +118,3 @@ Legend:
 - [ ] Vision pipeline integration hooks (gate detector + policy input)
 - [ ] Policy comparison harness (benchmark across all tracks)
 - [ ] Export: ONNX / packaging for submission
-
