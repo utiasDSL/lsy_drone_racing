@@ -31,6 +31,7 @@ Legend:
 - [x] Add stage-0 single-gate smoke config (`config/aigp_stage0_single_gate.toml`)
 - [x] Pad tracks to a fixed max gate count (needed for SB3 curriculum without changing obs space)
 - [x] Add per-episode active gate count (7/8/11 etc) without rebuilding the MJX model
+- [x] Fix masked reset correctness (partial reset must not clobber unmasked worlds)
 - [~] Add track pools (sample 1 track per episode from a weighted set)
   - [x] Env API (`set_track_pool`) + weighted sampling per reset
   - [ ] Per-world sampling for vector envs (currently global-per-reset)
