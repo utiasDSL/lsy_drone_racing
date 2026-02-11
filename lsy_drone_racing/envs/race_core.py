@@ -927,7 +927,14 @@ def build_track_randomization_fn(
                 randomization_fns += (randomize_gate_rpy_fn(rng, gate_mocap_ids),)
             case "obstacle_pos":
                 randomization_fns += (randomize_obstacle_pos_fn(rng, obstacle_mocap_ids),)
-            case "drone_pos" | "drone_rpy" | "drone_mass" | "drone_inertia":
+            case (
+                "drone_pos"
+                | "drone_rpy"
+                | "drone_mass"
+                | "drone_inertia"
+                | "drone_rpm2thrust"
+                | "drone_rotor_dyn_coef"
+            ):
                 pass
             case _:
                 raise ValueError(f"Invalid target: {target}")
