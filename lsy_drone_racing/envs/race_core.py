@@ -622,11 +622,11 @@ class RaceCoreEnv:
 
     @staticmethod
     def _disabled_drones(pos: Array, contacts: Array, data: EnvData) -> Array:
-        disabled = data.disabled_drones | jp.any(pos < data.pos_limit_low, axis=-1)
-        disabled = disabled | jp.any(pos > data.pos_limit_high, axis=-1)
+        disabled = data.disabled_drones
         not_in_platform = jp.any(pos[..., :2] < data.takeoff_pos[..., :2] - 0.02, axis=-1)
         not_in_platform |= jp.any(pos[..., :2] > data.takeoff_pos[..., :2] + 0.02, axis=-1)
-        disabled = disabled & not_in_platform
+        disabled = disabled | jp.any(pos < data.pos_limit_low, axis=-1) & not_in_platform
+        disabled = disabled | jp.any(pos > data.pos_limit_high, axis=-1)
         disabled = disabled | (data.target_gate == -1)
         contacts = jp.any(contacts[:, None, :] & data.contact_masks, axis=-1)
         disabled = disabled | contacts
