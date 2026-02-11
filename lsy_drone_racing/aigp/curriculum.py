@@ -509,11 +509,22 @@ class CurriculumManager:
             adaptive_at_min=adaptive_mult <= self.cfg.adaptive.min_mult + 1e-9,
         )
 
+        gate_success_threshold = float(stage.success_rate_threshold)
+        gate_success_rate = float(summary.success_rate)
+        gate_success_ok = gate_success_rate >= gate_success_threshold
+
+        gate_min_episodes_required = int(stage.min_episodes)
+        gate_stage_episodes = int(stage_episodes)
+        gate_min_episodes_ok = gate_stage_episodes >= gate_min_episodes_required
+
+        gate_stability_ok = bool(self.is_stable())
+        gate_recovery_clear = not bool(recovery_active)
+
         can_advance = (
-            stage_episodes >= int(stage.min_episodes)
-            and summary.success_rate >= float(stage.success_rate_threshold)
-            and self.is_stable()
-            and not recovery_active
+            gate_success_ok
+            and gate_min_episodes_ok
+            and gate_stability_ok
+            and gate_recovery_clear
         )
 
         decision: dict[str, Any] = {
@@ -528,6 +539,14 @@ class CurriculumManager:
             "panic_dr_mult": float(dr_mult),
             "panic_assist_mult": float(assist_mult),
             "recovery_active": bool(recovery_active),
+            "gate_success_ok": bool(gate_success_ok),
+            "gate_success_rate": gate_success_rate,
+            "gate_success_threshold": gate_success_threshold,
+            "gate_min_episodes_ok": bool(gate_min_episodes_ok),
+            "gate_stage_episodes": gate_stage_episodes,
+            "gate_min_episodes_required": gate_min_episodes_required,
+            "gate_stability_ok": bool(gate_stability_ok),
+            "gate_recovery_clear": bool(gate_recovery_clear),
         }
 
         if hardlock and stuck_action == "rollback_stage" and self.stage_idx > 0:

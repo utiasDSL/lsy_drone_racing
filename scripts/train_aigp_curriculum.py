@@ -24,7 +24,7 @@ from typing import Any
 import fire
 import numpy as np
 
-from lsy_drone_racing.aigp.curriculum import CurriculumConfig, CurriculumManager
+from lsy_drone_racing.aigp.curriculum import CurriculumConfig, CurriculumManager, EvalSummary
 from lsy_drone_racing.aigp.eval import evaluate_vec_env, make_predict_policy
 from lsy_drone_racing.aigp.sb3_vec_env import make_sb3_vec_env
 from lsy_drone_racing.aigp.wrappers import (
@@ -217,6 +217,81 @@ def _save_jsonl(path: Path, row: dict[str, Any]) -> None:
         f.write(json.dumps(row, sort_keys=True) + "\n")
 
 
+def _aggregate_eval_summaries(summaries: list[EvalSummary]) -> EvalSummary:
+    """Aggregate multiple evaluation summaries into one weighted summary."""
+    if not summaries:
+        raise ValueError("summaries must not be empty")
+    if len(summaries) == 1:
+        return summaries[0]
+
+    n_total = int(sum(int(s.n_episodes) for s in summaries))
+    if n_total <= 0:
+        raise ValueError("total n_episodes must be > 0")
+
+    success_rate = float(
+        sum(float(s.success_rate) * int(s.n_episodes) for s in summaries) / float(n_total)
+    )
+    completion_mean = float(
+        sum(float(s.completion_mean) * int(s.n_episodes) for s in summaries) / float(n_total)
+    )
+    completion_second_moment = float(
+        sum(
+            (float(s.completion_std) ** 2 + float(s.completion_mean) ** 2) * int(s.n_episodes)
+            for s in summaries
+        )
+        / float(n_total)
+    )
+    completion_var = max(0.0, completion_second_moment - completion_mean**2)
+    completion_std = float(np.sqrt(completion_var))
+
+    lap_medians = [float(s.lap_time_s_median) for s in summaries if s.lap_time_s_median is not None]
+    lap_time_s_median = float(np.median(lap_medians)) if lap_medians else None
+
+    return EvalSummary(
+        n_episodes=n_total,
+        success_rate=success_rate,
+        completion_mean=completion_mean,
+        completion_std=completion_std,
+        lap_time_s_median=lap_time_s_median,
+    )
+
+
+def _build_eval_scorecard(
+    *, summary: EvalSummary, decision: dict[str, Any]
+) -> dict[str, dict[str, Any] | bool]:
+    """Build a compact stage-gating scorecard for logs and JSONL."""
+    success_rate_value = float(summary.success_rate)
+    success_rate_threshold = float(decision.get("gate_success_threshold", 0.0))
+    min_episodes_value = int(decision.get("gate_stage_episodes", 0))
+    min_episodes_required = int(decision.get("gate_min_episodes_required", 0))
+
+    success_rate_ok = bool(decision.get("gate_success_ok", False))
+    min_episodes_ok = bool(decision.get("gate_min_episodes_ok", False))
+    stability_ok = bool(decision.get("gate_stability_ok", False))
+    recovery_clear_ok = bool(decision.get("gate_recovery_clear", False))
+    scorecard_pass = bool(
+        success_rate_ok and min_episodes_ok and stability_ok and recovery_clear_ok
+    )
+
+    return {
+        "pass": scorecard_pass,
+        "checks": {
+            "success_rate": {
+                "ok": success_rate_ok,
+                "value": success_rate_value,
+                "threshold": success_rate_threshold,
+            },
+            "min_episodes": {
+                "ok": min_episodes_ok,
+                "value": min_episodes_value,
+                "required": min_episodes_required,
+            },
+            "stability": {"ok": stability_ok},
+            "recovery_clear": {"ok": recovery_clear_ok},
+        },
+    }
+
+
 def train(
     *,
     config: str = "aigp_stage0_single_gate.toml",
@@ -232,6 +307,8 @@ def train(
     net_arch: str | tuple[int, ...] | list[int] = "256,128",
     ppo_n_steps: int = 2048,
     ppo_batch_size: int = 64,
+    eval_repeats: int = 1,
+    eval_seed_stride: int = 97,
 ) -> None:
     """Train PPO with a curriculum.
 
@@ -249,6 +326,8 @@ def train(
         net_arch: MLP architecture as comma-separated ints (e.g. "256,128").
         ppo_n_steps: PPO rollout length per env (affects update cadence and min learn chunk size).
         ppo_batch_size: PPO minibatch size.
+        eval_repeats: Number of independent eval sweeps to average per eval round.
+        eval_seed_stride: Per-round seed offset stride for eval env construction.
     """
     sb3 = _require_sb3()
     from stable_baselines3.common.callbacks import BaseCallback  # type: ignore[import-not-found]
@@ -270,6 +349,8 @@ def train(
     final_stage_idx = len(cur_cfg.stages) - 1
 
     arch = _parse_net_arch(net_arch)
+    eval_repeats_local = max(1, int(eval_repeats))
+    eval_seed_stride_local = max(1, int(eval_seed_stride))
 
     class _EpisodeCounter(BaseCallback):
         def __init__(self):
@@ -404,25 +485,54 @@ def train(
             if walltime_cb.reached:
                 stop_after_checkpoint = True
 
-            # Evaluate with a fresh env to avoid leaked state.
-            eval_env = _build_vec_env_for_stage(
-                stage_idx=stage_idx,
-                num_envs_local=int(eval_envs),
-                seed_offset=10_000,
-                dr_mult=eff_dr_mult,
-                gate_scale=eff_gate_scale,
-                tol_mult=eff_tol_mult,
-            )
+            # Evaluate with fresh envs to avoid leaked state and average across eval seeds.
+            eval_seed_offsets: list[int] = []
+            eval_summaries: list[EvalSummary] = []
+            for eval_idx in range(eval_repeats_local):
+                eval_seed_offset = (
+                    10_000
+                    + eval_round * eval_seed_stride_local
+                    + eval_idx * 1_000
+                )
+                eval_seed_offsets.append(int(eval_seed_offset))
+                eval_env = _build_vec_env_for_stage(
+                    stage_idx=stage_idx,
+                    num_envs_local=int(eval_envs),
+                    seed_offset=eval_seed_offset,
+                    dr_mult=eff_dr_mult,
+                    gate_scale=eff_gate_scale,
+                    tol_mult=eff_tol_mult,
+                )
 
-            summary = evaluate_vec_env(
-                eval_env,
-                make_predict_policy(model, deterministic=True),
-                n_episodes=stage_eval_eps,
-                max_episode_steps=stage_max_steps,
-            )
-            eval_env.close()
+                eval_summary = evaluate_vec_env(
+                    eval_env,
+                    make_predict_policy(model, deterministic=True),
+                    n_episodes=stage_eval_eps,
+                    max_episode_steps=stage_max_steps,
+                )
+                eval_env.close()
+                eval_summaries.append(eval_summary)
+            summary = _aggregate_eval_summaries(eval_summaries)
 
             decision = mgr.update_after_eval(summary=summary, stage_episodes=int(counter.episodes))
+            scorecard = _build_eval_scorecard(summary=summary, decision=decision)
+            logger.info(
+                (
+                    "EVAL_SCORECARD stage_idx=%s stage=%s pass=%d sr=%.3f/%.3f "
+                    "min_eps=%d/%d stable=%d recovery_clear=%d dr_mult=%.3f assist=%.3f"
+                ),
+                int(decision.get("stage_idx", mgr.stage_idx)),
+                str(decision.get("stage_name", stage.name)),
+                int(bool(scorecard["pass"])),
+                float(scorecard["checks"]["success_rate"]["value"]),
+                float(scorecard["checks"]["success_rate"]["threshold"]),
+                int(scorecard["checks"]["min_episodes"]["value"]),
+                int(scorecard["checks"]["min_episodes"]["required"]),
+                int(bool(scorecard["checks"]["stability"]["ok"])),
+                int(bool(scorecard["checks"]["recovery_clear"]["ok"])),
+                float(eff_dr_mult),
+                float(decision.get("panic_assist_mult", 1.0)),
+            )
 
             row = {
                 "stage": {"idx": mgr.stage_idx, "name": stage.name, "dr_tier": stage.dr_tier},
@@ -433,7 +543,10 @@ def train(
                     "gate_scale": float(eff_gate_scale),
                     "tol_mult": float(eff_tol_mult),
                 },
+                "eval_repeats": int(eval_repeats_local),
+                "eval_seed_offsets": eval_seed_offsets,
                 "eval": asdict(summary),
+                "scorecard": scorecard,
                 "decision": {k: v for k, v in decision.items() if k != "adaptive_smoothed"},
             }
             _save_jsonl(log_path, row)
@@ -480,7 +593,7 @@ def train(
                 prev_env = _build_vec_env_for_stage(
                     stage_idx=prev_idx,
                     num_envs_local=int(eval_envs),
-                    seed_offset=20_000,
+                    seed_offset=20_000 + eval_round * eval_seed_stride_local,
                     dr_mult=1.0,
                     gate_scale=1.0,
                     tol_mult=1.0,
