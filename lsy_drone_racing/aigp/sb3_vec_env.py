@@ -61,17 +61,30 @@ def _squeeze_single_drone(batch: dict[str, Any], *, num_envs: int) -> dict[str, 
     return out
 
 
-def _partial_reset(env: "VectorEnv", *, done: NDArray[np.bool_]) -> tuple[Obs, dict[str, Any]]:
-    """Reset only `done` lanes, using `RaceCoreEnv._reset(mask=...)` when available."""
+def _partial_reset(
+    env: "VectorEnv", *, done: NDArray[np.bool_]
+) -> tuple[Obs, dict[str, Any], bool]:
+    """Reset done lanes when possible.
+
+    Returns:
+        `(obs, info, reset_all)` where `reset_all=True` indicates that a full env reset was used
+        as a fallback and all observation lanes should be overwritten.
+    """
     num_envs = int(env.num_envs)
-    if done.all() or not hasattr(env, "_reset"):
+    if done.all():
         obs, info = env.reset()
-        return _as_numpy_obs(obs), _squeeze_single_drone(info, num_envs=num_envs)
+        return _as_numpy_obs(obs), _squeeze_single_drone(info, num_envs=num_envs), True
+
+    if not hasattr(env, "_reset"):
+        # Fallback for generic vector envs/wrappers without mask-aware reset support.
+        # Callers must patch all lanes, otherwise obs/env-state can diverge.
+        obs, info = env.reset()
+        return _as_numpy_obs(obs), _squeeze_single_drone(info, num_envs=num_envs), True
 
     obs_jax, info_jax = env._reset(mask=jp.asarray(done))  # type: ignore[attr-defined]
     obs = _as_numpy_obs(_squeeze_single_drone(obs_jax, num_envs=num_envs))
     info = _squeeze_single_drone(info_jax, num_envs=num_envs)
-    return obs, info
+    return obs, info, False
 
 
 def make_sb3_vec_env(env: "VectorEnv") -> Any:  # noqa: ANN401
@@ -148,11 +161,16 @@ def make_sb3_vec_env(env: "VectorEnv") -> Any:  # noqa: ANN401
                         k: np.asarray(v[int(i)]).copy() for k, v in obs_np.items()
                     }
 
-                reset_obs, _reset_info = _partial_reset(self.wrapped, done=dones.astype(np.bool_))
+                reset_obs, _reset_info, reset_all = _partial_reset(
+                    self.wrapped, done=dones.astype(np.bool_)
+                )
+                replace_mask = (
+                    np.ones_like(dones, dtype=bool) if reset_all else dones.astype(np.bool_)
+                )
                 for k, v in obs_np.items():
                     v_reset = reset_obs[k]
                     v = np.asarray(v)
-                    v[dones, ...] = v_reset[dones, ...]
+                    v[replace_mask, ...] = v_reset[replace_mask, ...]
                     obs_np[k] = v
 
             return obs_np, rewards_np, dones, infos

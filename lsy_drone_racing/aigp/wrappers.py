@@ -56,6 +56,45 @@ class ActionLatencyWrapper(VectorWrapper):
         self._init_state()
         return obs, info
 
+    def _reset(  # noqa: PLR0911
+        self,
+        *,
+        seed: int | list[int] | None = None,
+        options: dict[str, Any] | None = None,
+        mask: Any | None = None,
+    ) -> ResetReturn:
+        """Mask-aware reset used by SB3/eval partial-reset paths."""
+        if hasattr(self.env, "_reset"):
+            obs, info = self.env._reset(seed=seed, options=options, mask=mask)  # type: ignore[attr-defined]
+        else:
+            # Fallback: if the wrapped env cannot partially reset, reinitialize wrapper state.
+            obs, info = self.env.reset(seed=seed, options=options)
+            self._init_state()
+            return obs, info
+
+        if self._buf is None or self._latency_per_env is None:
+            self._init_state()
+            return obs, info
+
+        if mask is None:
+            self._init_state()
+            return obs, info
+
+        m = np.asarray(mask, dtype=bool).reshape(-1)
+        if m.shape != (int(self.env.num_envs),):
+            self._init_state()
+            return obs, info
+
+        self._buf[:, m, ...] = 0.0
+        if isinstance(self.latency_steps, tuple) and m.any():
+            lo, hi = int(self.latency_steps[0]), int(self.latency_steps[1])
+            if hi < lo:
+                lo, hi = hi, lo
+            self._latency_per_env[m] = self._rng.integers(
+                lo, hi + 1, size=int(m.sum()), dtype=np.int32
+            )
+        return obs, info
+
     def _init_state(self) -> None:
         num_envs = int(self.env.num_envs)
         if isinstance(self.latency_steps, tuple):
@@ -139,6 +178,47 @@ class ImuBiasNoiseWrapper(VectorWrapper):
         self._reset_biases_from_obs(obs)
         obs = self._apply(obs)
         return obs, info
+
+    def _reset(
+        self,
+        *,
+        seed: int | list[int] | None = None,
+        options: dict[str, Any] | None = None,
+        mask: Any | None = None,
+    ) -> ResetReturn:
+        """Mask-aware reset used by SB3/eval partial-reset paths."""
+        if hasattr(self.env, "_reset"):
+            obs, info = self.env._reset(seed=seed, options=options, mask=mask)  # type: ignore[attr-defined]
+        else:
+            obs, info = self.env.reset(seed=seed, options=options)
+            self._reset_biases_from_obs(obs)
+            return self._apply(obs), info
+
+        if self._vel_bias is None or self._ang_bias is None or mask is None:
+            self._reset_biases_from_obs(obs)
+            return self._apply(obs), info
+
+        m = np.asarray(mask, dtype=bool).reshape(-1)
+        n_envs = int(self.env.num_envs)
+        if m.shape != (n_envs,):
+            self._reset_biases_from_obs(obs)
+            return self._apply(obs), info
+
+        n_drones = int(np.asarray(obs["vel"]).shape[1]) if "vel" in obs else 1
+        expected_shape = (n_envs, n_drones, 3)
+        if self._vel_bias.shape != expected_shape or self._ang_bias.shape != expected_shape:
+            self._reset_biases_from_obs(obs)
+            return self._apply(obs), info
+
+        if m.any():
+            self._vel_bias[m, :, :] = self._rng.normal(
+                0.0, float(self.cfg.vel_bias_std), size=self._vel_bias[m, :, :].shape
+            ).astype(np.float32)
+            self._ang_bias[m, :, :] = self._rng.normal(
+                0.0, float(self.cfg.ang_vel_bias_std), size=self._ang_bias[m, :, :].shape
+            ).astype(np.float32)
+
+        return self._apply(obs), info
 
     def _reset_biases_from_obs(self, obs: dict[str, Any]) -> None:
         num_envs = int(self.env.num_envs)
@@ -237,6 +317,45 @@ class VioFailureWrapper(VectorWrapper):
         obs, info = self.env.reset(seed=seed, options=options)
         self._hold_steps = np.zeros((int(self.env.num_envs),), dtype=np.int32)
         self._last = {k: np.asarray(obs[k]).copy() for k in self.keys if k in obs}
+        return obs, info
+
+    def _reset(
+        self,
+        *,
+        seed: int | list[int] | None = None,
+        options: dict[str, Any] | None = None,
+        mask: Any | None = None,
+    ) -> ResetReturn:
+        """Mask-aware reset used by SB3/eval partial-reset paths."""
+        if hasattr(self.env, "_reset"):
+            obs, info = self.env._reset(seed=seed, options=options, mask=mask)  # type: ignore[attr-defined]
+        else:
+            obs, info = self.env.reset(seed=seed, options=options)
+            self._hold_steps = np.zeros((int(self.env.num_envs),), dtype=np.int32)
+            self._last = {k: np.asarray(obs[k]).copy() for k in self.keys if k in obs}
+            return obs, info
+
+        n_envs = int(self.env.num_envs)
+        if self._hold_steps is None or mask is None:
+            self._hold_steps = np.zeros((n_envs,), dtype=np.int32)
+            self._last = {k: np.asarray(obs[k]).copy() for k in self.keys if k in obs}
+            return obs, info
+
+        m = np.asarray(mask, dtype=bool).reshape(-1)
+        if m.shape != (n_envs,):
+            self._hold_steps = np.zeros((n_envs,), dtype=np.int32)
+            self._last = {k: np.asarray(obs[k]).copy() for k in self.keys if k in obs}
+            return obs, info
+
+        self._hold_steps[m] = 0
+        for k in self.keys:
+            if k not in obs:
+                continue
+            arr = np.asarray(obs[k])
+            if k not in self._last or np.asarray(self._last[k]).shape != arr.shape:
+                self._last[k] = arr.copy()
+            else:
+                self._last[k][m, ...] = arr[m, ...]
         return obs, info
 
     def step(self, actions: Any) -> StepReturn:

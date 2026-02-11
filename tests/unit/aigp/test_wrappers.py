@@ -1,9 +1,12 @@
+from typing import Any, Callable
+
 import numpy as np
 import pytest
 from gymnasium import Env, spaces
 from gymnasium.vector import SyncVectorEnv
 from numpy.typing import NDArray
 
+from lsy_drone_racing.aigp.sb3_vec_env import _partial_reset as sb3_partial_reset
 from lsy_drone_racing.aigp.wrappers import (
     ActionLatencyWrapper,
     ImuBiasNoiseWrapper,
@@ -68,6 +71,32 @@ class _ToyObsEnv(Env):
         }
 
 
+class _CountingSyncVectorEnv(SyncVectorEnv):
+    def __init__(self, env_fns: list[Callable[[], Env]]):
+        super().__init__(env_fns)
+        self.full_reset_calls = 0
+        self.masked_reset_calls = 0
+        self.last_mask: NDArray[np.bool_] | None = None
+
+    def reset(
+        self, *, seed: int | list[int] | None = None, options: dict | None = None
+    ) -> tuple[dict[str, NDArray[np.floating]], dict]:
+        self.full_reset_calls += 1
+        return super().reset(seed=seed, options=options)
+
+    def _reset(
+        self,
+        *,
+        seed: int | list[int] | None = None,
+        options: dict | None = None,
+        mask: Any | None = None,
+    ) -> tuple[dict[str, NDArray[np.floating]], dict]:
+        self.masked_reset_calls += 1
+        self.last_mask = None if mask is None else np.asarray(mask, dtype=np.bool_).copy()
+        # Keep this simple: delegation coverage is what matters in this unit test.
+        return super().reset(seed=seed, options=options)
+
+
 @pytest.mark.unit
 def test_action_latency_wrapper_fixed_latency():
     env = SyncVectorEnv([lambda: _ToyObsEnv() for _ in range(2)])
@@ -118,3 +147,37 @@ def test_vio_failure_wrapper_hold_mode_holds_last_value():
     obs1, *_ = env.step(np.zeros((2, 1), dtype=np.float32))
     # Underlying env moved to t=1, but dropout holds t=0.
     assert np.allclose(obs1["pos"][..., 0], 0.0)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "wrapper_factory",
+    [
+        lambda e: ActionLatencyWrapper(e, latency_steps=0, seed=0),
+        lambda e: ImuBiasNoiseWrapper(e, ImuNoiseConfig(), seed=0),
+        lambda e: VioFailureWrapper(e, VioFailureConfig(), seed=0),
+    ],
+)
+def test_partial_reset_delegates_through_wrappers(
+    wrapper_factory: Callable[[SyncVectorEnv], SyncVectorEnv]
+):
+    base = _CountingSyncVectorEnv([lambda: _ToyObsEnv() for _ in range(2)])
+    env = wrapper_factory(base)
+    env.reset()
+
+    full_reset_calls_before = base.full_reset_calls
+    done = np.array([True, False], dtype=np.bool_)
+
+    _, _, reset_all = sb3_partial_reset(env, done=done)
+    assert not reset_all
+    assert base.masked_reset_calls == 1
+    assert base.last_mask is not None and np.array_equal(base.last_mask, done)
+    assert base.full_reset_calls == full_reset_calls_before
+
+
+@pytest.mark.unit
+def test_partial_reset_fallback_marks_reset_all_without_masked_reset():
+    env = SyncVectorEnv([lambda: _ToyObsEnv() for _ in range(2)])
+    env.reset()
+    _, _, reset_all = sb3_partial_reset(env, done=np.array([True, False], dtype=np.bool_))
+    assert reset_all

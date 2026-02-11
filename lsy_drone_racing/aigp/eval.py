@@ -70,24 +70,33 @@ def _squeeze_single_drone(batch: dict[str, Any], *, num_envs: int) -> dict[str, 
     return out
 
 
-def _partial_reset(env: "VectorEnv", *, done: NDArray[np.bool_]) -> tuple[Obs, dict[str, Any]]:
+def _partial_reset(
+    env: "VectorEnv", *, done: NDArray[np.bool_]
+) -> tuple[Obs, dict[str, Any], bool]:
     """Reset only the environments indicated by `done`.
 
     Notes:
         This relies on the underlying env exposing a `._reset(mask=...)` method (as
         :class:`~lsy_drone_racing.envs.race_core.RaceCoreEnv` does). If it's missing, this falls
         back to resetting all environments.
+
+    Returns:
+        `(obs, info, reset_all)` where `reset_all=True` indicates a full reset fallback.
     """
     num_envs = int(env.num_envs)
-    if done.all() or not hasattr(env, "_reset"):
+    if done.all():
         obs, info = env.reset()
-        return _as_numpy_obs(obs), _squeeze_single_drone(info, num_envs=num_envs)
+        return _as_numpy_obs(obs), _squeeze_single_drone(info, num_envs=num_envs), True
+
+    if not hasattr(env, "_reset"):
+        obs, info = env.reset()
+        return _as_numpy_obs(obs), _squeeze_single_drone(info, num_envs=num_envs), True
 
     # `RaceCoreEnv._reset()` expects a JAX array mask in most code paths.
     obs_jax, info_jax = env._reset(mask=jp.asarray(done))  # type: ignore[attr-defined]
     obs = _as_numpy_obs(_squeeze_single_drone(obs_jax, num_envs=num_envs))
     info = _squeeze_single_drone(info_jax, num_envs=num_envs)
-    return obs, info
+    return obs, info, False
 
 
 def evaluate_vec_env(
@@ -179,13 +188,14 @@ def evaluate_vec_env(
             ep_returns[done] = 0.0
             ep_lengths[done] = 0
 
-            reset_obs, _reset_info = _partial_reset(env, done=done.astype(np.bool_))
+            reset_obs, _reset_info, reset_all = _partial_reset(env, done=done.astype(np.bool_))
             obs2_np = _as_numpy_obs(obs2)
+            replace_mask = np.ones_like(done, dtype=bool) if reset_all else done.astype(np.bool_)
             # Overwrite done lanes with freshly reset observations.
             for k, v in obs2_np.items():
                 v_reset = reset_obs[k]
                 v = np.asarray(v)
-                v[done, ...] = v_reset[done, ...]
+                v[replace_mask, ...] = v_reset[replace_mask, ...]
                 obs2_np[k] = v
             obs_np = obs2_np
         else:

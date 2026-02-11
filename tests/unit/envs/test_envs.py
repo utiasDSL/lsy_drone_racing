@@ -7,7 +7,9 @@ import numpy as np
 import pytest
 from gymnasium.utils.env_checker import check_env
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
+from ml_collections import ConfigDict
 
+from lsy_drone_racing.envs.aigp_drone_race import _pad_track_assets
 from lsy_drone_racing.utils import load_config
 
 
@@ -205,3 +207,26 @@ def test_masked_reset_only_resets_masked_worlds():
         "Unmasked world track changed on masked reset."
     )
     env.close()
+
+
+@pytest.mark.unit
+def test_pad_track_assets_pads_obstacles_when_gates_already_at_max():
+    track = ConfigDict(
+        {
+            "randomize": False,
+            "gates": [{"pos": [float(i), 0.0, 1.0], "rpy": [0.0, 0.0, 0.0]} for i in range(11)],
+            "obstacles": [],
+            "drones": [
+                {
+                    "pos": [0.0, 0.0, 1.0],
+                    "rpy": [0.0, 0.0, 0.0],
+                    "vel": [0.0, 0.0, 0.0],
+                    "ang_vel": [0.0, 0.0, 0.0],
+                }
+            ],
+        }
+    )
+
+    padded = _pad_track_assets(track, max_gates=11, max_obstacles=1)
+    assert len(padded.gates) == 11
+    assert len(padded.obstacles) == 1

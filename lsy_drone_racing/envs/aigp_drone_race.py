@@ -57,11 +57,10 @@ def _pad_track_assets(
     if active_gate_count < 1 or active_gate_count > n_gates:
         raise ValueError(f"Invalid active_gate_count={active_gate_count} for n_gates={n_gates}")
     track["active_gate_count"] = active_gate_count
-    if n_gates == max_gates:
-        return track
 
-    dummy_gate = {"pos": [1e6, 1e6, 1e6], "rpy": [0.0, 0.0, 0.0]}
-    track["gates"] = list(track.gates) + [dummy_gate] * (max_gates - n_gates)
+    if n_gates < max_gates:
+        dummy_gate = {"pos": [1e6, 1e6, 1e6], "rpy": [0.0, 0.0, 0.0]}
+        track["gates"] = list(track.gates) + [dummy_gate] * (max_gates - n_gates)
 
     n_obstacles = len(track.obstacles)
     if n_obstacles > max_obstacles:
