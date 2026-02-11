@@ -422,6 +422,12 @@ class RaceCoreEnv:
 
     def apply_action(self, action: Array):
         """Apply the commanded state action to the simulation."""
+        assert action.shape == self.action_space.shape, (
+            f"Action shape mismatch: expected {self.action_space.shape}, got {action.shape}."
+        )
+        action = self._sanitize_action(
+            action, self.action_space.low, self.action_space.high, self.device
+        )
         action = action.reshape((self.sim.n_worlds, self.sim.n_drones, -1))
         if "action" in self.disturbances:
             key, subkey = jax.random.split(self.sim.data.core.rng_key)
