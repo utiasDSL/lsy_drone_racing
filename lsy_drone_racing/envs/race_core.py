@@ -95,6 +95,7 @@ class EnvData:
     marked_for_reset: Array
     disabled_drones: Array
     steps: Array
+    takeoff_pos: Array
     # Static variables
     contact_masks: Array
     pos_limit_low: Array
@@ -130,6 +131,7 @@ class EnvData:
             disabled_drones=jp.zeros((n_envs, n_drones), dtype=bool, device=device),
             contact_masks=jp.array(contact_masks, dtype=bool, device=device),
             steps=jp.zeros(n_envs, dtype=int, device=device),
+            takeoff_pos=jp.zeros((n_envs, n_drones, 3), dtype=np.float32, device=device),
             pos_limit_low=jp.array(pos_limit_low, dtype=np.float32, device=device),
             pos_limit_high=jp.array(pos_limit_high, dtype=np.float32, device=device),
             gate_mj_ids=jp.array(gate_mj_ids, dtype=int, device=device),
@@ -151,7 +153,7 @@ def build_action_space(control_mode: Literal["state", "attitude"], drone_model: 
         A Box space representing the action space for the specified control mode.
     """
     if control_mode == "state":
-        return spaces.Box(low=-1, high=1, shape=(13,))
+        return spaces.Box(low=-np.inf, high=np.inf, shape=(13,))
     elif control_mode == "attitude":
         params = ForceTorqueParams.load(drone_model)
         thrust_min, thrust_max = params.thrust_min * 4, params.thrust_max * 4
@@ -326,7 +328,7 @@ class RaceCoreEnv:
             obstacle_mj_ids=obstacle_ids,
             max_episode_steps=max_episode_steps,
             sensor_range=sensor_range,
-            pos_limit_low=[-3, -3, -1e-3],
+            pos_limit_low=[-3, -3, 0.0],
             pos_limit_high=[3, 3, 2.5],
             device=self.device,
         )
@@ -412,9 +414,7 @@ class RaceCoreEnv:
         # previous flags, not the ones from the current step
         marked_for_reset = self.data.marked_for_reset
         # Apply the environment logic with updated simulation data.
-        self.data = self._step_env(
-            self.data, drone_pos, mocap_pos, mocap_quat, contacts, self.sim.freq
-        )
+        self.data = self._step_env(self.data, drone_pos, mocap_pos, mocap_quat, contacts)
         # Auto-reset envs. Add configuration option to disable for single-world envs
         if self.autoreset and marked_for_reset.any():
             self._reset(mask=marked_for_reset)
@@ -422,12 +422,13 @@ class RaceCoreEnv:
 
     def apply_action(self, action: Array):
         """Apply the commanded state action to the simulation."""
-        # Convert to a buffer that meets XLA's alginment restrictions to prevent warnings. See
-        # https://github.com/jax-ml/jax/discussions/6055
-        # Tracking issue:
-        # https://github.com/jax-ml/jax/issues/29810
-        # Forcing a copy here is less efficient, but avoids the warning.
-        action = np.reshape(action, (self.sim.n_worlds, self.sim.n_drones, -1), copy=True)
+        assert action.shape == self.action_space.shape, (
+            f"Action shape mismatch: expected {self.action_space.shape}, got {action.shape}."
+        )
+        action = self._sanitize_action(
+            action, self.action_space.low, self.action_space.high, self.device
+        )
+        action = action.reshape((self.sim.n_worlds, self.sim.n_drones, -1))
         if "action" in self.disturbances:
             key, subkey = jax.random.split(self.sim.data.core.rng_key)
             action += self.disturbances["action"](subkey, action.shape)
@@ -439,6 +440,12 @@ class RaceCoreEnv:
                 self.sim.state_control(action)
             case _:
                 raise ValueError(f"Unsupported control mode: {self.sim.control}")
+
+    @staticmethod
+    @partial(jax.jit, static_argnames=["device"])
+    def _sanitize_action(action: Array, low: NDArray, high: NDArray, device: str) -> Array:
+        action = jp.clip(action, low, high)
+        return jp.array(action, device=device)
 
     def render(self):
         """Render the environment."""
@@ -541,23 +548,18 @@ class RaceCoreEnv:
             gates_visited=gates_visited,
             obstacles_visited=obstacles_visited,
             steps=steps,
+            takeoff_pos=jp.where(mask[..., None, None], drone_pos, data.takeoff_pos),
             marked_for_reset=jp.where(mask, 0, data.marked_for_reset),  # Unmark after env reset
         )
 
     @staticmethod
     @jax.jit
     def _step_env(
-        data: EnvData,
-        drone_pos: Array,
-        mocap_pos: Array,
-        mocap_quat: Array,
-        contacts: Array,
-        freq: int,
+        data: EnvData, drone_pos: Array, mocap_pos: Array, mocap_quat: Array, contacts: Array
     ) -> EnvData:
         """Step the environment data."""
         n_gates = len(data.gate_mj_ids)
-        taken_off_drones = (data.steps > freq // 5)[:, None]  # Only activate check after 0.2s
-        disabled_drones = taken_off_drones & RaceCoreEnv._disabled_drones(drone_pos, contacts, data)
+        disabled_drones = RaceCoreEnv._disabled_drones(drone_pos, contacts, data)
         gates_pos = mocap_pos[:, data.gate_mj_ids]
         obstacles_pos = mocap_pos[:, data.obstacle_mj_ids]
         # We need to convert the mocap quat from MuJoCo order to scipy order
@@ -620,7 +622,10 @@ class RaceCoreEnv:
 
     @staticmethod
     def _disabled_drones(pos: Array, contacts: Array, data: EnvData) -> Array:
-        disabled = data.disabled_drones | jp.any(pos < data.pos_limit_low, axis=-1)
+        disabled = data.disabled_drones
+        not_in_platform = jp.any(pos[..., :2] < data.takeoff_pos[..., :2] - 0.02, axis=-1)
+        not_in_platform |= jp.any(pos[..., :2] > data.takeoff_pos[..., :2] + 0.02, axis=-1)
+        disabled = disabled | jp.any(pos < data.pos_limit_low, axis=-1) & not_in_platform
         disabled = disabled | jp.any(pos > data.pos_limit_high, axis=-1)
         disabled = disabled | (data.target_gate == -1)
         contacts = jp.any(contacts[:, None, :] & data.contact_masks, axis=-1)
@@ -698,6 +703,8 @@ class RaceCoreEnv:
         geom_count = sim.mj_model.body_geomnum[sim.mj_model.body("world").id]
         geom1_valid = (geom1 >= geom_start) & (geom1 < geom_start + geom_count)
         geom2_valid = (geom2 >= geom_start) & (geom2 < geom_start + geom_count)
+        floor_mask = geom1_valid | geom2_valid
+        masks = masks & ~floor_mask  # Disable contacts with the floor
 
         masks = np.tile(masks[None, ...], (sim.n_worlds, 1, 1))
         return masks
