@@ -157,6 +157,10 @@ kaggle = "*"
 # feature[tests]
 [tool.pixi.feature.tests.tasks]
 tests = { cmd = "pytest -v tests", description = "Run tests" }
+check-repo-invariants = { cmd = "python scripts/check_repo_invariants.py", description = "Verify AIGP repository invariants" }
+check-qualifier-readiness = { cmd = "python scripts/check_qualifier_readiness.py --help", description = "Show qualifier readiness checker CLI" }
+build-readiness-report = { cmd = "python scripts/build_readiness_report.py --help", description = "Show readiness report builder CLI" }
+compare-aigp-runs = { cmd = "python scripts/compare_aigp_runs.py --help", description = "Show run comparison CLI" }
 
 [tool.pixi.feature.tests.dependencies]
 pytest = "*"

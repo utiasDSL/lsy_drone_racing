@@ -51,6 +51,11 @@ class CurriculumStage:
     max_episode_steps: int | None = None
     eval_episodes: int | None = None
 
+    bossfight_enable: bool = True
+    bossfight_success_rate_min_threshold: float | None = None
+    bossfight_bottomk_fraction: float = 0.2
+    bossfight_bottomk_mean_threshold: float | None = None
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CurriculumStage":
         """Create a stage from a config dictionary."""
@@ -486,6 +491,7 @@ class CurriculumManager:
         *,
         summary: EvalSummary,
         stage_episodes: int,
+        eval_tracks: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Update controllers after an eval and decide whether to advance/rollback.
 
@@ -520,12 +526,87 @@ class CurriculumManager:
         gate_stability_ok = bool(self.is_stable())
         gate_recovery_clear = not bool(recovery_active)
 
+        bossfight_ok = True
+        bossfight_block_reason = "none"
+        bossfight_tracks_total: int | None = None
+        bossfight_tracks_covered: int | None = None
+        bossfight_success_rate_min: float | None = None
+        bossfight_success_rate_bottom20_mean: float | None = None
+        if len(stage.tracks) > 1 and bool(stage.bossfight_enable):
+            aggregate: dict[str, Any] = {}
+            if isinstance(eval_tracks, dict):
+                aggregate_raw = eval_tracks.get("_aggregate")
+                if isinstance(aggregate_raw, dict):
+                    aggregate = aggregate_raw
+
+            bossfight_tracks_total = int(aggregate.get("tracks_total", len(stage.tracks)))
+            covered_raw = aggregate.get("tracks_covered")
+            bossfight_tracks_covered = int(covered_raw) if covered_raw is not None else 0
+
+            min_raw = aggregate.get("success_rate_min")
+            bossfight_success_rate_min = float(min_raw) if min_raw is not None else None
+
+            bottom20_raw = aggregate.get("success_rate_bottom20_mean")
+            bossfight_success_rate_bottom20_mean = (
+                float(bottom20_raw) if bottom20_raw is not None else None
+            )
+
+            min_track_threshold = (
+                float(stage.bossfight_success_rate_min_threshold)
+                if stage.bossfight_success_rate_min_threshold is not None
+                else max(0.10, gate_success_threshold - 0.10)
+            )
+            bottomk_mean_threshold = (
+                float(stage.bossfight_bottomk_mean_threshold)
+                if stage.bossfight_bottomk_mean_threshold is not None
+                else None
+            )
+
+            if bossfight_tracks_covered != bossfight_tracks_total:
+                bossfight_ok = False
+                bossfight_block_reason = "bossfight_tracks_not_covered"
+            elif (
+                bossfight_success_rate_min is None
+                or bossfight_success_rate_min < min_track_threshold
+            ):
+                bossfight_ok = False
+                bossfight_block_reason = "bossfight_min_track_fail"
+            elif (
+                bottomk_mean_threshold is not None
+                and (
+                    bossfight_success_rate_bottom20_mean is None
+                    or bossfight_success_rate_bottom20_mean < bottomk_mean_threshold
+                )
+            ):
+                bossfight_ok = False
+                bossfight_block_reason = "bossfight_bottomk_fail"
+
         can_advance = (
             gate_success_ok
             and gate_min_episodes_ok
             and gate_stability_ok
             and gate_recovery_clear
+            and bossfight_ok
         )
+
+        if can_advance:
+            block_reason = "none"
+        elif not gate_success_ok:
+            block_reason = "success_rate"
+        elif not gate_min_episodes_ok:
+            block_reason = "min_episodes"
+        elif not gate_stability_ok:
+            block_reason = "stability"
+        elif not gate_recovery_clear:
+            block_reason = "recovery"
+        elif not bossfight_ok:
+            block_reason = (
+                bossfight_block_reason
+                if bossfight_block_reason != "none"
+                else "bossfight_other"
+            )
+        else:
+            block_reason = "other"
 
         decision: dict[str, Any] = {
             "stage_idx": int(self.stage_idx),
@@ -547,6 +628,12 @@ class CurriculumManager:
             "gate_min_episodes_required": gate_min_episodes_required,
             "gate_stability_ok": bool(gate_stability_ok),
             "gate_recovery_clear": bool(gate_recovery_clear),
+            "block_reason": str(block_reason),
+            "bossfight_ok": bool(bossfight_ok),
+            "bossfight_tracks_total": bossfight_tracks_total,
+            "bossfight_tracks_covered": bossfight_tracks_covered,
+            "bossfight_success_rate_min": bossfight_success_rate_min,
+            "bossfight_success_rate_bottom20_mean": bossfight_success_rate_bottom20_mean,
         }
 
         if hardlock and stuck_action == "rollback_stage" and self.stage_idx > 0:
@@ -590,7 +677,9 @@ class CurriculumManager:
         tracks = [self._load_track(config_dir / t) for t in stage.tracks]
         weights = stage.track_weights if stage.track_weights else None
 
-        for t in tracks:
+        for i, t in enumerate(tracks):
+            t["_track_id"] = int(i)
+            t["_track_name"] = str(stage.tracks[i])
             if stage.active_gate_count is not None:
                 t["active_gate_count"] = int(stage.active_gate_count)
             if "gate_size" not in t:

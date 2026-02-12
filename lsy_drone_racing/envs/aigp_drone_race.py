@@ -76,6 +76,17 @@ def _pad_track_assets(
     return track
 
 
+def _track_name_from_config(track: "ConfigDict", *, default: str) -> str:
+    """Resolve a stable, human-readable track name from a config object."""
+    for key in ("_track_name", "name", "id"):
+        raw = track.get(key)
+        if raw is not None:
+            value = str(raw).strip()
+            if value:
+                return value
+    return default
+
+
 class _AIGPRewardMixin:
     """Reward and bookkeeping helpers for AIGP environments."""
 
@@ -216,6 +227,8 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
         )
         self._track_pool: list["ConfigDict"] | None = None
         self._track_pool_probs: np.ndarray | None = None
+        self._track_names: list[str] = [_track_name_from_config(track, default="track_00")]
+        self._track_idx_per_world = np.zeros((self.sim.n_worlds,), dtype=np.int32)
         self._init_aigp_rewards(reward_config)
 
     def set_track_pool(
@@ -235,11 +248,19 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
         if not tracks:
             self._track_pool = None
             self._track_pool_probs = None
+            self._track_names = [_track_name_from_config(self.track, default="track_00")]
             return
-        padded = [
-            _pad_track_assets(t, max_gates=max_gates, max_obstacles=max_obstacles) for t in tracks
-        ]
+        padded: list["ConfigDict"] = []
+        names: list[str] = []
+        for i, t in enumerate(tracks):
+            t2 = _pad_track_assets(t, max_gates=max_gates, max_obstacles=max_obstacles)
+            name = _track_name_from_config(t2, default=f"track_{i:02d}")
+            t2["_track_id"] = int(i)
+            t2["_track_name"] = name
+            padded.append(t2)
+            names.append(name)
         self._track_pool = padded
+        self._track_names = names
         if probs is None:
             self._track_pool_probs = None
         else:
@@ -263,9 +284,31 @@ class AIGPDroneRaceEnv(_AIGPRewardMixin, DroneRaceEnv):
                 rng = np.random.default_rng(self.seed)
             idx = int(rng.choice(len(self._track_pool), p=self._track_pool_probs))
             self.track = self._track_pool[idx]
+            self._track_idx_per_world[...] = idx
+        else:
+            self._track_idx_per_world[...] = 0
         obs, info = super()._reset(seed=seed, options=options, mask=mask)
         self._aigp_on_reset(mask)
         return obs, info
+
+    def info(self) -> dict:
+        """Return base info plus optional track attribution metadata."""
+        out = super().info()
+        n_worlds, n_drones = self.sim.n_worlds, self.sim.n_drones
+        track_idx = np.broadcast_to(self._track_idx_per_world[:, None], (n_worlds, n_drones))
+        out["track_id"] = jp.asarray(track_idx, dtype=jp.int32)
+        max_len = max((len(name) for name in self._track_names), default=1)
+        track_names = np.empty((n_worlds, n_drones), dtype=f"<U{max_len}")
+        for i in range(n_worlds):
+            idx = int(self._track_idx_per_world[i])
+            name = (
+                self._track_names[idx]
+                if 0 <= idx < len(self._track_names)
+                else f"track_{idx:02d}"
+            )
+            track_names[i, :] = name
+        out["track_name"] = track_names
+        return out
 
 
 class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
@@ -328,6 +371,8 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
         )
         self._track_pool: list["ConfigDict"] | None = None
         self._track_pool_probs: np.ndarray | None = None
+        self._track_names: list[str] = [_track_name_from_config(track, default="track_00")]
+        self._track_idx_per_world = np.zeros((self.sim.n_worlds,), dtype=np.int32)
         self._init_aigp_rewards(reward_config)
 
     def set_track_pool(
@@ -342,11 +387,19 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
         if not tracks:
             self._track_pool = None
             self._track_pool_probs = None
+            self._track_names = [_track_name_from_config(self.track, default="track_00")]
             return
-        padded = [
-            _pad_track_assets(t, max_gates=max_gates, max_obstacles=max_obstacles) for t in tracks
-        ]
+        padded: list["ConfigDict"] = []
+        names: list[str] = []
+        for i, t in enumerate(tracks):
+            t2 = _pad_track_assets(t, max_gates=max_gates, max_obstacles=max_obstacles)
+            name = _track_name_from_config(t2, default=f"track_{i:02d}")
+            t2["_track_id"] = int(i)
+            t2["_track_name"] = name
+            padded.append(t2)
+            names.append(name)
         self._track_pool = padded
+        self._track_names = names
         if probs is None:
             self._track_pool_probs = None
         else:
@@ -363,13 +416,74 @@ class VecAIGPDroneRaceEnv(_AIGPRewardMixin, VecDroneRaceEnv):
     def _reset(
         self, *, seed: int | None = None, options: dict | None = None, mask: Array | None = None
     ) -> tuple[dict[str, Array], dict]:
-        """Reset the environment (optionally sampling from a track pool)."""
-        if self._track_pool:
-            rng = getattr(self, "_np_random", None)
-            if rng is None:
-                rng = np.random.default_rng(self.seed)
-            idx = int(rng.choice(len(self._track_pool), p=self._track_pool_probs))
-            self.track = self._track_pool[idx]
-        obs, info = super()._reset(seed=seed, options=options, mask=mask)
+        """Reset the environment (optionally sampling tracks per world)."""
+        if not self._track_pool:
+            self._track_idx_per_world[...] = 0
+            obs, info = super()._reset(seed=seed, options=options, mask=mask)
+            self._aigp_on_reset(mask)
+            return obs, info
+
+        world_mask = (
+            np.ones((self.sim.n_worlds,), dtype=bool)
+            if mask is None
+            else np.asarray(mask, dtype=bool)
+        )
+        if not world_mask.any():
+            obs, info = self.obs(), self.info()
+            self._aigp_on_reset(mask)
+            return obs, info
+
+        rng = getattr(self, "_np_random", None)
+        if rng is None:
+            rng = np.random.default_rng(self.seed)
+
+        sampled = np.asarray(
+            rng.choice(
+                len(self._track_pool),
+                size=int(world_mask.sum()),
+                p=self._track_pool_probs,
+            ),
+            dtype=np.int32,
+        )
+        self._track_idx_per_world[world_mask] = sampled
+
+        seed_local = seed
+        obs: dict[str, Array] | None = None
+        info: dict | None = None
+        unique_idx = np.unique(sampled)
+        world_indices = np.flatnonzero(world_mask)
+        for idx in unique_idx:
+            idx_int = int(idx)
+            per_world_mask = np.zeros((self.sim.n_worlds,), dtype=bool)
+            per_world_mask[world_indices[sampled == idx_int]] = True
+            self.track = self._track_pool[idx_int]
+            obs, info = super()._reset(
+                seed=seed_local,
+                options=options,
+                mask=jp.asarray(per_world_mask),
+            )
+            seed_local = None
+
+        if obs is None or info is None:
+            obs, info = self.obs(), self.info()
         self._aigp_on_reset(mask)
         return obs, info
+
+    def info(self) -> dict:
+        """Return base info plus optional track attribution metadata."""
+        out = super().info()
+        n_worlds, n_drones = self.sim.n_worlds, self.sim.n_drones
+        track_idx = np.broadcast_to(self._track_idx_per_world[:, None], (n_worlds, n_drones))
+        out["track_id"] = jp.asarray(track_idx, dtype=jp.int32)
+        max_len = max((len(name) for name in self._track_names), default=1)
+        track_names = np.empty((n_worlds, n_drones), dtype=f"<U{max_len}")
+        for i in range(n_worlds):
+            idx = int(self._track_idx_per_world[i])
+            name = (
+                self._track_names[idx]
+                if 0 <= idx < len(self._track_names)
+                else f"track_{idx:02d}"
+            )
+            track_names[i, :] = name
+        out["track_name"] = track_names
+        return out

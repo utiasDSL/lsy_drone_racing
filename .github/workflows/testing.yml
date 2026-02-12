@@ -25,4 +25,5 @@ jobs:
       - name: Verify pixi and run tests
         run: |
           pixi --version
-          pixi run -e tests tests -v      
+          pixi run -e tests tests -v
+          pixi run -e tests python scripts/check_repo_invariants.py

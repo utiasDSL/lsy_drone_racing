@@ -1,0 +1,18 @@
+[qualifier_eval]
+name = "qualifier_default"
+
+# Deterministic seed sweep for reproducible KPI tracking.
+seed_offsets = [91000, 91097, 91194]
+
+# Optional explicit track subset. Omit to evaluate all stage tracks.
+
+# Perturbation-set sweep.
+dr_multipliers = [1.0, 1.1]
+gate_scale_multipliers = [1.0]
+tolerance_multipliers = [1.0]
+
+# Optional override for eval episodes per profile rollout.
+# eval_episodes = 30
+
+# Run profile on every N eval rounds.
+every_evals = 1

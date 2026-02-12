@@ -27,6 +27,8 @@ def test_curriculum_track_overrides():
     assert weights is None or len(weights) == 1
     assert tracks[0].active_gate_count == 1
     assert float(tracks[0].gate_size.width) == pytest.approx(2.0)
+    assert int(tracks[0]._track_id) == 0
+    assert str(tracks[0]._track_name).endswith("aigp_stage0_single_gate.toml")
 
     # Stage 1 should set active_gate_count=2 on the Swift track.
     mgr.advance()
@@ -55,6 +57,7 @@ def test_curriculum_gate_fields_fail_on_min_episodes():
     assert decision["gate_success_threshold"] == pytest.approx(
         mgr.current_stage().success_rate_threshold
     )
+    assert decision["block_reason"] == "min_episodes"
 
 
 @pytest.mark.unit
@@ -81,6 +84,7 @@ def test_curriculum_gate_fields_fail_on_success_rate_threshold():
     assert decision["gate_stage_episodes"] == stage_episodes
     assert decision["gate_min_episodes_required"] == stage_episodes
     assert decision["gate_success_threshold"] == pytest.approx(threshold)
+    assert decision["block_reason"] == "success_rate"
 
 
 @pytest.mark.unit
@@ -98,3 +102,77 @@ def test_curriculum_gate_fields_pass_when_all_checks_pass():
     assert decision["gate_min_episodes_ok"]
     assert decision["gate_stability_ok"]
     assert decision["gate_recovery_clear"]
+    assert decision["block_reason"] == "none"
+    assert decision["bossfight_ok"]
+
+
+@pytest.mark.unit
+def test_curriculum_bossfight_blocks_on_min_track_failure():
+    cfg = CurriculumConfig.load(Path(__file__).parents[3] / "config/aigp_curriculum_10stage.toml")
+    stage0 = replace(
+        cfg.stages[0],
+        tracks=["aigp_stage0_single_gate.toml", "aigp_stage0_single_gate.toml"],
+    )
+    cfg = replace(
+        cfg,
+        stability_window=1,
+        stability_threshold=0.0,
+        stages=[stage0, *cfg.stages[1:]],
+    )
+    mgr = CurriculumManager(cfg)
+
+    summary = EvalSummary(n_episodes=20, success_rate=1.0, completion_mean=1.0, completion_std=0.0)
+    decision = mgr.update_after_eval(
+        summary=summary,
+        stage_episodes=int(mgr.current_stage().min_episodes),
+        eval_tracks={
+            "_aggregate": {
+                "tracks_total": 2,
+                "tracks_covered": 2,
+                "success_rate_min": 0.55,
+                "success_rate_bottom20_mean": 0.60,
+            }
+        },
+    )
+
+    assert not decision["advance"]
+    assert not decision["bossfight_ok"]
+    assert decision["bossfight_tracks_total"] == 2
+    assert decision["bossfight_tracks_covered"] == 2
+    assert decision["bossfight_success_rate_min"] == pytest.approx(0.55)
+    assert decision["bossfight_success_rate_bottom20_mean"] == pytest.approx(0.60)
+    assert decision["block_reason"] == "bossfight_min_track_fail"
+
+
+@pytest.mark.unit
+def test_curriculum_bossfight_passes_when_all_conditions_pass():
+    cfg = CurriculumConfig.load(Path(__file__).parents[3] / "config/aigp_curriculum_10stage.toml")
+    stage0 = replace(
+        cfg.stages[0],
+        tracks=["aigp_stage0_single_gate.toml", "aigp_stage0_single_gate.toml"],
+    )
+    cfg = replace(
+        cfg,
+        stability_window=1,
+        stability_threshold=0.0,
+        stages=[stage0, *cfg.stages[1:]],
+    )
+    mgr = CurriculumManager(cfg)
+
+    summary = EvalSummary(n_episodes=20, success_rate=1.0, completion_mean=1.0, completion_std=0.0)
+    decision = mgr.update_after_eval(
+        summary=summary,
+        stage_episodes=int(mgr.current_stage().min_episodes),
+        eval_tracks={
+            "_aggregate": {
+                "tracks_total": 2,
+                "tracks_covered": 2,
+                "success_rate_min": 0.90,
+                "success_rate_bottom20_mean": 0.85,
+            }
+        },
+    )
+
+    assert decision["advance"]
+    assert decision["bossfight_ok"]
+    assert decision["block_reason"] == "none"

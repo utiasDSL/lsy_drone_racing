@@ -9,6 +9,7 @@ They are intentionally RL-library agnostic: you provide a policy function.
 from __future__ import annotations
 
 import logging
+import math
 from typing import TYPE_CHECKING, Any, Protocol
 
 import jax.numpy as jp
@@ -218,3 +219,141 @@ def evaluate_vec_env(
         completion_std=completion_std,
         lap_time_s_median=lap_time_s_median,
     )
+
+
+def evaluate_sb3_vec_env(
+    env: Any,  # noqa: ANN401
+    policy: PolicyFn,
+    *,
+    n_episodes: int,
+    max_episode_steps: int | None = None,
+) -> EvalSummary:
+    """Evaluate a policy on a Stable-Baselines3-style VecEnv.
+
+    Notes:
+        This expects the standard SB3 vector API:
+        - `obs = env.reset()`
+        - `obs, reward, done, infos = env.step(actions)`
+        where `infos` is a list of dicts.
+    """
+    if n_episodes < 1:
+        raise ValueError("n_episodes must be >= 1")
+
+    num_envs = int(env.num_envs)
+    obs = env.reset()
+    obs_np = _as_numpy_obs(obs if not isinstance(obs, tuple) else obs[0])
+
+    ep_lengths = np.zeros((num_envs,), dtype=np.int32)
+    successes: list[bool] = []
+    completion_fracs: list[float] = []
+    lap_times_s: list[float] = []
+
+    while len(successes) < n_episodes:
+        actions = policy(obs_np)
+        obs2, _reward, done, infos = env.step(actions)
+        done_np = np.asarray(done, dtype=bool)
+        ep_lengths += 1
+
+        if done_np.any():
+            done_idx = np.flatnonzero(done_np)
+            for i in done_idx:
+                info_i = infos[int(i)] if isinstance(infos, list) else {}
+
+                success_raw = info_i.get("success", False)
+                success_arr = np.asarray(success_raw).reshape(-1)
+                success = bool(success_arr[0]) if success_arr.size else bool(success_raw)
+
+                completion_raw = info_i.get("completion_fraction", 0.0)
+                completion_arr = np.asarray(completion_raw).reshape(-1)
+                completion = (
+                    float(completion_arr[0]) if completion_arr.size else float(completion_raw)
+                )
+
+                lap_raw = info_i.get("lap_time_s")
+                if lap_raw is None:
+                    lap_time_s = float(ep_lengths[int(i)])
+                else:
+                    lap_arr = np.asarray(lap_raw).reshape(-1)
+                    lap_time_s = float(lap_arr[0]) if lap_arr.size else float(lap_raw)
+
+                successes.append(success)
+                completion_fracs.append(completion)
+                lap_times_s.append(lap_time_s)
+                ep_lengths[int(i)] = 0
+
+                if len(successes) >= n_episodes:
+                    break
+
+        # `max_episode_steps` is a compatibility parameter to mirror `evaluate_vec_env`.
+        # SB3 VecEnv episodes should already be capped by env-side max_episode_steps.
+        _ = max_episode_steps
+        obs_np = _as_numpy_obs(obs2 if not isinstance(obs2, tuple) else obs2[0])
+
+    success_rate = float(np.mean(successes)) if successes else 0.0
+    completion_mean = float(np.mean(completion_fracs)) if completion_fracs else 0.0
+    completion_std = float(np.std(completion_fracs)) if completion_fracs else 0.0
+    lap_time_s_median = None
+    if lap_times_s and any(successes):
+        lap_times_success = [
+            t for t, s in zip(lap_times_s, successes, strict=True) if s
+        ]
+        lap_time_s_median = float(np.median(lap_times_success))
+
+    return EvalSummary(
+        n_episodes=int(n_episodes),
+        success_rate=success_rate,
+        completion_mean=completion_mean,
+        completion_std=completion_std,
+        lap_time_s_median=lap_time_s_median,
+    )
+
+
+def aggregate_track_eval_summaries(
+    track_summaries: list[tuple[int, str, EvalSummary]],
+    *,
+    bottomk_fraction: float = 0.2,
+) -> dict[str, Any]:
+    """Build per-track + aggregate metrics for stratified evaluation."""
+    rows = sorted(track_summaries, key=lambda x: int(x[0]))
+    tracks_payload: list[dict[str, Any]] = []
+    success_rates: list[float] = []
+    tracks_covered = 0
+
+    for track_id, track_name, summary in rows:
+        sr = float(summary.success_rate)
+        tracks_payload.append(
+            {
+                "track_id": int(track_id),
+                "track_name": str(track_name),
+                "n_episodes": int(summary.n_episodes),
+                "success_rate": sr,
+                "completion_mean": float(summary.completion_mean),
+                "completion_std": float(summary.completion_std),
+                "lap_time_s_median": (
+                    None
+                    if summary.lap_time_s_median is None
+                    else float(summary.lap_time_s_median)
+                ),
+            }
+        )
+        if int(summary.n_episodes) > 0:
+            tracks_covered += 1
+            success_rates.append(sr)
+
+    success_rate_min = float(np.min(success_rates)) if success_rates else None
+    success_rate_bottom20_mean = None
+    if success_rates:
+        frac = float(bottomk_fraction)
+        frac = min(max(frac, 0.0), 1.0)
+        k = max(1, int(math.ceil(frac * len(success_rates))))
+        success_rate_bottom20_mean = float(np.mean(sorted(success_rates)[:k]))
+
+    return {
+        "tracks": tracks_payload,
+        "_aggregate": {
+            "tracks_total": int(len(rows)),
+            "tracks_covered": int(tracks_covered),
+            "success_rate_min": success_rate_min,
+            "success_rate_bottom20_mean": success_rate_bottom20_mean,
+        },
+    }

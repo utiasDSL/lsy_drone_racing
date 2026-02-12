@@ -31,6 +31,20 @@ Whether you’re new to drones or an experienced developer, this project provide
 
 To get started, visit our [official documentation](https://lsy-drone-racing.readthedocs.io/en/latest/getting_started/general.html).
 
+## AIGP Operations
+
+For the AIGP curriculum trainer workflow, repository-local operational docs are in:
+
+- `/Users/massimoraso/projects/aigp/lsy_drone_racing/AGENTS.md`
+- `/Users/massimoraso/projects/aigp/lsy_drone_racing/docs/aigp/index.md`
+
+Common checks:
+
+```bash
+/Users/massimoraso/projects/aigp/.venv/bin/python scripts/check_repo_invariants.py
+/Users/massimoraso/projects/aigp/.venv/bin/python scripts/check_qualifier_readiness.py --run-dir runs/<run_name> --window-evals 5
+```
+
 ---
 
 ## Dependencies
