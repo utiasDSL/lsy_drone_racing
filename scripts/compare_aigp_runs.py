@@ -5,11 +5,33 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
-from scripts.check_qualifier_readiness import evaluate_run_with_profile, read_eval_rows_from_run
+if __name__ == "__main__" and str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+def _load_readiness_checker() -> tuple[Any, Any]:
+    try:
+        from scripts.check_qualifier_readiness import (
+            evaluate_run_with_profile,
+            read_eval_rows_from_run,
+        )
+        return evaluate_run_with_profile, read_eval_rows_from_run
+    except ModuleNotFoundError:
+        root = Path(__file__).resolve().parents[1]
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+        from scripts.check_qualifier_readiness import (
+            evaluate_run_with_profile,
+            read_eval_rows_from_run,
+        )
+        return evaluate_run_with_profile, read_eval_rows_from_run
+
+
+evaluate_run_with_profile, read_eval_rows_from_run = _load_readiness_checker()
 
 
 def _forced_advance_violations(rows: list[dict[str, Any]]) -> int:

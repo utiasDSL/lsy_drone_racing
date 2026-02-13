@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -134,3 +136,64 @@ def test_compare_runs_uses_robustness_tiebreaker(tmp_path: Path):
     ranking = payload["ranking"]
     assert ranking[0]["run_dir"] == str(run_b.resolve())
     assert ranking[1]["run_dir"] == str(run_a.resolve())
+
+
+@pytest.mark.unit
+def test_compare_script_runs_without_pythonpath(tmp_path: Path):
+    run_a = tmp_path / "run_a"
+    run_b = tmp_path / "run_b"
+    _write_eval_rows(
+        run_a,
+        [
+            _row(
+                eval_id=1,
+                step=100,
+                stage_idx=1,
+                sr=0.9,
+                ccr=0.9,
+                robust=0.05,
+                score_pass=True,
+            )
+        ],
+    )
+    _write_eval_rows(
+        run_b,
+        [
+            _row(
+                eval_id=1,
+                step=100,
+                stage_idx=1,
+                sr=0.4,
+                ccr=0.4,
+                robust=0.05,
+                score_pass=False,
+                forced=True,
+            )
+        ],
+    )
+    out_prefix = tmp_path / "cmp_out"
+
+    script = Path(__file__).resolve().parents[3] / "scripts" / "compare_aigp_runs.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--run-dir",
+            str(run_a),
+            "--run-dir",
+            str(run_b),
+            "--profile",
+            "default",
+            "--window-evals",
+            "1",
+            "--out-prefix",
+            str(out_prefix),
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["ranking_count"] == 2
+    assert payload["top_run"] in {str(run_a.resolve()), str(run_b.resolve())}
