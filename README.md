@@ -37,6 +37,7 @@ For the AIGP curriculum trainer workflow, repository-local operational docs are 
 
 - `/Users/massimoraso/projects/aigp/lsy_drone_racing/AGENTS.md`
 - `/Users/massimoraso/projects/aigp/lsy_drone_racing/docs/aigp/index.md`
+- `/Users/massimoraso/projects/aigp/lsy_drone_racing/docs/aigp/DRONEPRIX_DIFF.md` (how this repo differs from DronePrix)
 
 Common checks:
 

@@ -7,6 +7,8 @@ This directory is the repository-local knowledge base for the AIGP training stac
 - Architecture: `/Users/massimoraso/projects/aigp/lsy_drone_racing/docs/aigp/architecture.md`
 - Qualifier KPIs: `/Users/massimoraso/projects/aigp/lsy_drone_racing/docs/aigp/qualifier_kpis.md`
 - Operations Runbook: `/Users/massimoraso/projects/aigp/lsy_drone_racing/docs/aigp/runbook.md`
+- Kaggle Runtime Guide: `/Users/massimoraso/projects/aigp/lsy_drone_racing/docs/aigp/kaggle_runtime.md`
+- DronePrix Difference Map: `/Users/massimoraso/projects/aigp/lsy_drone_racing/docs/aigp/DRONEPRIX_DIFF.md`
 - Plan Tracker: `/Users/massimoraso/projects/aigp/lsy_drone_racing/docs/aigp/plans/active.md`
 
 ## Design Intent
