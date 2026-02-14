@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import shutil
+import sys
 import time
 import uuid
 from dataclasses import asdict
@@ -25,7 +26,6 @@ from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 
-import fire
 import gymnasium as gym
 import numpy as np
 
@@ -48,6 +48,11 @@ from lsy_drone_racing.envs.aigp_drone_race import VecAIGPDroneRaceEnv
 from lsy_drone_racing.utils import load_config
 
 logger = logging.getLogger(__name__)
+
+try:
+    import fire
+except Exception:  # pragma: no cover - optional dependency for offline runtimes
+    fire = None
 
 try:
     import wandb  # type: ignore[import-not-found]
@@ -84,6 +89,32 @@ def _parse_obs_mode(mode: str) -> str:
     if normalized not in valid:
         raise ValueError(f"obs_mode must be one of {sorted(valid)}, got: {mode!r}")
     return normalized
+
+
+def _resolve_tournament_train_settings(
+    *,
+    tournament_mode: bool,
+    obs_mode: str,
+    qualifier_eval_profile: str | None,
+    tournament_readiness_profile: str | None,
+) -> tuple[str, str | None, str | None]:
+    """Resolve tournament-specific defaults and enforce competition-only observations."""
+    resolved_obs_mode = str(obs_mode)
+    resolved_qualifier_profile = qualifier_eval_profile
+    resolved_readiness_profile = tournament_readiness_profile
+
+    if bool(tournament_mode):
+        resolved_obs_mode = _parse_obs_mode(resolved_obs_mode)
+        if resolved_obs_mode != "competition_proxy":
+            raise ValueError("tournament_mode requires obs_mode='competition_proxy'")
+        if resolved_qualifier_profile is None:
+            resolved_qualifier_profile = "aigp_qualifier_eval_profile_default.toml"
+        if resolved_readiness_profile is None:
+            resolved_readiness_profile = "qualifier_strict"
+    else:
+        resolved_obs_mode = _parse_obs_mode(resolved_obs_mode)
+
+    return resolved_obs_mode, resolved_qualifier_profile, resolved_readiness_profile
 
 
 def _parse_wandb_mode(mode: str) -> str:
@@ -143,6 +174,8 @@ def _build_run_meta(
     config_hash: str,
     obs_mode: str,
     force_advance_mode: str,
+    tournament_mode: bool = False,
+    tournament_readiness_profile: str | None = None,
     wandb_info: dict[str, Any],
 ) -> dict[str, Any]:
     """Build run metadata persisted in the run output directory."""
@@ -156,6 +189,10 @@ def _build_run_meta(
         "config_hash": str(config_hash),
         "obs_mode": str(obs_mode),
         "force_advance_mode": str(force_advance_mode),
+        "tournament_mode": bool(tournament_mode),
+        "tournament_readiness_profile": (
+            None if tournament_readiness_profile is None else str(tournament_readiness_profile)
+        ),
         "wandb": dict(wandb_info),
     }
 
@@ -1046,6 +1083,8 @@ def train(
     policy_arch_vf: str | tuple[int, ...] | list[int] | None = None,
     obs_mode: str = "privileged",
     qualifier_eval_profile: str | None = None,
+    tournament_mode: bool = False,
+    tournament_readiness_profile: str | None = None,
     export_submission_bundle: bool = False,
     stage1_nonzero_progress_budget: int = 2_000_000,
     stage1_required_streak: int = 3,
@@ -1089,6 +1128,8 @@ def train(
         policy_arch_vf: Optional critic-only architecture override.
         obs_mode: Observation mode (`privileged|competition_proxy`).
         qualifier_eval_profile: Optional profile preset/path for qualifier KPI evaluation.
+        tournament_mode: Tournament run preset that enforces qualifier defaults.
+        tournament_readiness_profile: Optional readiness profile stored in run metadata.
         export_submission_bundle: Export/update a local submission bundle after each eval.
         stage1_nonzero_progress_budget: Timesteps allowed in stage1 before requiring nonzero SR.
         stage1_required_streak: Consecutive stage1 threshold-passing evals required to advance.
@@ -1136,7 +1177,18 @@ def train(
     mgr = CurriculumManager(cur_cfg)
     final_stage_idx = len(cur_cfg.stages) - 1
 
-    obs_mode_local = _parse_obs_mode(obs_mode)
+    obs_mode_local, qualifier_eval_profile, tournament_readiness_profile_local = (
+        _resolve_tournament_train_settings(
+            tournament_mode=bool(tournament_mode),
+            obs_mode=str(obs_mode),
+            qualifier_eval_profile=qualifier_eval_profile,
+            tournament_readiness_profile=tournament_readiness_profile,
+        )
+    )
+    force_advance_mode_local = None
+    if bool(tournament_mode):
+        force_advance_mode_local = "if_passing"
+        logger.info("TOURNAMENT_PRESET active")
     wandb_mode_local = _parse_wandb_mode(wandb_mode)
     wandb_tags_local = _parse_wandb_tags(wandb_tags)
     wandb_enabled_local = bool(wandb_enabled) and (wandb_mode_local != "disabled")
@@ -1148,7 +1200,8 @@ def train(
     )
     config_hash = _hash_training_inputs(config_path, curriculum_path)
 
-    force_advance_mode_local = _parse_force_advance_mode(force_advance_mode)
+    if force_advance_mode_local is None:
+        force_advance_mode_local = _parse_force_advance_mode(force_advance_mode)
     if float(vecnorm_clip_obs) <= 0.0:
         raise ValueError("vecnorm_clip_obs must be > 0")
     if int(stage1_nonzero_progress_budget) <= 0:
@@ -1212,6 +1265,12 @@ def train(
         "force_advance_mode": str(force_advance_mode_local),
         "obs_mode": str(obs_mode_local),
         "qualifier_profile": str(qualifier_profile_name),
+        "tournament_mode": bool(tournament_mode),
+        "tournament_readiness_profile": (
+            None
+            if tournament_readiness_profile_local is None
+            else str(tournament_readiness_profile_local)
+        ),
         "vecnorm_obs": bool(vecnorm_obs),
         "vecnorm_reward": bool(vecnorm_reward),
         "vecnorm_clip_obs": float(vecnorm_clip_obs),
@@ -1247,6 +1306,8 @@ def train(
         config_hash=config_hash,
         obs_mode=obs_mode_local,
         force_advance_mode=force_advance_mode_local,
+        tournament_mode=bool(tournament_mode),
+        tournament_readiness_profile=tournament_readiness_profile_local,
         wandb_info=_wandb_info_payload(wandb_state),
     )
     _write_run_meta(run_meta_path, run_meta_payload)
@@ -2154,8 +2215,51 @@ def train(
     _wandb_finish(wandb_state)
 
 
+def _coerce_fallback_cli_value(raw: str) -> Any:
+    """Convert plain CLI values when Fire is unavailable."""
+    text = str(raw).strip()
+    lower = text.lower()
+    if lower in {"true", "false"}:
+        return lower == "true"
+    if lower in {"none", "null"}:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        return float(text)
+    except ValueError:
+        return text
+
+
+def _run_train_without_fire(argv: list[str]) -> None:
+    """Fallback CLI path for environments without python-fire."""
+    if not argv or argv[0] != "train":
+        raise SystemExit("fire not installed; only `train` command is supported in fallback mode")
+
+    kwargs: dict[str, Any] = {}
+    idx = 1
+    while idx < len(argv):
+        token = str(argv[idx])
+        if not token.startswith("--"):
+            raise SystemExit(f"unexpected argument: {token!r}")
+        key = token[2:].replace("-", "_")
+        if idx + 1 >= len(argv) or str(argv[idx + 1]).startswith("--"):
+            kwargs[key] = True
+            idx += 1
+            continue
+        kwargs[key] = _coerce_fallback_cli_value(str(argv[idx + 1]))
+        idx += 2
+
+    train(**kwargs)
+
+
 if __name__ == "__main__":
     logging.basicConfig()
     logging.getLogger("lsy_drone_racing").setLevel(logging.INFO)
     logger.setLevel(logging.INFO)
-    fire.Fire({"train": train}, serialize=lambda _: None)
+    if fire is not None:
+        fire.Fire({"train": train}, serialize=lambda _: None)
+    else:
+        _run_train_without_fire(sys.argv[1:])

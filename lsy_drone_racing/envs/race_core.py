@@ -291,7 +291,21 @@ class RaceCoreEnv:
                 vectorized environments.
             device: Device used for the environment and the simulation.
         """
-        super().__init__()
+        # Gymnasium vector API differs across versions:
+        # - newer releases allow no-arg VectorEnv init
+        # - older releases require (num_envs, observation_space, action_space)
+        # We initialize compatibly so the same env works locally and on Kaggle images.
+        try:
+            super().__init__()
+        except TypeError as exc:
+            if "required positional arguments" not in str(exc):
+                raise
+            n_gates, n_obstacles = len(track.gates), len(track.obstacles)
+            super().__init__(
+                num_envs=n_envs,
+                observation_space=build_observation_space(n_gates, n_obstacles),
+                action_space=build_action_space(control_mode, sim_config.drone_model),
+            )
         if type(seed) is str:
             seed: int = np.random.SeedSequence().entropy if seed == "random" else hash(seed)
             seed &= 0xFFFFFFFF  # Limit seed to 32 bit for jax.random
@@ -513,7 +527,7 @@ class RaceCoreEnv:
         # Tracking issue:
         # https://github.com/jax-ml/jax/issues/29810
         # Forcing a copy here is less efficient, but avoids the warning.
-        action = np.reshape(action, (self.sim.n_worlds, self.sim.n_drones, -1), copy=True)
+        action = np.asarray(action).reshape((self.sim.n_worlds, self.sim.n_drones, -1)).copy()
         if "action" in self.disturbances:
             key, subkey = jax.random.split(self.sim.data.core.rng_key)
             action += self.disturbances["action"](subkey, action.shape)

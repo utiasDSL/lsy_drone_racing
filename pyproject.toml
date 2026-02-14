@@ -161,6 +161,8 @@ check-repo-invariants = { cmd = "python scripts/check_repo_invariants.py", descr
 check-qualifier-readiness = { cmd = "python scripts/check_qualifier_readiness.py --help", description = "Show qualifier readiness checker CLI" }
 build-readiness-report = { cmd = "python scripts/build_readiness_report.py --help", description = "Show readiness report builder CLI" }
 compare-aigp-runs = { cmd = "python scripts/compare_aigp_runs.py --help", description = "Show run comparison CLI" }
+run-aigp-kaggle-session = { cmd = "python scripts/run_aigp_kaggle_session.py --help", description = "Show Kaggle session launcher CLI" }
+push-aigp-kaggle-kernel = { cmd = "python scripts/push_aigp_kaggle_kernel.py --help", description = "Show Kaggle kernel push CLI" }
 
 [tool.pixi.feature.tests.dependencies]
 pytest = "*"

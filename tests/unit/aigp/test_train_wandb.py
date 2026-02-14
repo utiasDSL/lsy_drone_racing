@@ -2,14 +2,17 @@ from pathlib import Path
 
 import pytest
 
+from scripts import train_aigp_curriculum as train_mod
 from scripts.train_aigp_curriculum import (
     _block_reason_code,
     _build_run_meta,
     _build_wandb_train_payload,
+    _coerce_fallback_cli_value,
     _extract_train_snapshot_from_logger_values,
     _init_wandb_run,
     _parse_wandb_mode,
     _parse_wandb_tags,
+    _run_train_without_fire,
     _wandb_define_metrics,
     _wandb_info_payload,
 )
@@ -93,6 +96,8 @@ def test_build_run_meta_contains_wandb_and_paths(tmp_path: Path):
     assert meta["run_id"] == "run-xyz"
     assert meta["obs_mode"] == "privileged"
     assert meta["force_advance_mode"] == "if_passing"
+    assert meta["tournament_mode"] is False
+    assert meta["tournament_readiness_profile"] is None
     assert meta["wandb"]["enabled"] is True
     assert meta["wandb"]["run_path"] == "classimo/drone-racing/w1"
 
@@ -173,3 +178,46 @@ def test_wandb_define_metrics_uses_step_metric():
     assert ("curriculum/global_timesteps", None) in fake.calls
     assert ("train/*", "curriculum/global_timesteps") in fake.calls
     assert ("runtime/*", "curriculum/global_timesteps") in fake.calls
+
+
+@pytest.mark.unit
+def test_coerce_fallback_cli_value() -> None:
+    assert _coerce_fallback_cli_value("true") is True
+    assert _coerce_fallback_cli_value("False") is False
+    assert _coerce_fallback_cli_value("none") is None
+    assert _coerce_fallback_cli_value("4242") == 4242
+    assert _coerce_fallback_cli_value("0.25") == pytest.approx(0.25)
+    assert _coerce_fallback_cli_value("256,256") == "256,256"
+
+
+@pytest.mark.unit
+def test_run_train_without_fire_parses_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_train(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(train_mod, "train", _fake_train)
+    _run_train_without_fire(
+        [
+            "train",
+            "--seed",
+            "4242",
+            "--wandb_enabled",
+            "true",
+            "--max_walltime_s",
+            "42000",
+            "--policy_arch_pi",
+            "256,256",
+        ]
+    )
+    assert captured["seed"] == 4242
+    assert captured["wandb_enabled"] is True
+    assert captured["max_walltime_s"] == 42000
+    assert captured["policy_arch_pi"] == "256,256"
+
+
+@pytest.mark.unit
+def test_run_train_without_fire_rejects_unknown_command() -> None:
+    with pytest.raises(SystemExit):
+        _run_train_without_fire(["eval"])

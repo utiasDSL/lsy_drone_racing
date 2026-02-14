@@ -9,6 +9,7 @@ from scripts.train_aigp_curriculum import (
     _build_qualifier_eval_metrics,
     _export_submission_bundle,
     _parse_obs_mode,
+    _resolve_tournament_train_settings,
 )
 
 
@@ -18,6 +19,30 @@ def test_parse_obs_mode_validation():
     assert _parse_obs_mode("PRIVILEGED") == "privileged"
     with pytest.raises(ValueError):
         _parse_obs_mode("vision_only")
+
+
+@pytest.mark.unit
+def test_tournament_train_settings_enforce_competition_proxy() -> None:
+    with pytest.raises(ValueError, match="competition_proxy"):
+        _resolve_tournament_train_settings(
+            tournament_mode=True,
+            obs_mode="privileged",
+            qualifier_eval_profile=None,
+            tournament_readiness_profile=None,
+        )
+
+
+@pytest.mark.unit
+def test_tournament_train_settings_default_profiles() -> None:
+    obs_mode, qualifier_profile, readiness_profile = _resolve_tournament_train_settings(
+        tournament_mode=True,
+        obs_mode="competition_proxy",
+        qualifier_eval_profile=None,
+        tournament_readiness_profile=None,
+    )
+    assert obs_mode == "competition_proxy"
+    assert qualifier_profile == "aigp_qualifier_eval_profile_default.toml"
+    assert readiness_profile == "qualifier_strict"
 
 
 @pytest.mark.unit

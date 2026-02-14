@@ -154,7 +154,7 @@ class _AIGPRewardMixin:
     def apply_action(self, action: Array) -> None:
         """Apply action and update reward bookkeeping (e.g. action smoothness)."""
         # NOTE: We keep a NumPy copy for smoothness; the simulator path itself still uses JAX.
-        action_buf = np.reshape(action, (self.sim.n_worlds, self.sim.n_drones, -1), copy=True)
+        action_buf = np.asarray(action).reshape((self.sim.n_worlds, self.sim.n_drones, -1)).copy()
         if self._aigp_prev_action is None or self._aigp_prev_action.shape != action_buf.shape:
             self._aigp_prev_action = np.zeros_like(action_buf, dtype=np.float32)
             self._aigp_has_prev_action = np.zeros(action_buf.shape[:2], dtype=bool)

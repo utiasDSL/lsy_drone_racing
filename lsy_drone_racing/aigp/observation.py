@@ -13,7 +13,12 @@ from typing import Any
 
 import numpy as np
 from gymnasium import spaces
-from gymnasium.vector import VectorEnv, VectorWrapper
+
+try:
+    from gymnasium.vector import VectorEnv, VectorWrapper
+except ImportError:  # gymnasium<1.0
+    from gymnasium.vector import VectorEnv
+    from gymnasium.vector import VectorEnvWrapper as VectorWrapper
 from numpy.typing import NDArray
 
 Obs = dict[str, NDArray[np.generic]]

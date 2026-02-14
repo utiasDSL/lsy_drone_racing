@@ -56,6 +56,8 @@ def run_checks(repo_root: Path) -> list[Finding]:
     trainer_path = repo_root / "scripts" / "train_aigp_curriculum.py"
     curriculum_path = repo_root / "lsy_drone_racing" / "aigp" / "curriculum.py"
     monitor_path = repo_root / "scripts" / "monitor_aigp_run.py"
+    kaggle_session_path = repo_root / "scripts" / "run_aigp_kaggle_session.py"
+    kaggle_push_path = repo_root / "scripts" / "push_aigp_kaggle_kernel.py"
     readiness_path = repo_root / "scripts" / "check_qualifier_readiness.py"
     readiness_builder_path = repo_root / "scripts" / "build_readiness_report.py"
     compare_runs_path = repo_root / "scripts" / "compare_aigp_runs.py"
@@ -66,6 +68,8 @@ def run_checks(repo_root: Path) -> list[Finding]:
         trainer_path,
         curriculum_path,
         monitor_path,
+        kaggle_session_path,
+        kaggle_push_path,
         readiness_path,
         readiness_builder_path,
         compare_runs_path,
@@ -74,6 +78,8 @@ def run_checks(repo_root: Path) -> list[Finding]:
         repo_root / "tests" / "unit" / "aigp" / "test_curriculum.py",
         repo_root / "tests" / "unit" / "aigp" / "test_train_wandb.py",
         repo_root / "tests" / "unit" / "aigp" / "test_monitor_aigp_run.py",
+        repo_root / "tests" / "unit" / "aigp" / "test_run_aigp_kaggle_session.py",
+        repo_root / "tests" / "unit" / "aigp" / "test_push_aigp_kaggle_kernel.py",
     ]
     for path in required_paths:
         if not path.exists():
