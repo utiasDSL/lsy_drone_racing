@@ -196,10 +196,10 @@ class RealMultiDroneRaceEnvClient(Env):
         Returns:
             Tuple of (positions, quaternions).
         """
-        pos = np.zeros((self.n_drones, 3), dtype=np.float32)
-        quat = np.zeros((self.n_drones, 4), dtype=np.float32)
-        ang_vel = np.zeros((self.n_drones, 3), dtype=np.float32)
-        vel = np.zeros((self.n_drones, 3), dtype=np.float32)
+        pos = np.full((self.n_drones, 3), np.nan, dtype=np.float32)
+        quat = np.full((self.n_drones, 4), np.nan, dtype=np.float32)
+        ang_vel = np.full((self.n_drones, 3), np.nan, dtype=np.float32)
+        vel = np.full((self.n_drones, 3), np.nan, dtype=np.float32)
         # Own drone from high-precision estimator
         pos[self.rank] = self._ros_connector_own.pos[self.drone_name]
         quat[self.rank] = self._ros_connector_own.quat[self.drone_name]
@@ -387,6 +387,7 @@ class RealMultiDroneRaceEnvClient(Env):
         
         # Check safety bounds
         if np.any((self.pos_limit_low > drone_pos[self.rank, :]) | (drone_pos[self.rank, :] > self.pos_limit_high)):
+            logger.warning(f"Client {self.rank}: Drone exceeded safety bounds")
             logger.warning(f"Client {self.rank}: Drone exceeded safety bounds")
             terminated = True
 
