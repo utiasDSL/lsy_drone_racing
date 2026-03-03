@@ -115,9 +115,7 @@ class RealMultiDroneRaceEnvClient(Env):
         # Load drone info
         self.drone_names = [f"cf{drone['id']}" for drone in drones]
         self.drone_name = self.drone_names[rank]
-        self.drone_channel = drones[rank]["channel"]
-        self.drone_id = drones[rank]["id"]
-        
+
         # Load track
         self.gates, self.obstacles, self.drones_track = load_track(track)
         self.n_gates = len(self.gates.pos)
@@ -202,7 +200,6 @@ class RealMultiDroneRaceEnvClient(Env):
         quat = np.zeros((self.n_drones, 4), dtype=np.float32)
         ang_vel = np.zeros((self.n_drones, 3), dtype=np.float32)
         vel = np.zeros((self.n_drones, 3), dtype=np.float32)
-        
         # Own drone from high-precision estimator
         pos[self.rank] = self._ros_connector_own.pos[self.drone_name]
         quat[self.rank] = self._ros_connector_own.quat[self.drone_name]
@@ -216,8 +213,8 @@ class RealMultiDroneRaceEnvClient(Env):
                 if i != self.rank:
                     pos[i] = self._ros_connector_others.pos[name]
                     quat[i] = self._ros_connector_others.quat[name]
-                    vel[i] = self._ros_connector_others.vel[name]
-                    ang_vel[i] = self._ros_connector_others.ang_vel[name]
+                    # vel[i] = self._ros_connector_others.vel[name]
+                    # ang_vel[i] = self._ros_connector_others.ang_vel[name]
 
         return pos, quat, vel, ang_vel
     
@@ -250,7 +247,7 @@ class RealMultiDroneRaceEnvClient(Env):
                 self._race_start_time = time.perf_counter() - msg.elapsed_time
                 self._last_host_elapsed_time = msg.elapsed_time
                 latency_ms = compute_latency_ms(msg.timestamp)
-                logger.info(f"Client a{self.rank}: Received rce start (elapsed: {msg.elapsed_time:.3f}s, latency: {latency_ms:.2f}ms)")
+                logger.info(f"Client {self.rank}: Received race start (elapsed: {msg.elapsed_time:.3f}s, latency: {latency_ms:.2f}ms)")
             except Exception as e:
                 logger.error(f"Error processing race start message: {e}")
         
@@ -389,7 +386,7 @@ class RealMultiDroneRaceEnvClient(Env):
         terminated = self.data.target_gate[self.rank] == -1
         
         # Check safety bounds
-        if np.any((self.pos_limit_low > drone_pos) | (drone_pos > self.pos_limit_high)):
+        if np.any((self.pos_limit_low > drone_pos[self.rank, :]) | (drone_pos[self.rank, :] > self.pos_limit_high)):
             logger.warning(f"Client {self.rank}: Drone exceeded safety bounds")
             terminated = True
 
@@ -487,10 +484,3 @@ class RealMultiDroneRaceEnvClient(Env):
         
         logger.info(f"Client {self.rank}: Environment closed")
 
-
-# Register the client environment
-import gymnasium
-gymnasium.register(
-    id="RealMultiDroneRacingClient-v0",
-    entry_point="lsy_drone_racing.envs.real_race_env_client:RealMultiDroneRaceEnvClient",
-)

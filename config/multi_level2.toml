@@ -4,7 +4,7 @@
 # | :-----------------: | :-----------------------: | :-------------------------: | :--------------------: | :---------------: |
 # | `level0.toml`       | *No*                      | *No*                        | *No*                   | Perfect knowledge |
 [[controller]]
-file = "state_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
+file = "attitude_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `lsy_drone_racing/control/`
 [[controller]]
 file = "attitude_controller.py"
 
@@ -16,22 +16,6 @@ check_race_track = true
 check_drone_start_pos = true
 # Lets you practice your controller without putting up gates & obstacles, assumes nominal positions given below.
 real_track_objects = true
-# Enable synchronized takeoff barrier (default: true)
-sync_start_barrier = true
-
-[deploy.takeoff_barrier]
-# Authentication key for barrier (must be same across all nodes)
-authkey = "lsy-drone-barrier-v1"
-# Timeout in seconds for barrier wait
-timeout_s = 30.0
-# Metadata filename for barrier discovery
-filename = "start_barrier.json"
-# Port for barrier manager
-port = 56000
-# Bind host (interface to listen on, use 0.0.0.0 for all interfaces)
-bind_host = "0.0.0.0"
-# Public host (IP address that other machines use to reach this barrier)
-public_host = "127.0.0.1"
 
 [[deploy.drones]]
 id = 10
@@ -64,7 +48,7 @@ seed = "random"         # Either "random" for a random behavior or an integer fo
 [[env.kwargs]]
 freq = 50               # Frequency of the environment's step function, in Hz
 sensor_range = 0.7      # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
-control_mode = "state"  # Control mode of the environment. Can be either "state" or "attitude"
+control_mode = "attitude"  # Control mode of the environment. Can be either "state" or "attitude"
 [[env.kwargs]]
 freq = 100
 sensor_range = 0.7
@@ -115,7 +99,7 @@ ang_vel = [0, 0, 0]
 
 # If the drones exceed those bounds in real, the run will be stopped and the drone will safely be returned to the starting position
 [env.track.safety_limits]
-pos_limit_low = [-2.5, -1.5, -1e-3]
+pos_limit_low = [-2.5, -1.5, -1.0]
 pos_limit_high = [2.5, 1.5, 2.0]
 
 [env.disturbances.action]

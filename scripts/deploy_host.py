@@ -25,39 +25,41 @@ from lsy_drone_racing.utils import load_config
 logger = logging.getLogger(__name__)
 
 
-def main(config: str = "multi_level0.toml"):
+def main(config: str = "multi_level2.toml"):
     """Deploy and run the race host.
 
     Args:
         config: Path to the competition configuration. Assumes the file is in `config/`.
     """
     # Setup logging
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(level=logging.DEBUG)
     logging.getLogger("jax").setLevel(logging.ERROR)
+    logging.getLogger("cflib").setLevel(logging.WARNING)
     logger.setLevel(logging.INFO)
-    logging.getLogger("lsy_drone_racing").setLevel(logging.INFO)
+    logging.getLogger("lsy_drone_racing").setLevel(logging.DEBUG)
     
     # Initialize ROS2
     rclpy.init()
     
+    host = None
     try:
         # Load configuration
         config_obj = load_config(Path(__file__).parents[1] / "config" / config)
-        
-        # Create and run host
+        # Create host
         host = CrazyFlieRealRaceHost(config_obj)
-        logger.info("Host created, starting main loop...")
+        # Connect to drones
+        logger.info("Host created, connecting to drones...")
+        host.connect_drones()
+        # Start main loop
+        logger.info("Drones connected, starting main loop...")
         host.host_main_loop()
-        
     except KeyboardInterrupt:
-        logger.info("Host interrupted by user")
+        logger.info("Received keyboard interrupt, shutting down...")
     except Exception as e:
         logger.error(f"Host encountered an error: {e}", exc_info=True)
     finally:
-        try:
-            host._cleanup()
-        except Exception:
-            logger.exception("Error during host cleanup")
+        if host:
+            host.close()
         rclpy.shutdown()
         logger.info("Host shutdown complete")
 

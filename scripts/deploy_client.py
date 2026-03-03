@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 def main(
-    config: str = "multi_level0.toml",
+    config: str = "multi_level2.toml",
     controller: str | None = None,
     drone_rank: int | None = None,
 ):
@@ -61,7 +61,7 @@ def main(
         
         # Create environment
         env: RealMultiDroneRaceEnvClient = gymnasium.make(
-            "RealMultiDroneRacingClient-v0",
+            "RealMultiDroneRaceEnvClient-v0",
             drones=config_obj.deploy.drones,
             rank=drone_rank,
             freq=config_obj.env.kwargs[drone_rank]['freq'],
@@ -84,7 +84,7 @@ def main(
             
             # Wait for race to start
             logger.info(f"Client {drone_rank}: Waiting for race to start...")
-            env.lock_until_race_start(timeout=60.0)
+            env.unwrapped.lock_until_race_start(timeout=60.0)
             
             logger.info(f"Client {drone_rank}: Starting control loop at {config_obj.env.kwargs[drone_rank]['freq']} Hz")
             start_time = time.perf_counter()

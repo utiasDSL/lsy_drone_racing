@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 import logging
 import multiprocessing as mp
-import signal
 import threading
 import time
 from dataclasses import dataclass
@@ -22,7 +21,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 import concurrent.futures
-
+import struct
+import signal
 import numpy as np
 from scipy.spatial.transform import Rotation as R, RigidTransform as Tr
 import rclpy
@@ -62,7 +62,8 @@ class CrazyflieWorker:
     def __init__(self, rank: int, drone_id: int, drone_channel: int, drone_model: str,
                  ready_event: "mp.synchronize.Event", stop_event: "mp.synchronize.Event",
                  init_pose: Tr, control_mode: str, control_freq: float = 50.0,
-                 start_event: "mp.synchronize.Event | None" = None):
+                 start_event: "mp.synchronize.Event | None" = None,
+                 failure_event: "mp.synchronize.Event | None" = None):
         """Initialize the Crazyflie worker.
         
         Args:
@@ -75,7 +76,8 @@ class CrazyflieWorker:
             init_pose: Initial pose of the drone as a RigidTransform
             control_mode: Control mode, either "attitude" or "state"
             control_freq: Control frequency in Hz
-            all_clients_ready_event: Event to signal when all clients are ready (actions disabled until set)
+            start_event: Event to signal when all clients are ready (actions disabled until set)
+            failure_event: Event to signal if connection fails (shared with other workers)
         """
         self.rank = rank
         self.drone_id = drone_id
@@ -84,6 +86,7 @@ class CrazyflieWorker:
         self.ready_event = ready_event
         self.stop_event = stop_event
         self.start_event = start_event
+        self.failure_event = failure_event
         self.init_pose = init_pose
         self.control_mode = control_mode.lower()
         self.control_freq = control_freq
@@ -181,20 +184,34 @@ class CrazyflieWorker:
         self.logger.info(f"Connecting to drone {self.drone_id} on channel {self.drone_channel}...")
         self.drone = Crazyflie(rw_cache=str(Path(__file__).parent / ".cache"))
         cflib.crtp.init_drivers()
-        uri = f"radio://0/{self.drone_channel}/2M/E7E7E7E7E{self.drone_id:02X}"
-
-        power_switch = PowerSwitch(uri)
-        power_switch.stm_power_cycle()
-        time.sleep(2)
+        uri = f"radio://{self.rank}/{self.drone_channel}/2M/E7E7E7E7{self.drone_id:02X}"
+        # logger.info(f"URI : {uri}")
+        failure_msg: dict[str, str] = {"message": ""}
+        try:
+            power_switch = PowerSwitch(uri)
+            power_switch.stm_power_cycle()
+            wait_deadline = time.perf_counter() + 5.0
+            while time.perf_counter() < wait_deadline:
+                if self.stop_event.is_set():
+                    raise InterruptedError("Stop requested during power-cycle wait")
+                time.sleep(0.05)
+        except InterruptedError as e:
+            raise e
+        except Exception as e:
+            self.logger.error(f'{e}')
+            self.failure_event.set()
+            raise e
 
         connection_event = mp.Event()
+        connection_failed_event = mp.Event()
         
         def on_connected(uri_connected):
             self.logger.info(f"Connected to {uri_connected}")
             connection_event.set()
         
         def on_connection_failed(uri_failed, msg):
-            raise RuntimeError(f"Connection failed to {uri_failed}: {msg}")
+            failure_msg["message"] = f"Connection failed to {uri_failed}: {msg}"
+            connection_failed_event.set()
         
         def on_disconnected(uri_disconnected):
             self.logger.info(f"Disconnected from {uri_disconnected}")
@@ -204,8 +221,21 @@ class CrazyflieWorker:
         self.drone.disconnected.add_callback(on_disconnected)
         
         self.drone.open_link(uri)
-        
-        if not connection_event.wait(timeout=30):
+
+        timeout = 5.0
+        poll_interval = 0.05
+        start_time = time.perf_counter()
+        while time.perf_counter() - start_time < timeout:
+            if self.stop_event.is_set():
+                raise InterruptedError("Stop requested while connecting to drone")
+            if connection_failed_event.is_set():
+                self.failure_event.set()
+                raise RuntimeError(failure_msg["message"])
+            if connection_event.is_set():
+                break
+            time.sleep(poll_interval)
+
+        if not connection_event.is_set():
             raise TimeoutError(f"Timed out while waiting for the drone {self.drone_id} on channel {self.drone_channel}.")
         
         self.logger.info("Drone connected successfully")
@@ -222,14 +252,18 @@ class CrazyflieWorker:
             self._on_client_state,
         )
         
-        self.logger.info("Zenoh session initialized")
+        self.logger.info(f"Zenoh session for drone {self.rank} initialized")
     
     def _control_loop(self):
         """Main control loop - send actions to drone at control frequency."""
         # Wait for all clients to be ready before executing actions
         
         self.logger.info("Waiting for all clients to be ready...")
-        self.start_event.wait()
+        while not self.start_event.is_set():
+            if self.stop_event.is_set():
+                self.logger.info("Stop event set while waiting for start event")
+                return
+            time.sleep(0.05)
         self.logger.info("All clients ready, starting action execution")
         
         dt = 1.0 / self.control_freq
@@ -258,26 +292,67 @@ class CrazyflieWorker:
         if self.zenoh_session:
             self.zenoh_session.close()
         if self.drone:
-            # Send zero command before disconnecting
-            self.drone.commander.send_setpoint(0, 0, 0, 0)
-            self.drone.close_link()
-        
+            try:
+                pk = CRTPPacket()
+                pk.port = CRTPPort.LOCALIZATION
+                pk.channel = Localization.GENERIC_CH
+                pk.data = struct.pack("<B", Localization.EMERGENCY_STOP)
+                self.drone.send_packet(pk)
+            finally:
+                self.drone.close_link()
         self.logger.info("Drone process finished")
     
     def run(self):
         """Main entry point for the worker process."""
         try:
+            # Check if stop requested before doing any work
+            if self.stop_event.is_set():
+                self.logger.info("Stop event set before initialization, exiting immediately")
+                return
+            
             assert self.control_mode in ["attitude", "state"], "control_mode must be either 'attitude' or 'state'"
             
             # Load drone parameters
-            self.params = load_params(self.drone_model)
+            self.params = load_params(physics = "first_principles", drone_model = self.drone_model)
             self.logger.info(f"Loaded parameters for {self.drone_model}")
             
-            # Connect to drone
-            self._connect_drone()
+            # Check if stop requested before connecting
+            if self.stop_event.is_set():
+                self.logger.info("Stop event set before connection attempt, exiting")
+                return
+            
+            # Connect to drone (catch connection failures and signal other workers)
+            try:
+                self._connect_drone()
+            except InterruptedError as e:
+                # InterruptedError with stop_event set is an intentional shutdown path.
+                self.logger.info(f"Connection interrupted by stop request: {e}")
+                return
+            except (TimeoutError, RuntimeError) as e:
+                self.logger.error(f"Failed to connect to drone: {e}")
+                # Signal failure to host and other workers
+                if self.failure_event:
+                    self.failure_event.set()
+                    self.logger.info("Failure event set, notifying host to stop other workers")
+                raise
+            except Exception as e:
+                self.logger.error(f"Unexpected error during drone connection: {e}", exc_info=True)
+                if self.failure_event:
+                    self.failure_event.set()
+                    self.logger.info("Failure event set due to unexpected error, notifying host to stop other workers")
+                raise
+            # Check if stop requested after connection but before reset
+            if self.stop_event.is_set():
+                self.logger.info("Stop event set after connection, exiting")
+                return
             
             # Reset drone to initial state
             self._crazyflie_reset()
+            
+            # Check if stop requested before zenoh init
+            if self.stop_event.is_set():
+                self.logger.info("Stop event set before Zenoh initialization, exiting")
+                return
             
             # Initialize Zenoh
             self._init_zenoh()
@@ -286,13 +361,18 @@ class CrazyflieWorker:
             self.ready_event.set()
             self.logger.info("Drone process ready")
             
+            # Check if stop requested before control loop
+            if self.stop_event.is_set():
+                self.logger.info("Stop event set before control loop, exiting")
+                return
+            
             # Run control loop
             self._control_loop()
             
             self.logger.info("Drone process stopping")
-        
         finally:
             self._cleanup()
+            
 
 
 def crazyflie_process_worker(
@@ -305,6 +385,7 @@ def crazyflie_process_worker(
     init_pose: Tr,
     control_mode: str,
     start_event: "mp.synchronize.Event",
+    failure_event: "mp.synchronize.Event | None" = None,
     control_freq: float = 50.0,
     
 ):
@@ -312,6 +393,8 @@ def crazyflie_process_worker(
     
     This function is called by multiprocessing and creates a CrazyflieWorker instance.
     """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
     worker = CrazyflieWorker(
         rank=rank,
         drone_id=drone_id,
@@ -323,6 +406,7 @@ def crazyflie_process_worker(
         control_mode=control_mode,
         control_freq=control_freq,
         start_event=start_event,
+        failure_event=failure_event,
     )
     worker.run()
 
@@ -351,6 +435,7 @@ class DroneConnection:
     process: mp.Process | None = None
     ready_event: "mp.synchronize.Event | None" = None
     stop_event: "mp.synchronize.Event | None" = None
+    failure_event: "mp.synchronize.Event | None" = None
     connected: bool = False
 
 
@@ -365,6 +450,12 @@ class RealRaceHost:
     _num_drones: int = 0
     _config: ConfigDict | None = None
     
+    _zenoh_session: zenoh.Session | None
+    _host_ready_pub: ZenohPublisher | None
+    _race_start_pub: ZenohPublisher | None
+    
+    _client_state_subs: dict[int, ZenohSubscriber] | None
+
     def __init__(self, config: ConfigDict):
         """Initialize the RealRaceHost.
         
@@ -377,18 +468,48 @@ class RealRaceHost:
         self._clients_ready: dict[int, bool] = {}
         self._clients_stopped: dict[int, bool] = {}
         self._start_time = time.perf_counter()
-        
-        # Setup signal handlers for graceful shutdown
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+
+        self._host_ready_pub = None
+        self._race_start_pub = None
+        self._client_state_subs = None
         
         self.load_config(config)
-    
-    def _signal_handler(self, signum, frame):
-        """Handle shutdown signals."""
-        logger.info(f"Received signal {signum}, transitioning to STOPPING state")
-        self.state = RealRaceHostState.STOPPING
-        self._shutdown_event.set()
+        self.init_zenoh()
+
+    def init_zenoh(self, conf: zenoh.Config | None = None) -> zenoh.Session:
+        """Initialize Zenoh communication."""
+        self._client_state_subs = {}
+        self._zenoh_session = create_zenoh_session(conf)
+        
+        # Create publishers
+        self._host_ready_pub = ZenohPublisher(self._zenoh_session, "lsy_drone_racing/host/ready")
+        self._race_start_pub = ZenohPublisher(self._zenoh_session, "lsy_drone_racing/host/race_start")
+        
+        # Subscribe to client state messages for readiness detection and stopped detection
+        for rank in range(self._num_drones):
+            def on_client_state(payload: str, rank=rank):
+                msg = deserialize_message(payload, ClientStateMessage)
+                latency_ms = compute_latency_ms(msg.timestamp)
+                
+                # Mark client as ready on first state message
+                if not self._clients_ready[rank]:
+                    logger.debug(f"Client {rank} ready (received first state message, latency: {latency_ms:.2f}ms)")
+                    self._clients_ready[rank] = True
+                
+                # Track stopped clients
+                if msg.stopped:
+                    logger.info(f"Client {rank} stopped (next_gate_idx={msg.next_gate_idx}, latency: {latency_ms:.2f}ms)")
+                    self._clients_stopped[rank] = True
+            
+            sub = ZenohSubscriber(
+                self._zenoh_session,
+                f"lsy_drone_racing/client/{rank}/state",
+                on_client_state,
+            )
+            self._client_state_subs[rank] = sub
+        
+        logger.info("Zenoh communication initialized")
+        return self._zenoh_session
     
     def load_config(self, config: ConfigDict):
         """Load configuration.
@@ -402,20 +523,17 @@ class RealRaceHost:
         """Connect to all drones."""
         raise NotImplementedError("Subclass must implement connect_drones")
     
-    def init_zenoh(self, conf: zenoh.Config | None = None) -> zenoh.Session:
-        """Initialize Zenoh session and communication.
-        
-        Args:
-            conf: Optional Zenoh configuration.
-            
-        Returns:
-            Zenoh session.
-        """
-        raise NotImplementedError("Subclass must implement init_zenoh")
-    
     def host_main_loop(self):
         """Main loop of the host."""
         raise NotImplementedError("Subclass must implement host_main_loop")
+
+    def close(self):
+        """Gracefully close all resources and shutdown the host.
+        
+        This method can be called at any point during the host lifecycle
+        and will properly clean up resources.
+        """
+        raise NotImplementedError("Subclass must implement close")
 
 
 class CrazyFlieRealRaceHost(RealRaceHost):
@@ -425,34 +543,23 @@ class CrazyFlieRealRaceHost(RealRaceHost):
     _drone_ids: list[int]
     _drone_channels: list[int]
     _drone_models: list[str]
-    _drone_connections: dict[int, DroneConnection]
+    _drone_connections: dict[int, DroneConnection] | None
     _drone_control_freq: list[float]
     _all_clients_ready_event: "mp.synchronize.Event | None"
+    _mp_ctx: mp.context.BaseContext
 
-    _zenoh_session: zenoh.Session | None
-    _host_ready_pub: ZenohPublisher | None
-    _race_start_pub: ZenohPublisher | None
     
-    _client_ready_subs: dict[int, ZenohSubscriber]
-    _client_state_subs: dict[int, ZenohSubscriber]
 
     def __init__(self, config: ConfigDict):
         """Initialize LSYRealRaceHost."""
         super().__init__(config)
-        self.gates = None
-        self.obstacles = None
-        self.drones_track = None
-        self.n_gates = 0
-        self.n_obstacles = 0
-        self.pos_limit_low = None
-        self.pos_limit_high = None
-        self._all_clients_ready_event = mp.Event()
+        self._mp_ctx = mp.get_context("spawn")
+        self._all_clients_ready_event = self._mp_ctx.Event()
+        self._drone_connections = None  # Initialize early so close() can access it
         
         logger.info("Host: In IDLE state - checking track...")
         # TODO: Testing the pipeline without checking the track
-        # self.check_track(rng_config = config.env.randomizations)   
-        logger.info("Host: Connecting to drones...")
-        self.connect_drones()
+        # self.check_track(rng_config = config.env.randomizations)
     
     def load_config(self, config: ConfigDict):
         """Load track configuration."""
@@ -468,7 +575,7 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         self._drone_ids = [drone['id'] for drone in config.deploy.drones]
         self._drone_channels = [drone['channel'] for drone in config.deploy.drones]
         self._drone_models = [drone['drone_model'] for drone in config.deploy.drones]
-        self._drone_control_freq = [drone['freq'] for drone in config.env.kwargs.freq]
+        self._drone_control_freq = [kwargs['freq'] for kwargs in config.env.kwargs]
         
         # Initialize client tracking
         for rank in range(self._num_drones):
@@ -542,26 +649,43 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         logger.info("Host: Track check passed")
     
     def connect_drones(self):
-        """Connect to all Crazyflie drones by spawning individual processes."""
+        """Connect to all Crazyflie drones by spawning individual processes.
+        
+        Uses non-blocking polling to wait for connections, allowing responsive
+        shutdown via stop_event during the connection phase.
+        """
         logger.info(f"Host: Spawning processes for {self._num_drones} Crazyflie drones...")
         self._drone_connections = {}
+        
+        # Create shared failure event for all workers
+        failure_event = self._mp_ctx.Event()
         
         for rank in range(self._num_drones):
             drone_id = self._drone_ids[rank]
             channel = self._drone_channels[rank]
             drone_model = self._drone_models[rank]
             control_freq = self._drone_control_freq[rank]
-            init_pose = Tr(self.drones_track.pos[rank], R.from_quat(self.drones_track.quat[rank]))
-            control_mode = self._config.env.kwargs.control_mode
+            init_pose = Tr.from_components(translation=self.drones_track.pos[rank],rotation = R.from_quat(self.drones_track.quat[rank]))
+            control_mode = self._config.env.kwargs[rank]['control_mode']
             
             # Create synchronization events
-            ready_event = mp.Event()
-            stop_event = mp.Event()
+            ready_event = self._mp_ctx.Event()
+            stop_event = self._mp_ctx.Event()
             
             # Spawn process
-            process = mp.Process(
+            process = self._mp_ctx.Process(
                 target=crazyflie_process_worker,
-                args=(rank, drone_id, channel, drone_model, ready_event, stop_event, init_pose, control_mode, control_freq, self._all_clients_ready_event),
+                args=(rank,
+                    drone_id,
+                    channel,
+                    drone_model,
+                    ready_event,
+                    stop_event,
+                    init_pose,
+                     control_mode,
+                     self._all_clients_ready_event,
+                     failure_event,
+                     control_freq),
                 name=f"CrazyflieProcess-{rank}",
             )
             process.start()
@@ -574,30 +698,56 @@ class CrazyFlieRealRaceHost(RealRaceHost):
                 process=process,
                 ready_event=ready_event,
                 stop_event=stop_event,
+                failure_event=failure_event,
                 connected=False,
             )
             self._drone_connections[rank] = conn
             
             logger.info(f"Spawned process for Crazyflie {rank} (PID: {process.pid})")
         
-        # Wait for all processes to be ready
+        # Non-blocking polling for process readiness
         logger.info("Waiting for all Crazyflie processes to be ready...")
         timeout = 30  # seconds
+        poll_interval = 0.5  # check every 500ms
+        start_time = time.perf_counter()
         
-        for rank, conn in self._drone_connections.items():
-            if not conn.ready_event.wait(timeout=timeout):
-                raise TimeoutError(f"Timeout waiting for Crazyflie {rank} to be ready")
-            else:
-                conn.connected = True
-                logger.info(f"Crazyflie {rank} is ready")
+        while time.perf_counter() - start_time < timeout:
+            # Check if any worker has failed
+            if failure_event.is_set():
+                logger.error("Worker failure detected! Signaling all workers to stop...")
+                # Signal all workers to stop
+                for conn in self._drone_connections.values():
+                    conn.stop_event.set()
+                raise RuntimeError("Connection failed in one of the Crazyflie workers. Stopping all workers.")
+            
+            # Check if all processes are ready
+            all_ready = all(conn.ready_event.is_set() for conn in self._drone_connections.values())
+            if all_ready:
+                for conn in self._drone_connections.values():
+                    conn.connected = True
+                    logger.info(f"Crazyflie {conn.rank} is ready")
+                logger.info(f"Host: All {self._num_drones} Crazyflie processes are ready")
+                self.state = RealRaceHostState.INITIALIZED
+                return
+            
+            # Check if any process has died unexpectedly
+            for rank, conn in self._drone_connections.items():
+                if conn.process and not conn.process.is_alive() and not conn.ready_event.is_set():
+                    logger.error(f"Crazyflie process {rank} died unexpectedly without signaling ready")
+                    # Signal all workers to stop
+                    for other_conn in self._drone_connections.values():
+                        other_conn.stop_event.set()
+                    raise RuntimeError(f"Process {rank} terminated unexpectedly during connection phase")
+            
+            # Poll with small delay to allow responsiveness to signals
+            time.sleep(poll_interval)
         
-        if len(self._drone_connections) == self._num_drones:
-            logger.info(f"Host: All {self._num_drones} Crazyflie processes are ready")
-            self.state = RealRaceHostState.INITIALIZED
-        else:
-            raise RuntimeError(
-                f"Host: Only {sum(c.connected for c in self._drone_connections.values())}/{self._num_drones} Crazyflie processes ready"
-            )
+        # Timeout occurred
+        logger.error(f"Timeout waiting for Crazyflie processes to become ready")
+        # Signal all workers to stop
+        for conn in self._drone_connections.values():
+            conn.stop_event.set()
+        raise TimeoutError(f"Timeout waiting for all {self._num_drones} Crazyflie processes to connect")
     
     def _update_track_poses(self, ros_connector: ROSConnector):
         """Update track poses from motion capture system.
@@ -625,75 +775,56 @@ class CrazyFlieRealRaceHost(RealRaceHost):
             except Exception:
                 logger.warning(f"Could not update pose for {tf_name}")
     
-    def _cleanup(self):
-        """Clean up Crazyflie-specific resources."""
-        # Signal drone processes to stop
-        logger.info("Signaling Crazyflie processes to stop...")
-        for conn in self._drone_connections.values():
-            if conn.stop_event:
-                conn.stop_event.set()
+    def close(self):
+        """Gracefully close all Crazyflie-specific resources and shutdown.
         
-        # Wait for processes to finish
-        logger.info("Waiting for Crazyflie processes to finish...")
-        for rank, conn in self._drone_connections.items():
-            if conn.process and conn.process.is_alive():
-                conn.process.join(timeout=5)
-                if conn.process.is_alive():
-                    logger.warning(f"Crazyflie process {rank} did not terminate, killing...")
-                    conn.process.terminate()
-                    conn.process.join(timeout=2)
+        This method performs shutdown in phases:
+        1. Signal all drone processes to stop
+        2. Wait for drone processes to finish with timeout
+        3. Terminate any unresponsive processes
+        4. Close Zenoh communication
+        """
+        logger.info("Host shutting down...")
         
-        # Close Zenoh publishers/subscribers
+        # Phase 1: Signal all drone processes to stop
+        if self._drone_connections is not None:
+            logger.info("Phase 1: Signaling all Crazyflie processes to stop...")
+            for conn in self._drone_connections.values():
+                if conn.stop_event:
+                    conn.stop_event.set()
+            
+            # Phase 2: Wait for drone processes to finish with reasonable timeout
+            logger.info("Phase 2: Waiting for Crazyflie processes to finish...")
+            max_wait_per_process = 5  # seconds
+            for rank, conn in self._drone_connections.items():
+                if conn.process and conn.process.is_alive():
+                    conn.process.join(timeout=max_wait_per_process)
+                    if conn.process.is_alive():
+                        logger.warning(f"Process {rank} did not terminate, terminating...")
+                        conn.process.terminate()
+                        conn.process.join(timeout=2)
+                        if conn.process.is_alive():
+                            logger.warning(f"Process {rank} still alive after terminate, killing...")
+                            conn.process.kill()
+                            conn.process.join()
+                    else:
+                        logger.info(f"Process {rank} terminated successfully")
+        
+        # Phase 3: Close Zenoh communication
+        logger.info("Phase 3: Closing Zenoh communication...")
         if self._host_ready_pub:
             self._host_ready_pub.close()
         if self._race_start_pub:
             self._race_start_pub.close()
-        for sub in self._client_state_subs.values():
-            sub.close()
-        
-        # Close Zenoh session
+        if self._client_state_subs:
+            for sub in self._client_state_subs.values():
+                sub.close()
         if self._zenoh_session:
             self._zenoh_session.close()
         
-        # Call parent cleanup
-        super()._cleanup()
-        
-        logger.info("Host: CrazyflieRaceHost cleanup complete")
+        logger.info("Host shutdown complete")
     
-    def init_zenoh(self, conf: zenoh.Config | None = None) -> zenoh.Session:
-        """Initialize Zenoh communication."""
-        self._client_state_subs = {}
-        self._zenoh_session = create_zenoh_session(conf)
-        
-        # Create publishers
-        self._host_ready_pub = ZenohPublisher(self._zenoh_session, "lsy_drone_racing/host/ready")
-        self._race_start_pub = ZenohPublisher(self._zenoh_session, "lsy_drone_racing/host/race_start")
-        
-        # Subscribe to client state messages for readiness detection and stopped detection
-        for rank in range(self._num_drones):
-            def on_client_state(payload: str, rank=rank):
-                msg = deserialize_message(payload, ClientStateMessage)
-                latency_ms = compute_latency_ms(msg.timestamp)
-                
-                # Mark client as ready on first state message
-                if not self._clients_ready[rank]:
-                    logger.debug(f"Client {rank} ready (received first state message, latency: {latency_ms:.2f}ms)")
-                    self._clients_ready[rank] = True
-                
-                # Track stopped clients
-                if msg.stopped:
-                    logger.info(f"Client {rank} stopped (next_gate_idx={msg.next_gate_idx}, latency: {latency_ms:.2f}ms)")
-                    self._clients_stopped[rank] = True
-            
-            sub = ZenohSubscriber(
-                self._zenoh_session,
-                f"lsy_drone_racing/client/{rank}/state",
-                on_client_state,
-            )
-            self._client_state_subs[rank] = sub
-        
-        logger.info("Zenoh communication initialized")
-        return self._zenoh_session
+    
     
     def host_main_loop(self, race_update_freq : float = 50.0):
         """Main loop of the host."""
@@ -701,9 +832,6 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         
         if self.state != RealRaceHostState.INITIALIZED:
             raise RuntimeError("Host: Failed to reach INITIALIZED state")
-        
-        # Initialize Zenoh
-        self.init_zenoh()
         
         # INITIALIZED state: Wait for clients to be ready
         logger.info("Host: In INITIALIZED state - waiting for clients...")

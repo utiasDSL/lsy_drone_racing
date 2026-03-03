@@ -42,6 +42,7 @@ gpu = ["jax[cuda12]"]
 deploy = [
     "cfclient",
     "drone-estimators",
+    "eclipse-zenoh @ git+https://github.com/eclipse-zenoh/zenoh-python.git@1.7.2"
 ]
 # option[rl]: train rl policy
 rl = ["torch == 2.8.0", "wandb"]
@@ -160,6 +161,18 @@ tests = { cmd = "pytest -v tests", description = "Run tests" }
 
 [tool.pixi.feature.tests.dependencies]
 pytest = "*"
+
+[tool.pixi.feature.deploy.tasks.mocap]
+cmd = "ros2 launch motion_capture_tracking launch.py"
+
+[tool.pixi.feature.deploy.tasks.estimator]
+cmd = ["python",
+        "-m",
+        "drone_estimators.ros_nodes.ros2_node",
+        "--drone_name",
+        "{{drone_name}}"]
+args = [{ "arg" = "drone_name", "default" = "cf10" }]
+
 
 # environments
 [tool.pixi.environments]

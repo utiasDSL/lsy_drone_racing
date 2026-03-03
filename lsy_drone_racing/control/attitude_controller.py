@@ -87,46 +87,46 @@ class AttitudeController(Controller):
             [r_des, p_des, y_des, t_des] as a numpy array.
         """
         t = min(self._tick / self._freq, self._t_total)
-        if t >= self._t_total:  # Maximum duration reached
+        if t >= 3.0:  # Maximum duration reached
             self._finished = True
 
-        des_pos = self._des_pos_spline(t)
-        des_vel = self._des_vel_spline(t)
-        des_yaw = 0.0
+        # des_pos = self._des_pos_spline(t)
+        # des_vel = self._des_vel_spline(t)
+        # des_yaw = 0.0
 
-        # Calculate the deviations from the desired trajectory
-        pos_error = des_pos - obs["pos"]
-        vel_error = des_vel - obs["vel"]
+        # # Calculate the deviations from the desired trajectory
+        # pos_error = des_pos - obs["pos"]
+        # vel_error = des_vel - obs["vel"]
 
-        # Update integral error
-        self.i_error += pos_error * (1 / self._freq)
-        self.i_error = np.clip(self.i_error, -self.ki_range, self.ki_range)
+        # # Update integral error
+        # self.i_error += pos_error * (1 / self._freq)
+        # self.i_error = np.clip(self.i_error, -self.ki_range, self.ki_range)
 
-        # Compute target thrust
-        target_thrust = np.zeros(3)
-        target_thrust += self.kp * pos_error
-        target_thrust += self.ki * self.i_error
-        target_thrust += self.kd * vel_error
-        target_thrust[2] += self.drone_mass * self.g
+        # # Compute target thrust
+        # target_thrust = np.zeros(3)
+        # target_thrust += self.kp * pos_error
+        # target_thrust += self.ki * self.i_error
+        # target_thrust += self.kd * vel_error
+        # target_thrust[2] += self.drone_mass * self.g
 
-        # Update z_axis to the current orientation of the drone
-        z_axis = R.from_quat(obs["quat"]).as_matrix()[:, 2]
+        # # Update z_axis to the current orientation of the drone
+        # z_axis = R.from_quat(obs["quat"]).as_matrix()[:, 2]
 
-        # update current thrust
-        thrust_desired = target_thrust.dot(z_axis)
+        # # update current thrust
+        # thrust_desired = target_thrust.dot(z_axis)
 
-        # update z_axis_desired
-        z_axis_desired = target_thrust / np.linalg.norm(target_thrust)
-        x_c_des = np.array([math.cos(des_yaw), math.sin(des_yaw), 0.0])
-        y_axis_desired = np.cross(z_axis_desired, x_c_des)
-        y_axis_desired /= np.linalg.norm(y_axis_desired)
-        x_axis_desired = np.cross(y_axis_desired, z_axis_desired)
+        # # update z_axis_desired
+        # z_axis_desired = target_thrust / np.linalg.norm(target_thrust)
+        # x_c_des = np.array([math.cos(des_yaw), math.sin(des_yaw), 0.0])
+        # y_axis_desired = np.cross(z_axis_desired, x_c_des)
+        # y_axis_desired /= np.linalg.norm(y_axis_desired)
+        # x_axis_desired = np.cross(y_axis_desired, z_axis_desired)
 
-        R_desired = np.vstack([x_axis_desired, y_axis_desired, z_axis_desired]).T
-        euler_desired = R.from_matrix(R_desired).as_euler("xyz", degrees=False)
+        # R_desired = np.vstack([x_axis_desired, y_axis_desired, z_axis_desired]).T
+        # euler_desired = R.from_matrix(R_desired).as_euler("xyz", degrees=False)
 
-        action = np.concatenate([euler_desired, [thrust_desired]], dtype=np.float32)
-
+        # action = np.concatenate([euler_desired, [thrust_desired]], dtype=np.float32)
+        action = np.array([0.0,0.0,0.0,0.05], dtype=np.float32)
         return action
 
     def step_callback(
