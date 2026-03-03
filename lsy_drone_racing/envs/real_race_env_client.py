@@ -31,6 +31,8 @@ from lsy_drone_racing.utils.takeoff_barrier import TakeOffBarrier
 from lsy_drone_racing.utils.zenoh_utils import (
     ClientStateMessage,
     HostReadyMessage,
+    HostPingMessage,
+    ClientPongMessage,
     RaceStartMessage,
     ZenohPublisher,
     ZenohSubscriber,
@@ -141,8 +143,10 @@ class RealMultiDroneRaceEnvClient(Env):
         # Zenoh communication
         self._zenoh_session: zenoh.Session | None = None
         self._host_ready_sub: ZenohSubscriber | None = None
+        self._host_ping_sub: ZenohSubscriber | None = None
         self._race_start_sub: ZenohSubscriber | None = None
         self._client_state_pub: ZenohPublisher | None = None
+        self._client_pong_pub: ZenohPublisher | None = None
         
         # Race state
         self._host_ready = False
@@ -151,6 +155,8 @@ class RealMultiDroneRaceEnvClient(Env):
         self._race_start_time = 0.0
         self._should_stop = False
         self._last_host_elapsed_time = 0.0
+        self._last_race_start_timestamp = 0.0
+        self._clock_offset = 0.0  # Will be set during calibration
         
         self._jit_compiled = False
     
@@ -240,12 +246,34 @@ class RealMultiDroneRaceEnvClient(Env):
             on_host_ready,
         )
         
+        def on_host_ping(payload: str):
+            """Handle ping from host by immediately sending pong."""
+            try:
+                msg = deserialize_message(payload, HostPingMessage)
+                if msg.drone_rank == self.rank:
+                    pong_msg = ClientPongMessage(
+                        drone_rank=self.rank,
+                        host_timestamp=msg.host_timestamp,
+                        client_timestamp=time.perf_counter(),
+                    )
+                    self._client_pong_pub.publish(pong_msg)
+                    logger.debug(f"Client {self.rank}: Sent pong for clock calibration")
+            except Exception as e:
+                logger.error(f"Error processing host ping message: {e}")
+        
+        self._host_ping_sub = ZenohSubscriber(
+            self._zenoh_session,
+            "lsy_drone_racing/host/ping",
+            on_host_ping,
+        )
+        
         def on_race_start(payload: str):
             try:
                 msg = deserialize_message(payload, RaceStartMessage)
                 self._race_started = True
                 self._race_start_time = time.perf_counter() - msg.elapsed_time
                 self._last_host_elapsed_time = msg.elapsed_time
+                self._last_race_start_timestamp = msg.timestamp  # Store for echo
                 latency_ms = compute_latency_ms(msg.timestamp)
                 logger.info(f"Client {self.rank}: Received race start (elapsed: {msg.elapsed_time:.3f}s, latency: {latency_ms:.2f}ms)")
             except Exception as e:
@@ -261,6 +289,11 @@ class RealMultiDroneRaceEnvClient(Env):
         self._client_state_pub = ZenohPublisher(
             self._zenoh_session,
             f"lsy_drone_racing/client/{self.rank}/state",
+        )
+        
+        self._client_pong_pub = ZenohPublisher(
+            self._zenoh_session,
+            f"lsy_drone_racing/client/{self.rank}/pong",
         )
         
         logger.info(f"Client {self.rank}: Zenoh communication initialized")
