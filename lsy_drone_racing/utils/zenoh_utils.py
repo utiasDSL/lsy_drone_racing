@@ -74,6 +74,32 @@ class ClientStateMessage:
     next_gate_idx: int = 0
 
 
+@dataclass
+class HostPingMessage:
+    """Ping message from host to client for latency calibration.
+    
+    Attributes:
+        drone_rank: Rank of the drone.
+        host_timestamp: Timestamp when host sent this ping.
+    """
+    drone_rank: int
+    host_timestamp: float
+
+
+@dataclass
+class ClientPongMessage:
+    """Pong message from client back to host for latency calibration.
+    
+    Attributes:
+        drone_rank: Rank of the drone.
+        host_timestamp: Echo of the host's timestamp from the ping.
+        client_timestamp: Timestamp when client sent this pong.
+    """
+    drone_rank: int
+    host_timestamp: float
+    client_timestamp: float
+
+
 def serialize_message(message: Any) -> str:
     """Serialize a message dataclass to JSON.
     
@@ -104,16 +130,19 @@ def deserialize_message(json_str: str, message_class: type) -> Any:
     return message_class(**msg_dict)
 
 
-def compute_latency_ms(timestamp: float) -> float:
+def compute_latency_ms(timestamp: float, clock_offset: float = 0.0) -> float:
     """Compute latency in milliseconds from a given timestamp.
     
     Args:
         timestamp: Original timestamp when message was sent.
+        clock_offset: Optional clock offset between machines (in seconds) for correction.
+                     Set this to the calibrated offset from ping-pong to correct for
+                     clock skew between host and client machines.
         
     Returns:
         Latency in milliseconds.
     """
-    return (time.perf_counter() - timestamp) * 1000
+    return (time.perf_counter() - timestamp - clock_offset) * 1000
 
 
 class ZenohPublisher:

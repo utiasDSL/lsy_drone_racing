@@ -41,6 +41,8 @@ from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_trac
 from lsy_drone_racing.utils.zenoh_utils import (
     ClientStateMessage,
     HostReadyMessage,
+    HostPingMessage,
+    ClientPongMessage,
     RaceStartMessage,
     ZenohPublisher,
     ZenohSubscriber,
@@ -169,14 +171,12 @@ class CrazyflieWorker:
     def _on_client_state(self, payload: str):
         """Handle client state messages containing actions."""
         msg = deserialize_message(payload, ClientStateMessage)
-        latency_ms = compute_latency_ms(msg.timestamp)
         
         with self.action_lock:
             self.last_action = msg.action
         
         self.logger.debug(
             f"Received action from client (gate={msg.next_gate_idx}, "
-            f"latency={latency_ms:.2f}ms)"
         )
 
     def _connect_drone(self):
@@ -483,22 +483,22 @@ class RealRaceHost:
         
         # Create publishers
         self._host_ready_pub = ZenohPublisher(self._zenoh_session, "lsy_drone_racing/host/ready")
+        self._host_ping_pub = ZenohPublisher(self._zenoh_session, "lsy_drone_racing/host/ping")
         self._race_start_pub = ZenohPublisher(self._zenoh_session, "lsy_drone_racing/host/race_start")
         
         # Subscribe to client state messages for readiness detection and stopped detection
         for rank in range(self._num_drones):
             def on_client_state(payload: str, rank=rank):
                 msg = deserialize_message(payload, ClientStateMessage)
-                latency_ms = compute_latency_ms(msg.timestamp)
                 
                 # Mark client as ready on first state message
                 if not self._clients_ready[rank]:
-                    logger.debug(f"Client {rank} ready (received first state message, latency: {latency_ms:.2f}ms)")
+                    logger.debug(f"Client {rank} ready (received first state message")
                     self._clients_ready[rank] = True
                 
                 # Track stopped clients
                 if msg.stopped:
-                    logger.info(f"Client {rank} stopped (next_gate_idx={msg.next_gate_idx}, latency: {latency_ms:.2f}ms)")
+                    logger.info(f"Client {rank} stopped (next_gate_idx={msg.next_gate_idx}")
                     self._clients_stopped[rank] = True
             
             sub = ZenohSubscriber(
@@ -507,6 +507,27 @@ class RealRaceHost:
                 on_client_state,
             )
             self._client_state_subs[rank] = sub
+        
+        # Subscribe to pong messages for clock offset calibration
+        self._client_pong_subs = {}
+        for rank in range(self._num_drones):
+            def on_client_pong(payload: str, rank=rank):
+                msg = deserialize_message(payload, ClientPongMessage)
+                # Calculate round-trip time
+                rtt = time.perf_counter() - msg.host_timestamp
+                # Clock offset = (RTT / 2) + (client_timestamp - host_timestamp)
+                # This accounts for the network delay and clock difference
+                half_rtt = rtt / 2.0
+                clock_offset = (msg.client_timestamp - msg.host_timestamp) - half_rtt
+                self._client_clock_offsets[rank] = clock_offset
+                logger.info(f"Client {rank} clock offset calibrated: {clock_offset*1000:.2f}ms (RTT: {rtt*1000:.2f}ms)")
+            
+            sub = ZenohSubscriber(
+                self._zenoh_session,
+                f"lsy_drone_racing/client/{rank}/pong",
+                on_client_pong,
+            )
+            self._client_pong_subs[rank] = sub
         
         logger.info("Zenoh communication initialized")
         return self._zenoh_session
@@ -547,7 +568,7 @@ class CrazyFlieRealRaceHost(RealRaceHost):
     _drone_control_freq: list[float]
     _all_clients_ready_event: "mp.synchronize.Event | None"
     _mp_ctx: mp.context.BaseContext
-
+    _client_clock_offsets : dict[int, float]
     
 
     def __init__(self, config: ConfigDict):
@@ -556,6 +577,7 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         self._mp_ctx = mp.get_context("spawn")
         self._all_clients_ready_event = self._mp_ctx.Event()
         self._drone_connections = None  # Initialize early so close() can access it
+        self._client_clock_offsets = {}  # Store clock offsets for each client
         
         logger.info("Host: In IDLE state - checking track...")
         # TODO: Testing the pipeline without checking the track
@@ -814,10 +836,15 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         logger.info("Phase 3: Closing Zenoh communication...")
         if self._host_ready_pub:
             self._host_ready_pub.close()
+        if self._host_ping_pub:
+            self._host_ping_pub.close()
         if self._race_start_pub:
             self._race_start_pub.close()
         if self._client_state_subs:
             for sub in self._client_state_subs.values():
+                sub.close()
+        if self._client_pong_subs:
+            for sub in self._client_pong_subs.values():
                 sub.close()
         if self._zenoh_session:
             self._zenoh_session.close()
@@ -825,6 +852,33 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         logger.info("Host shutdown complete")
     
     
+    
+    
+    def _calibrate_client_clocks(self):
+        """Calibrate clock offsets with all clients via ping-pong.
+        
+        This should be called after all clients are ready but before the race starts.
+        """
+        logger.info("Host: Calibrating client clocks via ping-pong...")
+        self._client_clock_offsets = {}
+        
+        # Send pings to all clients
+        for rank in range(self._num_drones):
+            msg = HostPingMessage(drone_rank=rank, host_timestamp=time.perf_counter())
+            self._host_ping_pub.publish(msg)
+        
+        # Wait for all pongs with timeout
+        timeout = 10.0  # seconds
+        poll_interval = 0.01  # 10ms
+        start_time = time.perf_counter()
+        
+        while time.perf_counter() - start_time < timeout:
+            if len(self._client_clock_offsets) == self._num_drones:
+                logger.info(f"Host: All {self._num_drones} clients calibrated")
+                return
+            time.sleep(poll_interval)
+        
+        logger.warning(f"Host: Only {len(self._client_clock_offsets)} / {self._num_drones} clients calibrated within timeout")
     
     def host_main_loop(self, race_update_freq : float = 50.0):
         """Main loop of the host."""
@@ -853,6 +907,9 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         
         if not all(self._clients_ready.values()):
             raise TimeoutError("Host: Timeout waiting for all clients to become ready")
+        
+        # Calibrate client clocks
+        self._calibrate_client_clocks()
         
         # Signal drone processes that all clients are ready
         logger.info("Host: Signaling drone processes that all clients are ready")
