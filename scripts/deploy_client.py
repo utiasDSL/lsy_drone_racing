@@ -84,14 +84,14 @@ def main(
             
             # Wait for race to start
             logger.info(f"Client {drone_rank}: Waiting for race to start...")
-            env.unwrapped.lock_until_race_start(timeout=60.0)
+            env.unwrapped.lock_until_race_start(timeout=120.0)
             
             logger.info(f"Client {drone_rank}: Starting control loop at {config_obj.env.kwargs[drone_rank]['freq']} Hz")
-            start_time = time.perf_counter()
+            start_time = time.time()
             
             # Main control loop
             while rclpy.ok():
-                t_loop = time.perf_counter()
+                t_loop = time.time()
                 
                 # Compute control
                 action = controller.compute_control(obs, info)
@@ -110,14 +110,14 @@ def main(
                     break
                 
                 # Maintain control frequency
-                dt = time.perf_counter() - t_loop
+                dt = time.time() - t_loop
                 sleep_time = 1.0 / config_obj.env.kwargs[drone_rank]['freq'] - dt
                 if sleep_time > 0:
                     time.sleep(sleep_time)
                 else:
                     logger.warning(f"Client {drone_rank}: Control loop exceeded frequency (overrun: {-sleep_time*1000:.1f}ms)")
             
-            ep_time = time.perf_counter() - start_time
+            ep_time = time.time() - start_time
             finished = obs["target_gate"][drone_rank] == -1
             logger.info(
                 f"Client {drone_rank}: Episode completed in {ep_time:.3f}s "

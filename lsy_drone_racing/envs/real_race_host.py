@@ -190,8 +190,8 @@ class CrazyflieWorker:
         try:
             power_switch = PowerSwitch(uri)
             power_switch.stm_power_cycle()
-            wait_deadline = time.perf_counter() + 5.0
-            while time.perf_counter() < wait_deadline:
+            wait_deadline = time.time() + 5.0
+            while time.time() < wait_deadline:
                 if self.stop_event.is_set():
                     raise InterruptedError("Stop requested during power-cycle wait")
                 time.sleep(0.05)
@@ -224,8 +224,8 @@ class CrazyflieWorker:
 
         timeout = 5.0
         poll_interval = 0.05
-        start_time = time.perf_counter()
-        while time.perf_counter() - start_time < timeout:
+        start_time = time.time()
+        while time.time() - start_time < timeout:
             if self.stop_event.is_set():
                 raise InterruptedError("Stop requested while connecting to drone")
             if connection_failed_event.is_set():
@@ -269,7 +269,7 @@ class CrazyflieWorker:
         dt = 1.0 / self.control_freq
         
         while not self.stop_event.is_set():
-            start_time = time.perf_counter()
+            start_time = time.time()
             
             with self.action_lock:
                 action = self.last_action
@@ -279,7 +279,7 @@ class CrazyflieWorker:
                 self._send_action(action_array)
             
             # Maintain control frequency
-            elapsed = time.perf_counter() - start_time
+            elapsed = time.time() - start_time
             if elapsed > dt:
                 self.logger.warning(f"Control loop overrun: {elapsed:.3f}s, expected to be under {dt:.3f}s")
             sleep_time = max(0, dt - elapsed)
@@ -467,7 +467,7 @@ class RealRaceHost:
         self._shutdown_event = threading.Event()
         self._clients_ready: dict[int, bool] = {}
         self._clients_stopped: dict[int, bool] = {}
-        self._start_time = time.perf_counter()
+        self._start_time = time.time()
 
         self._host_ready_pub = None
         self._race_start_pub = None
@@ -514,11 +514,11 @@ class RealRaceHost:
             def on_client_pong(payload: str, rank=rank):
                 msg = deserialize_message(payload, ClientPongMessage)
                 # Calculate round-trip time
-                rtt = time.perf_counter() - msg.host_timestamp
+                rtt = time.time() - msg.host_timestamp
                 # Clock offset = (RTT / 2) + (client_timestamp - host_timestamp)
                 # This accounts for the network delay and clock difference
                 half_rtt = rtt / 2.0
-                clock_offset = (msg.client_timestamp - msg.host_timestamp) - half_rtt
+                clock_offset = (float(msg.client_timestamp) - float(msg.host_timestamp)) - half_rtt
                 self._client_clock_offsets[rank] = clock_offset
                 logger.info(f"Client {rank} clock offset calibrated: {clock_offset*1000:.2f}ms (RTT: {rtt*1000:.2f}ms)")
             
@@ -731,9 +731,9 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         logger.info("Waiting for all Crazyflie processes to be ready...")
         timeout = 30  # seconds
         poll_interval = 0.5  # check every 500ms
-        start_time = time.perf_counter()
+        start_time = time.time()
         
-        while time.perf_counter() - start_time < timeout:
+        while time.time() - start_time < timeout:
             # Check if any worker has failed
             if failure_event.is_set():
                 logger.error("Worker failure detected! Signaling all workers to stop...")
@@ -864,15 +864,15 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         
         # Send pings to all clients
         for rank in range(self._num_drones):
-            msg = HostPingMessage(drone_rank=rank, host_timestamp=time.perf_counter())
+            msg = HostPingMessage(drone_rank=rank, host_timestamp=time.time())
             self._host_ping_pub.publish(msg)
         
         # Wait for all pongs with timeout
         timeout = 10.0  # seconds
         poll_interval = 0.01  # 10ms
-        start_time = time.perf_counter()
+        start_time = time.time()
         
-        while time.perf_counter() - start_time < timeout:
+        while time.time() - start_time < timeout:
             if len(self._client_clock_offsets) == self._num_drones:
                 logger.info(f"Host: All {self._num_drones} clients calibrated")
                 return
@@ -890,12 +890,12 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         # INITIALIZED state: Wait for clients to be ready
         logger.info("Host: In INITIALIZED state - waiting for clients...")
         host_ready_freq = 10  # Hz
-        timeout = 30  # seconds
-        t_start = time.perf_counter()
+        timeout = 300  # seconds
+        t_start = time.time()
         
-        while time.perf_counter() - t_start < timeout:
+        while time.time() - t_start < timeout:
             # Send host ready messages
-            msg = HostReadyMessage(elapsed_time=0.0, timestamp=time.perf_counter())
+            msg = HostReadyMessage(elapsed_time=0.0, timestamp=time.time())
             self._host_ready_pub.publish(msg)
             
             # Check if all clients are ready
@@ -918,16 +918,16 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         # OPERATION state: Race started
         logger.info("Host: In OPERATION state - race started")
         self.state = RealRaceHostState.OPERATION
-        self._start_time = time.perf_counter()
+        self._start_time = time.time()
         
         while self.state == RealRaceHostState.OPERATION:
-            elapsed_time = time.perf_counter() - self._start_time
+            elapsed_time = time.time() - self._start_time
             
             # Send periodic race start messages
             finished = all(self._clients_stopped.values())
             msg = RaceStartMessage(
                 elapsed_time=elapsed_time,
-                timestamp=time.perf_counter(),
+                timestamp=time.time(),
                 finished=finished,
             )
             self._race_start_pub.publish(msg)

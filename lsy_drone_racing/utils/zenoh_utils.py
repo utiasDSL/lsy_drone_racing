@@ -142,7 +142,7 @@ def compute_latency_ms(timestamp: float, clock_offset: float = 0.0) -> float:
     Returns:
         Latency in milliseconds.
     """
-    return (time.perf_counter() - timestamp - clock_offset) * 1000
+    return (time.time() - timestamp - clock_offset) * 1000
 
 
 class ZenohPublisher:

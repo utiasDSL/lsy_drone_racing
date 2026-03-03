@@ -254,7 +254,7 @@ class RealMultiDroneRaceEnvClient(Env):
                     pong_msg = ClientPongMessage(
                         drone_rank=self.rank,
                         host_timestamp=msg.host_timestamp,
-                        client_timestamp=time.perf_counter(),
+                        client_timestamp=time.time(),
                     )
                     self._client_pong_pub.publish(pong_msg)
                     logger.debug(f"Client {self.rank}: Sent pong for clock calibration")
@@ -271,7 +271,7 @@ class RealMultiDroneRaceEnvClient(Env):
             try:
                 msg = deserialize_message(payload, RaceStartMessage)
                 self._race_started = True
-                self._race_start_time = time.perf_counter() - msg.elapsed_time
+                self._race_start_time = time.time() - msg.elapsed_time
                 self._last_host_elapsed_time = msg.elapsed_time
                 self._last_race_start_timestamp = msg.timestamp  # Store for echo
                 latency_ms = compute_latency_ms(msg.timestamp)
@@ -377,9 +377,9 @@ class RealMultiDroneRaceEnvClient(Env):
     def lock_until_race_start(self, timeout: float = 60.0):
         """Block until the race starts, with a timeout."""
         logger.info(f"Client {self.rank}: Waiting for race to start...")
-        start_time = time.perf_counter()
+        start_time = time.time()
         while not self._race_started:
-            if time.perf_counter() - start_time > timeout:
+            if time.time() - start_time > timeout:
                 raise TimeoutError(f"Client {self.rank}: Timeout waiting for race to start after {timeout}s.")
             
         logger.info(f"Client {self.rank}: Race started, proceeding with control loop")
@@ -442,13 +442,13 @@ class RealMultiDroneRaceEnvClient(Env):
             action: Current control action.
             stopped: Whether this client has stopped.
         """
-        elapsed_time = time.perf_counter() - self._race_start_time if self._race_started else 0.0
+        elapsed_time = time.time() - self._race_start_time if self._race_started else 0.0
         
         state_msg = ClientStateMessage(
             drone_rank=self.rank,
             action=action.tolist() if isinstance(action, np.ndarray) else list(action),
             elapsed_time=elapsed_time,
-            timestamp=time.perf_counter(),
+            timestamp=time.time(),
             stopped=stopped or self._should_stop,
             next_gate_idx=int(self.data.target_gate[self.rank]),
         )
