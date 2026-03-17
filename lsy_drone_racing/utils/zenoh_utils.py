@@ -75,8 +75,44 @@ class ClientStateMessage:
 
 
 @dataclass
+class HostInitializedMessage:
+    """Initialization message sent by host to signal clients can start calibration.
+    
+    Attributes:
+        drone_rank: Rank of the drone.
+        timestamp: Timestamp when the message was sent.
+    """
+    drone_rank: int
+    timestamp: float
+
+
+@dataclass
+class ClientPingMessage:
+    """Ping message from client to host for clock offset calibration.
+    
+    Attributes:
+        drone_rank: Rank of the drone.
+        client_timestamp: Timestamp when client sent this ping (in client's clock).
+    """
+    drone_rank: int
+    client_timestamp: float
+
+
+@dataclass
+class HostPongMessage:
+    """Pong message from host to client in response to ping.
+    
+    Attributes:
+        drone_rank: Rank of the drone.
+        host_timestamp: Timestamp when host sent this pong (in host's clock).
+    """
+    drone_rank: int
+    host_timestamp: float
+
+
+@dataclass
 class HostPingMessage:
-    """Ping message from host to client for latency calibration.
+    """[DEPRECATED] Ping message from host to client for latency calibration.
     
     Attributes:
         drone_rank: Rank of the drone.
@@ -88,7 +124,7 @@ class HostPingMessage:
 
 @dataclass
 class ClientPongMessage:
-    """Pong message from client back to host for latency calibration.
+    """[DEPRECATED] Pong message from client back to host for latency calibration.
     
     Attributes:
         drone_rank: Rank of the drone.
@@ -158,7 +194,7 @@ class ZenohPublisher:
         self.session = session
         self.key = key
         self.publisher = session.declare_publisher(key)
-        logger.info(f"Declared publisher on '{key}'")
+        logger.debug(f"Declared publisher on '{key}'")
     
     def publish(self, message: Any):
         """Publish a message.
@@ -202,7 +238,7 @@ class ZenohSubscriber:
                 logger.error(f"Error in subscriber callback: {e}")
         
         self.subscriber = session.declare_subscriber(key, listener)
-        logger.info(f"Declared subscriber on '{key}'")
+        logger.debug(f"Declared subscriber on '{key}'")
     
     def close(self):
         """Close the subscriber."""

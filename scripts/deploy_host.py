@@ -41,16 +41,17 @@ def main(config: str = "multi_level2.toml"):
     # Initialize ROS2
     rclpy.init()
     
-    host = None
+    config_obj = load_config(Path(__file__).parents[1] / "config" / config)
+    deploy = config_obj.deploy
+    host = CrazyFlieRealRaceHost(config_obj)
     try:
-        # Load configuration
-        config_obj = load_config(Path(__file__).parents[1] / "config" / config)
-        # Create host
-        host = CrazyFlieRealRaceHost(config_obj)
-        # Connect to drones
-        logger.info("Host created, connecting to drones...")
+        host.update_poses(track_obj = deploy.real_track_objects, 
+                          drones = deploy.check_drone_start_pos
+                          )
+        host.check_track(rng_config=config_obj.env.randomizations,
+                         check_objects = deploy.real_track_objects and deploy.check_race_track,
+                         check_drones = deploy.check_drone_start_pos)
         host.connect_drones()
-        # Start main loop
         logger.info("Drones connected, starting main loop...")
         host.host_main_loop()
     except KeyboardInterrupt:

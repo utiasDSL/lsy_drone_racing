@@ -27,12 +27,12 @@ import concurrent.futures
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
 from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track
-from lsy_drone_racing.utils.takeoff_barrier import TakeOffBarrier
 from lsy_drone_racing.utils.zenoh_utils import (
     ClientStateMessage,
     HostReadyMessage,
-    HostPingMessage,
-    ClientPongMessage,
+    HostInitializedMessage,
+    ClientPingMessage,
+    HostPongMessage,
     RaceStartMessage,
     ZenohPublisher,
     ZenohSubscriber,
@@ -125,9 +125,6 @@ class RealMultiDroneRaceEnvClient(Env):
         self.pos_limit_low = np.array(track.safety_limits["pos_limit_low"])
         self.pos_limit_high = np.array(track.safety_limits["pos_limit_high"])
         
-        # Store config
-        self.randomizations = randomizations
-        
         # Initialize JAX
         self.device = jax.devices("cpu")[0]
         
@@ -162,8 +159,6 @@ class RealMultiDroneRaceEnvClient(Env):
     
     def _init_ros_connectors(self):
         """Initialize ROS connectors in parallel for speed."""
-        
-        
         def init_own_connector():
             """Initialize high-precision estimator connector for own drone."""
             return ROSConnector(
@@ -182,16 +177,13 @@ class RealMultiDroneRaceEnvClient(Env):
                 timeout=10.0,
             )
         
-        logger.info(f"Client {self.rank}: Initializing ROS connectors in parallel...")
-        try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                future_own = executor.submit(init_own_connector)
-                future_others = executor.submit(init_others_connector)
-                self._ros_connector_own = future_own.result()
-                self._ros_connector_others = future_others.result()
-        except Exception as e:
-            logger.error(f"Client {self.rank}: Failed to initialize ROS connectors: {e}")
-            raise
+        logger.info(f"Client {self.rank}: Initializing ROS connectors for drones in parallel...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_own = executor.submit(init_own_connector)
+            future_others = executor.submit(init_others_connector)
+            self._ros_connector_own = future_own.result()
+            self._ros_connector_others = future_others.result()
+        
         
         logger.info(f"Client {self.rank}: ROS connectors initialized")
     
@@ -246,25 +238,46 @@ class RealMultiDroneRaceEnvClient(Env):
             on_host_ready,
         )
         
-        def on_host_ping(payload: str):
-            """Handle ping from host by immediately sending pong."""
+        def on_host_initialized(payload: str):
+            """Handle initialized message from host - trigger clock calibration."""
             try:
-                msg = deserialize_message(payload, HostPingMessage)
+                msg = deserialize_message(payload, HostInitializedMessage)
                 if msg.drone_rank == self.rank:
-                    pong_msg = ClientPongMessage(
+                    # Send ping immediately with client timestamp
+                    ping_msg = ClientPingMessage(
                         drone_rank=self.rank,
-                        host_timestamp=msg.host_timestamp,
                         client_timestamp=time.time(),
                     )
-                    self._client_pong_pub.publish(pong_msg)
-                    logger.debug(f"Client {self.rank}: Sent pong for clock calibration")
+                    self._client_ping_pub.publish(ping_msg)
+                    logger.debug(f"Client {self.rank}: Sent ping for clock calibration")
             except Exception as e:
-                logger.error(f"Error processing host ping message: {e}")
+                logger.error(f"Error processing host initialized message: {e}")
         
-        self._host_ping_sub = ZenohSubscriber(
+        self._host_initialized_sub = ZenohSubscriber(
             self._zenoh_session,
-            "lsy_drone_racing/host/ping",
-            on_host_ping,
+            "lsy_drone_racing/host/initialized",
+            on_host_initialized,
+        )
+        
+        def on_host_pong(payload: str):
+            """Handle pong from host - calculate and store clock offset."""
+            try:
+                msg = deserialize_message(payload, HostPongMessage)
+                if msg.drone_rank == self.rank:
+                    # Calculate clock offset for this client
+                    # offset = (host_time - client_time) - RTT/2
+                    # Since we're measuring RTT now, we approximate:
+                    # offset = host_time - client_time (measured at approximately same moment)
+                    # The RTT is typically small (~1-10ms for local/nearby machines)
+                    self._clock_offset = float(msg.host_timestamp) - time.time()
+                    logger.info(f"Client {self.rank}: Clock offset calibrated: {self._clock_offset*1000:.2f}ms")
+            except Exception as e:
+                logger.error(f"Error processing host pong message: {e}")
+        
+        self._host_pong_sub = ZenohSubscriber(
+            self._zenoh_session,
+            "lsy_drone_racing/host/pong",
+            on_host_pong,
         )
         
         def on_race_start(payload: str):
@@ -275,7 +288,6 @@ class RealMultiDroneRaceEnvClient(Env):
                 self._last_host_elapsed_time = msg.elapsed_time
                 self._last_race_start_timestamp = msg.timestamp  # Store for echo
                 latency_ms = compute_latency_ms(msg.timestamp)
-                logger.info(f"Client {self.rank}: Received race start (elapsed: {msg.elapsed_time:.3f}s, latency: {latency_ms:.2f}ms)")
             except Exception as e:
                 logger.error(f"Error processing race start message: {e}")
         
@@ -291,9 +303,9 @@ class RealMultiDroneRaceEnvClient(Env):
             f"lsy_drone_racing/client/{self.rank}/state",
         )
         
-        self._client_pong_pub = ZenohPublisher(
+        self._client_ping_pub = ZenohPublisher(
             self._zenoh_session,
-            f"lsy_drone_racing/client/{self.rank}/pong",
+            f"lsy_drone_racing/client/{self.rank}/ping",
         )
         
         logger.info(f"Client {self.rank}: Zenoh communication initialized")
@@ -332,9 +344,7 @@ class RealMultiDroneRaceEnvClient(Env):
             Initial observation and info.
         """
         options = {} if options is None else options
-        
-        logger.info(f"Client {self.rank}: Resetting environment...")
-        
+                
         # Initialize ROS connectors if not already done
         if self._ros_connector_own is None:
             self._init_ros_connectors()
@@ -356,7 +366,13 @@ class RealMultiDroneRaceEnvClient(Env):
         def send_state_messages():
             """Background thread to send state messages every 0.1s until race starts."""
             while not stop_sending.is_set():
-                self._send_state_update(np.zeros(4), stopped=False)
+                if self.control_mode == "attitude":
+                    dummy_action = np.zeros(4, dtype=np.float32) 
+                else:
+                    dummy_action = np.zeros(13, dtype=np.float32)
+                    dummy_action[:3] = current_positions[self.rank]  # Send current position as dummy action
+                    dummy_action[2] = 0.3
+                self._send_state_update(dummy_action, stopped=False)
                 time.sleep(0.1)
         
         sender_thread = threading.Thread(target=send_state_messages, daemon=True)
@@ -395,7 +411,7 @@ class RealMultiDroneRaceEnvClient(Env):
         """    
         
         # Get drone states
-        drone_pos, drone_quat, drone_vel, drone_ang_vel = self._get_all_drone_states()
+        drone_pos, _, _, _ = self._get_all_drone_states()
         
         # Check sensor visibility
         dpos = drone_pos[:, None, :2] - self.gates.pos[None, :, :2]
@@ -421,7 +437,6 @@ class RealMultiDroneRaceEnvClient(Env):
         # Check safety bounds
         if np.any((self.pos_limit_low > drone_pos[self.rank, :]) | (drone_pos[self.rank, :] > self.pos_limit_high)):
             logger.warning(f"Client {self.rank}: Drone exceeded safety bounds")
-            logger.warning(f"Client {self.rank}: Drone exceeded safety bounds")
             terminated = True
 
         # Send action to drone (via Zenoh to host) and to ROS for external estimator
@@ -444,11 +459,14 @@ class RealMultiDroneRaceEnvClient(Env):
         """
         elapsed_time = time.time() - self._race_start_time if self._race_started else 0.0
         
+        # Adjust timestamp to match host's clock using calibrated offset
+        adjusted_timestamp = time.time() + self._clock_offset
+        
         state_msg = ClientStateMessage(
             drone_rank=self.rank,
             action=action.tolist() if isinstance(action, np.ndarray) else list(action),
             elapsed_time=elapsed_time,
-            timestamp=time.time(),
+            timestamp=adjusted_timestamp,
             stopped=stopped or self._should_stop,
             next_gate_idx=int(self.data.target_gate[self.rank]),
         )
@@ -495,7 +513,7 @@ class RealMultiDroneRaceEnvClient(Env):
     
     def info(self) -> dict:
         """Get info dictionary."""
-        return {}
+        return {'rank': self.rank}
     
     def close(self):
         """Close the environment."""
@@ -503,16 +521,22 @@ class RealMultiDroneRaceEnvClient(Env):
         
         # Send final stop message
         if self._client_state_pub:
-            self._send_state_update(np.zeros(4), stopped=True)
-            time.sleep(0.1)  # Give message time to send
+            if self.control_mode == "attitude":
+                self._send_state_update(np.zeros(4), stopped=True)
         
-        # Close Zenoh
+        # Close Zenoh subscribers and publishers
         if self._host_ready_sub:
             self._host_ready_sub.close()
+        if self._host_initialized_sub:
+            self._host_initialized_sub.close()
+        if self._host_pong_sub:
+            self._host_pong_sub.close()
         if self._race_start_sub:
             self._race_start_sub.close()
         if self._client_state_pub:
             self._client_state_pub.close()
+        if self._client_ping_pub:
+            self._client_ping_pub.close()
         if self._zenoh_session:
             self._zenoh_session.close()
         

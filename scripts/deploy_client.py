@@ -58,7 +58,6 @@ def main(
         config_obj = load_config(Path(__file__).parents[1] / "config" / config)
         if controller is not None:
             config_obj.controller[drone_rank]['file'] = controller
-        
         # Create environment
         env: RealMultiDroneRaceEnvClient = gymnasium.make(
             "RealMultiDroneRaceEnvClient-v0",
@@ -81,7 +80,6 @@ def main(
             controller_cls = load_controller(controller_path)
             config_extracted = extract_config_for_rank(config_obj, drone_rank)
             controller = controller_cls(obs, info, config_extracted)
-            
             # Wait for race to start
             logger.info(f"Client {drone_rank}: Waiting for race to start...")
             env.unwrapped.lock_until_race_start(timeout=120.0)
