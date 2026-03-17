@@ -178,6 +178,7 @@ class AttitudeMPC(Controller):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
+        self.rank = info.get('rank', 0)
         self._N = 25
         self._dt = 1 / config.env.freq
         self._T_HORIZON = self._N * self._dt
@@ -242,9 +243,9 @@ class AttitudeMPC(Controller):
             self._finished = True
 
         # Setting initial state
-        obs["rpy"] = R.from_quat(obs["quat"]).as_euler("xyz")
-        obs["drpy"] = ang_vel2rpy_rates(obs["quat"], obs["ang_vel"])
-        x0 = np.concatenate((obs["pos"], obs["rpy"], obs["vel"], obs["drpy"]))
+        rpy = R.from_quat(obs["quat"][self.rank]).as_euler("xyz")
+        drpy = ang_vel2rpy_rates(obs["quat"][self.rank], obs["ang_vel"][self.rank])
+        x0 = np.concatenate((obs["pos"][self.rank], rpy, obs["vel"][self.rank], drpy))
         self._acados_ocp_solver.set(0, "lbx", x0)
         self._acados_ocp_solver.set(0, "ubx", x0)
 

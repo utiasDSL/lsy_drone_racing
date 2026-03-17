@@ -38,6 +38,7 @@ class AttitudeRL(Controller):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
+        self.rank = info.get('rank', 0)
         self.freq = config.env.freq
 
         drone_params = load_params(config.sim.physics, config.sim.drone_model)
@@ -82,7 +83,7 @@ class AttitudeRL(Controller):
         self.agent.load_state_dict(torch.load(model_path, map_location=torch.device("cpu")))
         self.last_action = np.array([0.0, 0.0, 0.0, self.drone_mass * 9.81], dtype=np.float32)
         self.basic_obs_key = ["pos", "quat", "vel", "ang_vel"]
-        basic_obs = np.concatenate([obs[k] for k in self.basic_obs_key], axis=-1)
+        basic_obs = np.concatenate([obs[k][self.rank] for k in self.basic_obs_key], axis=-1)
         self.prev_obs = np.tile(basic_obs[None, :], (self.n_obs, 1))
 
         self._finished = False
@@ -118,9 +119,9 @@ class AttitudeRL(Controller):
     def _obs_rl(self, obs: dict[str, NDArray[np.floating]]) -> NDArray[np.floating]:
         """Extract the relevant parts of the observation for the RL policy."""
         obs_rl = {}
-        obs_rl["basic_obs"] = np.concatenate([obs[k] for k in self.basic_obs_key], axis=-1)
+        obs_rl["basic_obs"] = np.concatenate([obs[k][self.rank] for k in self.basic_obs_key], axis=-1)
         idx = np.clip(self._tick + self.sample_offsets, 0, self.trajectory.shape[0] - 1)
-        dpos = self.trajectory[idx] - obs["pos"]  # (n_samples, 3)
+        dpos = self.trajectory[idx] - obs["pos"][self.rank]  # (n_samples, 3)
         obs_rl["local_samples"] = dpos.reshape(-1)  # (n_samples*3,)
         obs_rl["prev_obs"] = self.prev_obs.reshape(-1)  # (n_obs*13,)
         obs_rl["last_action"] = self.last_action  # (4,)
