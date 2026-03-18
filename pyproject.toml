@@ -117,10 +117,32 @@ docstring-code-line-length = "dynamic"
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
+[tool.pixi.dependencies]
+openblas = ">=0.3.30,<0.4"
+ruff = "*"
+python = ">=3.11.12,<3.14"
+pip = ">=25.0.1,<26"
+cmake = "*"
+compilers = ">=1.9.0, <1.11.0"
+make = "*"
+
 [tool.pixi.pypi-dependencies]
 lsy_drone_racing = { path = ".", editable = true }
 
-# feature[kilted]
+### environments
+[tool.pixi.environments]
+default = { features = ["sim"], solve-group = "default" }
+deploy = { features = ["sim", "gpu", "kilted", "deploy"] }
+gpu = { features = ["sim", "gpu"], solve-group = "default" }
+online-submission = { features = [
+    "sim",
+    "online-submission",
+], solve-group = "default" }
+tests = { features = ["sim", "rl", "tests"], solve-group = "default" }
+gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
+gamepad = { features = ["sim", "gamepad"], solve-group = "default" }
+
+## feature [kilted]
 [tool.pixi.feature.kilted]
 channels = ["https://prefix.dev/robostack-kilted"]
 
@@ -143,9 +165,7 @@ scripts = ["tools/setup_mocap.sh"]
 [tool.pixi.activation]
 scripts = ["tools/setup_acados.sh"]
 
-# feature[online-submission]
-# [tool.pixi.feature.online-submission]
-
+## feature [online-submission]
 [tool.pixi.feature.online-submission.tasks]
 create-submission = { cmd = "python scripts/kaggle.py", description = "Create online submission" }
 export-submission = { cmd = "kaggle competitions submit -c lsy-drone-racing-ws-25 -f submission.csv -m 'Automated submission'", description = "Submit online submission" }
@@ -154,30 +174,13 @@ export-submission = { cmd = "kaggle competitions submit -c lsy-drone-racing-ws-2
 pandas = "*"
 kaggle = "*"
 
-# feature[tests]
+## feature [tests]
 [tool.pixi.feature.tests.tasks]
 tests = { cmd = "pytest -v tests", description = "Run tests" }
 
 [tool.pixi.feature.tests.dependencies]
 pytest = "*"
 
-# environments
-[tool.pixi.environments]
-default = { features = ["sim"], solve-group = "default" }
-deploy = { features = ["sim", "gpu", "kilted", "deploy"] }
-gpu = { features = ["sim", "gpu"], solve-group = "default" }
-online-submission = { features = [
-    "sim",
-    "online-submission",
-], solve-group = "default" }
-tests = { features = ["sim", "rl", "tests"], solve-group = "default" }
-gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
-
-[tool.pixi.dependencies]
-openblas = ">=0.3.30,<0.4"
-ruff = "*"
-python = ">=3.11.12,<3.14"
-pip = ">=25.0.1,<26"
-cmake = "*"
-compilers = ">=1.9.0, <1.11.0"
-make = "*"
+## feature [gamepad]
+[tool.pixi.feature.gamepad.dependencies]
+pygame = "*"
