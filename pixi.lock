@@ -92,7 +92,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git#d630bc0da89fa65404e855f51517576b28afe45c
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=0.1.0b0#d630bc0da89fa65404e855f51517576b28afe45c
       - pypi: https://files.pythonhosted.org/packages/c3/be/d0d44e092656fe7a06b55e6103cbce807cdbdee17884a5367c68c9860853/dataclasses_json-0.6.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/ce/5c72cdb8b4994c1a8182ce5261269b131959dab552b52d27de2ad62296f0/drone_controllers-0.1.0b0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/2b/17c4f7e77249ff861bb1b7fcd7b2d267fc855a6c5d5b979a26abbde85262/drone_models-0.1.0b0-py3-none-any.whl
@@ -899,7 +899,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/86/ec/b956a6dd13c6d7819af3ab442759f8d9a49245429add601cd1b14dc0cbc0/cflib-0.1.31-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git#d630bc0da89fa65404e855f51517576b28afe45c
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=0.1.0b0#d630bc0da89fa65404e855f51517576b28afe45c
       - pypi: https://files.pythonhosted.org/packages/c3/be/d0d44e092656fe7a06b55e6103cbce807cdbdee17884a5367c68c9860853/dataclasses_json-0.6.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/ce/5c72cdb8b4994c1a8182ce5261269b131959dab552b52d27de2ad62296f0/drone_controllers-0.1.0b0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e8/60/d660a283ed138cdd5037abf461889ec117b9195d24322c958af187bb7163/drone_estimators-0.1.0b0-py3-none-any.whl
@@ -1064,7 +1064,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git#d630bc0da89fa65404e855f51517576b28afe45c
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=0.1.0b0#d630bc0da89fa65404e855f51517576b28afe45c
       - pypi: https://files.pythonhosted.org/packages/c3/be/d0d44e092656fe7a06b55e6103cbce807cdbdee17884a5367c68c9860853/dataclasses_json-0.6.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/ce/5c72cdb8b4994c1a8182ce5261269b131959dab552b52d27de2ad62296f0/drone_controllers-0.1.0b0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/2b/17c4f7e77249ff861bb1b7fcd7b2d267fc855a6c5d5b979a26abbde85262/drone_models-0.1.0b0-py3-none-any.whl
@@ -1204,7 +1204,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git#d630bc0da89fa65404e855f51517576b28afe45c
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=0.1.0b0#d630bc0da89fa65404e855f51517576b28afe45c
       - pypi: https://files.pythonhosted.org/packages/c3/be/d0d44e092656fe7a06b55e6103cbce807cdbdee17884a5367c68c9860853/dataclasses_json-0.6.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/ce/5c72cdb8b4994c1a8182ce5261269b131959dab552b52d27de2ad62296f0/drone_controllers-0.1.0b0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/2b/17c4f7e77249ff861bb1b7fcd7b2d267fc855a6c5d5b979a26abbde85262/drone_models-0.1.0b0-py3-none-any.whl
@@ -1364,7 +1364,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git#d630bc0da89fa65404e855f51517576b28afe45c
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=0.1.0b0#d630bc0da89fa65404e855f51517576b28afe45c
       - pypi: https://files.pythonhosted.org/packages/c3/be/d0d44e092656fe7a06b55e6103cbce807cdbdee17884a5367c68c9860853/dataclasses_json-0.6.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/ce/5c72cdb8b4994c1a8182ce5261269b131959dab552b52d27de2ad62296f0/drone_controllers-0.1.0b0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/2b/17c4f7e77249ff861bb1b7fcd7b2d267fc855a6c5d5b979a26abbde85262/drone_models-0.1.0b0-py3-none-any.whl
@@ -1552,7 +1552,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git#d630bc0da89fa65404e855f51517576b28afe45c
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=0.1.0b0#d630bc0da89fa65404e855f51517576b28afe45c
       - pypi: https://files.pythonhosted.org/packages/c3/be/d0d44e092656fe7a06b55e6103cbce807cdbdee17884a5367c68c9860853/dataclasses_json-0.6.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/ce/5c72cdb8b4994c1a8182ce5261269b131959dab552b52d27de2ad62296f0/drone_controllers-0.1.0b0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/2b/17c4f7e77249ff861bb1b7fcd7b2d267fc855a6c5d5b979a26abbde85262/drone_models-0.1.0b0-py3-none-any.whl
@@ -1712,7 +1712,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3f/5b/7120e22f6e22ca77283f4a086ab2e59d107f00bfc952116db41a015385fe/casadi-3.7.2-cp313-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl
-      - pypi: git+https://github.com/utiasDSL/crazyflow.git#d630bc0da89fa65404e855f51517576b28afe45c
+      - pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=0.1.0b0#d630bc0da89fa65404e855f51517576b28afe45c
       - pypi: https://files.pythonhosted.org/packages/c3/be/d0d44e092656fe7a06b55e6103cbce807cdbdee17884a5367c68c9860853/dataclasses_json-0.6.7-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/ce/5c72cdb8b4994c1a8182ce5261269b131959dab552b52d27de2ad62296f0/drone_controllers-0.1.0b0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/2b/17c4f7e77249ff861bb1b7fcd7b2d267fc855a6c5d5b979a26abbde85262/drone_models-0.1.0b0-py3-none-any.whl
@@ -2842,7 +2842,7 @@ packages:
   - pkg:pypi/cppcheck-htmlreport?source=hash-mapping
   size: 3065679
   timestamp: 1757440259649
-- pypi: git+https://github.com/utiasDSL/crazyflow.git#d630bc0da89fa65404e855f51517576b28afe45c
+- pypi: git+https://github.com/utiasDSL/crazyflow.git?rev=0.1.0b0#d630bc0da89fa65404e855f51517576b28afe45c
   name: crazyflow
   version: 0.1.0b0
   requires_dist:
@@ -6605,7 +6605,6 @@ packages:
   - wandb ; extra == 'rl'
   - pygame ; extra == 'gamepad'
   requires_python: '>=3.10'
-  editable: true
 - conda: https://conda.anaconda.org/conda-forge/linux-64/lttng-ust-2.13.9-hf5eda4c_0.conda
   sha256: 77ea6f9546bb8e4d6050b4ad8efb9bfb2177e9173a03b4d9eae6fd8ce1056431
   md5: bf1ee9cd230a64573a8b7745c6aaa593
