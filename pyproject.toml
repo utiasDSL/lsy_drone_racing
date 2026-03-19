@@ -45,6 +45,8 @@ deploy = [
 ]
 # option[rl]: train rl policy
 rl = ["torch == 2.8.0", "wandb"]
+# option[gamepad]: use a gamepad as input for your drone
+gamepad = ["pygame"]
 
 [tool.setuptools.packages]
 find = {}
@@ -118,16 +120,20 @@ channels = ["conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
-openblas = ">=0.3.30,<0.4"
-ruff = "*"
 python = ">=3.11.12,<3.14"
 pip = ">=25.0.1,<26"
+ruff = "*"
+# Compilers needed for acados
 cmake = "*"
 compilers = ">=1.9.0, <1.11.0"
 make = "*"
+openblas = ">=0.3.30,<0.4"
 
 [tool.pixi.pypi-dependencies]
 lsy_drone_racing = { path = ".", editable = true }
+
+[tool.pixi.activation]
+scripts = ["tools/setup_acados.sh"]
 
 ### environments
 [tool.pixi.environments]
@@ -162,11 +168,6 @@ ros-kilted-desktop = "*"
 [tool.pixi.feature.kilted.activation]
 scripts = ["tools/setup_mocap.sh"]
 
-[tool.pixi.activation]
-# Use system SSH to avoid OpenSSL version mismatch between pixi's libs and the system SSH binary
-env = { GIT_SSH_COMMAND = "/usr/bin/ssh" }
-scripts = ["tools/setup_acados.sh"]
-
 ## feature [online-submission]
 [tool.pixi.feature.online-submission.tasks]
 create-submission = { cmd = "python scripts/kaggle.py", description = "Create online submission" }
@@ -182,7 +183,3 @@ tests = { cmd = "pytest -v tests", description = "Run tests" }
 
 [tool.pixi.feature.tests.dependencies]
 pytest = "*"
-
-## feature [gamepad]
-[tool.pixi.feature.gamepad.dependencies]
-pygame = "*"
