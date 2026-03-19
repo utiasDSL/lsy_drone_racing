@@ -163,6 +163,8 @@ ros-kilted-desktop = "*"
 scripts = ["tools/setup_mocap.sh"]
 
 [tool.pixi.activation]
+# Use system SSH to avoid OpenSSL version mismatch between pixi's libs and the system SSH binary
+env = { GIT_SSH_COMMAND = "/usr/bin/ssh" }
 scripts = ["tools/setup_acados.sh"]
 
 ## feature [online-submission]
