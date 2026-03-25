@@ -283,6 +283,7 @@ class RaceCoreEnv:
             attitude_freq=sim_config.attitude_freq,
             rng_key=seed,
             device=device,
+            xml_path=Path(p) if (p := getattr(sim_config, "xml_path", None)) else None,
         )
         use_box_collision(self.sim, True)
 
