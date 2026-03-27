@@ -36,9 +36,8 @@ class StateController(Controller):
                 information such as disturbance configurations, randomizations, etc.
         """
         super().__init__(obs, info, config)
-        self.rank = info.get('rank', 0)
         self._freq = config.env.freq
-        
+
         # Same waypoints as in the attitude controller. Determined by trial and error.
         waypoints = np.array(
             [

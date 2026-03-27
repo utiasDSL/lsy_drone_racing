@@ -37,7 +37,6 @@ class AttitudeController(Controller):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
-        self.rank = info.get('rank', 0)
 
         self._freq = config.env.freq
         drone_params = load_params(config.sim.physics, config.sim.drone_model)
@@ -53,8 +52,7 @@ class AttitudeController(Controller):
         # Same waypoints as in the position controller. Determined by trial and error.
         waypoints = np.array(
             [
-                [-1.5, 1.5, 0.05],
-                [-1.5, 1.2, 0.4],
+                [-1.5, 0.5, 0.03],
                 [-1.0, 0.55, 0.4],
                 [0.3, 0.35, 0.7],
                 [1.3, -0.15, 0.9],
@@ -66,7 +64,6 @@ class AttitudeController(Controller):
                 [0.5, -0.75, 1.2],
             ]
         )
-
 
         self._t_total = 20  # s
         t = np.linspace(0, self._t_total, len(waypoints))
@@ -99,9 +96,8 @@ class AttitudeController(Controller):
         des_yaw = 0.0
 
         # Calculate the deviations from the desired trajectory
-        pos_error = des_pos - obs["pos"][self.rank]
-        vel_error = des_vel - obs["vel"][self.rank]
-
+        pos_error = des_pos - obs["pos"]
+        vel_error = des_vel - obs["vel"]
 
         # Update integral error
         self.i_error += pos_error * (1 / self._freq)
@@ -116,7 +112,7 @@ class AttitudeController(Controller):
 
         # Update z_axis to the current orientation of the drone
         # z_axis = R.from_quat(obs["quat"]).as_matrix()[:, 2]
-        z_axis = R.from_quat(obs["quat"][self.rank]).as_matrix()[:, 2]
+        z_axis = R.from_quat(obs["quat"]).as_matrix()[:, 2]
 
         # update current thrust
         thrust_desired = target_thrust.dot(z_axis)
@@ -132,7 +128,7 @@ class AttitudeController(Controller):
         euler_desired = R.from_matrix(R_desired).as_euler("xyz", degrees=False)
 
         action = np.concatenate([euler_desired, [thrust_desired]], dtype=np.float32)
-        
+
         # action = np.array([0.0,0.0,0.0,0.05], dtype=np.float32)
         return action
 
