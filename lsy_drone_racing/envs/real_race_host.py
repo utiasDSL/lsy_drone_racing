@@ -37,7 +37,7 @@ from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.envs.utils import load_track
 from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track
-from lsy_drone_racing.utils.ros2_race_comm import RaceCommNode
+from lsy_drone_racing.utils.ros_race_comm import RaceCommNode
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
