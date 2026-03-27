@@ -1,0 +1,14 @@
+.vscode/
+**.egg-info/
+**/__pycache__/
+logs
+secrets
+**/*.secret
+saves
+.pytest_cache
+**/*.json
+**/*.csv
+/build
+
+# Environments
+.pixi/*

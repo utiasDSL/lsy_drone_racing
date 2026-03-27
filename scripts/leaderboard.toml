@@ -1,0 +1,21 @@
+[group1]
+name = "Team Y"
+time = 3.5
+submissions = 1
+github = "todo"
+
+[group6]
+name = "Group6"
+time = 13.1
+submissions = 17
+
+[group2]
+name = "Limo"
+time = 5.022
+submissions = 17
+
+[group5]
+name = "rather"
+time = 5.12
+submissions = 2
+github = "ratheron"

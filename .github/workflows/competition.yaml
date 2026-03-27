@@ -1,0 +1,57 @@
+name: Evaluate and Update Leaderboard
+
+on:
+  repository_dispatch:
+    types: [evaluate_submission]
+
+permissions:
+  contents: write
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Competition Repo
+        uses: actions/checkout@v4
+        with:
+          ref: competition
+
+      - name: Checkout Student Code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.client_payload.repository }}
+          ref: ${{ github.event.client_payload.sha }}
+          path: student_code
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.9.3
+        with:
+          manifest-path: student_code/pixi.toml
+          pixi-version: v0.61.0
+          cache: true
+          cache-write: false
+          activate-environment: false
+          locked: true
+
+      - name: Check Whitelist by Username
+        run: |
+          # Pass the GitHub username to the script
+          pixi run --manifest-path student_code/pixi.toml python scripts/check_whitelist.py "${{ github.event.client_payload.actor }}"
+
+      - name: Run Student Evaluation
+        working-directory: student_code
+        run: pixi run evaluate
+
+      - name: Update Leaderboard TOML
+        run: |
+          pixi run --manifest-path student_code/pixi.toml python scripts/update_leaderboard.py "${{ github.event.client_payload.actor }}"
+
+      - name: Generate README
+        run: |
+          pixi run --manifest-path student_code/pixi.toml python scripts/update_readme.py
+
+      - name: Commit and Push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "🏆 Leaderboard update by ${{ github.event.client_payload.actor }}"
+          file_pattern: "scripts/leaderboard.toml README.md"
