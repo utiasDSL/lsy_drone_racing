@@ -48,7 +48,7 @@ jobs:
       - name: Check Whitelist by Username
         run: |
           # Pass the GitHub username to the script
-          pixi run --manifest-path student_code/pyproject.toml python scripts/check_whitelist.py "${{ github.event.client_payload.actor }}"
+          pixi run --manifest-path student_code/pyproject.toml python scripts/check_whitelist.py "${{ inputs.actor }}"
 
       - name: Run Student Evaluation
         working-directory: student_code
@@ -56,7 +56,7 @@ jobs:
 
       - name: Update Leaderboard TOML
         run: |
-          pixi run --manifest-path student_code/pyproject.toml python scripts/update_leaderboard.py "${{ github.event.client_payload.actor }}"
+          pixi run --manifest-path student_code/pyproject.toml python scripts/update_leaderboard.py "${{ inputs.actor }}"
 
       - name: Generate README
         run: |
