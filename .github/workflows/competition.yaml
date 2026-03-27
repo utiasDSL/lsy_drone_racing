@@ -1,8 +1,20 @@
 name: Evaluate and Update Leaderboard
 
 on:
-  repository_dispatch:
-    types: [evaluate_submission]
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'The student repository (e.g., org/repo)'
+        required: true
+        type: string
+      sha:
+        description: 'The commit SHA to checkout'
+        required: true
+        type: string
+      actor:
+        description: 'The GitHub username of the student'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -19,8 +31,8 @@ jobs:
       - name: Checkout Student Code
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.client_payload.repository }}
-          ref: ${{ github.event.client_payload.sha }}
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.sha }}
           path: student_code
 
       - name: Setup Pixi
@@ -53,5 +65,5 @@ jobs:
       - name: Commit and Push
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "🏆 Leaderboard update by ${{ github.event.client_payload.actor }}"
+          commit_message: "🏆 Leaderboard update by ${{ inputs.actor }}"
           file_pattern: "scripts/leaderboard.toml README.md"
