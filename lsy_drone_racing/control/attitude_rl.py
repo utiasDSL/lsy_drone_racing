@@ -38,7 +38,7 @@ class AttitudeRL(Controller):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
-        self.rank = info.get('rank', 0)
+        self.rank = info.get("rank", 0)
         self.freq = config.env.freq
 
         drone_params = load_params(config.sim.physics, config.sim.drone_model)
@@ -119,7 +119,9 @@ class AttitudeRL(Controller):
     def _obs_rl(self, obs: dict[str, NDArray[np.floating]]) -> NDArray[np.floating]:
         """Extract the relevant parts of the observation for the RL policy."""
         obs_rl = {}
-        obs_rl["basic_obs"] = np.concatenate([obs[k][self.rank] for k in self.basic_obs_key], axis=-1)
+        obs_rl["basic_obs"] = np.concatenate(
+            [obs[k][self.rank] for k in self.basic_obs_key], axis=-1
+        )
         idx = np.clip(self._tick + self.sample_offsets, 0, self.trajectory.shape[0] - 1)
         dpos = self.trajectory[idx] - obs["pos"][self.rank]  # (n_samples, 3)
         obs_rl["local_samples"] = dpos.reshape(-1)  # (n_samples*3,)
