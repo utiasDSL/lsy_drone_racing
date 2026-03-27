@@ -953,7 +953,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/d5/0c/f08f0d16b4f97ec2ea6d542b9a70472a344384382fa3543a12ec417cc063/trimesh-4.10.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ac/a4/dc6f335e54877f5d26ad4e4aac8f49b2d6e7719dee3e08f363d882c8aba4/vispy-0.15.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/ea/85/22c1e2ed47daec6dd40eaf0b11c6b86ad483636b8038453a87d1031f8a36/warp_lang-1.10.1-py3-none-manylinux_2_28_x86_64.whl
-      - pypi: git+https://github.com/eclipse-zenoh/zenoh-python.git?rev=1.7.2#2ac7c8e189c2343c78d19af0927390cd6afefef0
       - pypi: ./
   gpu:
     channels:
@@ -2850,10 +2849,6 @@ packages:
   - casadi>=3.7.0
   - array-api-compat
   - array-api-extra
-- pypi: git+https://github.com/eclipse-zenoh/zenoh-python.git?rev=1.7.2#2ac7c8e189c2343c78d19af0927390cd6afefef0
-  name: eclipse-zenoh
-  version: 1.7.2
-  requires_python: '>=3.8'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/eigen-3.4.0-h171cf75_1.conda
   sha256: fee3738c2431c13f4930778e9d7daca9328e7e2f2a38928cf6ca5a0daa86474a
   md5: ea2db216eae84bc83b0b2961f38f5c0d
@@ -6383,7 +6378,7 @@ packages:
 - pypi: ./
   name: lsy-drone-racing
   version: 0.0.1
-  sha256: 4b40dd0a8fef1b3c3df3207c0602e5f87ca7eb1acc5b17c92180bdbe02732df4
+  sha256: 55e1a1da48c8367abf28094d7e285b497309411349070b8216ee9e3eeda71311
   requires_dist:
   - fire>=0.6.0
   - numpy
@@ -6399,7 +6394,6 @@ packages:
   - jax[cuda12] ; extra == 'gpu'
   - cfclient ; extra == 'deploy'
   - drone-estimators ; extra == 'deploy'
-  - eclipse-zenoh @ git+https://github.com/eclipse-zenoh/zenoh-python.git@1.7.2 ; extra == 'deploy'
   - torch==2.8.0 ; extra == 'rl'
   - wandb ; extra == 'rl'
   requires_python: '>=3.10'

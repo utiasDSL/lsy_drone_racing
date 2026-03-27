@@ -42,7 +42,6 @@ gpu = ["jax[cuda12]"]
 deploy = [
     "cfclient",
     "drone-estimators",
-    "eclipse-zenoh @ git+https://github.com/eclipse-zenoh/zenoh-python.git@1.7.2"
 ]
 # option[rl]: train rl policy
 rl = ["torch == 2.8.0", "wandb"]
@@ -137,9 +136,15 @@ rosdep = "*"
 colcon-common-extensions = "*"
 # Kilted specific tools
 ros-kilted-desktop = "*"
+ros-kilted-rmw-zenoh-cpp = "*"
 
 [tool.pixi.feature.kilted.activation]
 scripts = ["tools/setup_mocap.sh"]
+env = { RMW_IMPLEMENTATION = "rmw_zenoh_cpp", ZENOH_ROUTER_CHECK_ATTEMPTS = "-1" }
+
+[tool.pixi.feature.kilted.tasks.zenoh-router]
+cmd = "ros2 run rmw_zenoh_cpp rmw_zenohd"
+description = "Run the Zenoh router on the host machine"
 
 [tool.pixi.activation]
 scripts = ["tools/setup_acados.sh"]
@@ -161,6 +166,7 @@ tests = { cmd = "pytest -v tests", description = "Run tests" }
 
 [tool.pixi.feature.tests.dependencies]
 pytest = "*"
+
 
 [tool.pixi.feature.deploy.tasks.mocap]
 cmd = "ros2 launch motion_capture_tracking launch.py"
