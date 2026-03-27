@@ -38,7 +38,7 @@ jobs:
       - name: Setup Pixi
         uses: prefix-dev/setup-pixi@v0.9.3
         with:
-          manifest-path: student_code/pixi.toml
+          manifest-path: student_code/pyproject.toml
           pixi-version: v0.61.0
           cache: true
           cache-write: false
@@ -48,7 +48,7 @@ jobs:
       - name: Check Whitelist by Username
         run: |
           # Pass the GitHub username to the script
-          pixi run --manifest-path student_code/pixi.toml python scripts/check_whitelist.py "${{ github.event.client_payload.actor }}"
+          pixi run --manifest-path student_code/pyproject.toml python scripts/check_whitelist.py "${{ github.event.client_payload.actor }}"
 
       - name: Run Student Evaluation
         working-directory: student_code
@@ -56,11 +56,11 @@ jobs:
 
       - name: Update Leaderboard TOML
         run: |
-          pixi run --manifest-path student_code/pixi.toml python scripts/update_leaderboard.py "${{ github.event.client_payload.actor }}"
+          pixi run --manifest-path student_code/pyproject.toml python scripts/update_leaderboard.py "${{ github.event.client_payload.actor }}"
 
       - name: Generate README
         run: |
-          pixi run --manifest-path student_code/pixi.toml python scripts/update_readme.py
+          pixi run --manifest-path student_code/pyproject.toml python scripts/update_readme.py
 
       - name: Commit and Push
         uses: stefanzweifel/git-auto-commit-action@v5
