@@ -8,7 +8,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 | :---: | :--- | :--- | :---: |
 | 🥇 1 | Team Y | 3.500 | 1 |
 | 🥈 2 | Limo | 5.022 | 17 |
-| 🥉 3 | rather | 5.120 | 2 |
+| 🥉 3 | rather | 5.120 | 3 |
 | 4 | Group6 | 13.100 | 17 |
 
 ## Hall of fame 🏆
