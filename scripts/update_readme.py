@@ -13,6 +13,7 @@ for group_id, data in leaderboard.items():
         {
             "name": data.get("name", "Unknown"),
             "time": data.get("time", np.inf),
+            "success_rate": data.get("success_rate", 0),
             "submissions": data.get("submissions", 0),
         }
     )
@@ -20,11 +21,15 @@ for group_id, data in leaderboard.items():
 teams.sort(key=lambda d: d["time"])
 
 ### Generate table
-lines = ["| Rank | Team | Time | Submissions |", "| :---: | :--- | :--- | :---: |"]
+lines = [
+    "| Rank | Team | Time [s] | Success Rate [%] | Submissions |",
+    "| :---: | :--- | :---  | :--- | :---: |",
+]
 
 for rank, team in enumerate(teams):
     time_val = team["time"]
     name = team["name"]
+    succ = team["success_rate"]
     subs = team["submissions"]
 
     # Handle formatting for unranked (nan) vs ranked teams
@@ -36,7 +41,7 @@ for rank, team in enumerate(teams):
         rank_str = medals[rank] if rank < 3 else str(rank + 1)
         time_str = f"{time_val:.3f}"
 
-    lines.append(f"| {rank_str} | {name} | {time_str} | {subs} |")
+    lines.append(f"| {rank_str} | {name} | {time_str} | {succ * 100:.0f} | {subs} |")
 
 markdown_table = "\n".join(lines)
 

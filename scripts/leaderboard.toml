@@ -1,21 +1,25 @@
 [group1]
 name = "Team Y"
 time = 3.5
+success_rate = 0.5
 submissions = 1
 github = "todo"
 
 [group6]
 name = "Group6"
 time = 13.1
+success_rate = 0.5
 submissions = 17
 
 [group2]
 name = "Limo"
 time = 5.022
+success_rate = 0.5
 submissions = 17
 
 [group5]
 name = "rather"
-time = 5.12
-submissions = 3
+time = 50.12
+success_rate = 0.8
+submissions = 4
 github = "ratheron"
