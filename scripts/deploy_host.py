@@ -46,10 +46,9 @@ def main(config: str = "multi_level2.toml"):
     except KeyboardInterrupt:
         logger.info("Interrupted, shutting down...")
     except Exception as e:
-        logger.error(f"Host encountered an error: {e}", exc_info=True)
+        logger.error(f"Host encountered error: {e}", exc_info=True)
     finally:
-        if host:
-            host.close()
+        host.close()
         rclpy.shutdown()
         logger.info("Host shutdown complete")
 
