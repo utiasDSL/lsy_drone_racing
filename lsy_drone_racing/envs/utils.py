@@ -45,20 +45,11 @@ def load_track(track: ConfigDict) -> tuple[ConfigDict, ConfigDict, ConfigDict]:
     }
     obstacle_pos = np.array([o["pos"] for o in track.obstacles], dtype=np.float32)
     obstacles = {"pos": obstacle_pos, "nominal_pos": obstacle_pos.copy()}
-
-    drone_pos = np.array([drone.get("pos") for drone in track.drones], dtype=np.float32)
-    drone_quat = (
-        R.from_euler("xyz", np.array([drone.get("rpy") for drone in track.drones]))
-        .as_quat()
-        .astype(np.float32)
-    )
     drones = {
-        "pos": drone_pos,
-        "quat": drone_quat,
-        "nominal_pos": drone_pos.copy(),
-        "nominal_quat": drone_quat.copy(),
+        k: np.array([drone.get(k) for drone in track.drones], dtype=np.float32)
+        for k in track.drones[0].keys()
     }
-
+    drones["quat"] = R.from_euler("xyz", drones["rpy"]).as_quat().astype(np.float32)
     return ConfigDict(gates), ConfigDict(obstacles), ConfigDict(drones)
 
 
