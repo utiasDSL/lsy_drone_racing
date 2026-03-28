@@ -198,11 +198,7 @@ class CrazyflieWorker:
             cflib.crtp.init_drivers()
             uri = f"radio://{self.rank}/{self.drone_channel}/2M/E7E7E7E7{self.drone_id:02X}"
             PowerSwitch(uri).stm_power_cycle()
-            deadline = time.time() + 10.0
-            while time.time() < deadline:
-                if self.stop_event.is_set():
-                    return
-                time.sleep(0.05)
+            time.sleep(2)
 
             connection_failed_event = threading.Event()
 
