@@ -31,7 +31,6 @@ from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
 from lsy_drone_racing.utils.checks import check_drone_start_pos, check_race_track
-from lsy_drone_racing.utils.takeoff_barrier import TakeOffBarrier
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
@@ -90,7 +89,6 @@ class RealRaceCoreEnv:
         randomizations: ConfigDict,
         sensor_range: float = 0.5,
         control_mode: Literal["state", "attitude"] = "state",
-        radio_id: int | None = None,
     ):
         """Create a deployable version of the drone racing environment.
 
@@ -103,7 +101,6 @@ class RealRaceCoreEnv:
             sensor_range: Sensor range. Determines at which distance the exact position of the
                 gates and obstacles is reveiled.
             control_mode: Control mode of the drone.
-            radio_id: Radio ID in multi-antenna setups, will be 0 if None.
         """
         assert rclpy.ok(), "ROS2 is not running. Please start ROS2 before creating a deploy env."
         # Static env data
@@ -119,7 +116,6 @@ class RealRaceCoreEnv:
         self.drone_channel = drones[rank]["channel"]
         self.drone_id = drones[rank]["id"]
         self.rank = rank
-        self.radio_id = 0 if radio_id is None else radio_id
         self.freq = freq
         self.device = jax.devices("cpu")[0]
         assert control_mode in ["state", "attitude"], f"Invalid control mode {control_mode}"
@@ -138,7 +134,6 @@ class RealRaceCoreEnv:
         self.data = EnvData.create(
             n_drones=self.n_drones, n_gates=self.n_gates, n_obstacles=self.n_obstacles
         )
-        self._takeoff_barrier: TakeOffBarrier | None = None
         self._jit()
 
     def _reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
@@ -168,7 +163,7 @@ class RealRaceCoreEnv:
         self.data.reset(np.stack([self._ros_connector.pos[n] for n in self.drone_names]))
 
         self._connect_radio(
-            radio_id=self.radio_id, radio_channel=self.drone_channel, drone_id=self.drone_id
+            radio_id=self.rank, radio_channel=self.drone_channel, drone_id=self.drone_id
         )
         self._last_drone_pos_update = 0  # Last time a position was sent to the drone estimator
         self._reset_drone()
@@ -176,22 +171,6 @@ class RealRaceCoreEnv:
         if self.control_mode == "attitude":
             # Unlock thrust mode protection by sending a zero thrust command
             self.drone.commander.send_setpoint(0, 0, 0, 0)
-
-        if options.get("sync_start_barrier", True):
-            # Initialize barrier if not already created
-            barrier_config = options["takeoff_barrier"]
-            if self._takeoff_barrier is None:
-                self._takeoff_barrier = TakeOffBarrier(
-                    authkey=barrier_config["authkey"].encode()
-                    if isinstance(barrier_config["authkey"], str)
-                    else barrier_config["authkey"],
-                    timeout_s=barrier_config["timeout_s"],
-                    filename=barrier_config["filename"],
-                    port=barrier_config["port"],
-                    bind_host=barrier_config.get("bind_host", "0.0.0.0"),
-                    public_host=barrier_config.get("public_host"),
-                )
-            self._takeoff_barrier.wait(rank=self.rank, parties=self.n_drones)
 
         return self.obs(), self.info()
 
@@ -487,9 +466,6 @@ class RealRaceCoreEnv:
             finally:
                 # Close all ROS connections
                 self._ros_connector.close()
-                # Cleanup barrier
-                if self._takeoff_barrier is not None:
-                    self._takeoff_barrier.close()
 
 
 # region Single Drone Env
@@ -524,7 +500,6 @@ class RealDroneRaceEnv(RealRaceCoreEnv, Env):
         randomizations: ConfigDict,
         sensor_range: float = 0.5,
         control_mode: Literal["state", "attitude"] = "state",
-        radio_id: int | None = None,
     ):
         """Initialize the multi-drone environment.
 
@@ -559,7 +534,6 @@ class RealDroneRaceEnv(RealRaceCoreEnv, Env):
             randomizations=randomizations,
             sensor_range=sensor_range,
             control_mode=control_mode,
-            radio_id=radio_id,
         )
 
     def reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
@@ -630,7 +604,6 @@ class RealMultiDroneRaceEnv(RealRaceCoreEnv, Env):
         randomizations: ConfigDict,
         sensor_range: float = 0.5,
         control_mode: Literal["state", "attitude"] = "state",
-        radio_id: int | None = None,
     ):
         """Initialize the multi-drone environment.
 
@@ -652,7 +625,6 @@ class RealMultiDroneRaceEnv(RealRaceCoreEnv, Env):
             randomizations=randomizations,
             sensor_range=sensor_range,
             control_mode=control_mode,
-            radio_id=radio_id,
         )
 
     def reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
