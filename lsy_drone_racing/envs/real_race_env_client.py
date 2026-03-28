@@ -22,8 +22,8 @@ from lsy_race_msgs.msg import ClientState, HostReady, RaceStart  # type: ignore[
 from lsy_race_msgs.srv import CalibrateClock  # type: ignore[import-untyped]
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
-from lsy_drone_racing.utils.ros_race_comm import RaceCommNode, calibrate_clock, compute_latency_ms
 from lsy_drone_racing.utils.ros import track_poses
+from lsy_drone_racing.utils.ros_race_comm import RaceCommNode, calibrate_clock, compute_latency_ms
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
@@ -147,18 +147,14 @@ class RealMultiDroneRaceEnvClient(Env):
         current_pos, _, _, _ = self._get_all_drone_states()
         self.data.reset(current_pos)
 
-        logger.debug(f"Environment reset complete")
+        logger.debug("Environment reset complete")
         return self.obs(), self.info()
 
     def lock_until_race_start(self, timeout: float = 60.0):
-        """Sends dummy state messages at the control frequency (``self.freq`` Hz) in the
-        background so the host can detect this client as ready. Blocks until
-        the race starts.
+        """Sends dummy messages at the control frequency (``self.freq`` Hz) until the race starts.
 
-        Calibrate the clock offset and block until the host broadcasts :class:`RaceStartMessage`.
-
-        Calls the host's calibration service (blocks until available), estimates the
-        clock offset via N round-trips, then waits for the race start signal.
+        After receiving host ready message, the client will calibrate the clock offset and \
+            until the host broadcasts :class:`RaceStartMessage`.
 
         Args:
             timeout: Maximum time in seconds to wait for calibration and race start.
@@ -166,7 +162,7 @@ class RealMultiDroneRaceEnvClient(Env):
         Raises:
             TimeoutError: If calibration or race start exceeds ``timeout`` seconds.
         """
-        logger.info(f"Waiting for host ready message...")
+        logger.info("Waiting for host ready message...")
         stop_sending = threading.Event()
 
         def send_state_messages():
@@ -184,14 +180,14 @@ class RealMultiDroneRaceEnvClient(Env):
         if not self._host_ready_event.wait(timeout=timeout):
             stop_sending.set()
             raise TimeoutError(
-                f"Timeout waiting for host ready. "
+                "Timeout waiting for host ready. "
                 "Host may not be running or network connection failed."
             )
 
-        logger.info(f"Received host ready message.")
+        logger.info("Received host ready message.")
         self._clock_offset = calibrate_clock(self._clock_calib_client, n=5, timeout=timeout)
         logger.info(f"Clock offset = {self._clock_offset * 1000:.2f}ms")
-        logger.info(f"Waiting for race start")
+        logger.info("Waiting for race start")
 
         t_start = time.time()
         while not self._race_started:
@@ -199,7 +195,7 @@ class RealMultiDroneRaceEnvClient(Env):
                 raise TimeoutError(f"Timeout waiting for race start after {timeout}s.")
             time.sleep(0.001)
         stop_sending.set()
-        logger.info(f"Race starts!")
+        logger.info("Race starts!")
 
     def step(self, action: NDArray) -> tuple[dict, float, bool, bool, dict]:
         """Perform a control step: update gate tracking, check bounds, and send the action.
@@ -233,7 +229,7 @@ class RealMultiDroneRaceEnvClient(Env):
             (self.pos_limit_low > drone_pos[self.rank])
             | (drone_pos[self.rank] > self.pos_limit_high)
         ):
-            logger.warning(f"Drone exceeded safety bounds")
+            logger.warning("Drone exceeded safety bounds")
             terminated = True
 
         if self.control_mode == "attitude" and self._ros_connector_own:
@@ -272,7 +268,7 @@ class RealMultiDroneRaceEnvClient(Env):
 
     def close(self):
         """Send a final stop message and close all ROS connections."""
-        logger.info(f"Closing environment...")
+        logger.info("Closing environment...")
         if self._client_state_pub:
             try:
                 self._send_state_update(
@@ -287,7 +283,7 @@ class RealMultiDroneRaceEnvClient(Env):
             self._ros_connector_own.close()
         if self._ros_connector_others:
             self._ros_connector_others.close()
-        logger.debug(f"Environment closed")
+        logger.debug("Environment closed")
 
     def _send_state_update(self, action: NDArray, stopped: bool):
         """Publish a :class:`ClientStateMessage` to the host.
@@ -347,7 +343,7 @@ class RealMultiDroneRaceEnvClient(Env):
         self._clock_calib_client = node.create_client(
             CalibrateClock, "lsy_drone_racing/calibrate_clock"
         )
-        logger.debug(f"ROS2 communication initialized")
+        logger.debug("ROS2 communication initialized")
 
     def _get_all_drone_states(self) -> tuple[NDArray, NDArray, NDArray, NDArray]:
         """Read positions, quaternions, velocities, and angular velocities for all drones.
