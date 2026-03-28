@@ -8,7 +8,7 @@ The online competition takes place every semester for the students of the "Auton
 
 Leaderboard
 -----------
-We host the online competition directly on GitHub in the `competition branch <https://github.com/utiasDSL/lsy_drone_racing/tree/competition>`. Students can submit their controllers to the competition by forking the repository and pushing their changes to their main branch. The fastest submission with at least 50% success rate will be used for the team ranking in the online leaderboard.
+We host the online competition directly on GitHub in the `competition branch <https://github.com/utiasDSL/lsy_drone_racing/tree/competition>`_. Students can submit their controllers to the competition by forking the repository and pushing their changes to their main branch. The fastest submission with at least 50% success rate will be used for the team ranking in the online leaderboard.
 
 .. note::
     The leaderboard is reset every semester. Participation is by whitelist only. If you have not been whitelisted as a student in the course, please contact the instructors.
@@ -23,7 +23,7 @@ To participate in the online competition, follow these steps:
 
 Submitting Your Controller
 --------------------------
-After you have joined the competition, you can start implementing your controller. For this, we advise you to work on a separate feature branch on your fork. We provide several controller examples in the control module. Once you have implemented your own controller, you should set the ``controller.file`` argument in the level 2 config file to your controller file. This will ensure that the controller is used by default when running the evaluation script. Before submission, you can evaluate your controller locally by running
+After forking the repository, you can start implementing your controller. For this, we advise you to work on a separate feature branch on your fork. We provide several controller examples in the control module. Once you have implemented your own controller, you should set the ``controller.file`` argument in the level 2 config file to your controller file. This will ensure that the controller is used by default when running the evaluation script. Before submission, you can evaluate your controller locally by running
 
 .. code-block:: bash
 
@@ -31,10 +31,10 @@ After you have joined the competition, you can start implementing your controlle
     # or
     python scripts/evaluate.py
 
-When your controller passes the evaluation and you want to submit your controller to the competition, you need to push your changes to the main branch of your forked repository. This will trigger a GitHub action on our central repository to evaluate your controller and add the results to the leaderboard.
+When your controller passes the evaluation and you want to submit your controller to the leaderboard, you need to push your changes to the main branch of your forked repository. This will trigger a GitHub action on our central repository to evaluate your controller and add the results to the leaderboard.
 
 .. note::
-    Before evaluation, your code will be checked for cheats. In the ``level2.toml`` file, you may only change the path to your controller under ``controller.file`` and the used control interface under ``env.control_mode``. Your submission will be rejected if any other changes are detected.
+    Before evaluation, the server will check your code for cheats. In the ``level2.toml`` file, you may only change the path to your controller under ``controller.file`` and the used control interface under ``env.control_mode``. Your submission will be rejected if any other changes are detected.
 
 If you need extra dependencies to run your controller, you can add them to the default environment in the ``pyproject.toml`` or by using ``pixi add <dependency>``. This is necessary so the repo can execute your code.
 
