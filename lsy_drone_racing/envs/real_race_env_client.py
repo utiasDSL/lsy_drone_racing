@@ -23,6 +23,7 @@ from lsy_race_msgs.srv import CalibrateClock  # type: ignore[import-untyped]
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
 from lsy_drone_racing.utils.ros_race_comm import RaceCommNode, calibrate_clock, compute_latency_ms
+from lsy_drone_racing.utils.ros import track_poses
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
@@ -137,6 +138,11 @@ class RealMultiDroneRaceEnvClient(Env):
         Raises:
             TimeoutError: If the host does not respond within 120 seconds.
         """
+        if options and options.get("real_track_objects", False):
+            self.gates.pos, self.gates.quat, self.obstacles.pos = track_poses(
+                self.n_gates, self.n_obstacles
+            )
+            
         if self._ros_connector_own is None:
             self._init_ros_connectors()
         if self._comm is None:
