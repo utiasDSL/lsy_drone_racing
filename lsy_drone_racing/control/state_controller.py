@@ -41,7 +41,7 @@ class StateController(Controller):
         # Same waypoints as in the attitude controller. Determined by trial and error.
         waypoints = np.array(
             [
-                [-1.5, 0.5, 0.03],
+                [-1.5, 0.75, 0.05],
                 [-1.0, 0.55, 0.4],
                 [0.3, 0.35, 0.7],
                 [1.3, -0.15, 0.9],

@@ -37,8 +37,8 @@ class AttitudeController(Controller):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
-
         self._freq = config.env.freq
+
         drone_params = load_params(config.sim.physics, config.sim.drone_model)
         self.drone_mass = drone_params["mass"]  # alternatively from sim.drone_mass
 
@@ -52,7 +52,7 @@ class AttitudeController(Controller):
         # Same waypoints as in the position controller. Determined by trial and error.
         waypoints = np.array(
             [
-                [-1.5, 0.5, 0.03],
+                [-1.5, 0.75, 0.05],
                 [-1.0, 0.55, 0.4],
                 [0.3, 0.35, 0.7],
                 [1.3, -0.15, 0.9],
@@ -64,8 +64,7 @@ class AttitudeController(Controller):
                 [0.5, -0.75, 1.2],
             ]
         )
-
-        self._t_total = 20  # s
+        self._t_total = 15  # s
         t = np.linspace(0, self._t_total, len(waypoints))
         self._des_pos_spline = CubicSpline(t, waypoints)
         self._des_vel_spline = self._des_pos_spline.derivative()
@@ -88,7 +87,7 @@ class AttitudeController(Controller):
             [r_des, p_des, y_des, t_des] as a numpy array.
         """
         t = min(self._tick / self._freq, self._t_total)
-        if t >= 60.0:  # Maximum duration reached
+        if t >= self._t_total:  # Maximum duration reached
             self._finished = True
 
         des_pos = self._des_pos_spline(t)
@@ -111,7 +110,6 @@ class AttitudeController(Controller):
         target_thrust[2] += self.drone_mass * self.g
 
         # Update z_axis to the current orientation of the drone
-        # z_axis = R.from_quat(obs["quat"]).as_matrix()[:, 2]
         z_axis = R.from_quat(obs["quat"]).as_matrix()[:, 2]
 
         # update current thrust
@@ -129,7 +127,6 @@ class AttitudeController(Controller):
 
         action = np.concatenate([euler_desired, [thrust_desired]], dtype=np.float32)
 
-        # action = np.array([0.0,0.0,0.0,0.05], dtype=np.float32)
         return action
 
     def step_callback(
