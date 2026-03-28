@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def main(
-    config: str = "multi_level2_single.toml",
+    config: str = "multi_level2.toml",
     controller: str | None = None,
     drone_rank: int | None = None,
 ):
