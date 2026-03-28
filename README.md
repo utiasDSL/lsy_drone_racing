@@ -1,74 +1,61 @@
-# Autonomous Drone Racing Project Course
+# ECE484 Quadrotor Project
 <p align="center">
-  <img width="460" height="300" src="docs/img/banner.jpeg">
+  <img width="460" height="300" src="docs/img/quadrotor-sketch.png">
 </p>
-<sub><sup>AI-generated image</sup></sub>
-
-[![Python Version]][Python Version URL] [![Ruff Check]][Ruff Check URL] [![Documentation Status]][Documentation Status URL] [![Tests]][Tests URL]
-
-[Python Version]: https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue  
-[Python Version URL]: https://www.python.org  
-
-[Ruff Check]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml/badge.svg?style=flat-square  
-[Ruff Check URL]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/ruff.yml  
-
-[Documentation Status]: https://readthedocs.org/projects/lsy-drone-racing/badge/?version=latest  
-[Documentation Status URL]: https://lsy-drone-racing.readthedocs.io/en/latest/?badge=latest  
-
-[Tests]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/testing.yml/badge.svg  
-[Tests URL]: https://github.com/utiasDSL/lsy_drone_racing/actions/workflows/testing.yml  
-
----
 
 ## Introduction
 
-**LSY Drone Racing** is a course project designed to help you develop and evaluate autonomous drone racing algorithms — both in simulation and on real Crazyflie hardware.  
-Whether you’re new to drones or an experienced developer, this project provides a structured and practical way to explore high-speed autonomy, control, and perception in dynamic environments.
+In this project, you will develop safe and robust control systems for autonomous drone flight. There are two phases: 
 
----
+1. Simulation: Develop and test controllers in simulation. 
+2. Deployment: Deploy and further optimize controllers on CrazyFlie hardware. 
 
-## Documentation
+You are required to achieve safe autonomous flight in both phases. Teams that deploy successfully will be allowed to participate in a competetition, in which lap times will be compared on various tracks. 
 
-To get started, visit our [official documentation](https://lsy-drone-racing.readthedocs.io/en/latest/getting_started/general.html).
+You may develop any controllers of your choosing. However, note that CrazyFlies are equipped only with an IMU. It has no other sensors, including cameras. 
 
----
+## Setup
 
-## Dependencies
+1. Clone repository. 
+2. Install Pixi via `curl -fsSL https://pixi.sh/install.sh | sh`.
 
-This project builds upon several open-source packages developed by the [Learning Systems Lab (LSY)](https://www.ce.cit.tum.de/lsy/home/) at TUM.  
-You can explore these related projects:
+To install the simulation environment: 
+1. In `~/ece484-fly`, run `pixi shell ` or `pixi shell -e gpu` if you have GPU. 
+2. Run `python3 scripts/sim.py -r` to ensure successful installation. You should see a drone fly through four gates in the simulator.
 
-- [**crazyflow**](https://github.com/utiasDSL/crazyflow) – A high-speed, high-fidelity drone simulator with strong sim-to-real performance.  
-- [**drone-models**](https://github.com/utiasDSL/drone-models) – A collection of accurate drone models for simulation and model-based control.  
-- [**drone-controllers**](https://github.com/utiasDSL/drone-controllers) – Controllers for the Crazyflie quadrotor.  
+To install the hardware deployment environment: 
+1. In `~/ece484-fly`, run `pixi shell -e deploy`. 
+2. Run the following to prepare the USB port for CrazyRadio to CrazyFlie communication: 
+```
+cat <<EOF | sudo tee /etc/udev/rules.d/99-bitcraze.rules > /dev/null
+# Crazyradio (normal operation)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1915", ATTRS{idProduct}=="7777", MODE="0664", GROUP="plugdev"
+# Bootloader
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1915", ATTRS{idProduct}=="0101", MODE="0664", GROUP="plugdev"
+# Crazyflie (over USB)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", MODE="0664", GROUP="plugdev"
+EOF
 
----
+# USB preparation for crazyradio
+sudo groupadd plugdev
+sudo usermod -a -G plugdev $USER
 
-## Difficulty Levels
+# Apply changes
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+3. Open three terminals and run the below commands: 
+```
+# Terminal 1: Motion capture tracking node
+ros2 launch motion_capture_tracking launch.py
 
-Each task setup — from track design to physics configuration — is defined by a TOML file (e.g., [`level0.toml`](config/level0.toml)).  
-The configuration files specify progressive difficulty levels from easy (0) to hard (3):
+# Terminal 2: Estimator node 
+python3 -m drone_estimators.ros_nodes.ros2_node --drone_name cf10
 
-|      Evaluation Scenario      | Rand. Inertial Properties | Randomized Obstacles, Gates | Random Tracks |             Notes              |
-| :---------------------------: | :-----------------------: | :-------------------------: | :-----------: | :----------------------------: |
-| [Level 0](config/level0.toml) |           *No*            |            *No*             |     *No*      |       Perfect knowledge        |
-| [Level 1](config/level1.toml) |          **Yes**          |            *No*             |     *No*      |        Adaptive control        |
-| [Level 2](config/level2.toml) |          **Yes**          |           **Yes**           |     *No*      |          Re-planning           |
-| [Level 3](config/level3.toml) |          **Yes**          |           **Yes**           |    **Yes**    |        Online planning         |
-|         **sim2real**          |     **Real hardware**     |           **Yes**           |    **Yes**    | Simulation-to-reality transfer |
+# Terminal 3: Run the deployment script with the correct configuration and controller
+python3 scripts/deploy.py --config level1.toml --controller <your_controller.py>
+```
 
----
+## Credit
 
-## Online Competition
-
-Throughout the semester, teams will compete to achieve the fastest autonomous race completion times.  
-Competition results are hosted on Kaggle — a popular machine learning competition platform.
-
-> **Note:** Competition results **do not** directly affect your course grade.  
-> However, they provide valuable feedback on the performance and robustness of your approach compared to others.
-
-The competition environment always uses **difficulty level 2**.  
-If your code fails the automated tests, it is likely to encounter the same issues in our evaluation environment.  
-For full details, refer to the [documentation](https://lsy-drone-racing.readthedocs.io/en/latest/).
-
----
+We credit [Learning Systems Lab (LSY)](https://www.ce.cit.tum.de/lsy/home/) at TUM for their work on [lsy_drone_racing](github.com/utiasDSL/lsy_drone_racing) from [Learning Systems Lab (LSY)](https://www.ce.cit.tum.de/lsy/home/) at TUM.
