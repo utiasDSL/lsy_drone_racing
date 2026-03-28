@@ -1,0 +1,39 @@
+{
+    "name": "ADR",
+    "build": {
+      "dockerfile": "Dockerfile",
+      "context": "..",
+    },
+    "customizations": {
+      "vscode": {
+        "settings": {},
+        "extensions": ["ms-python.python", "charliermarsh.ruff", "GitHub.copilot"]
+      }
+    },
+    "features": {
+      "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    },
+    "mounts": [
+        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
+        "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind", // use only with WSL2
+        "source=/mnt/wslg,target=/mnt/wslg,type=bind", // use only with WSL2
+        "source=/usr/lib/wsl,target=/usr/lib/wsl,type=bind" // use only with WSL2
+    ],
+    "postCreateCommand": "chown vscode .pixi && pixi install",
+    "containerEnv": {
+        "DISPLAY": "${localEnv:DISPLAY}",
+        "XAUTHORITY": "${localEnv:XAUTHORITY}",
+        "WAYLAND_DISPLAY": "${localEnv:WAYLAND_DISPLAY}", // use only with WSL2
+        "XDG_RUNTIME_DIR": "${localEnv:XDG_RUNTIME_DIR}", // use only with WSL2
+        "PULSE_SERVER": "${localEnv:PULSE_SERVER}" // use only with WSL2
+    },
+    "runArgs": [
+        "--interactive",
+        "--net=host",
+        "--ipc=host",
+        // "--gpus=all", // use only with GPU
+        // "--runtime=nvidia", // use only with GPU
+        // "--device=/dev/dri:/dev/dri" // use only with Linux
+    ],
+    "remoteUser": "vscode"
+}

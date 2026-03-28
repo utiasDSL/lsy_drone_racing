@@ -41,8 +41,9 @@ class AttitudeRL(Controller):
         self.rank = info.get("rank", 0)
         self.freq = config.env.freq
 
+        # For more info on the models, check out https://github.com/utiasDSL/drone-models
         drone_params = load_params(config.sim.physics, config.sim.drone_model)
-        self.drone_mass = drone_params["mass"]  # alternatively from sim.drone_mass
+        self.drone_mass = drone_params["mass"]
         self.thrust_min = drone_params["thrust_min"] * 4  # min total thrust
         self.thrust_max = drone_params["thrust_max"] * 4  # max total thrust
 

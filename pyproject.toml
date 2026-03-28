@@ -18,7 +18,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
 ]
 
-
 ########################
 # Pip Dependencies
 ########################
@@ -45,6 +44,8 @@ deploy = [
 ]
 # option[rl]: train rl policy
 rl = ["torch == 2.8.0", "wandb"]
+# option[gamepad]: use a gamepad as input for your drone
+gamepad = ["pygame"]
 
 [tool.setuptools.packages]
 find = {}
@@ -55,9 +56,90 @@ lsy_drone_racing = ["envs/assets/*.xml", "envs/assets/*.png"]
 [tool.pytest.ini_options]
 markers = ["unit", "integration"]
 
-[tool.ruff.lint.isort]  # Prevent ruff from reporting conflicting settings with isort
-split-on-trailing-comma = false
+########################
+# Pixi Sessions
+########################
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
 
+[tool.pixi.dependencies]
+python = ">=3.11.12,<3.14"
+pip = ">=25.0.1,<26"
+ruff = "*"
+# Compilers needed for acados
+cmake = "*"
+compilers = ">=1.9.0, <1.11.0"
+make = "*"
+openblas = ">=0.3.30,<0.4"
+
+[tool.pixi.pypi-dependencies]
+lsy_drone_racing = { path = ".", editable = true }
+
+[tool.pixi.activation]
+scripts = ["tools/setup_acados.sh"]
+
+[tool.pixi.tasks]
+evaluate = { cmd = "python scripts/evaluation.py", description = "Evaluate the controller" }
+
+### environments
+[tool.pixi.environments]
+default = { features = ["sim"], solve-group = "default" }
+deploy = { features = ["sim", "gpu", "kilted", "deploy"] }
+gpu = { features = ["sim", "gpu"], solve-group = "default" }
+tests = { features = ["sim", "rl", "tests"], solve-group = "default" }
+gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
+gamepad = { features = ["sim", "gamepad"], solve-group = "default" }
+
+## feature [kilted]
+[tool.pixi.feature.kilted]
+channels = ["https://prefix.dev/robostack-kilted"]
+
+[tool.pixi.feature.kilted.dependencies]
+# Build tools
+compilers = "*"
+cmake = "*"
+pkg-config = "*"
+make = "*"
+ninja = "*"
+# ROS specific tools
+rosdep = "*"
+colcon-common-extensions = "*"
+# Kilted specific tools
+ros-kilted-desktop = "*"
+ros-kilted-rmw-zenoh-cpp = "*"
+
+[tool.pixi.feature.kilted.activation]
+scripts = ["tools/setup_mocap.sh"]
+env = { RMW_IMPLEMENTATION = "rmw_zenoh_cpp", ZENOH_ROUTER_CHECK_ATTEMPTS = "-1" }
+
+[tool.pixi.feature.kilted.tasks.zenoh-router]
+# To use ROS with Zenoh backend, a router is mandatory
+cmd = "ros2 run rmw_zenoh_cpp rmw_zenohd"
+description = "Run the Zenoh router on the host machine"
+
+## feature [deploy]
+[tool.pixi.feature.deploy.tasks.mocap]
+cmd = "ros2 launch motion_capture_tracking launch.py"
+
+[tool.pixi.feature.deploy.tasks.estimator]
+cmd = ["python",
+        "-m",
+        "drone_estimators.ros_nodes.ros2_node",
+        "--drone_name",
+        "{{drone_name}}"]
+args = [{ "arg" = "drone_name", "default" = "cf10" }]
+
+## feature [tests]
+[tool.pixi.feature.tests.tasks]
+tests = { cmd = "pytest -v tests", description = "Run tests" }
+
+[tool.pixi.feature.tests.dependencies]
+pytest = "*"
+
+########################
+# Linting and formatting settings
+########################
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -89,6 +171,9 @@ ignore = ["ANN401"]
 fixable = ["ALL"]
 unfixable = []
 
+[tool.ruff.lint.isort]  # Prevent ruff from reporting conflicting settings with isort
+split-on-trailing-comma = false
+
 [tool.ruff.lint.per-file-ignores]
 "benchmarks/*" = ["D100", "D103"]
 "tests/*" = ["D100", "D103", "D104"]
@@ -108,95 +193,3 @@ skip-magic-trailing-comma = true
 line-ending = "auto"
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
-
-########################
-# Pixi Sessions
-########################
-
-[tool.pixi.workspace]
-channels = ["conda-forge"]
-platforms = ["linux-64"]
-
-[tool.pixi.pypi-dependencies]
-lsy_drone_racing = { path = ".", editable = true }
-
-# feature[kilted]
-[tool.pixi.feature.kilted]
-channels = ["https://prefix.dev/robostack-kilted"]
-
-[tool.pixi.feature.kilted.dependencies]
-# Build tools
-compilers = "*"
-cmake = "*"
-pkg-config = "*"
-make = "*"
-ninja = "*"
-# ROS specific tools
-rosdep = "*"
-colcon-common-extensions = "*"
-# Kilted specific tools
-ros-kilted-desktop = "*"
-ros-kilted-rmw-zenoh-cpp = "*"
-
-[tool.pixi.feature.kilted.activation]
-scripts = ["tools/setup_mocap.sh"]
-env = { RMW_IMPLEMENTATION = "rmw_zenoh_cpp", ZENOH_ROUTER_CHECK_ATTEMPTS = "-1" }
-
-[tool.pixi.feature.kilted.tasks.zenoh-router]
-cmd = "ros2 run rmw_zenoh_cpp rmw_zenohd"
-description = "Run the Zenoh router on the host machine"
-
-[tool.pixi.activation]
-scripts = ["tools/setup_acados.sh"]
-
-# feature[online-submission]
-# [tool.pixi.feature.online-submission]
-
-[tool.pixi.feature.online-submission.tasks]
-create-submission = { cmd = "python scripts/kaggle.py", description = "Create online submission" }
-export-submission = { cmd = "kaggle competitions submit -c lsy-drone-racing-ws-25 -f submission.csv -m 'Automated submission'", description = "Submit online submission" }
-
-[tool.pixi.feature.online-submission.dependencies]
-pandas = "*"
-kaggle = "*"
-
-# feature[tests]
-[tool.pixi.feature.tests.tasks]
-tests = { cmd = "pytest -v tests", description = "Run tests" }
-
-[tool.pixi.feature.tests.dependencies]
-pytest = "*"
-
-
-[tool.pixi.feature.deploy.tasks.mocap]
-cmd = "ros2 launch motion_capture_tracking launch.py"
-
-[tool.pixi.feature.deploy.tasks.estimator]
-cmd = ["python",
-        "-m",
-        "drone_estimators.ros_nodes.ros2_node",
-        "--drone_name",
-        "{{drone_name}}"]
-args = [{ "arg" = "drone_name", "default" = "cf10" }]
-
-
-# environments
-[tool.pixi.environments]
-default = { features = ["sim"], solve-group = "default" }
-deploy = { features = ["sim", "gpu", "kilted", "deploy"] }
-gpu = { features = ["sim", "gpu"], solve-group = "default" }
-online-submission = { features = [
-    "sim",
-    "online-submission",
-], solve-group = "default" }
-tests = { features = ["sim", "rl", "tests"], solve-group = "default" }
-gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
-
-[tool.pixi.dependencies]
-openblas = ">=0.3.30,<0.4"
-ruff = "*"
-python = ">=3.11.12,<3.14"
-pip = ">=25.0.1,<26"
-cmake = "*"
-compilers = ">=1.9.0, <1.11.0"
-make = "*"

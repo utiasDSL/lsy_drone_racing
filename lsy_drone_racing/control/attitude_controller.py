@@ -39,8 +39,9 @@ class AttitudeController(Controller):
         super().__init__(obs, info, config)
         self._freq = config.env.freq
 
+        # For more info on the models, check out https://github.com/utiasDSL/drone-models
         drone_params = load_params(config.sim.physics, config.sim.drone_model)
-        self.drone_mass = drone_params["mass"]  # alternatively from sim.drone_mass
+        self.drone_mass = drone_params["mass"]
 
         self.kp = np.array([0.4, 0.4, 1.25])
         self.ki = np.array([0.05, 0.05, 0.05])

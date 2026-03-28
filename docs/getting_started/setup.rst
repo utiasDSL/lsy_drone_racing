@@ -92,6 +92,12 @@ Micromamba package manager (Not recommended)
 
 You may also use  with `micromamba <https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html>`_. We do not recommend this, since Mamba/Conda environments have the tendency to be leaky and share some system-wide packages. In our experience, this will lead to problems, which is why this project is optimized to use with pixi. If you want to use micromamba anyway, we can't guarantee support. 
 
+
+Docker (Not recommended)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We also provide a dev container for the simulation environment. However, this is not recommended, since it's heavy and only supports software rendering at the moment. If you're using Windows, make sure to install `WSL <https://docs.microsoft.com/en-us/windows/wsl/install>`_ and `Docker Desktop <https://docs.docker.com/desktop/windows/install/>`_ with WSL integration. Refer to the `Using Docker` section below for more details.
+
 Simulation & Hardware on our Lab PC (If Necessary)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -256,7 +262,7 @@ Extended Dependencies
 We want to encourage you to use other libraries to speed up your development process. The easiest way to use another library is to install it with pip inside your pixi shell. 
 
 .. warning::
-   If your controller depends on additional libraries, which are installed locally with pip, the tests on github and the Kaggle submission will not work.
+   If your controller depends on additional libraries, which are installed locally with pip, the tests and evaluation on GitHub won't work.
 
 To properly add a package to your project, you can either add it tot the ``pyproject.toml`` file in the root of the repository, or run the following command while being in the correct pixi environment:
 
@@ -267,27 +273,53 @@ To properly add a package to your project, you can either add it tot the ``pypro
 After that, reopen your environment. This automatically adds the package to the ``pyproject.toml`` file.
 
 .. note::
-   Changing the ``pyproject.toml`` will also update the ``pixi.lock`` file, which pins the exact versions of all packages. Make sure to commit both files to your repository, otherwise the tests on github will fail.
+   Changing the ``pyproject.toml`` will also update the ``pixi.lock`` file, which pins the exact versions of all packages. Make sure to commit both files to your repository, otherwise the tests on GitHub will fail.
 
-Using Docker
-~~~~~~~~~~~~
+Windows Subsystem for Linux (WSL2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You can also run the *simulation* with Docker, albeit without the GUI at the moment. To test this, install docker with docker compose on your system, and then run
+It is also possible to develop the project on Windows using WSL2. Clone this project into the WSL2 file system, and follow the same instructions as for Linux.
 
-.. code-block:: bash
-
-   docker compose --profile sim build
-   docker compose --profile sim up
-
-After building, running the container should produce the following output something like:
+However, rendering might not work out of the box. To enable software rendering, set the following environment variable in your WSL2 terminal:
 
 .. code-block:: bash
 
-   sim-1  | INFO:__main__:Flight time (s): 8.466666666666667
-   sim-1  | Reason for termination: Task completed
-   sim-1  | Gates passed: 4
-   sim-1  | 
-   sim-1  | 8.466666666666667
+   export LIBGL_ALWAYS_INDIRECT=1
+   python scripts/sim.py -r
+
+
+Dev Container (Windows 11 WSL2)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For Windows, you require WSL2 to run the dev container, which enables a Linux environment within Windows. Follow these steps to set up the dev container in VS Code with WSL2:
+
+**Installation and Setup**
+
+#. Follow the `official VS Code Dev Containers installation steps <https://code.visualstudio.com/docs/devcontainers/tutorial>`_ to install VS Code Dev Containers in WSL2 and Docker.
+
+   - Make sure to install Ubuntu 22.04 or above in WSL2.
+   - If you didn't get prompted to enable WSL integration by Docker during installation, open Docker Desktop settings and manually enable WSL integration. **Important:** There are TWO setting options for this. Make sure to enable BOTH!
+
+#. Clone this project into the WSL2 file system (e.g., ``/home/~``) rather than the Windows file system. You can access the WSL filesystem by opening a WSL2/Ubuntu terminal. Performance is significantly better when working on the WSL file system compared to the Windows file system.
+
+#. Verify dev container configuration:
+
+   - Check the dev container configuration file ``.devcontainer/devcontainer.json``.
+   - Comment out/Uncomment the necessary settings.
+
+#. Open the project in VS Code:
+
+   - Select **File → Open Folder** and navigate to your project directory in WSL.
+   - VS Code should automatically detect the dev container and prompt you to **Reopen in Container**. If not, see the `official instructions <https://code.visualstudio.com/docs/devcontainers/tutorial#_open-the-folder-in-a-container>`_ on how to open it manually.
+   - Make sure to have the **Dev Containers** extension and **Container Tools** extension installed.
+
+#. Once the container has opened, initialize the environment by opening a terminal and running:
+
+   .. code-block:: bash
+
+      pixi shell
+
+This activates the Pixi environment with all required dependencies installed. You should now be ready to develop with the dev container!
 
 
 Common errors
