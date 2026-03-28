@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 def extract_config_for_rank(config: ConfigDict, rank: int) -> ConfigDict:
     """Get the configuration for a specific drone rank in a multi-drone setup.
 
@@ -43,6 +44,7 @@ def extract_config_for_rank(config: ConfigDict, rank: int) -> ConfigDict:
         for key, value in config.env.kwargs[rank].items():
             cfg.env[key] = value
     return cfg
+
 
 def load_controller(path: Path) -> Type[Controller]:
     """Load the controller module from the given path and return the Controller class.
