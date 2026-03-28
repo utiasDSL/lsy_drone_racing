@@ -124,10 +124,6 @@ class RealMultiDroneRaceEnvClient(Env):
     def reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment and wait for the host to signal readiness.
 
-        Sends dummy state messages at the control frequency (``self.freq`` Hz) in the
-        background so the host can detect this client as ready. Blocks until
-        :class:`HostReadyMessage` is received.
-
         Args:
             seed: Unused in real environments.
             options: Unused in real environments.
@@ -142,7 +138,7 @@ class RealMultiDroneRaceEnvClient(Env):
             self.gates.pos, self.gates.quat, self.obstacles.pos = track_poses(
                 self.n_gates, self.n_obstacles
             )
-            
+
         if self._ros_connector_own is None:
             self._init_ros_connectors()
         if self._comm is None:
@@ -151,32 +147,15 @@ class RealMultiDroneRaceEnvClient(Env):
         current_pos, _, _, _ = self._get_all_drone_states()
         self.data.reset(current_pos)
 
-        logger.info(f"Client {self.rank}: Waiting for host ready message...")
-        stop_sending = threading.Event()
-
-        def send_state_messages():
-            while not stop_sending.is_set():
-                if self.control_mode == "attitude":
-                    dummy_action = np.zeros(4, dtype=np.float32)
-                else:
-                    dummy_action = np.zeros(13, dtype=np.float32)
-                    dummy_action[:3] = current_pos[self.rank]
-                self._send_state_update(dummy_action, stopped=False)
-                time.sleep(1 / self.freq)
-
-        threading.Thread(target=send_state_messages, daemon=True).start()
-        if not self._host_ready_event.wait(timeout=120.0):
-            stop_sending.set()
-            raise TimeoutError(
-                f"Client {self.rank}: Timeout waiting for host ready. "
-                "Host may not be running or network connection failed."
-            )
-        stop_sending.set()
-        logger.debug(f"Client {self.rank}: Environment reset complete")
+        logger.debug(f"Environment reset complete")
         return self.obs(), self.info()
 
     def lock_until_race_start(self, timeout: float = 60.0):
-        """Calibrate the clock offset and block until the host broadcasts :class:`RaceStartMessage`.
+        """Sends dummy state messages at the control frequency (``self.freq`` Hz) in the
+        background so the host can detect this client as ready. Blocks until
+        the race starts.
+
+        Calibrate the clock offset and block until the host broadcasts :class:`RaceStartMessage`.
 
         Calls the host's calibration service (blocks until available), estimates the
         clock offset via N round-trips, then waits for the race start signal.
@@ -187,18 +166,40 @@ class RealMultiDroneRaceEnvClient(Env):
         Raises:
             TimeoutError: If calibration or race start exceeds ``timeout`` seconds.
         """
-        logger.debug(f"Client {self.rank}: Calibrating clock offset...")
+        logger.info(f"Waiting for host ready message...")
+        stop_sending = threading.Event()
+
+        def send_state_messages():
+            while not stop_sending.is_set():
+                if self.control_mode == "attitude":
+                    dummy_action = np.zeros(4, dtype=np.float32)
+                else:
+                    dummy_action = np.zeros(13, dtype=np.float32)
+                    dummy_action[:3] = self._ros_connector_own.pos[self.drone_name]
+                self._send_state_update(dummy_action, stopped=False)
+                time.sleep(1 / self.freq)
+
+        threading.Thread(target=send_state_messages, daemon=True).start()
+
+        if not self._host_ready_event.wait(timeout=timeout):
+            stop_sending.set()
+            raise TimeoutError(
+                f"Timeout waiting for host ready. "
+                "Host may not be running or network connection failed."
+            )
+
+        logger.info(f"Received host ready message.")
         self._clock_offset = calibrate_clock(self._clock_calib_client, n=5, timeout=timeout)
-        logger.info(f"Client {self.rank}: Clock offset = {self._clock_offset * 1000:.2f}ms")
+        logger.info(f"Clock offset = {self._clock_offset * 1000:.2f}ms")
+        logger.info(f"Waiting for race start")
 
         t_start = time.time()
         while not self._race_started:
             if time.time() - t_start > timeout:
-                raise TimeoutError(
-                    f"Client {self.rank}: Timeout waiting for race start after {timeout}s."
-                )
+                raise TimeoutError(f"Timeout waiting for race start after {timeout}s.")
             time.sleep(0.001)
-        logger.info(f"Client {self.rank}: Race started")
+        stop_sending.set()
+        logger.info(f"Race starts!")
 
     def step(self, action: NDArray) -> tuple[dict, float, bool, bool, dict]:
         """Perform a control step: update gate tracking, check bounds, and send the action.
@@ -232,7 +233,7 @@ class RealMultiDroneRaceEnvClient(Env):
             (self.pos_limit_low > drone_pos[self.rank])
             | (drone_pos[self.rank] > self.pos_limit_high)
         ):
-            logger.warning(f"Client {self.rank}: Drone exceeded safety bounds")
+            logger.warning(f"Drone exceeded safety bounds")
             terminated = True
 
         if self.control_mode == "attitude" and self._ros_connector_own:
@@ -271,7 +272,7 @@ class RealMultiDroneRaceEnvClient(Env):
 
     def close(self):
         """Send a final stop message and close all ROS connections."""
-        logger.info(f"Client {self.rank}: Closing environment...")
+        logger.info(f"Closing environment...")
         if self._client_state_pub:
             try:
                 self._send_state_update(
@@ -279,14 +280,14 @@ class RealMultiDroneRaceEnvClient(Env):
                 )
                 time.sleep(0.1)  # allow the executor thread to flush the message before shutdown
             except Exception as e:
-                logger.warning(f"Client {self.rank}: Could not send final stop message: {e}")
+                logger.warning(f"Could not send final stop message: {e}")
         if self._comm:
             self._comm.close()
         if self._ros_connector_own:
             self._ros_connector_own.close()
         if self._ros_connector_others:
             self._ros_connector_others.close()
-        logger.debug(f"Client {self.rank}: Environment closed")
+        logger.debug(f"Environment closed")
 
     def _send_state_update(self, action: NDArray, stopped: bool):
         """Publish a :class:`ClientStateMessage` to the host.
@@ -327,10 +328,7 @@ class RealMultiDroneRaceEnvClient(Env):
 
         def on_host_ready(msg: HostReady):
             self._host_ready_event.set()
-            logger.debug(
-                f"Client {self.rank}: Host ready "
-                f"(latency: {compute_latency_ms(msg.timestamp):.2f}ms)"
-            )
+            logger.debug(f"Host ready (latency: {compute_latency_ms(msg.timestamp):.2f}ms)")
 
         def on_race_start(msg: RaceStart):
             self._race_started = True
@@ -349,7 +347,7 @@ class RealMultiDroneRaceEnvClient(Env):
         self._clock_calib_client = node.create_client(
             CalibrateClock, "lsy_drone_racing/calibrate_clock"
         )
-        logger.debug(f"Client {self.rank}: ROS2 communication initialized")
+        logger.debug(f"ROS2 communication initialized")
 
     def _get_all_drone_states(self) -> tuple[NDArray, NDArray, NDArray, NDArray]:
         """Read positions, quaternions, velocities, and angular velocities for all drones.
