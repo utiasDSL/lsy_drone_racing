@@ -1,4 +1,4 @@
-# Autonomous Drone Racing Project Course
+# Autonomous Drone Racing Challenge
 <p align="center">
   <img width="460" height="300" src="docs/img/banner.jpeg">
 </p>
