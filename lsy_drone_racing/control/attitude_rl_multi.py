@@ -17,7 +17,8 @@ from lsy_drone_racing.control.attitude_rl import AttitudeRL as SingleAttitudeRL
 if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
-    
+
+
 class AttitudeRL(SingleAttitudeRL):
     """Example of a controller using the collective thrust and attitude interface."""
 
@@ -31,7 +32,7 @@ class AttitudeRL(SingleAttitudeRL):
             config: The configuration of the environment.
         """
         super().__init__(obs, info, config)
-        self.rank = info['rank']
+        self.rank = info["rank"]
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
@@ -54,4 +55,3 @@ class AttitudeRL(SingleAttitudeRL):
         obs["gates_visited"] = obs["gates_visited"][self.rank]
         obs["obstacles_visited"] = obs["obstacles_visited"][self.rank]
         return super().compute_control(obs, info)
-
