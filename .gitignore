@@ -10,5 +10,9 @@ saves
 **/*.csv
 /build
 
+# Submodules
+original_main/
+student_code/
+
 # Environments
 .pixi/*

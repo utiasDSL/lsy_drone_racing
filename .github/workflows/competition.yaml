@@ -28,6 +28,12 @@ jobs:
         with:
           ref: competition
 
+      - name: Checkout Clean Main Branch (For Anti-Cheat)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: original_main
+
       - name: Checkout Student Code
         uses: actions/checkout@v4
         with:
@@ -49,6 +55,9 @@ jobs:
         run: |
           # Pass the GitHub username to the script
           pixi run --manifest-path student_code/pyproject.toml python scripts/check_whitelist.py "${{ inputs.actor }}"
+
+      - name: Run Anti-Cheat Check
+        run: pixi run --manifest-path student_code/pyproject.toml python scripts/check_cheat.py
 
       - name: Run Student Evaluation
         working-directory: student_code
