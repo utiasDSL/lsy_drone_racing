@@ -123,8 +123,9 @@ class RealMultiDroneRaceEnvClient(Env):
     def reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment and wait for the host to signal readiness.
 
-        Sends dummy state messages at 10 Hz in the background so the host can detect
-        this client as ready. Blocks until :class:`HostReadyMessage` is received.
+        Sends dummy state messages at the control frequency (``self.freq`` Hz) in the
+        background so the host can detect this client as ready. Blocks until
+        :class:`HostReadyMessage` is received.
 
         Args:
             seed: Unused in real environments.
@@ -275,6 +276,10 @@ class RealMultiDroneRaceEnvClient(Env):
                 logger.warning(f"Client {self.rank}: Could not send final stop message: {e}")
         if self._comm:
             self._comm.close()
+        if self._ros_connector_own:
+            self._ros_connector_own.close()
+        if self._ros_connector_others:
+            self._ros_connector_others.close()
         logger.debug(f"Client {self.rank}: Environment closed")
 
     def _send_state_update(self, action: NDArray, stopped: bool):
