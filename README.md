@@ -61,8 +61,8 @@ The configuration files specify progressive difficulty levels from easy (0) to h
 
 ## Online Competition
 
-Throughout the semester, teams will compete to achieve the fastest autonomous race completion times.  
-Competition results are hosted on Kaggle — a popular machine learning competition platform.
+Throughout the semester, teams in the course will compete to achieve the fastest autonomous race completion times. 
+Competition results visible in the [competition branch](https://github.com/utiasDSL/lsy_drone_racing/tree/competition).
 
 > **Note:** Competition results **do not** directly affect your course grade.  
 > However, they provide valuable feedback on the performance and robustness of your approach compared to others.

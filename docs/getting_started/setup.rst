@@ -262,7 +262,7 @@ Extended Dependencies
 We want to encourage you to use other libraries to speed up your development process. The easiest way to use another library is to install it with pip inside your pixi shell. 
 
 .. warning::
-   If your controller depends on additional libraries, which are installed locally with pip, the tests on github and the Kaggle submission will not work.
+   If your controller depends on additional libraries, which are installed locally with pip, the tests and evaluation on GitHub won't work.
 
 To properly add a package to your project, you can either add it tot the ``pyproject.toml`` file in the root of the repository, or run the following command while being in the correct pixi environment:
 
@@ -273,7 +273,7 @@ To properly add a package to your project, you can either add it tot the ``pypro
 After that, reopen your environment. This automatically adds the package to the ``pyproject.toml`` file.
 
 .. note::
-   Changing the ``pyproject.toml`` will also update the ``pixi.lock`` file, which pins the exact versions of all packages. Make sure to commit both files to your repository, otherwise the tests on github will fail.
+   Changing the ``pyproject.toml`` will also update the ``pixi.lock`` file, which pins the exact versions of all packages. Make sure to commit both files to your repository, otherwise the tests on GitHub will fail.
 
 Windows Subsystem for Linux (WSL2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

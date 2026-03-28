@@ -57,9 +57,71 @@ lsy_drone_racing = ["envs/assets/*.xml", "envs/assets/*.png"]
 [tool.pytest.ini_options]
 markers = ["unit", "integration"]
 
-[tool.ruff.lint.isort]  # Prevent ruff from reporting conflicting settings with isort
-split-on-trailing-comma = false
+########################
+# Pixi Sessions
+########################
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
 
+[tool.pixi.dependencies]
+python = ">=3.11.12,<3.14"
+pip = ">=25.0.1,<26"
+ruff = "*"
+# Compilers needed for acados
+cmake = "*"
+compilers = ">=1.9.0, <1.11.0"
+make = "*"
+openblas = ">=0.3.30,<0.4"
+
+[tool.pixi.pypi-dependencies]
+lsy_drone_racing = { path = ".", editable = true }
+
+[tool.pixi.activation]
+scripts = ["tools/setup_acados.sh"]
+
+[tool.pixi.tasks]
+evaluate = { cmd = "python scripts/evaluation.py", description = "Evaluate the controller" }
+
+### environments
+[tool.pixi.environments]
+default = { features = ["sim"], solve-group = "default" }
+deploy = { features = ["sim", "gpu", "kilted", "deploy"] }
+gpu = { features = ["sim", "gpu"], solve-group = "default" }
+tests = { features = ["sim", "rl", "tests"], solve-group = "default" }
+gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
+gamepad = { features = ["sim", "gamepad"], solve-group = "default" }
+
+## feature [kilted]
+[tool.pixi.feature.kilted]
+channels = ["https://prefix.dev/robostack-kilted"]
+
+[tool.pixi.feature.kilted.dependencies]
+# Build tools
+compilers = "*"
+cmake = "*"
+pkg-config = "*"
+make = "*"
+ninja = "*"
+# ROS specific tools
+rosdep = "*"
+colcon-common-extensions = "*"
+# Kilted specific tools
+ros-kilted-desktop = "*"
+
+[tool.pixi.feature.kilted.activation]
+scripts = ["tools/setup_mocap.sh"]
+
+## feature [tests]
+[tool.pixi.feature.tests.tasks]
+tests = { cmd = "pytest -v tests", description = "Run tests" }
+
+[tool.pixi.feature.tests.dependencies]
+pytest = "*"
+
+########################
+# Linting and formatting settings
+########################
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -91,6 +153,9 @@ ignore = ["ANN401"]
 fixable = ["ALL"]
 unfixable = []
 
+[tool.ruff.lint.isort]  # Prevent ruff from reporting conflicting settings with isort
+split-on-trailing-comma = false
+
 [tool.ruff.lint.per-file-ignores]
 "benchmarks/*" = ["D100", "D103"]
 "tests/*" = ["D100", "D103", "D104"]
@@ -110,76 +175,3 @@ skip-magic-trailing-comma = true
 line-ending = "auto"
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
-
-########################
-# Pixi Sessions
-########################
-
-[tool.pixi.workspace]
-channels = ["conda-forge"]
-platforms = ["linux-64"]
-
-[tool.pixi.dependencies]
-python = ">=3.11.12,<3.14"
-pip = ">=25.0.1,<26"
-ruff = "*"
-# Compilers needed for acados
-cmake = "*"
-compilers = ">=1.9.0, <1.11.0"
-make = "*"
-openblas = ">=0.3.30,<0.4"
-
-[tool.pixi.pypi-dependencies]
-lsy_drone_racing = { path = ".", editable = true }
-
-[tool.pixi.activation]
-scripts = ["tools/setup_acados.sh"]
-
-### environments
-[tool.pixi.environments]
-default = { features = ["sim"], solve-group = "default" }
-deploy = { features = ["sim", "gpu", "kilted", "deploy"] }
-gpu = { features = ["sim", "gpu"], solve-group = "default" }
-online-submission = { features = [
-    "sim",
-    "online-submission",
-], solve-group = "default" }
-tests = { features = ["sim", "rl", "tests"], solve-group = "default" }
-gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
-gamepad = { features = ["sim", "gamepad"], solve-group = "default" }
-
-## feature [kilted]
-[tool.pixi.feature.kilted]
-channels = ["https://prefix.dev/robostack-kilted"]
-
-[tool.pixi.feature.kilted.dependencies]
-# Build tools
-compilers = "*"
-cmake = "*"
-pkg-config = "*"
-make = "*"
-ninja = "*"
-# ROS specific tools
-rosdep = "*"
-colcon-common-extensions = "*"
-# Kilted specific tools
-ros-kilted-desktop = "*"
-
-[tool.pixi.feature.kilted.activation]
-scripts = ["tools/setup_mocap.sh"]
-
-## feature [online-submission]
-[tool.pixi.feature.online-submission.tasks]
-create-submission = { cmd = "python scripts/kaggle.py", description = "Create online submission" }
-export-submission = { cmd = "kaggle competitions submit -c lsy-drone-racing-ws-25 -f submission.csv -m 'Automated submission'", description = "Submit online submission" }
-
-[tool.pixi.feature.online-submission.dependencies]
-pandas = "*"
-kaggle = "*"
-
-## feature [tests]
-[tool.pixi.feature.tests.tasks]
-tests = { cmd = "pytest -v tests", description = "Run tests" }
-
-[tool.pixi.feature.tests.dependencies]
-pytest = "*"
