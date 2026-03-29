@@ -1,6 +1,6 @@
 """Real-world drone racing environments.
 
-This module contains the environments for controlling a single or multiple drones in a real-world
+This module contains the environments for controlling a single drone in a real-world
 race track. It mirrors the :mod:`~ece484_fly.envs.drone_race` module as closely as possible,
 but uses data from real-world observations from motion capture systems and sends actions to the
 real drones.
@@ -488,8 +488,7 @@ class RealDroneRaceEnv(RealRaceCoreEnv, Env):
     - Handles automatic return-to-home behavior when the race is completed
 
     Note:
-        This environment is designed for single-drone racing. For multi-drone racing, use the
-        :class:`~ece484_fly.envs.real_race_env.RealMultiDroneRaceEnv` class instead.
+        This environment is designed for single-drone racing. 
     """
 
     def __init__(
@@ -501,7 +500,7 @@ class RealDroneRaceEnv(RealRaceCoreEnv, Env):
         sensor_range: float = 0.5,
         control_mode: Literal["state", "attitude"] = "state",
     ):
-        """Initialize the multi-drone environment.
+        """Initialize the single-drone environment.
 
         Action space:
             The action space is a single action vector for the drone with the environment rank.
@@ -553,95 +552,3 @@ class RealDroneRaceEnv(RealRaceCoreEnv, Env):
         obs, reward, terminated, truncated, info = self._step(action)
         return {k: v[0, ...] for k, v in obs.items()}, reward[0], terminated[0], truncated[0], info
 
-
-# region Multi Drone Env
-class RealMultiDroneRaceEnv(RealRaceCoreEnv, Env):
-    """A Gymnasium environment for controlling a specific drone in a multi-drone physical race.
-
-    This environment extends the functionality of `RealRaceCoreEnv` to support multi-drone racing
-    scenarios. Each instance of this environment controls a single drone identified by its rank, but
-    maintains awareness of all drones in the race. This allows for coordinated multi-drone
-    deployments where each drone runs in a separate process with its own controller.
-
-    The environment handles communication with the specific drone through cflib and tracks all
-    drones' positions using a motion capture system via ROS2. It provides observations that include
-    the state of all drones, allowing controllers to implement collision avoidance or cooperative
-    strategies.
-
-    Features:
-    - Controls a specific drone in a multi-drone race based on its rank
-    - Tracks all drones' positions and states via ROS2
-    - Supports both state-based and attitude-based control modes
-    - Provides sensor range simulation for gates and obstacles
-    - Handles automatic return-to-home behavior when the race is completed
-
-    Action space:
-        The action space is a **single** action vector for the drone with the environment rank.
-        See :class:`~.RealRaceCoreEnv` for more information.
-
-    Warning:
-        The action space differs from the action space of the simulated counterpart. This deviation
-        is necessary to run different controller types at different frequencies that asynchronously
-        publish ther commands to the drone.
-
-    Observation space:
-        The observation space is a dictionary containing the state of all drones in the race.
-        It mimics exactly the observation space of
-        :class:`ece484_fly.envs.multi_drone_race.MultiDroneRaceEnv`.
-
-    Note:
-        Each instance of this environment controls only one drone (specified by rank), but provides
-        observations for all drones in the race. This allows us to run controllers at different
-        frequencies for different drones. Consequently the step method applies actions only to the
-    """
-
-    def __init__(
-        self,
-        drones: list[dict[str, int]],
-        rank: int,
-        freq: int,
-        track: ConfigDict,
-        randomizations: ConfigDict,
-        sensor_range: float = 0.5,
-        control_mode: Literal["state", "attitude"] = "state",
-    ):
-        """Initialize the multi-drone environment.
-
-        Args:
-            drones: List of all drones in the race, including their channel and id.
-            rank: Rank of the drone that is controlled by this environment.
-            freq: Environment step frequency.
-            track: Track configuration (see :func:`~ece484_fly.envs.utils.load_track`).
-            randomizations: Randomization configuration.
-            sensor_range: Sensor range. Determines at which distance the exact position of the
-                gates and obstacles is reveiled.
-            control_mode: Control mode of the drone.
-        """
-        super().__init__(
-            drones=drones,
-            rank=rank,
-            freq=freq,
-            track=track,
-            randomizations=randomizations,
-            sensor_range=sensor_range,
-            control_mode=control_mode,
-        )
-
-    def reset(self, *, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
-        """Reset the environment and return the initial observation and info."""
-        return self._reset(seed=seed, options=options)
-
-    def step(self, action: NDArray) -> tuple[dict, float, bool, bool, dict]:
-        """Perform a step in the environment.
-
-        Note:
-            The action is applied only to the drone with the environment rank!
-
-        Args:
-            action: Action to be taken by the drone.
-
-        Returns:
-            Observation, reward, terminated, truncated, and info.
-        """
-        obs, reward, terminated, truncated, info = self._step(action)
-        return obs, reward[self.rank], terminated[self.rank], truncated[self.rank], info

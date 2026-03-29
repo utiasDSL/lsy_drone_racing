@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import fire
 import numpy as np
-from sim import time_multi_drone_reset, time_multi_drone_step, time_sim_reset, time_sim_step
+from sim import time_sim_reset, time_sim_step
 
 
 def print_benchmark_results(name: str, timings: list[float], n_envs: int, device: str):
@@ -16,15 +16,12 @@ def print_benchmark_results(name: str, timings: list[float], n_envs: int, device
 def main(
     n_tests: int = 2,
     number: int = 100,
-    multi_drone: bool = False,
     reset: bool = True,
     step: bool = True,
     vec_size: int = 1,
     device: str = "cpu",
 ):
     reset_fn, step_fn = time_sim_reset, time_sim_step
-    if multi_drone:
-        reset_fn, step_fn = time_multi_drone_reset, time_multi_drone_step
     if reset:
         timings = reset_fn(n_tests=n_tests, number=number, n_envs=vec_size, device=device)
         print_benchmark_results(

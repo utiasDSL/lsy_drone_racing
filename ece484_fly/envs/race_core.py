@@ -13,9 +13,7 @@ The environment is designed to be configurable, supporting:
 * Vectorized execution for parallel training
 
 This module is primarily used as a base for the higher-level environments in
-:mod:`~ece484_fly.envs.drone_race` and :mod:`~ece484_fly.envs.multi_drone_race`,
-which provide Gymnasium-compatible interfaces for reinforcement learning, MPC and other control
-techniques.
+:mod:`~ece484_fly.envs.drone_race` which provide Gymnasium-compatible interfaces for control techniques.
 """
 
 from __future__ import annotations

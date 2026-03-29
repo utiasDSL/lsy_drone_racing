@@ -18,7 +18,7 @@ from ece484_fly.utils.ros import track_poses
 logger = logging.getLogger("rosout." + __name__)
 
 
-def main(config: str = "level2.toml"):
+def main(config: str = "level1.toml"):
     """Check if the real race track conforms to the race configuration.
 
     Args:

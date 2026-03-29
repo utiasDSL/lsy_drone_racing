@@ -25,14 +25,6 @@ register(
     disable_env_checker=True,  # Remove warnings about 2D observations
 )
 
-register(
-    id="MultiDroneRacing-v0",
-    entry_point="ece484_fly.envs.multi_drone_race:MultiDroneRaceEnv",
-    vector_entry_point="ece484_fly.envs.multi_drone_race:VecMultiDroneRaceEnv",
-    max_episode_steps=1500,
-    disable_env_checker=True,
-)
-
 # region RealEnvs
 
 register(
@@ -41,8 +33,3 @@ register(
     disable_env_checker=True,
 )
 
-register(
-    id="RealMultiDroneRacing-v0",
-    entry_point="ece484_fly.envs.real_race_env:RealMultiDroneRaceEnv",
-    disable_env_checker=True,
-)

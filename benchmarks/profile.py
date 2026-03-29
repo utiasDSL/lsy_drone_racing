@@ -9,7 +9,7 @@ from ece484_fly.utils import load_config
 
 
 def main():
-    config = load_config(Path(__file__).parents[1] / "config/level2.toml")
+    config = load_config(Path(__file__).parents[1] / "config/level1.toml")
     env = gymnasium.make(
         "DroneRacing-v0",
         freq=config.env.freq,

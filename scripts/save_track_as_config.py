@@ -47,7 +47,7 @@ def update_level_config(
     return config
 
 
-def main(config: str = "level2.toml", save_config_to: str = "real_track.toml"):
+def main(config: str = "level1.toml", save_config_to: str = "real_track.toml"):
     """Check if the real race track conforms to the race configuration.
 
     Args:

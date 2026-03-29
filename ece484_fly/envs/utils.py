@@ -304,7 +304,6 @@ def generate_random_track(
     # Write random track
     for i, d in enumerate(track.drones):
         d["pos"][:2] = start_pos
-        # TODO multi drones?
 
     for i, g in enumerate(track.gates):
         g["pos"][:2] = gates_final[i, :2].tolist()
