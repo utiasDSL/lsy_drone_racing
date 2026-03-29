@@ -19,13 +19,13 @@ import jax.numpy as jp
 import numpy as np
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 
-from lsy_drone_racing.utils import load_config, load_controller
+from ece484_fly.utils import load_config, load_controller
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
 
-    from lsy_drone_racing.control.controller import Controller
-    from lsy_drone_racing.envs.drone_race import DroneRaceEnv
+    from ece484_fly.control.controller import Controller
+    from ece484_fly.envs.drone_race import DroneRaceEnv
 
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def simulate(
 
     Args:
         config: The path to the configuration file. Assumes the file is in `config/`.
-        controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
+        controller: The name of the controller file in `ece484_fly/control/` or None. If None,
             the controller specified in the config file is used.
         n_runs: The number of episodes.
         render: Enable/disable rendering the simulation.
@@ -56,7 +56,7 @@ def simulate(
     else:
         config.sim.render = render
     # Load the controller module
-    control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
+    control_path = Path(__file__).parents[1] / "ece484_fly/control"
     controller_path = control_path / (controller or config.controller.file)
     controller_cls = load_controller(controller_path)  # This returns a class, not an instance
     # Create the racing environment
@@ -126,6 +126,6 @@ def log_episode_stats(obs: dict, info: dict, config: ConfigDict, curr_time: floa
 
 if __name__ == "__main__":
     logging.basicConfig()
-    logging.getLogger("lsy_drone_racing").setLevel(logging.INFO)
+    logging.getLogger("ece484_fly").setLevel(logging.INFO)
     logger.setLevel(logging.INFO)
     fire.Fire(simulate, serialize=lambda _: None)

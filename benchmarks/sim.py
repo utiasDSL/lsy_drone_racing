@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 load_config_code = f"""
 from pathlib import Path
 
-from lsy_drone_racing.utils import load_config
+from ece484_fly.utils import load_config
 
 config = load_config(Path('{Path(__file__).parents[1] / "config/level2.toml"}'))
 """
@@ -21,7 +21,7 @@ env_setup_code = """
 import gymnasium
 import jax
 
-import lsy_drone_racing
+import ece484_fly
 
 env = gymnasium.make_vec(
     config.env.id,
@@ -52,7 +52,7 @@ attitude_env_setup_code = """
 import gymnasium
 import jax
 
-import lsy_drone_racing
+import ece484_fly
 
 env = gymnasium.make_vec('DroneRacingAttitude-v0',
     num_envs={num_envs},
@@ -81,7 +81,7 @@ env.action_space.seed(2)
 load_multi_drone_config_code = f"""
 from pathlib import Path
 
-from lsy_drone_racing.utils import load_config
+from ece484_fly.utils import load_config
 
 config = load_config(Path('{Path(__file__).parents[1] / "config/multi_level3.toml"}'))
 """
@@ -90,8 +90,8 @@ multi_drone_env_setup_code = """
 import gymnasium
 import jax
 
-import lsy_drone_racing
-from lsy_drone_racing.envs.multi_drone_race import VecMultiDroneRaceEnv
+import ece484_fly
+from ece484_fly.envs.multi_drone_race import VecMultiDroneRaceEnv
 
 
 env = gymnasium.make_vec('MultiDroneRacing-v0',

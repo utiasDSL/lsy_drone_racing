@@ -4,8 +4,8 @@ import gymnasium
 from gymnasium.wrappers.jax_to_numpy import JaxToNumpy
 from pyinstrument import Profiler
 
-import lsy_drone_racing  # noqa: F401, required for gymnasium.make
-from lsy_drone_racing.utils import load_config
+import ece484_fly  # noqa: F401, required for gymnasium.make
+from ece484_fly.utils import load_config
 
 
 def main():

@@ -19,16 +19,16 @@ from gymnasium import register
 
 register(
     id="DroneRacing-v0",
-    entry_point="lsy_drone_racing.envs.drone_race:DroneRaceEnv",
-    vector_entry_point="lsy_drone_racing.envs.drone_race:VecDroneRaceEnv",
+    entry_point="ece484_fly.envs.drone_race:DroneRaceEnv",
+    vector_entry_point="ece484_fly.envs.drone_race:VecDroneRaceEnv",
     max_episode_steps=1500,  # 30 seconds * 50 Hz,
     disable_env_checker=True,  # Remove warnings about 2D observations
 )
 
 register(
     id="MultiDroneRacing-v0",
-    entry_point="lsy_drone_racing.envs.multi_drone_race:MultiDroneRaceEnv",
-    vector_entry_point="lsy_drone_racing.envs.multi_drone_race:VecMultiDroneRaceEnv",
+    entry_point="ece484_fly.envs.multi_drone_race:MultiDroneRaceEnv",
+    vector_entry_point="ece484_fly.envs.multi_drone_race:VecMultiDroneRaceEnv",
     max_episode_steps=1500,
     disable_env_checker=True,
 )
@@ -37,12 +37,12 @@ register(
 
 register(
     id="RealDroneRacing-v0",
-    entry_point="lsy_drone_racing.envs.real_race_env:RealDroneRaceEnv",
+    entry_point="ece484_fly.envs.real_race_env:RealDroneRaceEnv",
     disable_env_checker=True,
 )
 
 register(
     id="RealMultiDroneRacing-v0",
-    entry_point="lsy_drone_racing.envs.real_race_env:RealMultiDroneRaceEnv",
+    entry_point="ece484_fly.envs.real_race_env:RealMultiDroneRaceEnv",
     disable_env_checker=True,
 )

@@ -17,10 +17,10 @@ import fire
 import gymnasium
 import rclpy
 
-from lsy_drone_racing.utils import load_config, load_controller
+from ece484_fly.utils import load_config, load_controller
 
 if TYPE_CHECKING:
-    from lsy_drone_racing.envs.real_race_env import RealDroneRaceEnv
+    from ece484_fly.envs.real_race_env import RealDroneRaceEnv
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def main(config: str = "level2.toml", controller: str | None = None):
 
     Args:
         config: Path to the competition configuration. Assumes the file is in `config/`.
-        controller: The name of the controller file in `lsy_drone_racing/control/` or None. If None,
+        controller: The name of the controller file in `ece484_fly/control/` or None. If None,
          the controller specified in the config file is used.
     """
     rclpy.init()
@@ -51,7 +51,7 @@ def main(config: str = "level2.toml", controller: str | None = None):
         obs, info = env.reset(options=config.deploy)
         next_obs = obs  # Set next_obs to avoid errors when the loop never enters
 
-        control_path = Path(__file__).parents[1] / "lsy_drone_racing/control"
+        control_path = Path(__file__).parents[1] / "ece484_fly/control"
         controller_path = control_path / config.controller.file
         controller_cls = load_controller(controller_path)
         controller = controller_cls(obs, info, config)
@@ -83,5 +83,5 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING)
     logging.getLogger("jax").setLevel(logging.ERROR)
     logger.setLevel(logging.INFO)
-    logging.getLogger("lsy_drone_racing").setLevel(logging.INFO)
+    logging.getLogger("ece484_fly").setLevel(logging.INFO)
     fire.Fire(main)

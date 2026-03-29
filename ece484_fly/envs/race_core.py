@@ -13,7 +13,7 @@ The environment is designed to be configurable, supporting:
 * Vectorized execution for parallel training
 
 This module is primarily used as a base for the higher-level environments in
-:mod:`~lsy_drone_racing.envs.drone_race` and :mod:`~lsy_drone_racing.envs.multi_drone_race`,
+:mod:`~ece484_fly.envs.drone_race` and :mod:`~ece484_fly.envs.multi_drone_race`,
 which provide Gymnasium-compatible interfaces for reinforcement learning, MPC and other control
 techniques.
 """
@@ -36,7 +36,7 @@ from drone_controllers.mellinger.params import ForceTorqueParams
 from flax.struct import dataclass
 from gymnasium import spaces
 
-from lsy_drone_racing.envs.randomize import (
+from ece484_fly.envs.randomize import (
     randomize_drone_inertia_fn,
     randomize_drone_mass_fn,
     randomize_drone_pos_fn,
@@ -45,7 +45,7 @@ from lsy_drone_racing.envs.randomize import (
     randomize_gate_rpy_fn,
     randomize_obstacle_pos_fn,
 )
-from lsy_drone_racing.envs.utils import gate_passed, generate_random_track, load_track
+from ece484_fly.envs.utils import gate_passed, generate_random_track, load_track
 
 if TYPE_CHECKING:
     from crazyflow.sim.data import SimData

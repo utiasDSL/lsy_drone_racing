@@ -20,11 +20,11 @@ You may develop any controllers of your choosing. However, note that CrazyFlies 
 2. Install Pixi via `curl -fsSL https://pixi.sh/install.sh | sh`.
 
 To install the simulation environment: 
-1. In `~/ece484-fly`, run `pixi shell ` or `pixi shell -e gpu` if you have GPU. 
+1. In `~/ece484_fly`, run `pixi shell ` or `pixi shell -e gpu` if you have GPU. 
 2. Run `python3 scripts/sim.py -r` to ensure successful installation. You should see a drone fly through four gates in the simulator.
 
 To install the hardware deployment environment: 
-1. In `~/ece484-fly`, run `pixi shell -e deploy`. 
+1. In `~/ece484_fly`, run `pixi shell -e deploy`. 
 2. Run the following to prepare the USB port for CrazyRadio to CrazyFlie communication: 
 ```
 cat <<EOF | sudo tee /etc/udev/rules.d/99-bitcraze.rules > /dev/null

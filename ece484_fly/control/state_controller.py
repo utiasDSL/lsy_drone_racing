@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.interpolate import CubicSpline
 
-from lsy_drone_racing.control import Controller
+from ece484_fly.control import Controller
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
