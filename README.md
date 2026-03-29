@@ -1,6 +1,6 @@
 # ECE484 Quadrotor Project
 <p align="center">
-  <img width="460" height="300" src="docs/img/quadrotor-sketch.png">
+  <img width="460" height="300" src="quadrotor-sketch.png">
 </p>
 
 ## Introduction
