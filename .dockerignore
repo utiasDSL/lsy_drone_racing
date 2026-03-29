@@ -1,5 +1,0 @@
-.git
-.github
-.vscode
-.pytest_cache
-**/*.pyc
