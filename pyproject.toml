@@ -41,6 +41,7 @@ gpu = ["jax[cuda12]"]
 # option[deploy]: deploy to real drones
 deploy = [
     "cfclient",
+    "cflib == 0.1.30",
     "drone-estimators",
 ]
 # option[rl]: train rl policy
@@ -79,6 +80,8 @@ rosdep = "*"
 colcon-common-extensions = "*"
 # Kilted specific tools
 ros-kilted-desktop = "*"
+# Pin Boost <1.87 to avoid removed boost::asio::io_service in motion_capture_tracking
+libboost-headers = ">=1.84,<1.87"
 
 [tool.pixi.feature.kilted.activation]
 scripts = ["tools/setup_mocap.sh"]
@@ -96,6 +99,7 @@ gpu = { features = ["sim", "gpu"], solve-group = "default" }
 openblas = ">=0.3.30,<0.4"
 python = ">=3.11.12,<3.14"
 pip = ">=25.0.1,<26"
+packaging = ">=25.0,<26"
 cmake = "*"
 compilers = ">=1.9.0, <1.11.0"
 make = "*"

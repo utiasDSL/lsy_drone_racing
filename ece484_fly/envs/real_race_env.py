@@ -128,7 +128,7 @@ class RealRaceCoreEnv:
         self._ros_connector = ROSConnector(
             estimator_names=self.drone_names,
             cmd_topic=f"/drones/{self.drone_name}/command",
-            timeout=10.0,
+            timeout=30.0,
         )
         # Dynamic data
         self.data = EnvData.create(

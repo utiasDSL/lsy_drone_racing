@@ -4,19 +4,19 @@
 # | :-----------------: | :----------------------------: | :-------------------------: | :---------------: | :------: |
 # | `level1.toml`       | *Yes*                          | *No*                        | *No*              | Adaptive |
 [controller]
-file = "state_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `ece484_fly/control/`
+file = "attitude_controller.py" # Put your controller file name here. Specifying a controller as argument to scripts will override this setting. Controllers are located in `ece484_fly/control/`
 
 [deploy]
 ### Settings only relevant for deployment
 # Whether to check if gate and obstacle positions observed by vicon are within the limits defined down below.
-check_race_track = true
+check_race_track = false
 # Whether to check if the drone start position is within the limits specified down below.
-check_drone_start_pos = true
+check_drone_start_pos = false
 # Lets you practice your controller without putting up gates & obstacles, assumes nominal positions given below.
-real_track_objects = true
+real_track_objects = false
 
 [[deploy.drones]]
-id = 10
+id = 1
 channel = 100
 drone_model = "cf21B_500"                        # Model of the drone, i.e., cf2x_L250, cf2x_P250, cf2x_T500, cf21B_500. For this course, we use cf21B_500
 
@@ -27,7 +27,7 @@ drone_model = "cf21B_500"                        # Model of the drone, i.e., cf2
 # "so_rpy": Simplified identified model.
 # "so_rpy_rotor": Simplified identified model with rotor dynamics.
 # "so_rpy_rotor_drag": Simplified identified model with rotor dynamics and drag.
-physics = "first_principles"
+physics = "so_rpy_rotor_drag"
 drone_model = "cf21B_500"                        # Model of the drone, i.e., cf2x_L250, cf2x_P250, cf2x_T500, cf21B_500. For this course, we use cf21B_500
 camera_view = [5.0, 180.0, -25.0, 0.0, 0.0, 0.0] # Camera view [distance, azimuth, elevation, lookat_x, lookat_y, lookat_z]
 freq = 500                                        # Simulation frequency, in Hz
@@ -38,13 +38,13 @@ render = false                                       # Enable/disable PyBullet's
 [env]
 id = "DroneRacing-v0"   # "DroneRacing-v0" for single races. Each environment implements a vector-environment for faster training
 seed = "random"         # Either "random" for a random behavior or an integer for reproducibility
-freq = 50               # Frequency of the environment's step function, in Hz
+freq = 100               # Frequency of the environment's step function, in Hz
 sensor_range = 0.7      # Range at which the exact location of gates and obstacles become visible to the drone. Objects that are not in the drone's sensor range report their nominal position.
-control_mode = "state"  # Control mode of the environment. Can be either "state" or "attitude"
+control_mode = "attitude"  # Control mode of the environment. Can be either "state" or "attitude"
 
 [env.track]
-# Full track radomization. When activated, the position (x & y) and orientation (yaw) 
-# of the below given gates, obstacles and drones is randomized inside the safety limits. 
+# Full track radomization. When activated, the position (x & y) and orientation (yaw)
+# of the below given gates, obstacles and drones is randomized inside the safety limits.
 # Note: The order and therefore also height is not randomized!
 randomize = false
 
@@ -66,13 +66,7 @@ rpy = [0.0, 0.0, 0.0]
 # Obstacle height: 1.52m + reflective marker on top. Height is measured from the ground to the top of the obstacle.
 # Obstacles are cylinders with a diameter of 0.03m.
 [[env.track.obstacles]]
-pos = [0.0, 0.75, 1.55]
-[[env.track.obstacles]]
-pos = [1.0, 0.25, 1.55]
-[[env.track.obstacles]]
-pos = [-1.5, -0.25, 1.55]
-[[env.track.obstacles]]
-pos = [-0.5, -0.75, 1.55]
+pos = [2.4, 1.4, 1.55]
 
 [[env.track.drones]]
 pos = [-1.5, 0.75, 0.01]
