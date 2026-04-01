@@ -2,7 +2,7 @@
 
 Run as:
 
-    $ python scripts/sim.py --config level0.toml
+    $ python scripts/sim.py --config level1.toml
 
 Look for instructions in `README.md` and in the official documentation.
 """
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 def simulate(
-    config: str = "level0.toml",
+    config: str = "level1.toml",
     controller: str | None = None,
     n_runs: int = 1,
     render: bool | None = None,

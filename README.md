@@ -55,7 +55,3 @@ python3 -m drone_estimators.ros_nodes.ros2_node --drone_name cf10
 # Terminal 3: Run the deployment script with the correct configuration and controller
 python3 scripts/deploy.py --config level1.toml --controller <your_controller.py>
 ```
-
-## Credit
-
-We credit [Learning Systems Lab (LSY)](https://www.ce.cit.tum.de/lsy/home/) at TUM for their work on [lsy_drone_racing](github.com/utiasDSL/lsy_drone_racing) from [Learning Systems Lab (LSY)](https://www.ce.cit.tum.de/lsy/home/) at TUM.
