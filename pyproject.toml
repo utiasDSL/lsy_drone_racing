@@ -18,7 +18,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
 ]
 
-
 ########################
 # Pip Dependencies
 ########################
@@ -108,9 +107,28 @@ rosdep = "*"
 colcon-common-extensions = "*"
 # Kilted specific tools
 ros-kilted-desktop = "*"
+ros-kilted-rmw-zenoh-cpp = "*"
 
 [tool.pixi.feature.kilted.activation]
 scripts = ["tools/setup_mocap.sh"]
+env = { RMW_IMPLEMENTATION = "rmw_zenoh_cpp", ZENOH_ROUTER_CHECK_ATTEMPTS = "-1" }
+
+[tool.pixi.feature.kilted.tasks.zenoh-router]
+# To use ROS with Zenoh backend, a router is mandatory
+cmd = "ros2 run rmw_zenoh_cpp rmw_zenohd"
+description = "Run the Zenoh router on the host machine"
+
+## feature [deploy]
+[tool.pixi.feature.deploy.tasks.mocap]
+cmd = "ros2 launch motion_capture_tracking launch.py"
+
+[tool.pixi.feature.deploy.tasks.estimator]
+cmd = ["python",
+        "-m",
+        "drone_estimators.ros_nodes.ros2_node",
+        "--drone_name",
+        "{{drone_name}}"]
+args = [{ "arg" = "drone_name", "default" = "cf10" }]
 
 ## feature [tests]
 [tool.pixi.feature.tests.tasks]

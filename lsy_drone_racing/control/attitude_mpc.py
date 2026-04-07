@@ -243,9 +243,9 @@ class AttitudeMPC(Controller):
             self._finished = True
 
         # Setting initial state
-        obs["rpy"] = R.from_quat(obs["quat"]).as_euler("xyz")
-        obs["drpy"] = ang_vel2rpy_rates(obs["quat"], obs["ang_vel"])
-        x0 = np.concatenate((obs["pos"], obs["rpy"], obs["vel"], obs["drpy"]))
+        rpy = R.from_quat(obs["quat"]).as_euler("xyz")
+        drpy = ang_vel2rpy_rates(obs["quat"], obs["ang_vel"])
+        x0 = np.concatenate((obs["pos"], rpy, obs["vel"], drpy))
         self._acados_ocp_solver.set(0, "lbx", x0)
         self._acados_ocp_solver.set(0, "ubx", x0)
 

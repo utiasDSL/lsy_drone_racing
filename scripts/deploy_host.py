@@ -1,0 +1,62 @@
+"""Deployment script for the multi-drone racing host.
+
+The host connects to all Crazyflie drones, coordinates client synchronization via
+Zenoh, and supervises the race until all clients finish.
+
+Usage:
+
+    python deploy_host.py --config multi_level2.toml
+
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+import fire
+import rclpy
+
+from lsy_drone_racing.envs.real_race_host import CrazyFlieRealRaceHost
+from lsy_drone_racing.utils import load_config
+
+logger = logging.getLogger(__name__)
+
+
+def main(config: str = "multi_level2.toml"):
+    """Deploy and run the race host.
+
+    Args:
+        config: Configuration file name, assumed to be in ``config/``.
+    """
+    rclpy.init()
+    config_obj = load_config(Path(__file__).parents[1] / "config" / config)
+    deploy = config_obj.deploy
+    host = CrazyFlieRealRaceHost(config_obj)
+    try:
+        host.update_poses(track_obj=deploy.real_track_objects, drones=deploy.check_drone_start_pos)
+        host.check_track(
+            rng_config=config_obj.env.randomizations,
+            check_objects=deploy.real_track_objects and deploy.check_race_track,
+            check_drones=deploy.check_drone_start_pos,
+        )
+        host.connect_drones()
+        logger.info("Drones connected, starting main loop...")
+        host.host_main_loop()
+    except KeyboardInterrupt:
+        logger.info("Interrupted, shutting down...")
+    except Exception as e:
+        logger.error(f"Host encountered error: {e}", exc_info=True)
+    finally:
+        host.close()
+        rclpy.shutdown()
+        logger.info("Host shutdown complete")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    logging.getLogger("jax").setLevel(logging.ERROR)
+    logging.getLogger("cflib").setLevel(logging.WARNING)
+    logger.setLevel(logging.INFO)
+    logging.getLogger("lsy_drone_racing").setLevel(logging.DEBUG)
+    fire.Fire(main)

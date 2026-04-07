@@ -1,10 +1,14 @@
 """Script for checking the positioning of gates and obstacles."""
 
 import logging
+import os
 from pathlib import Path
 
 import fire
 import rclpy
+
+os.environ["SCIPY_ARRAY_API"] = "1"
+
 from scipy.spatial.transform import Rotation as R
 
 from lsy_drone_racing.utils import load_config
