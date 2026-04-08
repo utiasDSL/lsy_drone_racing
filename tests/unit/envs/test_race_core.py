@@ -304,3 +304,173 @@ def test_gate_not_passed_without_crossing():
     )
     assert int(np.asarray(new_data.target_gate[0, 0])) == 0
     env.close()
+
+
+@pytest.mark.unit
+def test_gate_pass_non_target_gate_does_not_increment():
+    """Crossing a gate that is not the current target must not increment target_gate."""
+    from scipy.spatial.transform import Rotation as R
+
+    env = make_env()
+    env.reset()
+    data = env.unwrapped.data
+    n_gates = len(data.gate_mj_ids)
+    assert n_gates >= 2, "need at least 2 gates for this test"
+    assert int(np.asarray(data.target_gate[0, 0])) == 0
+
+    # Straddle gate 1 (the *next* gate) while target_gate is still 0.
+    non_target_idx = 1
+    gate_mj_id = int(np.asarray(data.gate_mj_ids[non_target_idx]))
+    gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
+    gate_quat_mj = np.asarray(
+        env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id]
+    )
+    gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
+    forward = R.from_quat(gate_quat_xyzw).apply(np.array([1.0, 0.0, 0.0]))
+
+    behind = gate_pos - 0.05 * forward
+    front = gate_pos + 0.05 * forward
+
+    new_last = data.last_drone_pos.at[0, 0, :].set(jp.asarray(behind))
+    env.unwrapped.data = data.replace(last_drone_pos=new_last)
+
+    sim_data = env.unwrapped.sim.data
+    new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
+    env.unwrapped.sim.data = sim_data.replace(
+        states=sim_data.states.replace(pos=new_pos)
+    )
+
+    contacts = env.unwrapped.sim.contacts()
+    new_data = RaceCoreEnv._step_env(
+        env.unwrapped.data,
+        env.unwrapped.sim.data.states.pos,
+        env.unwrapped.sim.mjx_data.mocap_pos,
+        env.unwrapped.sim.mjx_data.mocap_quat,
+        contacts,
+    )
+    assert int(np.asarray(new_data.target_gate[0, 0])) == 0
+    env.close()
+
+
+@pytest.mark.unit
+def test_gate_not_passed_in_reverse():
+    """Flying through the gate from +x to -x (reverse) must not count as a pass."""
+    from scipy.spatial.transform import Rotation as R
+
+    env = make_env()
+    env.reset()
+    data = env.unwrapped.data
+
+    gate_mj_id = int(np.asarray(data.gate_mj_ids[0]))
+    gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
+    gate_quat_mj = np.asarray(env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id])
+    gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
+    forward = R.from_quat(gate_quat_xyzw).apply(np.array([1.0, 0.0, 0.0]))
+
+    # Reverse crossing: last position is in front of the gate, current is behind.
+    front = gate_pos + 0.05 * forward
+    behind = gate_pos - 0.05 * forward
+
+    new_last = data.last_drone_pos.at[0, 0, :].set(jp.asarray(front))
+    env.unwrapped.data = data.replace(last_drone_pos=new_last)
+
+    sim_data = env.unwrapped.sim.data
+    new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(behind))
+    env.unwrapped.sim.data = sim_data.replace(states=sim_data.states.replace(pos=new_pos))
+
+    contacts = env.unwrapped.sim.contacts()
+    new_data = RaceCoreEnv._step_env(
+        env.unwrapped.data,
+        env.unwrapped.sim.data.states.pos,
+        env.unwrapped.sim.mjx_data.mocap_pos,
+        env.unwrapped.sim.mjx_data.mocap_quat,
+        contacts,
+    )
+    assert int(np.asarray(new_data.target_gate[0, 0])) == 0
+    env.close()
+
+
+@pytest.mark.unit
+def test_gate_not_passed_when_outside_gate_box():
+    """Crossing the gate plane but far outside the gate opening must not count as a pass."""
+    from scipy.spatial.transform import Rotation as R
+
+    env = make_env()
+    env.reset()
+    data = env.unwrapped.data
+
+    gate_mj_id = int(np.asarray(data.gate_mj_ids[0]))
+    gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
+    gate_quat_mj = np.asarray(env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id])
+    gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
+    rot = R.from_quat(gate_quat_xyzw)
+    forward = rot.apply(np.array([1.0, 0.0, 0.0]))
+    # Offset along the gate's local y-axis, well outside the gate box (half-width is 0.225 m).
+    sideways = rot.apply(np.array([0.0, 1.0, 0.0]))
+
+    # Cross the plane in the correct direction, but 2 m to the side of the opening.
+    behind = gate_pos - 0.05 * forward + 2.0 * sideways
+    front = gate_pos + 0.05 * forward + 2.0 * sideways
+
+    new_last = data.last_drone_pos.at[0, 0, :].set(jp.asarray(behind))
+    env.unwrapped.data = data.replace(last_drone_pos=new_last)
+
+    sim_data = env.unwrapped.sim.data
+    new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
+    env.unwrapped.sim.data = sim_data.replace(states=sim_data.states.replace(pos=new_pos))
+
+    contacts = env.unwrapped.sim.contacts()
+    new_data = RaceCoreEnv._step_env(
+        env.unwrapped.data,
+        env.unwrapped.sim.data.states.pos,
+        env.unwrapped.sim.mjx_data.mocap_pos,
+        env.unwrapped.sim.mjx_data.mocap_quat,
+        contacts,
+    )
+    assert int(np.asarray(new_data.target_gate[0, 0])) == 0
+    env.close()
+
+
+@pytest.mark.unit
+def test_gate_pass_at_last_gate_clamps_to_negative_one():
+    """Passing the final gate must set target_gate to -1 (course finished sentinel)."""
+    from scipy.spatial.transform import Rotation as R
+
+    env = make_env()
+    env.reset()
+    data = env.unwrapped.data
+    n_gates = len(data.gate_mj_ids)
+
+    # Pre-advance target_gate to the last gate so _step_env will check against it.
+    last_idx = n_gates - 1
+    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[0, 0].set(last_idx))
+    data = env.unwrapped.data
+
+    # Craft a forward crossing of the last gate.
+    gate_mj_id = int(np.asarray(data.gate_mj_ids[last_idx]))
+    gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
+    gate_quat_mj = np.asarray(env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id])
+    gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
+    forward = R.from_quat(gate_quat_xyzw).apply(np.array([1.0, 0.0, 0.0]))
+
+    behind = gate_pos - 0.05 * forward
+    front = gate_pos + 0.05 * forward
+
+    new_last = data.last_drone_pos.at[0, 0, :].set(jp.asarray(behind))
+    env.unwrapped.data = data.replace(last_drone_pos=new_last)
+
+    sim_data = env.unwrapped.sim.data
+    new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
+    env.unwrapped.sim.data = sim_data.replace(states=sim_data.states.replace(pos=new_pos))
+
+    contacts = env.unwrapped.sim.contacts()
+    new_data = RaceCoreEnv._step_env(
+        env.unwrapped.data,
+        env.unwrapped.sim.data.states.pos,
+        env.unwrapped.sim.mjx_data.mocap_pos,
+        env.unwrapped.sim.mjx_data.mocap_quat,
+        contacts,
+    )
+    # target_gate would otherwise increment to n_gates; the clamp in _step_env maps it to -1.
+    assert int(np.asarray(new_data.target_gate[0, 0])) == -1
+    env.close()
