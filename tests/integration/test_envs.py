@@ -214,7 +214,7 @@ def test_render():
 
     # Force terminal state
     data = env.unwrapped.data
-    env.unwrapped.data = data.replace(target_gate = data.target_gate.at[...].set(-1))
+    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[...].set(-1))
     env.step(env.action_space.sample())
     assert jp.all(env.unwrapped.data.disabled_drones), "drone not actually disabled"
     env.render()
@@ -251,7 +251,7 @@ def test_render_multi_drone():
     # `_warp_disabled_drones`, exercising the renderer with a mix of active and
     # warped drones.
     data = env.unwrapped.data
-    env.unwrapped.data = data.replace(target_gate = data.target_gate.at[0, 0].set(-1))
+    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[0, 0].set(-1))
     env.step(env.action_space.sample())
 
     # Verify drone 0 is disabled and the others are still active.
@@ -261,7 +261,7 @@ def test_render_multi_drone():
 
     env.render()
 
-    # Now force ALL drones into a terminal state by setting every target gate to
+    # Force ALL drones into a terminal state by setting every target gate to
     # -1. On the next step, every drone will be disabled and (because the env
     # has autoreset enabled) the world will be auto-reset before render is
     # called again.
