@@ -322,9 +322,7 @@ def test_gate_pass_non_target_gate_does_not_increment():
     non_target_idx = 1
     gate_mj_id = int(np.asarray(data.gate_mj_ids[non_target_idx]))
     gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
-    gate_quat_mj = np.asarray(
-        env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id]
-    )
+    gate_quat_mj = np.asarray(env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id])
     gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
     forward = R.from_quat(gate_quat_xyzw).apply(np.array([1.0, 0.0, 0.0]))
 
@@ -336,9 +334,7 @@ def test_gate_pass_non_target_gate_does_not_increment():
 
     sim_data = env.unwrapped.sim.data
     new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
-    env.unwrapped.sim.data = sim_data.replace(
-        states=sim_data.states.replace(pos=new_pos)
-    )
+    env.unwrapped.sim.data = sim_data.replace(states=sim_data.states.replace(pos=new_pos))
 
     contacts = env.unwrapped.sim.contacts()
     new_data = RaceCoreEnv._step_env(
