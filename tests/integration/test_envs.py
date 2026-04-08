@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import gymnasium
@@ -9,6 +10,11 @@ from drone_models import available_models
 import lsy_drone_racing  # noqa: F401, environment registrations
 from lsy_drone_racing.envs.drone_race import DroneRaceEnv
 from lsy_drone_racing.utils import load_config
+
+skip_if_headless = pytest.mark.skipif(
+    os.environ.get("DISPLAY") is None,
+    reason="DISPLAY is not set, skipping test in headless environment",
+)
 
 CONFIG_FILES = {
     "DroneRacing-v0": ["level0.toml", "level1.toml", "level2.toml"],
@@ -189,6 +195,7 @@ def test_vector_envs_randomization(config_file: str):
     env.close()
 
 
+@skip_if_headless
 @pytest.mark.integration
 def test_render():
     """Smoke test: env.render() runs at every lifecycle stage for DroneRacing-v0."""
@@ -221,6 +228,7 @@ def test_render():
     env.close()
 
 
+@skip_if_headless
 @pytest.mark.integration
 def test_render_multi_drone():
     """Smoke test: env.render() runs at every lifecycle stage for MultiDroneRacing-v0."""
