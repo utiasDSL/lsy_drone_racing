@@ -9,6 +9,7 @@ from drone_models import available_models
 import lsy_drone_racing  # noqa: F401, environment registrations
 from lsy_drone_racing.envs.drone_race import DroneRaceEnv
 from lsy_drone_racing.utils import load_config
+from tests.conftest import skip_if_headless
 
 CONFIG_FILES = {
     "DroneRacing-v0": ["level0.toml", "level1.toml", "level2.toml"],
@@ -186,4 +187,89 @@ def test_vector_envs_randomization(config_file: str):
         "obstacles_pos[1] not re-randomized"
     )
 
+    env.close()
+
+
+@skip_if_headless
+@pytest.mark.integration
+def test_render():
+    """Smoke test: env.render() runs at every lifecycle stage for DroneRacing-v0."""
+    config = load_config(Path(__file__).parents[2] / "config" / "level0.toml")
+    env = gymnasium.make(
+        "DroneRacing-v0",
+        freq=config.env.freq,
+        sim_config=config.sim,
+        sensor_range=config.env.sensor_range,
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=config.env.seed,
+    )
+    # Right after reset
+    env.reset()
+    env.render()
+    # Mid-episode: render after several steps
+    for _ in range(5):
+        env.step(env.action_space.sample())
+        env.render()
+
+    # Force terminal state
+    data = env.unwrapped.data
+    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[...].set(-1))
+    env.step(env.action_space.sample())
+    assert jp.all(env.unwrapped.data.disabled_drones), "drone not actually disabled"
+    env.render()
+    env.close()
+
+
+@skip_if_headless
+@pytest.mark.integration
+def test_render_multi_drone():
+    """Smoke test: env.render() runs at every lifecycle stage for MultiDroneRacing-v0."""
+    config = load_config(Path(__file__).parents[2] / "config" / "multi_level0.toml")
+    env = gymnasium.make(
+        "MultiDroneRacing-v0",
+        freq=config.env.kwargs[0]["freq"],
+        sim_config=config.sim,
+        sensor_range=config.env.kwargs[0]["sensor_range"],
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=config.env.seed,
+    )
+    # Right after reset
+    env.reset()
+    env.render()
+    # Mid-episode: render after several steps
+    for _ in range(5):
+        env.step(env.action_space.sample())
+        env.render()
+
+    # Force only drone 0 (in world 0) into a terminal state by setting its target
+    # gate to -1. The other drones stay active, so autoreset will not fire (it
+    # only triggers when all drones in a world are disabled). The next step will
+    # mark drone 0 as disabled and warp it below the ground via
+    # `_warp_disabled_drones`, exercising the renderer with a mix of active and
+    # warped drones.
+    data = env.unwrapped.data
+    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[0, 0].set(-1))
+    env.step(env.action_space.sample())
+
+    # Verify drone 0 is disabled and the others are still active.
+    disabled = env.unwrapped.data.disabled_drones
+    assert bool(disabled[0, 0]), "drone 0 should be disabled after target_gate=-1"
+    assert not bool(jp.all(disabled)), "only drone 0 should be disabled, not all drones"
+
+    env.render()
+
+    # Force ALL drones into a terminal state by setting every target gate to
+    # -1. On the next step, every drone will be disabled and (because the env
+    # has autoreset enabled) the world will be auto-reset before render is
+    # called again.
+    data = env.unwrapped.data
+    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[...].set(-1))
+    env.step(env.action_space.sample())
+    env.render()
     env.close()
