@@ -247,7 +247,7 @@ class RaceCoreEnv:
         control_mode: Literal["state", "attitude"] = "state",
         disturbances: ConfigDict | None = None,
         randomizations: ConfigDict | None = None,
-        seed: str | int = "random",
+        seed: int | None = None,
         max_episode_steps: int = 1500,
         device: Literal["cpu", "gpu"] = "cpu",
     ):
@@ -263,15 +263,21 @@ class RaceCoreEnv:
             track: Track configuration.
             disturbances: Disturbance configuration.
             randomizations: Randomization configuration.
-            seed: "random" for a generated seed or the random seed directly.
+            seed: None / -1 for a generated seed or the random seed directly.
             max_episode_steps: Maximum number of steps per episode. Needs to be tracked manually for
                 vectorized environments.
             device: Device used for the environment and the simulation.
         """
         super().__init__()
-        if type(seed) is str:
-            seed: int = np.random.SeedSequence().entropy if seed == "random" else hash(seed)
-            seed &= 0xFFFFFFFF  # Limit seed to 32 bit for jax.random
+        assert seed is None or isinstance(seed, int)
+        # TOML does not support None values, so we use -1 to indicate that a random seed should be
+        # generated. This is equivalent to seed=None, but allows us to use TOML for configuration.
+        seed = None if seed == -1 else seed
+        self._np_random = np.random.default_rng(seed)
+        # JAX must have an integer key, so we generate one from numpy. If the key was None / -1, we
+        # get a randomly-seeded numpy rng, and hence a random JAX rng key. If a seed was given, we
+        # get a reproducible numpy rng, which always generates the same JAX key for the same seed.
+        rng_key = int(self._np_random.integers(0, 2**32 - 1))
         self.sim = Sim(
             n_worlds=n_envs,
             n_drones=n_drones,
@@ -281,7 +287,7 @@ class RaceCoreEnv:
             freq=sim_config.freq,
             state_freq=freq,
             attitude_freq=sim_config.attitude_freq,
-            rng_key=seed,
+            rng_key=rng_key,
             device=device,
             xml_path=Path(p) if (p := getattr(sim_config, "xml_path", None)) else None,
         )

@@ -129,17 +129,18 @@ def test_level2_randomization():
         seed=0,
     )
     obs, info = env.reset()
-    gate_pos_1, obstacle_pos_1 = obs["gates_pos"], obs["obstacles_pos"]
+    gate_pos_1, obstacle_pos_1, drone_pos1 = obs["gates_pos"], obs["obstacles_pos"], obs["pos"]
     gate_quat_1 = obs["gates_quat"]
 
     obs, info = env.reset()
-    gate_pos_2, obstacle_pos_2 = obs["gates_pos"], obs["obstacles_pos"]
+    gate_pos_2, obstacle_pos_2, drone_pos2 = obs["gates_pos"], obs["obstacles_pos"], obs["pos"]
     gate_quat_2 = obs["gates_quat"]
     env.close()
 
     assert not (gate_pos_1 == gate_pos_2).all(), "Gate positions unchanged after reset."
     assert not (obstacle_pos_1 == obstacle_pos_2).all(), "Obstacle positions unchanged after reset."
     assert not (gate_quat_1 == gate_quat_2).all(), "Gate rotations unchanged after reset."
+    assert not (drone_pos1 == drone_pos2).all(), "Drone positions unchanged after reset."
 
 
 @pytest.mark.unit
@@ -159,3 +160,101 @@ def test_contact_mask():
     )
     mask = env.unwrapped.data.contact_masks
     assert not jp.all(mask == 0), "Contact mask is all zeros."
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("multi_drone", [False, True])
+@pytest.mark.parametrize("seed", [None, 42])
+def test_env_reset_seeding(multi_drone: bool, seed: int | None):
+    config_prefix = "multi_" if multi_drone else ""
+    env_prefix = "Multi" if multi_drone else ""
+    config = load_config(Path(__file__).parents[3] / "config" / (config_prefix + "level2.toml"))
+    env_name = env_prefix + "DroneRacing-v0"
+
+    sensor_range = config.env.kwargs[0]["sensor_range"] if multi_drone else config.env.sensor_range
+    env1 = gymnasium.make(
+        env_name,
+        freq=config.env.kwargs[0]["freq"] if multi_drone else config.env.freq,
+        sim_config=config.sim,
+        sensor_range=sensor_range,
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=seed,
+    )
+    obs1, _ = env1.reset(seed=seed)
+    env1.close()
+
+    env2 = gymnasium.make(
+        env_name,
+        freq=config.env.kwargs[0]["freq"] if multi_drone else config.env.freq,
+        sim_config=config.sim,
+        sensor_range=sensor_range,
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=seed,
+    )
+    obs2, _ = env2.reset(seed=seed)
+    env2.close()
+
+    # Check that observations are the same after resetting with the same seed, and different after
+    # resetting with different seeds
+    if seed is not None:
+        assert jp.all(obs1["pos"] == obs2["pos"]), "Pos differ after resetting with the same seed."
+    else:
+        assert not jp.all(obs1["pos"] == obs2["pos"]), (
+            "Pos are the same after resetting with different seeds."
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("multi_drone", [False, True])
+@pytest.mark.parametrize("seed", [None, 42])
+def test_vec_env_reset_seeding(multi_drone: bool, seed: int | None):
+    config_prefix = "multi_" if multi_drone else ""
+    env_prefix = "Multi" if multi_drone else ""
+    config = load_config(Path(__file__).parents[3] / "config" / (config_prefix + "level2.toml"))
+    env_name = env_prefix + "DroneRacing-v0"
+
+    sensor_range = config.env.kwargs[0]["sensor_range"] if multi_drone else config.env.sensor_range
+    env1 = gymnasium.make_vec(
+        env_name,
+        num_envs=2,
+        freq=config.env.kwargs[0]["freq"] if multi_drone else config.env.freq,
+        sim_config=config.sim,
+        sensor_range=sensor_range,
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=seed,
+    )
+    obs1, _ = env1.reset(seed=seed)
+    env1.close()
+
+    env2 = gymnasium.make_vec(
+        env_name,
+        num_envs=2,
+        freq=config.env.kwargs[0]["freq"] if multi_drone else config.env.freq,
+        sim_config=config.sim,
+        sensor_range=sensor_range,
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=seed,
+    )
+    obs2, _ = env2.reset(seed=seed)
+    env2.close()
+
+    # Check that observations are the same after resetting with the same seed, and different after
+    # resetting with different seeds
+    if seed is not None:
+        assert jp.all(obs1["pos"] == obs2["pos"]), "Pos differ after resetting with the same seed."
+    else:
+        assert not jp.all(obs1["pos"] == obs2["pos"]), (
+            "Pos are the same after resetting with different seeds."
+        )

@@ -36,16 +36,14 @@ def main(
             name="Racing env steps", timings=timings / number, n_envs=vec_size, device=device
         )
         timings = step_fn(
-            n_tests=n_tests, number=number, physics_mode="sys_id", n_envs=vec_size, device=device
+            n_tests=n_tests, number=number, physics_mode="so_rpy", n_envs=vec_size, device=device
         )
         print_benchmark_results(
-            name="Racing env steps (sys_id backend)",
+            name="Racing env steps (so_rpy backend)",
             timings=timings / number,
             n_envs=vec_size,
             device=device,
         )
-        # timings = step_fn(n_tests=n_tests, number=number, physics_mode="mujoco")
-        # print_benchmark_results(name="Sim steps (mujoco backend)", timings=timings / number)
 
 
 if __name__ == "__main__":
