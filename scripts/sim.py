@@ -93,6 +93,7 @@ def simulate(
                 break
             if config.sim.render:  # Render the sim if selected.
                 if ((i * fps) % config.env.freq) < fps:
+                    controller.render_callback(env.unwrapped.sim)
                     env.render()
             i += 1
 
