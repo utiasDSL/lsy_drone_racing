@@ -369,3 +369,17 @@ def test_gate_pass_at_last_gate_clamps_to_negative_one():
     new_data = _update_target_gates(env.unwrapped.data)
     assert int(np.asarray(new_data.target_gate[0, 0])) == -1
     env.close()
+
+
+@pytest.mark.unit
+def test_single_compile():
+    env = make_env()
+    env.reset()
+    env.step(env.action_space.sample())
+    reset_cache_size = env.unwrapped._reset._cache_size()
+    step_cache_size = env.unwrapped._step._cache_size()
+    env.reset()  # This reset should hit the cache and not cause a second compile.
+    env.step(env.action_space.sample())
+    assert env.unwrapped._reset._cache_size() == reset_cache_size, "unexpected reset recompilation"
+    assert env.unwrapped._step._cache_size() == step_cache_size, "unexpected step recompilation"
+    env.close()

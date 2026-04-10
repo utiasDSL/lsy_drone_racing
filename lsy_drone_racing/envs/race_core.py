@@ -134,9 +134,11 @@ class EnvData:
         """Create a new environment data struct with default values."""
         n_envs = sim_data.core.n_worlds
         n_drones = sim_data.core.n_drones
-        gates_pos = jp.tile(nominal_gates_pos[None, ...], (n_envs, 1, 1))
-        gates_quat = jp.tile(nominal_gates_quat[None, ...], (n_envs, 1, 1))
-        obstacles_pos = jp.tile(nominal_obstacles_pos[None, ...], (n_envs, 1, 1))
+        gates_pos = jax.device_put(jp.tile(nominal_gates_pos[None, ...], (n_envs, 1, 1)), device)
+        gates_quat = jax.device_put(jp.tile(nominal_gates_quat[None, ...], (n_envs, 1, 1)), device)
+        obstacles_pos = jax.device_put(
+            jp.tile(nominal_obstacles_pos[None, ...], (n_envs, 1, 1)), device
+        )
         return EnvData(
             target_gate=jp.zeros((n_envs, n_drones), dtype=int, device=device),
             gates_visited=jp.zeros((n_envs, n_drones, n_gates), dtype=bool, device=device),
