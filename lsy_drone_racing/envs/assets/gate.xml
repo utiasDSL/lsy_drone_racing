@@ -7,10 +7,10 @@
     <texture name="gate_texture_bottom" type="2d" file="gate_bottom.png" />
     <texture name="gate_texture_left" type="2d" file="gate_left.png" />
     <texture name="gate_texture_right" type="2d" file="gate_right.png" />
-    <material name="gate_mat_top" texture="gate_texture_top" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
-    <material name="gate_mat_bottom" texture="gate_texture_bottom" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
-    <material name="gate_mat_left" texture="gate_texture_left" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
-    <material name="gate_mat_right" texture="gate_texture_right" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
+    <material name="gate_mat_top" texture="gate_texture_top" specular="0.5" shininess="0.3" reflectance="0.0" emission="0.2"/>
+    <material name="gate_mat_bottom" texture="gate_texture_bottom" specular="0.5" shininess="0.3" reflectance="0.0" emission="0.2"/>
+    <material name="gate_mat_left" texture="gate_texture_left" specular="0.5" shininess="0.3" reflectance="0.0" emission="0.2"/>
+    <material name="gate_mat_right" texture="gate_texture_right" specular="0.5" shininess="0.3" reflectance="0.0" emission="0.2"/>
     <material name="frame_mat" rgba="0.5 0.5 0.5 1" specular="0.4" shininess="0.4" reflectance="0.5"/>
     <material name="rope_mat" rgba="0.1 0.1 0.1 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
     <material name="stand_mat" rgba="0.7 0.58 0.45 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
