@@ -13,7 +13,7 @@
     <material name="gate_mat_right" texture="gate_texture_right" specular="0.5" shininess="0.3" reflectance="0.2" emission="0.2"/>
     <material name="frame_mat" rgba="0.5 0.5 0.5 1" specular="0.4" shininess="0.4" reflectance="0.5"/>
     <material name="rope_mat" rgba="0.1 0.1 0.1 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
-    <material name="stand_mat" rgba="0.7 0.68 0.55 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
+    <material name="stand_mat" rgba="0.7 0.58 0.45 1" specular="0.0" shininess="0.0" reflectance="0.0"/>
   </asset>
 
   <worldbody>
