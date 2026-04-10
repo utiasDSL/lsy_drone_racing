@@ -69,7 +69,7 @@ def test_single_drone_envs(config_file: str, physics: str, device: str):
     assert obs["pos"].device == device, f"Expected device {device}, but got {obs['pos'].device}"
     env.close()
 
-    kwargs["num_envs"] = 2
+    kwargs["num_envs"] = 3
     env = gymnasium.make_vec("DroneRacing-v0", **kwargs)
     env.reset()
     for _ in range(2):
@@ -110,7 +110,7 @@ def test_multi_drone_envs(config_file: str, physics: str, device: str):
         obs, _, _, _, _ = env.step(env.action_space.sample())
     assert obs["pos"].device == device, f"Expected device {device}, but got {obs['pos'].device}"
     env.close()
-    kwargs["num_envs"] = 2
+    kwargs["num_envs"] = 3
     env = gymnasium.make_vec("MultiDroneRacing-v0", **kwargs)
     env.reset()
     for _ in range(2):
@@ -134,22 +134,17 @@ def test_vector_envs_randomization(config_file: str):
         randomizations=config.env.get("randomizations"),
     )
 
-    def get_obj_mocap(env: DroneRaceEnv) -> jax.Array:
-        gate_mocap_ids = env.data.gate_mj_ids
-        obstacle_mocap_ids = env.data.obstacle_mj_ids
-        gates_mocap_pos = env.sim.mjx_data.mocap_pos[:, gate_mocap_ids]
-        gates_mocap_quat = env.sim.mjx_data.mocap_quat[:, gate_mocap_ids][..., [1, 2, 3, 0]]
-        obstacles_mocap_pos = env.sim.mjx_data.mocap_pos[:, obstacle_mocap_ids]
-        return gates_mocap_pos, gates_mocap_quat, obstacles_mocap_pos
+    def get_obj_data(env: DroneRaceEnv) -> jax.Array:
+        return env.data.gates_pos, env.data.gates_quat, env.data.obstacles_pos
 
-    # Backup nominal track mocap data
-    nominal_gates_pos, nominal_gates_quat, nominal_obstacles_pos = get_obj_mocap(env)
+    # Backup nominal track data (before reset, gates_pos is initialized to nominal values).
+    nominal_gates_pos, nominal_gates_quat, nominal_obstacles_pos = get_obj_data(env)
 
     env.reset()
 
     # Check if track is randomized
-    gates_pos, gates_quat, obstacles_pos = get_obj_mocap(env)
-    drone_pos = env.sim.data.states.pos[:, 0, :]
+    gates_pos, gates_quat, obstacles_pos = get_obj_data(env)
+    drone_pos = env.data.sim_data.states.pos[:, 0, :]
     nominal_drone_pos = env.sim.default_data.states.pos[:, 0, :]
     assert not jp.allclose(gates_pos, nominal_gates_pos), "gates_pos not randomized"
     assert not jp.allclose(gates_quat, nominal_gates_quat), "gates_quat not randomized"
@@ -158,15 +153,15 @@ def test_vector_envs_randomization(config_file: str):
 
     action = jp.tile(jp.array([0.0, 0.0, 0.0, 0.6]), (2, 1))  # ensure drone doesn't crash
     env.step(action)
-    gates_pos_1, gates_quat_1, obstacles_pos_1 = get_obj_mocap(env)
+    gates_pos_1, gates_quat_1, obstacles_pos_1 = get_obj_data(env)
 
     # Force reset 2nd world
     env.data = env.data.replace(marked_for_reset=env.data.marked_for_reset.at[1].set(True))
 
     # Step once to trigger autoreset
     env.step(action)
-    gates_pos_2, gates_quat_2, obstacles_pos_2 = get_obj_mocap(env)
-    drone_pos = env.sim.data.states.pos[:, 0, :]
+    gates_pos_2, gates_quat_2, obstacles_pos_2 = get_obj_data(env)
+    drone_pos = env.data.sim_data.states.pos[:, 0, :]
     nominal_drone_pos = env.sim.default_data.states.pos[:, 0, :]
 
     # Check if track is re-randomized for the 2nd world but not for the 1st world

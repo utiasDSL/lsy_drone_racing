@@ -77,7 +77,8 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         self.observation_space = batch_space(
             build_observation_space(n_gates, n_obstacles), n_drones
         )
-        self.autoreset = False
+        self.settings = self.settings.replace(autoreset=False)
+        self._step = self.build_step_fn()  # Apply new settings to capture autoreset effect
 
     def reset(self, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment for all drones.
@@ -89,7 +90,8 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             Observation and info for all drones.
         """
-        obs, info = self._reset(seed=seed, options=options)
+        Env.reset(self, seed=seed, options=options)
+        self.data, (obs, info) = self._reset(self.data, seed=seed)
         obs = {k: v[0] for k, v in obs.items()}
         info = {k: v[0] for k, v in info.items()}
         return obs, info
@@ -103,7 +105,7 @@ class MultiDroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             Observation, reward, terminated, truncated, and info for all drones.
         """
-        obs, reward, terminated, truncated, info = self._step(action)
+        self.data, (obs, reward, terminated, truncated, info) = self._step(self.data, action)
         obs = {k: v[0] for k, v in obs.items()}
         info = {k: v[0] for k, v in info.items()}
         # TODO: Fix by moving towards pettingzoo API
@@ -183,7 +185,9 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
         Returns:
             Observation and info for all drones.
         """
-        return self._reset(seed=seed, options=options)
+        VectorEnv.reset(self, seed=seed, options=options)
+        self.data, (obs, info) = self._reset(self.data, seed=seed)
+        return obs, info
 
     def step(self, action: Array) -> tuple[dict, Array, Array, Array, dict]:
         """Step the environment for all drones.
@@ -191,4 +195,5 @@ class VecMultiDroneRaceEnv(RaceCoreEnv, VectorEnv):
         Args:
             action: Action for all drones, i.e., a batch of (n_drones, action_dim) arrays.
         """
-        return self._step(action)
+        self.data, (obs, reward, terminated, truncated, info) = self._step(self.data, action)
+        return obs, reward, terminated, truncated, info
