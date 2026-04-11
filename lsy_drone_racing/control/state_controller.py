@@ -9,16 +9,18 @@ At each time step, the controller computes the next desired position by evaluati
     trajectory if you receive updated gate and obstacle poses.
 """
 
-from __future__ import annotations  # Python 3.10 type hints
+from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 import numpy as np
+from crazyflow.sim.visualize import draw_line, draw_points
 from scipy.interpolate import CubicSpline
 
 from lsy_drone_racing.control import Controller
 
 if TYPE_CHECKING:
+    from crazyflow import Sim
     from numpy.typing import NDArray
 
 
@@ -102,3 +104,10 @@ class StateController(Controller):
     def episode_callback(self):
         """Reset the internal state."""
         self._tick = 0
+
+    def render_callback(self, sim: Sim):
+        """Visualize the desired trajectory and the current setpoint."""
+        setpoint = self._des_pos_spline(self._tick / self._freq).reshape(1, -1)
+        draw_points(sim, setpoint, rgba=(1.0, 0.0, 0.0, 1.0), size=0.02)
+        trajectory = self._des_pos_spline(np.linspace(0, self._t_total, 100))
+        draw_line(sim, trajectory, rgba=(0.0, 1.0, 0.0, 1.0))
