@@ -68,7 +68,8 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         self.action_space = build_action_space(control_mode, sim_config.drone_model)
         n_gates, n_obstacles = len(track.gates), len(track.obstacles)
         self.observation_space = build_observation_space(n_gates, n_obstacles)
-        self.autoreset = False
+        self.settings = self.settings.replace(autoreset=False)
+        self._step = self.build_step_fn()  # Apply new settings to capture autoreset effect
 
     def reset(self, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
         """Reset the environment.
@@ -80,7 +81,8 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             The initial observation and info.
         """
-        obs, info = self._reset(seed=seed, options=options)
+        Env.reset(self, seed=seed, options=options)
+        self.data, (obs, info) = self._reset(self.data, seed=seed)
         obs = {k: v[0, 0] for k, v in obs.items()}
         info = {k: v[0, 0] for k, v in info.items()}
         return obs, info
@@ -94,7 +96,7 @@ class DroneRaceEnv(RaceCoreEnv, Env):
         Returns:
             Observation, reward, terminated, truncated, and info.
         """
-        obs, reward, terminated, truncated, info = self._step(action)
+        self.data, (obs, reward, terminated, truncated, info) = self._step(self.data, action)
         obs = {k: v[0, 0] for k, v in obs.items()}
         info = {k: v[0, 0] for k, v in info.items()}
         return obs, float(reward[0, 0]), bool(terminated[0, 0]), bool(truncated[0, 0]), info
@@ -165,7 +167,8 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
         Returns:
             The initial observation and info.
         """
-        obs, info = self._reset(seed=seed, options=options)
+        VectorEnv.reset(self, seed=seed, options=options)
+        self.data, (obs, info) = self._reset(self.data, seed=seed)
         obs = {k: v[:, 0] for k, v in obs.items()}
         info = {k: v[:, 0] for k, v in info.items()}
         return obs, info
@@ -179,7 +182,7 @@ class VecDroneRaceEnv(RaceCoreEnv, VectorEnv):
         Returns:
             Observation, reward, terminated, truncated, and info.
         """
-        obs, reward, terminated, truncated, info = self._step(action)
+        self.data, (obs, reward, terminated, truncated, info) = self._step(self.data, action)
         obs = {k: v[:, 0] for k, v in obs.items()}
         info = {k: v[:, 0] for k, v in info.items()}
         return obs, reward[:, 0], terminated[:, 0], truncated[:, 0], info

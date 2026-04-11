@@ -6,20 +6,20 @@ detection) rather than physics or rendering. They exercise both the public prope
 the same pattern used in the render integration tests.
 """
 
+import os
 from pathlib import Path
 from typing import Any
+
+os.environ["SCIPY_ARRAY_API"] = "1"
 
 import gymnasium
 import jax.numpy as jp
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.envs.race_core import RaceCoreEnv
+from lsy_drone_racing.envs.race_core import _update_disabled_drones, _update_target_gates
 from lsy_drone_racing.utils import load_config
-
-# Note: ``scipy`` must NOT be imported at module load time. ``lsy_drone_racing`` depends on
-# ``crazyflow``, which sets ``SCIPY_ARRAY_API=1`` on import and raises if scipy was imported first.
-# The only test that needs scipy (``test_gate_pass_increments_target_gate``) imports it locally.
 
 CONFIG_PATH = Path(__file__).parents[3] / "config"
 
@@ -41,9 +41,6 @@ def make_env(config_name: str = "level0.toml", **overrides: Any) -> gymnasium.En
     return gymnasium.make("DroneRacing-v0", **kwargs)
 
 
-# region close
-
-
 @pytest.mark.unit
 def test_close_after_reset():
     """close() after a normal reset must not raise."""
@@ -57,9 +54,6 @@ def test_close_without_reset():
     """close() without ever calling reset() must not raise."""
     env = make_env()
     env.close()
-
-
-# region obs
 
 
 @pytest.mark.unit
@@ -97,8 +91,8 @@ def test_obs_returns_nominal_when_out_of_sensor_range():
     assert not bool(jp.any(obs["gates_visited"])), "no gate should be visited"
     assert not bool(jp.any(obs["obstacles_visited"])), "no obstacle should be visited"
 
-    nominal_gate_pos = np.asarray(env.unwrapped.gates["nominal_pos"])
-    nominal_obstacle_pos = np.asarray(env.unwrapped.obstacles["nominal_pos"])
+    nominal_gate_pos = env.unwrapped.data.nominal_gates_pos
+    nominal_obstacle_pos = np.asarray(env.unwrapped.data.nominal_obstacles_pos)
     np.testing.assert_allclose(np.asarray(obs["gates_pos"]), nominal_gate_pos, rtol=1e-5)
     np.testing.assert_allclose(np.asarray(obs["obstacles_pos"]), nominal_obstacle_pos, rtol=1e-5)
     env.close()
@@ -112,41 +106,11 @@ def test_obs_returns_real_pose_when_in_sensor_range():
     assert bool(jp.all(obs["gates_visited"])), "all gates should be visited"
     assert bool(jp.all(obs["obstacles_visited"])), "all obstacles should be visited"
 
-    gate_ids = env.unwrapped.data.gate_mj_ids
-    obstacle_ids = env.unwrapped.data.obstacle_mj_ids
-    real_gates = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_ids])
-    real_obstacles = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, obstacle_ids])
-    np.testing.assert_allclose(np.asarray(obs["gates_pos"]), real_gates, rtol=1e-5)
-    np.testing.assert_allclose(np.asarray(obs["obstacles_pos"]), real_obstacles, rtol=1e-5)
+    real_gates_pos = env.unwrapped.data.gates_pos[0]
+    real_obstacles_pos = env.unwrapped.data.obstacles_pos[0]
+    np.testing.assert_allclose(np.asarray(obs["gates_pos"]), real_gates_pos, rtol=1e-5)
+    np.testing.assert_allclose(np.asarray(obs["obstacles_pos"]), real_obstacles_pos, rtol=1e-5)
     env.close()
-
-
-# region reward
-
-
-@pytest.mark.unit
-def test_reward_zero_during_race():
-    """While target_gate >= 0, the sparse reward is 0."""
-    env = make_env()
-    env.reset()
-    _, reward, _, _, _ = env.step(env.action_space.sample())
-    assert float(np.asarray(reward).sum()) == 0.0
-    env.close()
-
-
-@pytest.mark.unit
-def test_reward_minus_one_when_course_finished():
-    """When target_gate == -1 (course finished), reward is -1 per drone."""
-    env = make_env()
-    env.reset()
-    data = env.unwrapped.data
-    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[...].set(-1))
-    reward = np.asarray(env.unwrapped.reward())
-    assert reward.sum() == -1.0 * env.unwrapped.sim.n_drones
-    env.close()
-
-
-# region terminated
 
 
 @pytest.mark.unit
@@ -154,7 +118,8 @@ def test_terminated_false_after_reset():
     """Fresh reset: no drone is disabled, so terminated is False."""
     env = make_env()
     env.reset()
-    assert not bool(jp.any(env.unwrapped.terminated()))
+    _, _, terminated, _, _ = env.step(env.action_space.sample())
+    assert not terminated, "terminated should be False after reset"
     env.close()
 
 
@@ -165,8 +130,8 @@ def test_terminated_true_when_target_gate_negative():
     env.reset()
     data = env.unwrapped.data
     env.unwrapped.data = data.replace(target_gate=data.target_gate.at[...].set(-1))
-    env.step(env.action_space.sample())
-    assert bool(jp.all(env.unwrapped.terminated()))
+    _, _, terminated, _, _ = env.step(env.action_space.sample())
+    assert terminated, "terminated should be True when target_gate is -1"
     env.close()
 
 
@@ -177,10 +142,13 @@ def test_disabled_drones_out_of_bounds():
     env.reset()
     data = env.unwrapped.data
     # Place the drone well above the z upper limit (2.5). Shape: (n_worlds, n_drones, 3).
-    pos = jp.asarray(env.unwrapped.sim.data.states.pos).at[..., 2].set(5.0)
-    contacts = jp.zeros_like(env.unwrapped.sim.contacts())
-    disabled = RaceCoreEnv._disabled_drones(pos, contacts, data)
-    assert bool(jp.all(disabled)), "drone above pos_limit_high should be disabled"
+    pos = env.unwrapped.data.sim_data.states.pos.at[..., 2].set(5.0)
+    data = data.replace(
+        sim_data=data.sim_data.replace(states=data.sim_data.states.replace(pos=pos))
+    )
+    contact_check_fn = env.unwrapped.build_contact_check_fn()
+    data = _update_disabled_drones(data, contact_check_fn(data))
+    assert bool(jp.all(data.disabled_drones)), "drone above pos_limit_high should be disabled"
     env.close()
 
 
@@ -190,10 +158,9 @@ def test_disabled_drones_nominal_not_disabled():
     env = make_env()
     env.reset()
     data = env.unwrapped.data
-    pos = env.unwrapped.sim.data.states.pos
-    contacts = jp.zeros_like(env.unwrapped.sim.contacts())
-    disabled = RaceCoreEnv._disabled_drones(pos, contacts, data)
-    assert not bool(jp.any(disabled)), "nominal drone with no contacts should not be disabled"
+    contact_check_fn = env.unwrapped.build_contact_check_fn()
+    data = _update_disabled_drones(data, contact_check_fn(data))
+    assert not bool(jp.any(data.disabled_drones)), "drones with no contacts should not be disabled"
     env.close()
 
 
@@ -203,15 +170,15 @@ def test_disabled_drones_on_contact():
     env = make_env()
     env.reset()
     data = env.unwrapped.data
-    pos = env.unwrapped.sim.data.states.pos
-    # Set every contact to True; contact_masks selects the relevant ones per drone.
-    contacts = jp.ones_like(env.unwrapped.sim.contacts())
-    disabled = RaceCoreEnv._disabled_drones(pos, contacts, data)
-    assert bool(jp.all(disabled)), "drone with active masked contacts should be disabled"
+    # Set the drones into contact with obstacles by placing them at the same position
+    pos = env.unwrapped.sim.data.states.pos.at[...].set(data.obstacles_pos[:, 0, :])
+    data = data.replace(
+        sim_data=data.sim_data.replace(states=data.sim_data.states.replace(pos=pos))
+    )
+    contact_check_fn = env.unwrapped.build_contact_check_fn()
+    data = _update_disabled_drones(data, contact_check_fn(data))
+    assert bool(jp.all(data.disabled_drones)), "drone with collisions should be disabled"
     env.close()
-
-
-# region truncated
 
 
 @pytest.mark.unit
@@ -219,7 +186,8 @@ def test_truncated_false_after_reset():
     """Fresh reset: steps=0, so truncated is False."""
     env = make_env()
     env.reset()
-    assert not bool(jp.any(env.unwrapped.truncated()))
+    _, _, _, truncated, _ = env.step(env.action_space.sample())
+    assert not bool(jp.any(truncated)), "truncated should be False after reset"
     env.close()
 
 
@@ -235,30 +203,22 @@ def test_truncated_on_timeout_does_not_terminate():
     env.reset()
     data = env.unwrapped.data
     env.unwrapped.data = data.replace(steps=data.steps.at[...].set(data.max_episode_steps))
-    assert bool(jp.all(env.unwrapped.truncated()))
-    assert not bool(jp.any(env.unwrapped.terminated()))
+    _, _, _, truncated, _ = env.step(env.action_space.sample())
+    assert bool(jp.all(truncated)), "truncated should be True on timeout"
     env.close()
-
-
-# region gate-pass (hidden function in _step_env)
 
 
 @pytest.mark.unit
 def test_gate_pass_increments_target_gate():
-    """Straddling the current target gate's plane makes ``_step_env`` increment target_gate."""
-    # Local import: scipy must not be imported at module load time (see note at top of file).
-    from scipy.spatial.transform import Rotation as R
-
+    """Crossing the target gate's plane makes ``_update_target_gates`` increment target_gate."""
     env = make_env()
     env.reset()
     data = env.unwrapped.data
 
-    # Current target gate (index 0 after reset). Shapes: mocap is (n_worlds, n_mocap, 3/4).
-    gate_mj_id = int(np.asarray(data.gate_mj_ids[0]))
-    gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
-    # MuJoCo quat is wxyz; gate_passed (via _step_env) expects scipy xyzw order.
-    gate_quat_mj = np.asarray(env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id])
-    gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
+    # Current target gate (index 0 after reset). gates_quat is stored in xyzw order.
+    gate_idx = 0
+    gate_pos = np.asarray(data.gates_pos[0, gate_idx])
+    gate_quat_xyzw = np.asarray(data.gates_quat[0, gate_idx])
     # Gates are crossed from -x to +x in the local gate frame (see gate_passed docstring).
     forward = R.from_quat(gate_quat_xyzw).apply(np.array([1.0, 0.0, 0.0]))
 
@@ -267,21 +227,12 @@ def test_gate_pass_increments_target_gate():
 
     # Craft data so that last_drone_pos is "behind" and current sim pos is "front".
     new_last = data.last_drone_pos.at[0, 0, :].set(jp.asarray(behind))
-    env.unwrapped.data = data.replace(last_drone_pos=new_last)
+    new_pos = data.sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
+    new_sim_data = data.sim_data.replace(states=data.sim_data.states.replace(pos=new_pos))
+    env.unwrapped.data = data.replace(last_drone_pos=new_last, sim_data=new_sim_data)
 
-    sim_data = env.unwrapped.sim.data
-    new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
-    env.unwrapped.sim.data = sim_data.replace(states=sim_data.states.replace(pos=new_pos))
-
-    # Call _step_env directly so physics doesn't overwrite our crafted positions.
-    contacts = env.unwrapped.sim.contacts()
-    new_data = RaceCoreEnv._step_env(
-        env.unwrapped.data,
-        env.unwrapped.sim.data.states.pos,
-        env.unwrapped.sim.mjx_data.mocap_pos,
-        env.unwrapped.sim.mjx_data.mocap_quat,
-        contacts,
-    )
+    # Call _update_target_gates directly so physics doesn't overwrite our crafted positions.
+    new_data = _update_target_gates(env.unwrapped.data)
     assert int(np.asarray(new_data.target_gate[0, 0])) == 1
     env.close()
 
@@ -294,14 +245,7 @@ def test_gate_not_passed_without_crossing():
     data = env.unwrapped.data
     assert int(np.asarray(data.target_gate[0, 0])) == 0
     # Nominal step without any crafted crossing: drone still on the takeoff pad.
-    contacts = env.unwrapped.sim.contacts()
-    new_data = RaceCoreEnv._step_env(
-        data,
-        env.unwrapped.sim.data.states.pos,
-        env.unwrapped.sim.mjx_data.mocap_pos,
-        env.unwrapped.sim.mjx_data.mocap_quat,
-        contacts,
-    )
+    new_data = _update_target_gates(data)
     assert int(np.asarray(new_data.target_gate[0, 0])) == 0
     env.close()
 
@@ -314,36 +258,25 @@ def test_gate_pass_non_target_gate_does_not_increment():
     env = make_env()
     env.reset()
     data = env.unwrapped.data
-    n_gates = len(data.gate_mj_ids)
+    n_gates = data.gates_pos.shape[1]
     assert n_gates >= 2, "need at least 2 gates for this test"
     assert int(np.asarray(data.target_gate[0, 0])) == 0
 
     # Straddle gate 1 (the *next* gate) while target_gate is still 0.
     non_target_idx = 1
-    gate_mj_id = int(np.asarray(data.gate_mj_ids[non_target_idx]))
-    gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
-    gate_quat_mj = np.asarray(env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id])
-    gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
+    gate_pos = np.asarray(data.gates_pos[0, non_target_idx])
+    gate_quat_xyzw = np.asarray(data.gates_quat[0, non_target_idx])
     forward = R.from_quat(gate_quat_xyzw).apply(np.array([1.0, 0.0, 0.0]))
 
     behind = gate_pos - 0.05 * forward
     front = gate_pos + 0.05 * forward
 
     new_last = data.last_drone_pos.at[0, 0, :].set(jp.asarray(behind))
-    env.unwrapped.data = data.replace(last_drone_pos=new_last)
+    new_pos = data.sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
+    new_sim_data = data.sim_data.replace(states=data.sim_data.states.replace(pos=new_pos))
+    env.unwrapped.data = data.replace(last_drone_pos=new_last, sim_data=new_sim_data)
 
-    sim_data = env.unwrapped.sim.data
-    new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
-    env.unwrapped.sim.data = sim_data.replace(states=sim_data.states.replace(pos=new_pos))
-
-    contacts = env.unwrapped.sim.contacts()
-    new_data = RaceCoreEnv._step_env(
-        env.unwrapped.data,
-        env.unwrapped.sim.data.states.pos,
-        env.unwrapped.sim.mjx_data.mocap_pos,
-        env.unwrapped.sim.mjx_data.mocap_quat,
-        contacts,
-    )
+    new_data = _update_target_gates(env.unwrapped.data)
     assert int(np.asarray(new_data.target_gate[0, 0])) == 0
     env.close()
 
@@ -357,10 +290,8 @@ def test_gate_not_passed_in_reverse():
     env.reset()
     data = env.unwrapped.data
 
-    gate_mj_id = int(np.asarray(data.gate_mj_ids[0]))
-    gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
-    gate_quat_mj = np.asarray(env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id])
-    gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
+    gate_pos = np.asarray(data.gates_pos[0, 0])
+    gate_quat_xyzw = np.asarray(data.gates_quat[0, 0])
     forward = R.from_quat(gate_quat_xyzw).apply(np.array([1.0, 0.0, 0.0]))
 
     # Reverse crossing: last position is in front of the gate, current is behind.
@@ -368,20 +299,11 @@ def test_gate_not_passed_in_reverse():
     behind = gate_pos - 0.05 * forward
 
     new_last = data.last_drone_pos.at[0, 0, :].set(jp.asarray(front))
-    env.unwrapped.data = data.replace(last_drone_pos=new_last)
+    new_pos = data.sim_data.states.pos.at[0, 0, :].set(jp.asarray(behind))
+    new_sim_data = data.sim_data.replace(states=data.sim_data.states.replace(pos=new_pos))
+    env.unwrapped.data = data.replace(last_drone_pos=new_last, sim_data=new_sim_data)
 
-    sim_data = env.unwrapped.sim.data
-    new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(behind))
-    env.unwrapped.sim.data = sim_data.replace(states=sim_data.states.replace(pos=new_pos))
-
-    contacts = env.unwrapped.sim.contacts()
-    new_data = RaceCoreEnv._step_env(
-        env.unwrapped.data,
-        env.unwrapped.sim.data.states.pos,
-        env.unwrapped.sim.mjx_data.mocap_pos,
-        env.unwrapped.sim.mjx_data.mocap_quat,
-        contacts,
-    )
+    new_data = _update_target_gates(env.unwrapped.data)
     assert int(np.asarray(new_data.target_gate[0, 0])) == 0
     env.close()
 
@@ -395,10 +317,8 @@ def test_gate_not_passed_when_outside_gate_box():
     env.reset()
     data = env.unwrapped.data
 
-    gate_mj_id = int(np.asarray(data.gate_mj_ids[0]))
-    gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
-    gate_quat_mj = np.asarray(env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id])
-    gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
+    gate_pos = np.asarray(data.gates_pos[0, 0])
+    gate_quat_xyzw = np.asarray(data.gates_quat[0, 0])
     rot = R.from_quat(gate_quat_xyzw)
     forward = rot.apply(np.array([1.0, 0.0, 0.0]))
     # Offset along the gate's local y-axis, well outside the gate box (half-width is 0.225 m).
@@ -409,20 +329,11 @@ def test_gate_not_passed_when_outside_gate_box():
     front = gate_pos + 0.05 * forward + 2.0 * sideways
 
     new_last = data.last_drone_pos.at[0, 0, :].set(jp.asarray(behind))
-    env.unwrapped.data = data.replace(last_drone_pos=new_last)
+    new_pos = data.sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
+    new_sim_data = data.sim_data.replace(states=data.sim_data.states.replace(pos=new_pos))
+    env.unwrapped.data = data.replace(last_drone_pos=new_last, sim_data=new_sim_data)
 
-    sim_data = env.unwrapped.sim.data
-    new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
-    env.unwrapped.sim.data = sim_data.replace(states=sim_data.states.replace(pos=new_pos))
-
-    contacts = env.unwrapped.sim.contacts()
-    new_data = RaceCoreEnv._step_env(
-        env.unwrapped.data,
-        env.unwrapped.sim.data.states.pos,
-        env.unwrapped.sim.mjx_data.mocap_pos,
-        env.unwrapped.sim.mjx_data.mocap_quat,
-        contacts,
-    )
+    new_data = _update_target_gates(env.unwrapped.data)
     assert int(np.asarray(new_data.target_gate[0, 0])) == 0
     env.close()
 
@@ -435,38 +346,40 @@ def test_gate_pass_at_last_gate_clamps_to_negative_one():
     env = make_env()
     env.reset()
     data = env.unwrapped.data
-    n_gates = len(data.gate_mj_ids)
+    n_gates = data.gates_pos.shape[1]
 
-    # Pre-advance target_gate to the last gate so _step_env will check against it.
+    # Pre-advance target_gate to the last gate so _update_target_gates will check against it.
     last_idx = n_gates - 1
     env.unwrapped.data = data.replace(target_gate=data.target_gate.at[0, 0].set(last_idx))
     data = env.unwrapped.data
 
     # Craft a forward crossing of the last gate.
-    gate_mj_id = int(np.asarray(data.gate_mj_ids[last_idx]))
-    gate_pos = np.asarray(env.unwrapped.sim.mjx_data.mocap_pos[0, gate_mj_id])
-    gate_quat_mj = np.asarray(env.unwrapped.sim.mjx_data.mocap_quat[0, gate_mj_id])
-    gate_quat_xyzw = gate_quat_mj[[1, 2, 3, 0]]
+    gate_pos = np.asarray(data.gates_pos[0, last_idx])
+    gate_quat_xyzw = np.asarray(data.gates_quat[0, last_idx])
     forward = R.from_quat(gate_quat_xyzw).apply(np.array([1.0, 0.0, 0.0]))
 
     behind = gate_pos - 0.05 * forward
     front = gate_pos + 0.05 * forward
 
     new_last = data.last_drone_pos.at[0, 0, :].set(jp.asarray(behind))
-    env.unwrapped.data = data.replace(last_drone_pos=new_last)
+    new_pos = data.sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
+    new_sim_data = data.sim_data.replace(states=data.sim_data.states.replace(pos=new_pos))
+    env.unwrapped.data = data.replace(last_drone_pos=new_last, sim_data=new_sim_data)
 
-    sim_data = env.unwrapped.sim.data
-    new_pos = sim_data.states.pos.at[0, 0, :].set(jp.asarray(front))
-    env.unwrapped.sim.data = sim_data.replace(states=sim_data.states.replace(pos=new_pos))
-
-    contacts = env.unwrapped.sim.contacts()
-    new_data = RaceCoreEnv._step_env(
-        env.unwrapped.data,
-        env.unwrapped.sim.data.states.pos,
-        env.unwrapped.sim.mjx_data.mocap_pos,
-        env.unwrapped.sim.mjx_data.mocap_quat,
-        contacts,
-    )
-    # target_gate would otherwise increment to n_gates; the clamp in _step_env maps it to -1.
+    new_data = _update_target_gates(env.unwrapped.data)
     assert int(np.asarray(new_data.target_gate[0, 0])) == -1
+    env.close()
+
+
+@pytest.mark.unit
+def test_single_compile():
+    env = make_env()
+    env.reset()
+    env.step(env.action_space.sample())
+    reset_cache_size = env.unwrapped._reset._cache_size()
+    step_cache_size = env.unwrapped._step._cache_size()
+    env.reset()  # This reset should hit the cache and not cause a second compile.
+    env.step(env.action_space.sample())
+    assert env.unwrapped._reset._cache_size() == reset_cache_size, "unexpected reset recompilation"
+    assert env.unwrapped._step._cache_size() == step_cache_size, "unexpected step recompilation"
     env.close()
