@@ -1,8 +1,14 @@
 # Autonomous Drone Racing Challenge
-<p align="center">
-  <img width="460" height="300" src="docs/img/banner.jpeg">
-</p>
-<sub><sup>AI-generated image</sup></sub>
+
+<div align="center">
+  <a href="https://github.com/utiasDSL/crazyflow">
+    <img width="800" height="450" src="docs/img/race.gif">
+  </a>
+  <br/>
+  <sub><sup style="font-size: 0.8em;"><a href="https://github.com/utiasDSL/crazyflow">Powered by Crazyflow</a></sup></sub>
+  </br>
+  </br>
+</div>
 
 [![Python Version]][Python Version URL] [![Ruff Check]][Ruff Check URL] [![Documentation Status]][Documentation Status URL] [![Tests]][Tests URL]
 
