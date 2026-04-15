@@ -81,7 +81,7 @@ lsy_drone_racing = { path = ".", editable = true }
 scripts = ["tools/setup_acados.sh"]
 
 [tool.pixi.tasks]
-evaluate = { cmd = "python scripts/evaluation.py", description = "Evaluate the controller" }
+evaluate = { cmd = "python scripts/evaluate.py", description = "Evaluate the controller" }
 
 ### environments
 [tool.pixi.environments]
