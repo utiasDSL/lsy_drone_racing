@@ -37,7 +37,7 @@ for rank, team in enumerate(teams):
         rank_str = "-"
         time_str = "N/A"
     else:
-        medals = ["🥇 1", "🥈 2", "🥉 3"]
+        medals = ["🥇", "🥈", "🥉"]
         rank_str = medals[rank] if rank < 3 else str(rank + 1)
         time_str = f"{time_val:.3f}"
 

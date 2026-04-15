@@ -9,6 +9,7 @@ saves
 **/*.json
 **/*.csv
 /build
+/ros_ws
 
 # Submodules
 original_main/
