@@ -37,7 +37,7 @@ sim = [
     "warp-lang",
 ]
 # option[gpu]: simulation with gpu
-gpu = ["jax[cuda12]"]
+gpu = ["jax"]
 # option[deploy]: deploy to real drones
 deploy = [
     "cfclient",
@@ -62,7 +62,7 @@ markers = ["unit", "integration"]
 ########################
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64"]
+platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
 python = ">=3.11.12,<3.14"
