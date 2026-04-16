@@ -19,7 +19,6 @@ with open(csv_path, "r") as f:
 leaderboard = toml.load(toml_file)
 
 # Update leaderboard
-new_best = False
 for group_id, data in leaderboard.items():
     if data.get("github") == actor:
         current_time = data.get("time", np.inf)
@@ -27,15 +26,13 @@ for group_id, data in leaderboard.items():
         if new_time < current_time:
             leaderboard[group_id]["time"] = new_time
             leaderboard[group_id]["success_rate"] = new_success_rate
-            leaderboard[group_id]["submissions"] += 1
+            leaderboard[group_id]["submissions"] = leaderboard[group_id].get("submissions", 0) + 1
             print(f"🎉 New personal best for {group_id}: {new_time}s!")
-            new_best = True
+        else:
+            print(f"🛑 No new best ({new_time}s), won't submit to leaderboard.")
+            sys.exit(0)  # Exits cleanly. The TOML file remains unchanged.
 
         break  # Stop searching once we found the team
-
-if not new_best:
-    print(f"🛑 No new best ({new_time}s), won't submit to leaderboard.")
-    sys.exit(0)  # Exits cleanly. The TOML file remains unchanged.
 
 with open(toml_file, "w") as f:
     toml.dump(leaderboard, f)

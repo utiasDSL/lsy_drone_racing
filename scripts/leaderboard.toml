@@ -1,25 +1,18 @@
-[group1]
-name = "Team Y"
-time = 3.5
-success_rate = 0.5
-submissions = 1
-github = "todo"
+[ta1]
+name = "Martin (TA)"
+github = "amacati"
 
-[group6]
-name = "Group6"
-time = 13.1
-success_rate = 0.5
-submissions = 17
-
-[group2]
-name = "Limo"
-time = 5.022
-success_rate = 0.5
-submissions = 17
-
-[group5]
-name = "rather"
-time = 50.12
-success_rate = 0.8
-submissions = 4
+[ta2]
+name = "Marcel (TA)"
 github = "ratheron"
+time = 27.165333333333333
+success_rate = 0.75
+submissions = 1
+
+[ta3]
+name = "Radu (TA)"
+github = "rducrist"
+
+[ta4]
+name = "Yuming (TA)"
+github = "Yuming-Lee24"

@@ -10,6 +10,7 @@ saves
 **/*.csv
 /build
 /ros_ws
+/c_generated_code
 
 # Submodules
 original_main/
