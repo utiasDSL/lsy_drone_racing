@@ -12,6 +12,9 @@ submissions = 1
 [ta3]
 name = "Radu (TA)"
 github = "rducrist"
+time = 28.290000000000003
+success_rate = 0.6
+submissions = 1
 
 [ta4]
 name = "Yuming (TA)"
