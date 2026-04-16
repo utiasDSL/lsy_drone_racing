@@ -52,9 +52,7 @@ jobs:
           locked: true
 
       - name: Check Whitelist by Username
-        run: |
-          # Pass the GitHub username to the script
-          pixi run --manifest-path student_code/pyproject.toml python scripts/check_whitelist.py "${{ inputs.actor }}"
+        run: pixi run --manifest-path student_code/pyproject.toml python scripts/check_whitelist.py "${{ inputs.actor }}"
 
       - name: Run Anti-Cheat Check
         run: pixi run --manifest-path student_code/pyproject.toml python scripts/check_cheat.py
@@ -63,13 +61,15 @@ jobs:
         working-directory: student_code
         run: pixi run evaluate
 
+      # Pull latest to prevent concurrent push conflicts.
+      - name: Fetch Latest Leaderboard Data
+        run: git pull --rebase origin competition
+
       - name: Update Leaderboard TOML
-        run: |
-          pixi run --manifest-path student_code/pyproject.toml python scripts/update_leaderboard.py "${{ inputs.actor }}"
+        run: pixi run --manifest-path student_code/pyproject.toml python scripts/update_leaderboard.py "${{ inputs.actor }}"
 
       - name: Generate README
-        run: |
-          pixi run --manifest-path student_code/pyproject.toml python scripts/update_readme.py
+        run: pixi run --manifest-path student_code/pyproject.toml python scripts/update_readme.py
 
       - name: Commit and Push
         uses: stefanzweifel/git-auto-commit-action@v5
