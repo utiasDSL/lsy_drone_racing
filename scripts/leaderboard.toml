@@ -1,6 +1,9 @@
 [ta1]
 name = "Martin (TA)"
 github = "amacati"
+time = 27.08235294117647
+success_rate = 0.85
+submissions = 1
 
 [ta2]
 name = "Marcel (TA)"
