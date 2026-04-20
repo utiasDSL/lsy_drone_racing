@@ -5,9 +5,9 @@ github = "amacati"
 [ta2]
 name = "Marcel (TA)"
 github = "ratheron"
-time = 27.165333333333333
-success_rate = 0.75
-submissions = 1
+time = 22.71875
+success_rate = 0.8
+submissions = 2
 
 [ta3]
 name = "Radu (TA)"
