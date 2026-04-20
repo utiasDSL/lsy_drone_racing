@@ -6,7 +6,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 ## Leaderboard 🏁
 | Rank | Team | Time [s] | Success Rate [%] | Submissions |
 | :---: | :--- | :---  | :--- | :---: |
-| 🥇 | Marcel (TA) | 21.839 | 75 | 3 |
+| 🥇 | Marcel (TA) | 21.059 | 75 | 4 |
 | 🥈 | Martin (TA) | 27.082 | 85 | 1 |
 | 🥉 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
