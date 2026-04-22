@@ -6,9 +6,10 @@ This competition is only for students of the ADR course at TUM. Students have to
 ## Leaderboard 🏁
 | Rank | Team | Time [s] | Success Rate [%] | Submissions |
 | :---: | :--- | :---  | :--- | :---: |
-| 🥇 | Marcel (TA) | 21.059 | 75 | 4 |
-| 🥈 | Martin (TA) | 27.082 | 85 | 1 |
-| 🥉 | Radu (TA) | 28.290 | 60 | 1 |
+| 🥇 | Deniz & Ahmet | 8.378 | 50 | 1 |
+| 🥈 | Marcel (TA) | 21.059 | 75 | 4 |
+| 🥉 | Martin (TA) | 27.082 | 85 | 1 |
+| 4 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
 | - | Millennium Falcon | N/A | 0 | 0 |
 | - | Sama & Luc | N/A | 0 | 0 |
@@ -25,7 +26,6 @@ This competition is only for students of the ADR course at TUM. Students have to
 | - | Leonie & Nicolas | N/A | 0 | 0 |
 | - | Wei Lun & Lars | N/A | 0 | 0 |
 | - | Xiaochen & Aoji | N/A | 0 | 0 |
-| - | Deniz & Ahmet | N/A | 0 | 0 |
 | - | FlyingPacers (MAADR) | N/A | 0 | 0 |
 
 ## Hall of fame 🏆

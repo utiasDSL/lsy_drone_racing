@@ -86,6 +86,9 @@ github = "stateirving"
 [team16]
 name = "Deniz & Ahmet"
 github = "denizozturk95"
+time = 8.378
+success_rate = 0.5
+submissions = 1
 
 [team17]
 name = "FlyingPacers (MAADR)"
