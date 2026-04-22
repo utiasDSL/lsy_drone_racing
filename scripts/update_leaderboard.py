@@ -29,7 +29,8 @@ for group_id, data in leaderboard.items():
             leaderboard[group_id]["submissions"] = leaderboard[group_id].get("submissions", 0) + 1
             print(f"🎉 New personal best for {group_id}: {new_time}s!")
         else:
-            print(f"🛑 No new best ({new_time}s), won't submit to leaderboard.")
+            # Special formatting for GitHub Actions logs to show an error message
+            print(f"::error title=Submission Result::🛑 No new best ({new_time}s), won't submit to leaderboard.")
             sys.exit(1)  # Ends the action
 
         break  # Stop searching once we found the team
