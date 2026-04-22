@@ -22,3 +22,71 @@ submissions = 1
 [ta4]
 name = "Yuming (TA)"
 github = "Yuming-Lee24"
+
+[team1]
+name = "Millennium Falcon"
+github = "masfgithub"
+
+[team2]
+name = "Sama & Luc"
+github = "sama-abuassad"
+
+[team3]
+name = "Thunderstrike"
+github = "Qshao007"
+
+[team4]
+name = "IshowSpeed"
+github = "HongMinhNhat35"
+
+[team5]
+name = "Release the drone"
+github = "VJandl"
+
+[team6]
+name = "aaa"
+github = "RuiyangHuang28"
+
+[team7]
+name = "Sandro & Marek"
+github = "s-stauss"
+
+[team8]
+name = "Okan"
+github = "okanarif"
+
+[team9]
+name = "Timo & Jeffrey"
+github = "mangam-02"
+
+[team10]
+name = "Nikola & Moritz"
+github = "SarNi434"
+
+[team11]
+name = "Theo & Olcay"
+github = "TheoSpringer"
+
+[team12]
+name = "Celia & Paula"
+github = "celplasan"
+
+[team13]
+name = "Leonie & Nicolas"
+github = "leonie0206"
+
+[team14]
+name = "Wei Lun & Lars"
+github = "ang-weilun"
+
+[team15]
+name = "Xiaochen & Aoji"
+github = "stateirving"
+
+[team16]
+name = "Deniz & Ahmet"
+github = "denizozturk95"
+
+[team17]
+name = "FlyingPacers (MAADR)"
+github = "rosenbergerJonas"

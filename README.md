@@ -10,6 +10,23 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 🥈 | Martin (TA) | 27.082 | 85 | 1 |
 | 🥉 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
+| - | Millennium Falcon | N/A | 0 | 0 |
+| - | Sama & Luc | N/A | 0 | 0 |
+| - | Thunderstrike | N/A | 0 | 0 |
+| - | IshowSpeed | N/A | 0 | 0 |
+| - | Release the drone | N/A | 0 | 0 |
+| - | aaa | N/A | 0 | 0 |
+| - | Sandro & Marek | N/A | 0 | 0 |
+| - | Okan | N/A | 0 | 0 |
+| - | Timo & Jeffrey | N/A | 0 | 0 |
+| - | Nikola & Moritz | N/A | 0 | 0 |
+| - | Theo & Olcay | N/A | 0 | 0 |
+| - | Celia & Paula | N/A | 0 | 0 |
+| - | Leonie & Nicolas | N/A | 0 | 0 |
+| - | Wei Lun & Lars | N/A | 0 | 0 |
+| - | Xiaochen & Aoji | N/A | 0 | 0 |
+| - | Deniz & Ahmet | N/A | 0 | 0 |
+| - | FlyingPacers (MAADR) | N/A | 0 | 0 |
 
 ## Hall of fame 🏆
 * [Winter 2025 Leaderboard](./previous_leaderboards/winter25/README.md)
