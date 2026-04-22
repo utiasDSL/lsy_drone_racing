@@ -6,7 +6,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 ## Leaderboard 🏁
 | Rank | Team | Time [s] | Success Rate [%] | Submissions |
 | :---: | :--- | :---  | :--- | :---: |
-| 🥇 | Deniz & Ahmet | 8.378 | 50 | 1 |
+| 🥇 | Deniz & Ahmet | 8.126 | 50 | 2 |
 | 🥈 | Xiaochen & Aoji | 13.599 | 70 | 1 |
 | 🥉 | Marcel (TA) | 21.059 | 75 | 4 |
 | 4 | Martin (TA) | 27.082 | 85 | 1 |
