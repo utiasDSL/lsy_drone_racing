@@ -30,7 +30,7 @@ for group_id, data in leaderboard.items():
             print(f"🎉 New personal best for {group_id}: {new_time}s!")
         else:
             print(f"🛑 No new best ({new_time}s), won't submit to leaderboard.")
-            sys.exit(0)  # Exits cleanly. The TOML file remains unchanged.
+            sys.exit(1)  # Ends the action
 
         break  # Stop searching once we found the team
 

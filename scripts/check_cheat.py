@@ -36,14 +36,14 @@ if len(student_lines) != len(base_lines):
     print(f"🚨 CHEAT DETECTED: {toml_path} has a different number of lines!")
     sys.exit(1)
 
-# Allowed lines are 1-indexed (7 and 43), so their list indices are 6 and 42
-allowed_indices = {6, 42} 
+# Allowed lines are 1-indexed (7 and 48), so their list indices are 6 and 47
+allowed_indices = {6, 47} 
 
 for i, (s_line, b_line) in enumerate(zip(student_lines, base_lines)):
     if i not in allowed_indices and s_line != b_line:
         print(f"🚨 CHEAT DETECTED: {toml_path} was modified on line {i + 1}!")
         print(f"Expected: {b_line.strip()}")
         print(f"Found:    {s_line.strip()}")
-        sys.exit(1)
+        sys.exit(1)  # Ends the action
 
 print("✅ Anti-cheat checks passed. No unauthorized modifications detected.")
