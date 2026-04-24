@@ -52,7 +52,9 @@ jobs:
           locked: true
 
       - name: Check Whitelist by Username
-        run: pixi run --manifest-path student_code/pyproject.toml python scripts/check_whitelist.py "${{ inputs.actor }}"
+        env:
+          STUDENT_REPO: ${{ inputs.repository }}
+        run: pixi run --manifest-path student_code/pyproject.toml python scripts/check_whitelist.py "${STUDENT_REPO%%/*}"
 
       - name: Run Anti-Cheat Check
         run: pixi run --manifest-path student_code/pyproject.toml python scripts/check_cheat.py
@@ -66,7 +68,9 @@ jobs:
         run: git pull --rebase origin competition
 
       - name: Update Leaderboard TOML
-        run: pixi run --manifest-path student_code/pyproject.toml python scripts/update_leaderboard.py "${{ inputs.actor }}"
+        env:
+          STUDENT_REPO: ${{ inputs.repository }}
+        run: pixi run --manifest-path student_code/pyproject.toml python scripts/update_leaderboard.py "${STUDENT_REPO%%/*}"
 
       - name: Generate README
         run: pixi run --manifest-path student_code/pyproject.toml python scripts/update_readme.py
