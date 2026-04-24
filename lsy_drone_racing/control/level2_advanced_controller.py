@@ -163,12 +163,7 @@ class Level2AdvancedController(Controller):
             for obs_pos in self._obstacles_pos:
                 # Distance from segment to obstacle
                 t = max(
-                    0,
-                    min(
-                        1,
-                        np.dot(obs_pos - prev_wp, curr_wp - prev_wp)
-                        / (distance**2 + 1e-6),
-                    ),
+                    0, min(1, np.dot(obs_pos - prev_wp, curr_wp - prev_wp) / (distance**2 + 1e-6))
                 )
                 closest_point = prev_wp + t * (curr_wp - prev_wp)
                 obs_dist = np.linalg.norm(obs_pos - closest_point)
@@ -338,9 +333,7 @@ class Level2AdvancedController(Controller):
 
         if self._current_waypoints is not None:
             # Draw waypoints in green
-            draw_points(
-                sim, self._current_waypoints, rgba=(0.0, 1.0, 0.0, 1.0), size=0.02
-            )
+            draw_points(sim, self._current_waypoints, rgba=(0.0, 1.0, 0.0, 1.0), size=0.02)
 
         if self._trajectory_spline is not None:
             # Draw trajectory in red
@@ -353,6 +346,4 @@ class Level2AdvancedController(Controller):
         # Draw current target in blue
         t = min(self._tick / self._freq, self._total_time)
         des_pos, _, _ = self._get_desired_state(t)
-        draw_points(
-            sim, des_pos.reshape(1, -1), rgba=(0.0, 0.0, 1.0, 1.0), size=0.03
-        )
+        draw_points(sim, des_pos.reshape(1, -1), rgba=(0.0, 0.0, 1.0, 1.0), size=0.03)

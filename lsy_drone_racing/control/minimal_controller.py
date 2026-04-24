@@ -22,12 +22,9 @@ if TYPE_CHECKING:
 _REPLAN_THRESHOLD = 0.05
 
 # Nominal gate centers (x, y, z) matching level-2 track layout.
-_NOMINAL_GATE_POS = np.array([
-    [0.5,  0.25, 0.7],
-    [1.05, 0.75, 1.2],
-    [-1.0, -0.25, 0.7],
-    [0.0,  -0.75, 1.2],
-], dtype=np.float64)
+_NOMINAL_GATE_POS = np.array(
+    [[0.5, 0.25, 0.7], [1.05, 0.75, 1.2], [-1.0, -0.25, 0.7], [0.0, -0.75, 1.2]], dtype=np.float64
+)
 
 
 class StateController(Controller):
@@ -38,18 +35,21 @@ class StateController(Controller):
         super().__init__(obs, info, config)
         self._freq = config.env.freq
 
-        self._base_waypoints = np.array([
-            [-1.5,  0.75, 0.05],
-            [-1.0,  0.55, 0.4],
-            [0.3,   0.35, 0.7],   # near gate 0
-            [1.3,  -0.15, 0.9],
-            [0.85,  0.85, 1.2],   # near gate 1
-            [-0.5, -0.05, 0.7],
-            [-1.2, -0.2,  0.8],   # near gate 2
-            [-1.2, -0.2,  1.2],
-            [-0.0, -0.7,  1.2],   # near gate 3
-            [0.5,  -0.75, 1.2],
-        ], dtype=np.float64)
+        self._base_waypoints = np.array(
+            [
+                [-1.5, 0.75, 0.05],
+                [-1.0, 0.55, 0.4],
+                [0.3, 0.35, 0.7],  # near gate 0
+                [1.3, -0.15, 0.9],
+                [0.85, 0.85, 1.2],  # near gate 1
+                [-0.5, -0.05, 0.7],
+                [-1.2, -0.2, 0.8],  # near gate 2
+                [-1.2, -0.2, 1.2],
+                [-0.0, -0.7, 1.2],  # near gate 3
+                [0.5, -0.75, 1.2],
+            ],
+            dtype=np.float64,
+        )
 
         # Which waypoint index corresponds to each gate (closest to nominal gate pos).
         self._gate_wp_idx = [

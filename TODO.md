@@ -13,3 +13,6 @@
     * Local variable `n_waypoints` is assigned to but never used
 
     * oder einfach "ruff check . --fix" ins terminal
+
+* "Ruff-Format" checkt unsere formatierung des codes... also den style
+    * einfach zu beheben mit: "ruff format ." ins terminal

@@ -273,9 +273,7 @@ class Level2Controller(Controller):
 
         # Draw waypoints
         if self._current_waypoints is not None:
-            draw_points(
-                sim, self._current_waypoints, rgba=(0.0, 1.0, 0.0, 1.0), size=0.02
-            )
+            draw_points(sim, self._current_waypoints, rgba=(0.0, 1.0, 0.0, 1.0), size=0.02)
 
         # Draw trajectory spline
         if self._trajectory_spline is not None:

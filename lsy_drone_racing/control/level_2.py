@@ -27,7 +27,7 @@ class Level2Controller(Controller):
         self._freq = config.env.freq
         self._gates_pos = obs["gates_pos"].copy()
         self._obstacles_pos = obs["obstacles_pos"].copy()
-        
+
         # ★★★ TARGET GATE TRACKING (THE FIX!) ★★★
         self._current_target_gate = obs.get("target_gate", -1)
 
@@ -73,7 +73,7 @@ class Level2Controller(Controller):
 
         waypoints_arr = np.array(waypoints, dtype=np.float32)
         t = np.linspace(0, self._total_time_per_gate, len(waypoints_arr))
-        
+
         try:
             self._trajectory_spline = CubicSpline(t, waypoints_arr, bc_type="natural")
             self._current_waypoints = waypoints_arr
@@ -140,6 +140,7 @@ class Level2Controller(Controller):
     def render_callback(self, sim: Sim):
         """Visualize."""
         from crazyflow.sim.visualize import draw_line, draw_points
+
         if self._current_waypoints is not None:
             draw_points(sim, self._current_waypoints, rgba=(0, 1, 0, 1), size=0.02)
         if self._trajectory_spline is not None:
