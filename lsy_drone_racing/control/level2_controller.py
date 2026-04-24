@@ -227,7 +227,8 @@ class Level2Controller(Controller):
             des_pos = self._get_desired_position(t)
 
         # Return state command: [pos(3), vel(3), acc(3), yaw(1), ang_vel(3)]
-        # For now, we only specify position and let the lower controller handle velocity/acceleration
+        # For now, we only specify position and let
+        #  the lower controller handle velocity/acceleration
         action = np.concatenate((des_pos, np.zeros(10)), dtype=np.float32)
         return action
 

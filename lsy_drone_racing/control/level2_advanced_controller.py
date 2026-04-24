@@ -101,7 +101,7 @@ class Level2AdvancedController(Controller):
         Returns:
             Adjusted waypoint position.
         """
-        obstacle_radius = 0.08  # Safety radius around obstacles
+        # obstacle_radius = 0.08  # Safety radius around obstacles
         interaction_distance = 0.4  # Start pushing away at this distance
         max_offset = self._waypoint_offset
 
@@ -121,7 +121,7 @@ class Level2AdvancedController(Controller):
     def _plan_trajectory(self):
         """Plan trajectory with velocity and acceleration derivatives."""
         self._current_waypoints = self._compute_waypoints()
-        n_waypoints = len(self._current_waypoints)
+        # n_waypoints = len(self._current_waypoints)
 
         # Create time points with variable spacing
         # Spend more time at difficult sections (near obstacles)

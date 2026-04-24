@@ -34,6 +34,7 @@ class StateController(Controller):
     """State controller following a pre-defined trajectory with gate-nudge re-planning."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
+        """Initialization of the controller."""
         super().__init__(obs, info, config)
         self._freq = config.env.freq
 
@@ -86,6 +87,7 @@ class StateController(Controller):
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
     ) -> NDArray[np.floating]:
+        """Compute the next desired state of the drone."""
         t = min(self._tick / self._freq, self._t_total)
         if t >= self._t_total:
             self._finished = True
@@ -102,10 +104,12 @@ class StateController(Controller):
         truncated: bool,
         info: dict,
     ) -> bool:
+        """Increment the time step counter."""
         self._tick += 1
         return self._finished
 
     def episode_callback(self):
+        """Reset the internal state."""
         self._tick = 0
         self._finished = False
         self._waypoints = self._base_waypoints.copy()
@@ -113,6 +117,7 @@ class StateController(Controller):
         self._build_spline()
 
     def render_callback(self, sim: Sim):
+        """Visualize the desired trajectory and the current setpoint."""
         setpoint = self._des_pos_spline(self._tick / self._freq).reshape(1, -1)
         draw_points(sim, setpoint, rgba=(1.0, 0.0, 0.0, 1.0), size=0.02)
         trajectory = self._des_pos_spline(np.linspace(0, self._t_total, 100))
