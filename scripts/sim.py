@@ -89,8 +89,20 @@ def simulate(
                 action, obs, reward, terminated, truncated, info
             )
             # Add up reward, collisions
+            # Add up reward, collisions
             if terminated or truncated or controller_finished:
+                if config.sim.render and terminated:
+                    # Force one last render so you can see exactly what you hit
+                    controller.render_callback(env.unwrapped.sim)
+                    env.render()
+                    print("Drone crashed! Check the render window.")
+                    input("Press Enter in this terminal to continue...")
                 break
+                
+            if config.sim.render:  # Render the sim if selected.
+                if ((i * fps) % config.env.freq) < fps:
+                    controller.render_callback(env.unwrapped.sim)
+                    env.render()
             if config.sim.render:  # Render the sim if selected.
                 if ((i * fps) % config.env.freq) < fps:
                     controller.render_callback(env.unwrapped.sim)
