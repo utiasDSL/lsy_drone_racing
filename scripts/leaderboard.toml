@@ -26,9 +26,9 @@ github = "Yuming-Lee24"
 [team1]
 name = "Millennium Falcon"
 github = "masfgithub"
-time = 9.368571428571428
-success_rate = 0.7
-submissions = 1
+time = 8.998666666666667
+success_rate = 0.75
+submissions = 2
 
 [team2]
 name = "Sama & Luc"
