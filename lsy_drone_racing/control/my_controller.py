@@ -75,54 +75,44 @@ class MyController(Controller):
         Returns:
             Attitude command [roll, pitch, yaw, thrust] as numpy array.
         """
-        t = min(self._tick / self._freq, self._t_total)
-        if t >= self._t_total:
-            self._finished = True
+        t = self._tick / self._freq
+        pos = obs["pos"]
+        vel = obs["vel"]
 
-        # Get desired position and velocity from spline
-        des_pos = self._des_pos_spline(t)
-        des_vel = self._des_vel_spline(t)
-        des_yaw = 0.0
+        # --- target height profile ---
+        if t < 2.0:
+            target_z   =  0.5 * (t / 2.0)
+            target_vz  =  0.5 / 2.0          # 0.25 m/s upward
+        elif t < 4.0:
+            target_z   =  0.5
+            target_vz  =  0.0
+        elif t < 6.0:
+            target_z   =  0.5 * (1 - (t - 4) / 2.0)
+            target_vz  = -0.5 / 2.0          # 0.25 m/s downward
+        else:
+            target_z   =  0.0
+            target_vz  =  0.0
 
-        # Calculate position and velocity errors
-        pos_error = des_pos - obs["pos"]
-        vel_error = des_vel - obs["vel"]
+        # PD on position error → desired acceleration
+        kp_z, kd_z = 3.0, 1.5
+        acc_z = kp_z * (target_z - pos[2]) + kd_z * (target_vz - vel[2])
+        acc_z = np.clip(acc_z, -15.0, 15.0)
 
-        # Update integral error with anti-windup
-        self.i_error += pos_error * (1 / self._freq)
-        self.i_error = np.clip(self.i_error, -self.ki_range, self.ki_range)
-
-        # Compute target thrust vector
-        target_thrust = np.zeros(3)
-        target_thrust += self.kp * pos_error
-        target_thrust += self.ki * self.i_error
-        target_thrust += self.kd * vel_error
-        target_thrust[2] += self.drone_mass * self.g  # Gravity compensation
-
-        # Get current drone orientation
-        z_axis = R.from_quat(obs["quat"]).as_matrix()[:, 2]
-
-        # Compute desired collective thrust
-        thrust_desired = max(target_thrust.dot(z_axis), 0.1)  # Minimum thrust to hover
-
-        # Compute desired orientation from thrust direction
-        z_axis_desired = target_thrust / (np.linalg.norm(target_thrust) + 1e-8)
-        x_c_des = np.array([math.cos(des_yaw), math.sin(des_yaw), 0.0])
-        y_axis_desired = np.cross(z_axis_desired, x_c_des)
-        y_axis_desired /= np.linalg.norm(y_axis_desired) + 1e-8
-        x_axis_desired = np.cross(y_axis_desired, z_axis_desired)
-
-        R_desired = np.vstack([x_axis_desired, y_axis_desired, z_axis_desired]).T
-        euler_desired = R.from_matrix(R_desired).as_euler("xyz", degrees=False)
-
+        # --- action ---
         action = np.array([
-            obs["pos"][0], obs["pos"][1], obs["pos"][2],  # position
-            0.0, 0.0, 0.0,                                # velocity
-            0.0, 0.0, thrust_desired,                     # acceleration (z only)
-            euler_desired[2],                             # yaw
-            0.0, 0.0, 0.0                                 # angular rates
+            pos[0], pos[1], target_z,    # desired position (x, y, z)
+            0.0,    0.0,    target_vz,   # desired velocity (vx, vy, vz)  ← THIS was the bug
+            0.0,    0.0,    acc_z,       # desired acceleration
+            0.0,                         # yaw
+            0.0,    0.0,    0.0          # angular rates
             ], dtype=np.float32)
-        
+
+        # debug
+        if self._tick % 50 == 0:
+            print(f"\n t={t:.2f}")
+            print("z:", pos[2], "target_z:", target_z)
+            print("vel_z:", vel[2], "acc_z:", acc_z)
+
         return action
 
     def step_callback(
