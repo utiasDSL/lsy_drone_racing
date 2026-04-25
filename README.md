@@ -7,13 +7,13 @@ This competition is only for students of the ADR course at TUM. Students have to
 | Rank | Team | Time [s] | Success Rate [%] | Submissions |
 | :---: | :--- | :---  | :--- | :---: |
 | 🥇 | Deniz & Ahmet | 7.785 | 55 | 3 |
-| 🥈 | Theo & Olcay | 13.038 | 50 | 1 |
-| 🥉 | Xiaochen & Aoji | 13.599 | 70 | 1 |
-| 4 | Marcel (TA) | 21.059 | 75 | 4 |
-| 5 | Martin (TA) | 27.082 | 85 | 1 |
-| 6 | Radu (TA) | 28.290 | 60 | 1 |
+| 🥈 | Millennium Falcon | 9.369 | 70 | 1 |
+| 🥉 | Theo & Olcay | 13.038 | 50 | 1 |
+| 4 | Xiaochen & Aoji | 13.599 | 70 | 1 |
+| 5 | Marcel (TA) | 21.059 | 75 | 4 |
+| 6 | Martin (TA) | 27.082 | 85 | 1 |
+| 7 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
-| - | Millennium Falcon | N/A | 0 | 0 |
 | - | Sama & Luc | N/A | 0 | 0 |
 | - | Thunderstrike | N/A | 0 | 0 |
 | - | IshowSpeed | N/A | 0 | 0 |
