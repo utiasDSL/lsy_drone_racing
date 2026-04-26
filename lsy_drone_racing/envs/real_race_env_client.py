@@ -89,8 +89,7 @@ class RealMultiDroneRaceEnvClient(Env):
         self.pos_limit_high = np.array(track.safety_limits["pos_limit_high"])
 
         self.device = jax.devices("cpu")[0]
-        self._ros_connector_own: ROSConnector | None = None
-        self._ros_connector_others: ROSConnector | None = None
+        self._ros_connector: ROSConnector | None = None
         self.data = EnvData(self.n_drones, self.n_gates, self.n_obstacles)
 
         self._comm: RaceCommNode | None = None
@@ -120,7 +119,7 @@ class RealMultiDroneRaceEnvClient(Env):
                 self.n_gates, self.n_obstacles
             )
 
-        if self._ros_connector_own is None:
+        if self._ros_connector is None:
             self._init_ros_connectors()
         if self._comm is None:
             self._init_comm()
@@ -152,7 +151,7 @@ class RealMultiDroneRaceEnvClient(Env):
                     dummy_action = np.zeros(4, dtype=np.float32)
                 else:
                     dummy_action = np.zeros(13, dtype=np.float32)
-                    dummy_action[:3] = self._ros_connector_own.pos[self.drone_name]
+                    dummy_action[:3] = self._ros_connector.pos[self.drone_name]
                 self._send_state_update(dummy_action, stopped=False)
                 time.sleep(1 / self.freq)
 
@@ -213,8 +212,8 @@ class RealMultiDroneRaceEnvClient(Env):
             logger.warning("Drone exceeded safety bounds")
             terminated = True
 
-        if self.control_mode == "attitude" and self._ros_connector_own:
-            self._ros_connector_own.publish_cmd(action)
+        if self.control_mode == "attitude" and self._ros_connector:
+            self._ros_connector.publish_cmd(action)
 
         self._send_state_update(action, terminated)
 
@@ -260,10 +259,8 @@ class RealMultiDroneRaceEnvClient(Env):
                 logger.warning(f"Could not send final stop message: {e}")
         if self._comm:
             self._comm.close()
-        if self._ros_connector_own:
-            self._ros_connector_own.close()
-        if self._ros_connector_others:
-            self._ros_connector_others.close()
+        if self._ros_connector:
+            self._ros_connector.close()
         logger.debug("Environment closed")
 
     def _send_state_update(self, action: NDArray, stopped: bool):
@@ -287,16 +284,14 @@ class RealMultiDroneRaceEnvClient(Env):
         self._client_state_pub.publish(msg)
 
     def _init_ros_connectors(self):
-        """Open ROS connectors for own drone (estimator) and others (TF)."""
-        self._ros_connector_own = ROSConnector(
+        """Open ROS connector for own drone (estimator) and others (TF)."""
+        other_names = [n for i, n in enumerate(self.drone_names) if i != self.rank]
+        self._ros_connector = ROSConnector(
             estimator_names=[self.drone_name],
             cmd_topic=f"/drones/{self.drone_name}/command",
+            tf_names=other_names,
             timeout=10.0,
         )
-
-        other_names = [n for i, n in enumerate(self.drone_names) if i != self.rank]
-        if other_names:
-            self._ros_connector_others = ROSConnector(tf_names=other_names, timeout=10.0)
 
     def _init_comm(self):
         """Set up the ROS2 communication node with all publishers and subscribers."""
@@ -341,15 +336,13 @@ class RealMultiDroneRaceEnvClient(Env):
         quat = np.full((self.n_drones, 4), np.nan, dtype=np.float32)
         vel = np.full((self.n_drones, 3), np.nan, dtype=np.float32)
         ang_vel = np.full((self.n_drones, 3), np.nan, dtype=np.float32)
-        pos[self.rank] = self._ros_connector_own.pos[self.drone_name]
-        quat[self.rank] = self._ros_connector_own.quat[self.drone_name]
-        vel[self.rank] = self._ros_connector_own.vel[self.drone_name]
-        ang_vel[self.rank] = self._ros_connector_own.ang_vel[self.drone_name]
-        if self._ros_connector_others is not None:
-            for i, name in enumerate(self.drone_names):
-                if i != self.rank:
-                    pos[i] = self._ros_connector_others.pos.get(name, np.nan)
-                    quat[i] = self._ros_connector_others.quat.get(name, np.nan)
-                    # vel[i] = self._ros_connector_others.vel.get(name, np.nan)
-                    # ang_vel[i] = self._ros_connector_others.ang_vel.get(name, np.nan)
+        for i, name in enumerate(self.drone_names):
+            if i == self.rank:
+                pos[i] = self._ros_connector.pos[name]
+                quat[i] = self._ros_connector.quat[name]
+                vel[i] = self._ros_connector.vel[name]
+                ang_vel[i] = self._ros_connector.ang_vel[name]
+            else:
+                pos[i] = self._ros_connector.pos.get(name, np.nan)
+                quat[i] = self._ros_connector.quat.get(name, np.nan)
         return pos, quat, vel, ang_vel
