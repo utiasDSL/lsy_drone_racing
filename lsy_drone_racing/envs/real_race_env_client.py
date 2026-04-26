@@ -209,10 +209,12 @@ class RealMultiDroneRaceEnvClient(Env):
         self.data.taken_off |= drone_pos[self.rank, 2] > 0.1
 
         terminated = bool(self.data.target_gate[self.rank] == -1)
-        if np.any(
-            (self.pos_limit_low > drone_pos[self.rank])
-            | (drone_pos[self.rank] > self.pos_limit_high)
-        ):
+
+        within_bound = np.all(
+            (drone_pos[self.rank] >= self.pos_limit_low)
+            & (drone_pos[self.rank] <= self.pos_limit_high)
+        )
+        if not within_bound:
             logger.warning("Drone exceeded safety bounds")
             terminated = True
 
