@@ -106,7 +106,7 @@ class RealMultiDroneRaceEnvClient(Env):
 
         Args:
             seed: Unused in real environments.
-            options: Unused in real environments.
+            options: Deploy options to determine whether to load real track object poses
 
         Returns:
             Initial observation and info dictionaries.
