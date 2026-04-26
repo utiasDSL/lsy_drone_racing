@@ -9,7 +9,7 @@ fi
 
 if [ ! -d ros_ws/src/drone_racing_msgs/.git ]; then
   echo "[Pixi activation] Cloning drone_racing_msgs..."
-  git clone https://github.com/rducrist/drone_racing_msgs.git ros_ws/src/drone_racing_msgs
+  git clone --branch real_race git@github.com:N0OBSTUDENT/drone_racing_msgs.git ros_ws/src/drone_racing_msgs
 fi
 
 if [ ! -f ros_ws/install/setup.sh ] || [ ! -d ros_ws/install/drone_racing_msgs ]; then
