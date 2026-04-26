@@ -24,32 +24,13 @@ from drone_racing_msgs.srv import RealCalibrateClock  # type: ignore[import-unty
 from lsy_drone_racing.envs.utils import gate_passed, load_track
 from lsy_drone_racing.utils.ros import track_poses
 from lsy_drone_racing.utils.ros_race_comm import RaceCommNode, calibrate_clock, compute_latency_ms
+from lsy_drone_racing.envs.real_race_env import EnvData
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
     from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
-
-
-class ClientEnvData:
-    """Auxiliary state for the client-side environment, mirroring :class:`EnvData`."""
-
-    def __init__(self, n_drones: int, n_gates: int, n_obstacles: int):
-        """Initialize all dynamic fields to default values."""
-        self.target_gate = np.zeros(n_drones, dtype=int)
-        self.gates_visited = np.zeros((n_drones, n_gates), dtype=bool)
-        self.obstacles_visited = np.zeros((n_drones, n_obstacles), dtype=bool)
-        self.last_drone_pos = np.zeros((n_drones, 3), dtype=np.float32)
-        self.taken_off = False
-
-    def reset(self, last_drone_pos: NDArray[np.float32]):
-        """Reset all dynamic fields and seed last drone positions."""
-        self.target_gate[:] = 0
-        self.gates_visited[:] = False
-        self.obstacles_visited[:] = False
-        self.last_drone_pos[:] = last_drone_pos
-        self.taken_off = False
 
 
 class RealMultiDroneRaceEnvClient(Env):
@@ -110,7 +91,7 @@ class RealMultiDroneRaceEnvClient(Env):
         self.device = jax.devices("cpu")[0]
         self._ros_connector_own: ROSConnector | None = None
         self._ros_connector_others: ROSConnector | None = None
-        self.data = ClientEnvData(self.n_drones, self.n_gates, self.n_obstacles)
+        self.data = EnvData(self.n_drones, self.n_gates, self.n_obstacles)
 
         self._comm: RaceCommNode | None = None
         self._client_state_pub: Any = None
@@ -332,7 +313,9 @@ class RealMultiDroneRaceEnvClient(Env):
             self._host_terminate = bool(msg.race_finished)
 
         self._subs = [
-            node.create_subscription(RealHostReady, "lsy_drone_racing/host/ready", on_host_ready, 10),
+            node.create_subscription(
+                RealHostReady, "lsy_drone_racing/host/ready", on_host_ready, 10
+            ),
             node.create_subscription(
                 RealRaceStart, "lsy_drone_racing/host/race_start", on_race_start, 10
             ),
