@@ -17,14 +17,18 @@ from typing import TYPE_CHECKING, Any, Literal
 import jax
 import numpy as np
 from drone_estimators.ros_nodes.ros2_connector import ROSConnector
-from gymnasium import Env
-from drone_racing_msgs.msg import RealClientState, RealHostReady, RealRaceStart  # type: ignore[import-untyped]
+from drone_racing_msgs.msg import (  # type: ignore[import-untyped]
+    RealClientState,
+    RealHostReady,
+    RealRaceStart,
+)
 from drone_racing_msgs.srv import RealCalibrateClock  # type: ignore[import-untyped]
+from gymnasium import Env
 
+from lsy_drone_racing.envs.real_race_env import EnvData
 from lsy_drone_racing.envs.utils import gate_passed, load_track
 from lsy_drone_racing.utils.ros import track_poses
 from lsy_drone_racing.utils.ros_race_comm import RaceCommNode, calibrate_clock, compute_latency_ms
-from lsy_drone_racing.envs.real_race_env import EnvData
 
 if TYPE_CHECKING:
     from ml_collections import ConfigDict
@@ -124,7 +128,7 @@ class RealMultiDroneRaceEnvClient(Env):
         if self._comm is None:
             self._init_comm()
 
-        current_pos, _, _, _ = self._get_all_drone_states()
+        current_pos, _, _, _ = self._all_drone_states()
         self.data.reset(current_pos)
 
         logger.debug("Environment reset complete")
@@ -133,7 +137,7 @@ class RealMultiDroneRaceEnvClient(Env):
     def lock_until_race_start(self, timeout: float = 60.0):
         """Sends dummy messages at the control frequency (``self.freq`` Hz) until the race starts.
 
-        After receiving host ready message, the client will calibrate the clock offset and \
+        After receiving host ready message, the client will calibrate the clock offset and
             until the host broadcasts :class:`RaceStartMessage`.
 
         Args:
@@ -186,7 +190,7 @@ class RealMultiDroneRaceEnvClient(Env):
         Returns:
             Observation, reward (always 0.0), terminated, truncated (always False), info.
         """
-        drone_pos, _, _, _ = self._get_all_drone_states()
+        drone_pos, _, _, _ = self._all_drone_states()
 
         dpos = drone_pos[:, None, :2] - self.gates.pos[None, :, :2]
         self.data.gates_visited |= np.linalg.norm(dpos, axis=-1) < self.sensor_range
@@ -228,7 +232,7 @@ class RealMultiDroneRaceEnvClient(Env):
         obstacles_pos = np.where(mask, self.obstacles.pos, self.obstacles.nominal_pos).astype(
             np.float32
         )
-        drone_pos, drone_quat, drone_vel, drone_ang_vel = self._get_all_drone_states()
+        drone_pos, drone_quat, drone_vel, drone_ang_vel = self._all_drone_states()
         return {
             "pos": drone_pos,
             "quat": drone_quat,
@@ -323,7 +327,7 @@ class RealMultiDroneRaceEnvClient(Env):
         )
         logger.debug("ROS2 communication initialized")
 
-    def _get_all_drone_states(self) -> tuple[NDArray, NDArray, NDArray, NDArray]:
+    def _all_drone_states(self) -> tuple[NDArray, NDArray, NDArray, NDArray]:
         """Read positions, quaternions, velocities, and angular velocities for all drones.
 
         Own drone state comes from the high-precision estimator; other drones from TF.
