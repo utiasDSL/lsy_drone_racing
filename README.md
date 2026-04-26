@@ -10,10 +10,11 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 🥈 | Deniz & Ahmet | 6.975 | 55 | 6 |
 | 🥉 | Millennium Falcon | 7.495 | 55 | 4 |
 | 4 | Theo & Olcay | 13.038 | 50 | 1 |
-| 5 | Xiaochen & Aoji | 13.599 | 70 | 1 |
-| 6 | Marcel (TA) | 21.059 | 75 | 4 |
-| 7 | Martin (TA) | 27.082 | 85 | 1 |
-| 8 | Radu (TA) | 28.290 | 60 | 1 |
+| 5 | Wei Lun & Lars | 13.157 | 60 | 1 |
+| 6 | Xiaochen & Aoji | 13.599 | 70 | 1 |
+| 7 | Marcel (TA) | 21.059 | 75 | 4 |
+| 8 | Martin (TA) | 27.082 | 85 | 1 |
+| 9 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
 | - | Sama & Luc | N/A | 0 | 0 |
 | - | Thunderstrike | N/A | 0 | 0 |
@@ -25,7 +26,6 @@ This competition is only for students of the ADR course at TUM. Students have to
 | - | Timo & Jeffrey | N/A | 0 | 0 |
 | - | Celia & Paula | N/A | 0 | 0 |
 | - | Leonie & Nicolas | N/A | 0 | 0 |
-| - | Wei Lun & Lars | N/A | 0 | 0 |
 | - | FlyingPacers (MAADR) | N/A | 0 | 0 |
 | - | Justin & Finn | N/A | 0 | 0 |
 | - | XYZ | N/A | 0 | 0 |
