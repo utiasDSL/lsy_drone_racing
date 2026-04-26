@@ -64,7 +64,7 @@ class Level1Fast(Controller):
                 [0.5, -0.75, 1.2],
             ]
         )
-        
+
         # 1. Lowered the total time for a much faster run!
         self._t_total = 5.0  # s
 
@@ -82,8 +82,8 @@ class Level1Fast(Controller):
 
         # Create position spline and its derivatives
         self._des_pos_spline = CubicSpline(t, waypoints)
-        self._des_vel_spline = self._des_pos_spline.derivative(nu=1)  
-        self._des_acc_spline = self._des_pos_spline.derivative(nu=2)  
+        self._des_vel_spline = self._des_pos_spline.derivative(nu=1)
+        self._des_acc_spline = self._des_pos_spline.derivative(nu=2)
 
         self._tick = 0
         self._finished = False
