@@ -1,4 +1,8 @@
-"""This module is a wrapper for the attitude controller that allows it to be used in a multi-agent environment. It extracts the relevant information for the current agent from the observation and passes it to the single-agent attitude controller."""
+"""This module implements a wrapper for the attitude controller for a multi-agent environment.
+
+It extracts the relevant information for the current agent from the observation,
+ and passes it to the single-agent attitude controller.
+"""
 
 from __future__ import annotations  # Python 3.10 type hints
 
@@ -43,7 +47,8 @@ class AttitudeController(SingleAttitudeController):
             [r_des, p_des, y_des, t_des] as a numpy array.
         """
         assert obs["pos"].ndim == 2, (
-            f"Observation should have 2 dimensions but now it has {obs['pos'].ndim} dimensions. Are you sure you are running the multi-agent environment?"
+            f"Observation should have 2 dimensions but now it has {obs['pos'].ndim} dimensions. "
+            "Are you sure you are running the multi-agent environment?"
         )
         obs = {
             "pos": obs["pos"][self.rank],
