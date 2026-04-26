@@ -70,7 +70,6 @@ class StateController(Controller):
         self._planned_obstacles_pos = np.array(obs.get("obstacles_pos", _NOMINAL_OBSTACLE_POS), dtype=np.float64)
         self._replanned_gates: set[int] = set()
 
-        # --- ALTITUDE DRIFT COMPENSATOR ---
         self._dt = 1.0 / self._freq
         self._z_error_integral = 0.0
         self._ki_z = 0.8  
@@ -82,7 +81,6 @@ class StateController(Controller):
         self._des_vel_spline: CubicSpline | None = None
         self._des_acc_spline: CubicSpline | None = None
         
-        # Replaced blind tick with dynamic tracking variable
         self._t_track = 0.0  
         self._finished = False
         
@@ -164,13 +162,11 @@ class StateController(Controller):
                 break
 
         # --- 3. AGGRESSIVE PRUNING TO KILL "W" SHAPES ---
-        # Strip out waypoints that are too close together (under 0.3m)
         final_wps = [wps[0]]
         for wp in wps[1:-1]:
             if np.linalg.norm(wp - final_wps[-1]) > 0.3:
                 final_wps.append(wp)
                 
-        # Always ensure the very last waypoint (the finish line) is included
         if np.linalg.norm(final_wps[-1] - wps[-1]) > 0.05:
             final_wps.append(wps[-1])
 
@@ -193,9 +189,8 @@ class StateController(Controller):
             acc_samples = self._des_acc_spline(t_samples)
             max_acc = np.max(np.linalg.norm(acc_samples, axis=1))
             
-            # Stricter acceleration limit to guarantee wider, sweeping turns
-            if max_acc > 2.0:  
-                self._t_total += 0.5 
+            if max_acc > 1.8:  
+                self._t_total += 0.2 
             else:
                 break
 
@@ -234,12 +229,26 @@ class StateController(Controller):
                     needs_rebuild = True
 
         if needs_rebuild:
+            # --- THE FIX: SAVE THE CURRENT SETPOINT POSITION BEFORE REBUILDING ---
+            # If the spline exists, save the exact location of the "carrot"
+            if self._des_pos_spline is not None:
+                old_des_pos = self._des_pos_spline(self._t_track)
+            else:
+                old_des_pos = obs["pos"]
+
             self._build_spline()
+            
             if "pos" in obs:
-                t_samples = np.linspace(0, self._t_total, 300)
+                # Localized search window (-1.0 to +1.0 covers the spline time stretch)
+                t_start = max(0.0, self._t_track - 1.0)
+                t_end = min(self._t_total, self._t_track + 1.0)
+                
+                t_samples = np.linspace(t_start, t_end, 200)
                 path_pts = self._des_pos_spline(t_samples)
-                closest_idx = np.argmin(np.linalg.norm(path_pts - obs["pos"], axis=1))
-                # Snap virtual time to the closest point on the newly built path
+                
+                # --- THE FIX: SNAP TO THE OLD SETPOINT, NOT THE DRONE ---
+                # This guarantees the setpoint physically stays exactly where it was, preventing all jumps!
+                closest_idx = np.argmin(np.linalg.norm(path_pts - old_des_pos, axis=1))
                 self._t_track = t_samples[closest_idx]
 
     def compute_control(
@@ -264,21 +273,24 @@ class StateController(Controller):
         
         # --- 1. EVALUATE TRACKING ERROR ---
         pos_error = np.linalg.norm(self._current_pos - des_pos)
-
-        # --- 2. EVALUATE INERTIA AND UPCOMING CURVES ---
-        lookahead_t = min(self._t_track + 0.4, self._t_total)
-        upcoming_acc = np.linalg.norm(self._des_acc_spline(lookahead_t))
         current_speed = np.linalg.norm(obs.get("vel", np.zeros(3)))
 
-        # --- 3. DYNAMIC TIME WARPING (FASTER TUNING) ---
-        # Allow up to 1.5m of error before braking to 20% speed
+        # --- 2. DYNAMIC LOOKAHEAD & EVALUATE INERTIA ---
+        dynamic_lookahead = np.clip(0.3 + (0.04 * current_speed), 0.3, 0.8)
+        lookahead_t = min(self._t_track + dynamic_lookahead, self._t_total)
+        upcoming_acc = np.linalg.norm(self._des_acc_spline(lookahead_t))
+
+        # --- 3. DYNAMIC TIME WARPING (THE STRAIGHTAWAY BOOST) ---
         error_factor = np.clip(1.0 - (pos_error / 1.5), 0.2, 1.0)
-
-        # Relaxed Lookahead Penalty for faster cornering
         accel_penalty = 1.0 + (0.015 * upcoming_acc * current_speed)
-        accel_factor = 1.0 / accel_penalty
+        
+        straight_boost = 1.0
+        if upcoming_acc < 2.5:
+            straight_boost = 1.0 + 1.0 * (1.0 - (upcoming_acc / 2.5))
 
-        # Advance the track setpoint
+        accel_factor = straight_boost / accel_penalty
+
+        # Advance the track setpoint EXACTLY ONCE
         self._t_track += self._dt * error_factor * accel_factor
         self._t_track = min(self._t_track, self._t_total)
 
