@@ -1,12 +1,4 @@
-"""This module implements an AttitudeController for quadrotor control.
-
-It utilizes the collective thrust interface for drone control to compute control commands based on
-current state observations and desired waypoints. The attitude control is handled by computing a
-PID control law for position tracking, incorporating gravity compensation in thrust calculations.
-
-The waypoints are generated using cubic spline interpolation from a set of predefined waypoints.
-Note that the trajectory uses pre-defined waypoints instead of dynamically generating a good path.
-"""
+"""This module is a wrapper for the attitude controller that allows it to be used in a multi-agent environment. It extracts the relevant information for the current agent from the observation and passes it to the single-agent attitude controller."""
 
 from __future__ import annotations  # Python 3.10 type hints
 
@@ -50,6 +42,9 @@ class AttitudeController(SingleAttitudeController):
             The orientation as roll, pitch, yaw angles, and the collective thrust
             [r_des, p_des, y_des, t_des] as a numpy array.
         """
+        assert obs["pos"].ndim == 2, (
+            f"Observation should have 2 dimensions but now it has {obs['pos'].ndim} dimensions. Are you sure you are running the multi-agent environment?"
+        )
         obs = {
             "pos": obs["pos"][self.rank],
             "vel": obs["vel"][self.rank],
