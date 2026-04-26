@@ -31,14 +31,17 @@ def main(config: str = "multi_level2.toml"):
     """
     rclpy.init()
     config_obj = load_config(Path(__file__).parents[1] / "config" / config)
-    deploy = config_obj.deploy
     host = CrazyFlieRealRaceHost(config_obj)
     try:
-        host.update_poses(track_obj=deploy.real_track_objects, drones=deploy.check_drone_start_pos)
+        host.update_poses(
+            track_obj=config_obj.deploy.real_track_objects,
+            drones=config_obj.deploy.check_drone_start_pos,
+        )
         host.check_track(
             rng_config=config_obj.env.randomizations,
-            check_objects=deploy.real_track_objects and deploy.check_race_track,
-            check_drones=deploy.check_drone_start_pos,
+            check_objects=config_obj.deploy.real_track_objects
+            and config_obj.deploy.check_race_track,
+            check_drones=config_obj.deploy.check_drone_start_pos,
         )
         host.connect_drones()
         logger.info("Drones connected, starting main loop...")

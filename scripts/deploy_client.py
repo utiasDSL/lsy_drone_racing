@@ -40,8 +40,7 @@ def main(
             to use the value from the config file.
         drone_rank: Rank of this drone in the multi-drone setup. Required.
     """
-    if drone_rank is None:
-        raise ValueError("drone_rank must be specified")
+    assert drone_rank is not None, "drone_rank must be specified"
 
     rclpy.init()
     config_obj = load_config(Path(__file__).parents[1] / "config" / config)
@@ -81,9 +80,9 @@ def main(
             if terminated or truncated or controller_finished:
                 logger.debug(
                     f"Client {drone_rank}: Episode finished "
-                    f"(terminated={terminated}, "
-                    f"truncated={truncated}, "
-                    f"finished={controller_finished})"
+                    f"({terminated=}, "
+                    f"{truncated=}, "
+                    f"{controller_finished=})"
                 )
                 break
 
