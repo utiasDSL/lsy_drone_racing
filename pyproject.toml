@@ -62,12 +62,14 @@ markers = ["unit", "integration"]
 ########################
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [tool.pixi.dependencies]
 python = ">=3.11.12,<3.14"
 pip = ">=25.0.1,<26"
 ruff = "*"
+
+[tool.pixi.target.unix.dependencies]
 # Compilers needed for acados
 cmake = "*"
 compilers = ">=1.9.0, <1.11.0"
@@ -77,8 +79,14 @@ openblas = ">=0.3.30,<0.4"
 [tool.pixi.pypi-dependencies]
 lsy_drone_racing = { path = ".", editable = true }
 
-[tool.pixi.activation]
+[tool.pixi.target.linux-64.activation]
 scripts = ["tools/setup_acados.sh"]
+
+[tool.pixi.target.osx-arm64.activation]
+scripts = ["tools/setup_acados.sh"]
+
+[tool.pixi.target.win-64.activation]
+scripts = ["tools/setup_acados.bat"]
 
 [tool.pixi.tasks]
 evaluate = { cmd = "python scripts/evaluate.py", description = "Evaluate the controller" }
@@ -96,6 +104,7 @@ profile = { features = ["sim", "profile", "gpu"], solve-group = "default" }
 ## feature [kilted]
 [tool.pixi.feature.kilted]
 channels = ["https://prefix.dev/robostack-kilted"]
+platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.feature.kilted.dependencies]
 # Build tools

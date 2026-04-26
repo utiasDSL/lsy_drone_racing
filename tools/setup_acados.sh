@@ -29,6 +29,11 @@ case "$(uname -s)" in
     ACADOS_PLATFORM="osx"
     ACADOS_LIB_NAME="libacados.dylib"
     ;;
+  MINGW* | MSYS* | CYGWIN*)
+    log "Native Windows acados bootstrap is not supported by this repository; skipping."
+    log "Use pixi shell on Windows or WSL if you need acados."
+    exit 0
+    ;;
   *)
     log "ERROR: Unsupported platform: $(uname -s)"
     exit 1
