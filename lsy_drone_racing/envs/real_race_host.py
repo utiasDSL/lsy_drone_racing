@@ -25,7 +25,11 @@ from cflib.utils.power_switch import PowerSwitch
 from drone_estimators.ros_nodes.ros2_connector import ROSConnector
 from drone_models.core import load_params
 from drone_models.transform import force2pwm
-from drone_racing_msgs.msg import RealClientState, RealHostReady, RealRaceStart  # type: ignore[import-untyped]
+from drone_racing_msgs.msg import (  # type: ignore[import-untyped]
+    RealClientState,
+    RealHostReady,
+    RealRaceStart,
+)
 from drone_racing_msgs.srv import RealCalibrateClock  # type: ignore[import-untyped]
 from scipy.spatial.transform import RigidTransform as Tr
 from scipy.spatial.transform import Rotation as R
@@ -229,7 +233,7 @@ class CrazyflieWorker:
         """Subscribe to client state messages for this drone via ROS2."""
         self._comm = RaceCommNode(f"lsy_race_worker_{self.rank}")
         self._sub = self._comm.node.create_subscription(
-            ClientState,
+            RealClientState,
             f"lsy_drone_racing/client/drone_{self.rank}/state",
             self._on_client_state,
             10,
@@ -402,7 +406,9 @@ class RealRaceHost:
         """Set up the ROS2 communication node with all publishers and subscribers."""
         self._comm = RaceCommNode("lsy_race_host")
         node = self._comm.node
-        self._host_ready_pub = node.create_publisher(RealHostReady, "lsy_drone_racing/host/ready", 10)
+        self._host_ready_pub = node.create_publisher(
+            RealHostReady, "lsy_drone_racing/host/ready", 10
+        )
         self._race_start_pub = node.create_publisher(
             RealRaceStart, "lsy_drone_racing/host/race_start", 10
         )
@@ -419,7 +425,10 @@ class RealRaceHost:
 
             self._subs.append(
                 node.create_subscription(
-                    RealClientState, f"lsy_drone_racing/client/drone_{rank}/state", on_client_state, 10
+                    RealClientState,
+                    f"lsy_drone_racing/client/drone_{rank}/state",
+                    on_client_state,
+                    10,
                 )
             )
         logger.debug("ROS2 communication initialized")
