@@ -29,7 +29,7 @@ class Controller(ABC):
     """Base class for controller implementations."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
-        """Initialization of the controller.
+        """Initialization of the controller
 
         Instructions:
             The controller's constructor has access the initial observation `obs`, the a priori
@@ -43,6 +43,9 @@ class Controller(ABC):
             config: The race configuration. See the config files for details. Contains additional
                 information such as disturbance configurations, randomizations, etc.
         """
+
+        
+        
 
     @abstractmethod
     def compute_control(
