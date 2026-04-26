@@ -16,3 +16,8 @@
 
 * "Ruff-Format" checkt unsere formatierung des codes... also den style
     * einfach zu beheben mit: "ruff format ." ins terminal
+
+
+@NICO:
+* Letzes Tor mit hinderniss davor
+    * spline oft durch die stange

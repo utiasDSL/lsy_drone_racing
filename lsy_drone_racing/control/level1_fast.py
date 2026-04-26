@@ -43,7 +43,8 @@ class Level1Fast(Controller):
         Args:
             obs: The initial observation of the environment's state.
             info: The initial environment information from the reset.
-            config: The race configuration containing disturbance configurations, randomizations, etc.
+            config: The race configuration containing
+                     disturbance configurations, randomizations, etc.
         """
         super().__init__(obs, info, config)
         self._freq = config.env.freq
@@ -81,8 +82,8 @@ class Level1Fast(Controller):
 
         # Create position spline and its derivatives
         self._des_pos_spline = CubicSpline(t, waypoints)
-        self._des_vel_spline = self._des_pos_spline.derivative(nu=1)  # 1st derivative (velocity)
-        self._des_acc_spline = self._des_pos_spline.derivative(nu=2)  # 2nd derivative (acceleration)
+        self._des_vel_spline = self._des_pos_spline.derivative(nu=1)  
+        self._des_acc_spline = self._des_pos_spline.derivative(nu=2)  
 
         self._tick = 0
         self._finished = False
@@ -170,7 +171,7 @@ class Level1Fast(Controller):
         # Get current time and desired state
         t = min(self._tick / self._freq, self._t_total)
         des_pos = self._des_pos_spline(t)
-        des_vel = self._des_vel_spline(t)
+        # des_vel = self._des_vel_spline(t)
 
         # Draw current setpoint
         setpoint = des_pos.reshape(1, -1)

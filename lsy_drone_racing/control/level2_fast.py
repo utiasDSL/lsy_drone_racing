@@ -21,8 +21,9 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 _REPLAN_THRESHOLD = 0.05
-_GATE_MARGIN = 0.160      # Meters before and after the gate for a straight approach
-_OBSTACLE_MARGIN = 0.160  # Meters of safe clearance radius around the vertical obstacles
+_GATE_MARGIN = 0.160      
+# INCREASED MARGIN: Forces the drone to give obstacles a much wider berth
+_OBSTACLE_MARGIN = 0.250  
 
 # Nominal track layout
 _NOMINAL_GATE_POS = np.array(
@@ -31,7 +32,8 @@ _NOMINAL_GATE_POS = np.array(
 _NOMINAL_GATE_YAW = np.array([-0.78, 2.35, 3.14, 0.0], dtype=np.float64)
 
 _NOMINAL_OBSTACLE_POS = np.array(
-    [[0.0, 0.75, 1.55], [1.0, 0.25, 1.55], [-1.5, -0.25, 1.55], [-0.5, -0.75, 1.55]], dtype=np.float64
+    [[0.0, 0.75, 1.55], [1.0, 0.25, 1.55],
+     [-1.5, -0.25, 1.55], [-0.5, -0.75, 1.55]], dtype=np.float64
 )
 
 
@@ -42,6 +44,7 @@ class StateController(Controller):
     MAX_ACCELERATION = 100 
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
+        """Initialization of the controller."""
         super().__init__(obs, info, config)
         self._freq = config.env.freq
         self._t_total = 10.0
@@ -56,19 +59,29 @@ class StateController(Controller):
         self._add_gate_waypoints(gate_id=1, intermediate_point=[1.3, -0.15, 0.9])
         self._add_gate_waypoints(gate_id=2, intermediate_point=[-0.5, -0.05, 0.7])
         self._waypoints_list.append([-1.2, -0.2, 1.2])   # Intermediate
-        self._add_gate_waypoints(gate_id=3)
+        
+        # WIDER APPROACH FOR GATE 4: Steer wide of the obstacle at [-0.5, -0.75]
+        self._add_gate_waypoints(gate_id=3, intermediate_point=[-0.6, -0.2, 1.2])
         self._waypoints_list.append([0.5, -0.75, 1.2])   # End
 
         self._base_waypoints = np.array(self._waypoints_list, dtype=np.float64)
         self._waypoints = self._base_waypoints.copy()
         
-        self._planned_gates_pos = np.array(obs.get("gates_pos", _NOMINAL_GATE_POS), dtype=np.float64)
-        self._planned_obstacles_pos = np.array(obs.get("obstacles_pos", _NOMINAL_OBSTACLE_POS), dtype=np.float64)
+        self._planned_gates_pos = np.array(obs.get("gates_pos", _NOMINAL_GATE_POS),
+                                           dtype=np.float64)
+        self._planned_obstacles_pos = np.array(obs.get("obstacles_pos",
+                                                        _NOMINAL_OBSTACLE_POS),
+                                                dtype=np.float64)
         self._replanned_gates: set[int] = set()
 
-        # --- VISUAL DEBUGGING STATE ---
-        self._path_history = []  # Stores the drone's actual flown path
-        # ------------------------------
+        # --- ALTITUDE DRIFT COMPENSATOR ---
+        self._dt = 1.0 / self._freq
+        self._z_error_integral = 0.0
+        self._ki_z = 0.8  
+        
+        self._current_pos = np.zeros(3)
+        self._current_setpoint = np.zeros(3)
+        self._path_history = []  
 
         self._des_pos_spline: CubicSpline | None = None
         self._des_vel_spline: CubicSpline | None = None
@@ -103,75 +116,92 @@ class StateController(Controller):
         self._gate_indices[gate_id] = (pre_idx, post_idx)
 
     def _build_spline(self) -> None:
-        """Applies Obstacle Shielding, Prunes clashing points, and builds splines."""
-        safe_wps = []
+        """Applies Obstacle Shielding and enforces Acceleration Limits."""
+        # A realistic safety limit for standard drones to prevent flipping out.
+        # Even though MAX_ACCELERATION is 100, splines over 25-30 m/s^2 usually induce chaos.
+        SAFE_ACCEL_LIMIT = 3.0 
         
-        # 1. Obstacle Repulsion Logic (Same as before)
-        for i in range(len(self._waypoints)):
-            wp = self._waypoints[i].copy()
-            pushed = False
-
-            for obs_pos in self._planned_obstacles_pos:
-                dist_xy = np.linalg.norm(wp[:2] - obs_pos[:2])
-                
-                if dist_xy < _OBSTACLE_MARGIN:
-                    push_vec = wp[:2] - obs_pos[:2]
-                    if np.linalg.norm(push_vec) < 1e-3:
-                        push_vec = np.array([1.0, 0.0]) 
-                    push_vec = push_vec / np.linalg.norm(push_vec) 
-
-                    safe_wp = wp.copy()
-                    safe_wp[:2] = obs_pos[:2] + push_vec * _OBSTACLE_MARGIN
-
-                    tangent = np.array([-push_vec[1], push_vec[0], 0.0])
-                    shield_dist = 0.18  
-                    
-                    wp_pre = safe_wp + tangent * shield_dist
-                    wp_post = safe_wp - tangent * shield_dist
-
-                    if len(safe_wps) > 0:
-                        travel_dir = safe_wp - safe_wps[-1]
-                        if np.dot(travel_dir, tangent) < 0:
-                            wp_pre, wp_post = wp_post, wp_pre 
-
-                    safe_wps.extend([wp_pre, safe_wp, wp_post])
-                    pushed = True
-                    break 
-
-            if not pushed:
-                safe_wps.append(wp)
-
-        # --- 2. THE PRUNING FILTER (NEW) ---
-        # Remove waypoints that are squished too close together to prevent spline knots
-        pruned_wps = [safe_wps[0]]
-        for i in range(1, len(safe_wps)):
-            dist_to_prev = np.linalg.norm(safe_wps[i] - pruned_wps[-1])
+        # 1. Start with the base waypoints and lightly prune tight clusters
+        wps = [self._waypoints[0].copy()]
+        for i in range(1, len(self._waypoints)):
+            if np.linalg.norm(self._waypoints[i] - wps[-1]) > 0.15 or i == len(self._waypoints) - 1:
+                wps.append(self._waypoints[i].copy())
+        
+        # 2. Iteratively check the SPLINE segments and nudge if needed
+        for iteration in range(4):
+            wps_arr = np.array(wps)
+            distances = np.linalg.norm(np.diff(wps_arr, axis=0), axis=1)
+            cum_distances = np.concatenate(([0], np.cumsum(distances)))
+            total_distance = cum_distances[-1]
             
-            # Keep the point IF it is > 15cm away, OR if it's the final finish-line point
-            if dist_to_prev > 0.15 or i == len(safe_wps) - 1:
-                pruned_wps.append(safe_wps[i])
-        # -----------------------------------
+            if total_distance == 0:
+                break
+                
+            t_wps = (cum_distances / total_distance) * self._t_total
+            temp_spline = CubicSpline(t_wps, wps_arr)
+            
+            t_samples = np.linspace(0, self._t_total, 200)
+            spline_pts = temp_spline(t_samples)
+            collision_found = False
+            
+            for obs_pos in self._planned_obstacles_pos:
+                dist_xy = np.linalg.norm(spline_pts[:, :2] - obs_pos[:2], axis=1)
+                min_idx = np.argmin(dist_xy)
+                
+                if dist_xy[min_idx] < _OBSTACLE_MARGIN:
+                    p_coll = spline_pts[min_idx]
+                    t_coll = t_samples[min_idx]
+                    
+                    push_vec = p_coll[:2] - obs_pos[:2]
+                    if np.linalg.norm(push_vec) < 1e-3:
+                        push_vec = np.array([1.0, 0.0])
+                    push_vec = push_vec / np.linalg.norm(push_vec)
+                    
+                    nudged_wp = p_coll.copy()
+                    nudged_wp[:2] = obs_pos[:2] + push_vec * (_OBSTACLE_MARGIN + 0.05) 
+                    
+                    insert_idx = np.searchsorted(t_wps, t_coll)
+                    wps.insert(insert_idx, nudged_wp)
+                    
+                    collision_found = True
+                    break 
+            
+            if not collision_found:
+                break
 
-        self._active_path_wps = np.array(pruned_wps)
-
-        # 3. Distance-Based Time Allocation
-        differences = np.diff(self._active_path_wps, axis=0)
-        distances = np.linalg.norm(differences, axis=1)
-
+        # 3. The Safety Check: Bounding the Second Derivative (Acceleration)
+        self._active_path_wps = np.array(wps)
+        distances = np.linalg.norm(np.diff(self._active_path_wps, axis=0), axis=1)
         cum_distances = np.concatenate(([0], np.cumsum(distances)))
         total_distance = cum_distances[-1]
 
-        t = (cum_distances / total_distance) * self._t_total
+        # Loop to ensure the path is physically flyable
+        max_retries = 10
+        for attempt in range(max_retries):
+            t_wps = (cum_distances / total_distance) * self._t_total
+            
+            self._des_pos_spline = CubicSpline(t_wps, self._active_path_wps)
+            self._des_vel_spline = self._des_pos_spline.derivative(nu=1)
+            self._des_acc_spline = self._des_pos_spline.derivative(nu=2)
+            
+            # Sample the acceleration across the whole trajectory
+            t_samples = np.linspace(0, self._t_total, 200)
+            acc_samples = self._des_acc_spline(t_samples)
+            max_acc = np.max(np.linalg.norm(acc_samples, axis=1))
+            
+            if max_acc > SAFE_ACCEL_LIMIT:
+                # The trajectory is too aggressive. 
+                # Giving the drone more time smoothly "relaxes" the violent curves.
+                self._t_total += 1.5 
+            else:
+                # Safe to fly! Break the loop.
+                break
 
-        self._des_pos_spline = CubicSpline(t, self._active_path_wps)
-        self._des_vel_spline = self._des_pos_spline.derivative(nu=1)
-        self._des_acc_spline = self._des_pos_spline.derivative(nu=2)
 
     def _check_and_replan(self, obs: dict[str, NDArray[np.floating]]) -> None:
         """Updates internal state with revealed gates/obstacles and triggers rebuild."""
         needs_rebuild = False
 
-        # --- 1. GATE REPLANNING (Permanently alters self._waypoints) ---
         target_gate = int(obs["target_gate"])
         if target_gate >= 0 and target_gate not in self._replanned_gates:
             new_gate_pos = np.asarray(obs["gates_pos"][target_gate], dtype=np.float64)
@@ -194,7 +224,6 @@ class StateController(Controller):
                 self._replanned_gates.add(target_gate)
                 needs_rebuild = True
 
-        # --- 2. OBSTACLE UPDATE (Only updates state, _build_spline handles the math) ---
         if "obstacles_pos" in obs:
             current_obs_pos = np.asarray(obs["obstacles_pos"], dtype=np.float64)
             for i in range(len(current_obs_pos)):
@@ -202,25 +231,25 @@ class StateController(Controller):
                 if np.linalg.norm(delta) > _REPLAN_THRESHOLD:
                     self._planned_obstacles_pos[i] = current_obs_pos[i]
                     needs_rebuild = True
-                    
-                    # --- NEW: DYNAMIC BRAKING ---
-                    # If an obstacle suddenly appears in our way, give the drone 
-                    # an extra 0.3 seconds to safely navigate the complex dodge!
-                    self._t_total += 0.3
-                    print(f"Obstacle Dodged! Relaxing flight time to {self._t_total:.2f}s")
-                    # ----------------------------
+                    # Removed the buggy `self._t_total += 0.3` time warp here.
+                    # We now handle braking dynamically in compute_control!
 
         if needs_rebuild:
             self._build_spline()
+            if "pos" in obs:
+                t_samples = np.linspace(0, self._t_total, 300)
+                path_pts = self._des_pos_spline(t_samples)
+                closest_idx = np.argmin(np.linalg.norm(path_pts - obs["pos"], axis=1))
+                self._tick = int(t_samples[closest_idx] * self._freq)
 
     def compute_control(
         self, obs: dict[str, NDArray[np.floating]], info: dict | None = None
     ) -> NDArray[np.floating]:
         
-        # --- RECORD FLIGHT PATH ---
         if "pos" in obs:
             self._path_history.append(obs["pos"].copy())
-        # --------------------------
+            if len(self._path_history) > 500:
+                self._path_history.pop(0)
 
         t = min(self._tick / self._freq, self._t_total)
         if t >= self._t_total:
@@ -232,15 +261,34 @@ class StateController(Controller):
         des_vel = self._des_vel_spline(t)
         des_acc = self._des_acc_spline(t)
 
+        self._current_pos = obs["pos"].copy()
+        self._current_setpoint = des_pos.copy()
+
+        z_error = des_pos[2] - self._current_pos[2]
+        self._z_error_integral += z_error * self._dt
+        self._z_error_integral = np.clip(self._z_error_integral, -0.2, 0.2)
+        
+        compensated_des_pos = des_pos.copy()
+        compensated_des_pos[2] += self._ki_z * self._z_error_integral
+
+        # --- DYNAMIC PROXIMITY BRAKING ---
+        # If we get within 0.8m of ANY obstacle, aggressively clamp the max velocity
+        # so the drone has time to physically maneuver the spline dodge.
+        current_max_vel = self.MAX_VELOCITY
+        for obs_pos in self._planned_obstacles_pos:
+            if np.linalg.norm(self._current_pos[:2] - obs_pos[:2]) < 0.8:
+                current_max_vel = 1.5  # Brakes applied!
+                break
+
         vel_magnitude = np.linalg.norm(des_vel)
-        if vel_magnitude > self.MAX_VELOCITY:
-            des_vel = des_vel * (self.MAX_VELOCITY / vel_magnitude)
+        if vel_magnitude > current_max_vel:
+            des_vel = des_vel * (current_max_vel / vel_magnitude)
 
         acc_magnitude = np.linalg.norm(des_acc)
         if acc_magnitude > self.MAX_ACCELERATION:
             des_acc = des_acc * (self.MAX_ACCELERATION / acc_magnitude)
 
-        return np.concatenate((des_pos, des_vel, des_acc, np.zeros(4)), dtype=np.float32)
+        return np.concatenate((compensated_des_pos, des_vel, des_acc, np.zeros(4)), dtype=np.float32)
 
     def step_callback(self, action, obs, reward, terminated, truncated, info) -> bool:
         self._tick += 1
@@ -251,25 +299,21 @@ class StateController(Controller):
         self._finished = False
         self._waypoints = self._base_waypoints.copy()
         self._replanned_gates = set()
-        self._path_history = []  # Clear the trail on reset!
+        self._path_history = [] 
+        self._z_error_integral = 0.0
         self._build_spline()
 
     def render_callback(self, sim: Sim):
         t = min(self._tick / self._freq, self._t_total)
         
-        # 1. DRAW ACTUAL FLOWN PATH (Orange Trail)
         if len(self._path_history) > 1:
-            # We slice the array or draw it to show where the drone physically went
-            path_array = np.array(self._path_history)
+            path_array = np.array(self._path_history[::5])
             draw_line(sim, path_array, rgba=(1.0, 0.5, 0.0, 1.0))
         
-        # 2. DRAW TARGET WAYPOINTS (Magenta dots)
         draw_points(sim, self._waypoints, rgba=(1.0, 0.0, 1.0, 1.0), size=0.03)
 
-        # 3. DRAW DANGER ZONES (Red Obstacle Circles & Pillars)
-        theta = np.linspace(0, 2 * np.pi, 21) # 21 points creates a closed 20-sided polygon
+        theta = np.linspace(0, 2 * np.pi, 21)
         for obs_pos in self._planned_obstacles_pos:
-            # Draw the red repulsion circle at z=1.0m (roughly drone flight height)
             z_height = 1.0
             circle_points = []
             for th in theta:
@@ -278,19 +322,15 @@ class StateController(Controller):
                                       z_height])
             draw_line(sim, np.array(circle_points), rgba=(1.0, 0.0, 0.0, 0.8))
             
-            # Draw a vertical line representing the center of the obstacle pole
             pole_line = np.array([[obs_pos[0], obs_pos[1], 0.0], [obs_pos[0], obs_pos[1], 1.55]])
             draw_line(sim, pole_line, rgba=(1.0, 0.0, 0.0, 0.4))
 
-        # 4. DRAW IDEAL TRAJECTORY (Green Line)
         trajectory = self._des_pos_spline(np.linspace(0, self._t_total, 100))
         draw_line(sim, trajectory, rgba=(0.0, 1.0, 0.0, 1.0))
 
-        # 5. DRAW CURRENT SETPOINT (Red Dot)
         setpoint = self._des_pos_spline(t).reshape(1, -1)
         draw_points(sim, setpoint, rgba=(1.0, 0.0, 0.0, 1.0), size=0.02)
         
-        # 6. DRAW FEEDFORWARD VELOCITY VECTORS (Blue Ticks)
         time_samples = np.linspace(0, self._t_total, 15)
         pos_samples = self._des_pos_spline(time_samples)
         vel_samples = self._des_vel_spline(time_samples)
