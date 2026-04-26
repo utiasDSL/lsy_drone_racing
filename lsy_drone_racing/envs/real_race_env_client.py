@@ -18,8 +18,8 @@ import jax
 import numpy as np
 from drone_estimators.ros_nodes.ros2_connector import ROSConnector
 from gymnasium import Env
-from lsy_race_msgs.msg import ClientState, HostReady, RaceStart  # type: ignore[import-untyped]
-from lsy_race_msgs.srv import CalibrateClock  # type: ignore[import-untyped]
+from drone_racing_msgs.msg import RealClientState, RealHostReady, RealRaceStart  # type: ignore[import-untyped]
+from drone_racing_msgs.srv import RealCalibrateClock  # type: ignore[import-untyped]
 
 from lsy_drone_racing.envs.utils import gate_passed, load_track
 from lsy_drone_racing.utils.ros import track_poses
@@ -296,12 +296,12 @@ class RealMultiDroneRaceEnvClient(Env):
             stopped: Whether this client has finished or crashed.
         """
         elapsed_time = time.time() - self._race_start_time if self._race_started else 0.0
-        msg = ClientState()
+        msg = RealClientState()
         msg.drone_rank = self.rank
         msg.action = action.tolist() if isinstance(action, np.ndarray) else list(action)
         msg.elapsed_time = elapsed_time
         msg.timestamp = time.time() + self._clock_offset
-        msg.stopped = stopped
+        msg.controller_finished = stopped
         msg.next_gate_idx = int(self.data.target_gate[self.rank])
         self._client_state_pub.publish(msg)
 
@@ -322,26 +322,26 @@ class RealMultiDroneRaceEnvClient(Env):
         self._comm = RaceCommNode(f"lsy_race_client_{self.rank}")
         node = self._comm.node
 
-        def on_host_ready(msg: HostReady):
+        def on_host_ready(msg: RealHostReady):
             self._host_ready_event.set()
             logger.debug(f"Host ready (latency: {compute_latency_ms(msg.timestamp):.2f}ms)")
 
-        def on_race_start(msg: RaceStart):
+        def on_race_start(msg: RealRaceStart):
             self._race_started = True
             self._race_start_time = time.time() - msg.elapsed_time
-            self._host_terminate = bool(msg.finished)
+            self._host_terminate = bool(msg.race_finished)
 
         self._subs = [
-            node.create_subscription(HostReady, "lsy_drone_racing/host/ready", on_host_ready, 10),
+            node.create_subscription(RealHostReady, "lsy_drone_racing/host/ready", on_host_ready, 10),
             node.create_subscription(
-                RaceStart, "lsy_drone_racing/host/race_start", on_race_start, 10
+                RealRaceStart, "lsy_drone_racing/host/race_start", on_race_start, 10
             ),
         ]
         self._client_state_pub = node.create_publisher(
-            ClientState, f"lsy_drone_racing/client/drone_{self.rank}/state", 10
+            RealClientState, f"lsy_drone_racing/client/drone_{self.rank}/state", 10
         )
         self._clock_calib_client = node.create_client(
-            CalibrateClock, "lsy_drone_racing/calibrate_clock"
+            RealCalibrateClock, "lsy_drone_racing/calibrate_clock"
         )
         logger.debug("ROS2 communication initialized")
 

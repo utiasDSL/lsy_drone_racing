@@ -25,8 +25,8 @@ from cflib.utils.power_switch import PowerSwitch
 from drone_estimators.ros_nodes.ros2_connector import ROSConnector
 from drone_models.core import load_params
 from drone_models.transform import force2pwm
-from lsy_race_msgs.msg import ClientState, HostReady, RaceStart  # type: ignore[import-untyped]
-from lsy_race_msgs.srv import CalibrateClock  # type: ignore[import-untyped]
+from drone_racing_msgs.msg import RealClientState, RealHostReady, RealRaceStart  # type: ignore[import-untyped]
+from drone_racing_msgs.srv import RealCalibrateClock  # type: ignore[import-untyped]
 from scipy.spatial.transform import RigidTransform as Tr
 from scipy.spatial.transform import Rotation as R
 
@@ -103,7 +103,7 @@ class CrazyflieWorker:
         self.drone_name = f"cf{drone_id}"
         self.drone: Crazyflie | None = None
         self.params: dict | None = None
-        self.last_msg: ClientState | None = None
+        self.last_msg: RealClientState | None = None
         self.action_lock = threading.Lock()
         self._comm: RaceCommNode | None = None
         self._ros_connector: ROSConnector | None = None
@@ -165,7 +165,7 @@ class CrazyflieWorker:
                 pos, vel, acc, quat, rollrate, pitchrate, yawrate
             )
 
-    def _on_client_state(self, msg: ClientState):
+    def _on_client_state(self, msg: RealClientState):
         """Store the latest action from the client state message."""
         with self.action_lock:
             self.last_msg = msg
@@ -261,7 +261,7 @@ class CrazyflieWorker:
                         f"No command received for 10 * {dt:.2f}s, handover control to host..."
                     )
                     break
-                if self.last_msg and self.last_msg.stopped:
+                if self.last_msg and self.last_msg.controller_finished:
                     self.logger.info(
                         "Received stop signal from client, handover control to host..."
                     )
@@ -402,24 +402,24 @@ class RealRaceHost:
         """Set up the ROS2 communication node with all publishers and subscribers."""
         self._comm = RaceCommNode("lsy_race_host")
         node = self._comm.node
-        self._host_ready_pub = node.create_publisher(HostReady, "lsy_drone_racing/host/ready", 10)
+        self._host_ready_pub = node.create_publisher(RealHostReady, "lsy_drone_racing/host/ready", 10)
         self._race_start_pub = node.create_publisher(
-            RaceStart, "lsy_drone_racing/host/race_start", 10
+            RealRaceStart, "lsy_drone_racing/host/race_start", 10
         )
         self._subs = []
         for rank in range(self._num_drones):
 
-            def on_client_state(msg: ClientState, rank: int = rank):
+            def on_client_state(msg: RealClientState, rank: int = rank):
                 if not self._clients_ready[rank]:
                     logger.debug(f"Client {rank} ready")
                     self._clients_ready[rank] = True
-                if msg.stopped:
+                if msg.controller_finished:
                     logger.info(f"Client {rank} stopped (gate={msg.next_gate_idx})")
                     self._clients_stopped[rank] = True
 
             self._subs.append(
                 node.create_subscription(
-                    ClientState, f"lsy_drone_racing/client/drone_{rank}/state", on_client_state, 10
+                    RealClientState, f"lsy_drone_racing/client/drone_{rank}/state", on_client_state, 10
                 )
             )
         logger.debug("ROS2 communication initialized")
@@ -623,7 +623,7 @@ class CrazyFlieRealRaceHost(RealRaceHost):
     def close(self):
         """Stop all drone subprocesses and close ROS communication."""
         self._race_start_pub.publish(
-            RaceStart(elapsed_time=-1.0, timestamp=time.time(), finished=True)
+            RealRaceStart(elapsed_time=-1.0, timestamp=time.time(), race_finished=True)
         )
         if self._init_barrier is not None:
             self._init_barrier.abort()
@@ -652,13 +652,13 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         logger.info("Starting clock calibration service...")
 
         def _handler(
-            _: CalibrateClock.Request, response: CalibrateClock.Response
-        ) -> CalibrateClock.Response:
+            _: RealCalibrateClock.Request, response: RealCalibrateClock.Response
+        ) -> RealCalibrateClock.Response:
             response.host_timestamp = time.time()
             return response
 
         self._calib_srv = self._comm.node.create_service(
-            CalibrateClock, "lsy_drone_racing/calibrate_clock", _handler
+            RealCalibrateClock, "lsy_drone_racing/calibrate_clock", _handler
         )
         time.sleep(1.0)
         logger.info("Clock calibration complete")
@@ -683,7 +683,7 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         logger.info("Waiting for clients...")
         t_start = time.time()
         while time.time() - t_start < 300.0:
-            self._host_ready_pub.publish(HostReady(elapsed_time=0.0, timestamp=time.time()))
+            self._host_ready_pub.publish(RealHostReady(elapsed_time=0.0, timestamp=time.time()))
             if all(self._clients_ready.values()):
                 logger.info("All clients ready")
                 break
@@ -706,7 +706,7 @@ class CrazyFlieRealRaceHost(RealRaceHost):
             elapsed_time = time.time() - self._start_time
             finished = all(self._clients_stopped.values())
             self._race_start_pub.publish(
-                RaceStart(elapsed_time=elapsed_time, timestamp=time.time(), finished=False)
+                RealRaceStart(elapsed_time=elapsed_time, timestamp=time.time(), race_finished=False)
             )
             if finished:
                 logger.info("All clients stopped")

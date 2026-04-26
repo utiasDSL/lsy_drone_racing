@@ -21,7 +21,7 @@ import time
 from typing import TYPE_CHECKING
 
 import rclpy
-from lsy_race_msgs.srv import CalibrateClock  # type: ignore[import-untyped]
+from drone_racing_msgs.srv import RealCalibrateClock  # type: ignore[import-untyped]
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 
 
@@ -94,7 +94,7 @@ def calibrate_clock(client: Client, n: int = 5, timeout: float = 60.0) -> float:
     offsets = []
     for _ in range(n):
         t_send = time.time()
-        future = client.call_async(CalibrateClock.Request())
+        future = client.call_async(RealCalibrateClock.Request())
         while not future.done():
             time.sleep(0.0001)  # Don't busy-wait too aggressively
         t_recv = time.time()
