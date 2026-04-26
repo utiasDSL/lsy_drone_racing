@@ -6,13 +6,14 @@ This competition is only for students of the ADR course at TUM. Students have to
 ## Leaderboard 🏁
 | Rank | Team | Time [s] | Success Rate [%] | Submissions |
 | :---: | :--- | :---  | :--- | :---: |
-| 🥇 | Deniz & Ahmet | 7.307 | 60 | 4 |
-| 🥈 | Millennium Falcon | 7.495 | 55 | 4 |
-| 🥉 | Theo & Olcay | 13.038 | 50 | 1 |
-| 4 | Xiaochen & Aoji | 13.599 | 70 | 1 |
-| 5 | Marcel (TA) | 21.059 | 75 | 4 |
-| 6 | Martin (TA) | 27.082 | 85 | 1 |
-| 7 | Radu (TA) | 28.290 | 60 | 1 |
+| 🥇 | Nikola & Moritz | 7.064 | 55 | 1 |
+| 🥈 | Deniz & Ahmet | 7.307 | 60 | 4 |
+| 🥉 | Millennium Falcon | 7.495 | 55 | 4 |
+| 4 | Theo & Olcay | 13.038 | 50 | 1 |
+| 5 | Xiaochen & Aoji | 13.599 | 70 | 1 |
+| 6 | Marcel (TA) | 21.059 | 75 | 4 |
+| 7 | Martin (TA) | 27.082 | 85 | 1 |
+| 8 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
 | - | Sama & Luc | N/A | 0 | 0 |
 | - | Thunderstrike | N/A | 0 | 0 |
@@ -22,7 +23,6 @@ This competition is only for students of the ADR course at TUM. Students have to
 | - | Sandro & Marek | N/A | 0 | 0 |
 | - | Okan | N/A | 0 | 0 |
 | - | Timo & Jeffrey | N/A | 0 | 0 |
-| - | Nikola & Moritz | N/A | 0 | 0 |
 | - | Celia & Paula | N/A | 0 | 0 |
 | - | Leonie & Nicolas | N/A | 0 | 0 |
 | - | Wei Lun & Lars | N/A | 0 | 0 |
