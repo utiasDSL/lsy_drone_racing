@@ -8,6 +8,9 @@ from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
 from lsy_drone_racing.control import Controller
 
+import sys
+sys.stdout = open("output.log", "w")
+
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
@@ -23,10 +26,11 @@ APPROACH_THRESHOLD    = 0.15  # m – wann gilt Approach als erreicht?
 GATE_THRESHOLD        = 0.12  # m – wann gilt Gate-Zentrum als erreicht?
 GATE_HALF_WIDTH       = 0.45  # etwas größer als echte Gate-Öffnung
 GATE_MARGIN           = 0.12  # kleinere Inflation für Gate-Rahmen
-TIME_SCALE            = 2.0   # Zeitfaktor für Spline-Geschwindigkeit
-SLOWNDOWN_SCALE       = 1.0   # Faktor um letzten Abschnitt zu verlangsamen
-REPLAN_INTERVAL       = 1.0   # s – wie oft replanen (außer bei Nähe zum Gate)
-GATE_PROXIMITY_THRESHOLD = 0.3  # m – wann gilt die Drohne als "nahe" am Gate (Spline einfrieren)
+TIME_SCALE            = 3.0   # Zeitfaktor für Spline-Geschwindigkeit
+SLOWNDOWN_SCALE       = 2.0   # Faktor um letzten Abschnitt zu verlangsamen
+REPLAN_INTERVAL       = 0.05   # s – wie oft replanen (außer bei Nähe zum Gate)
+GATE_PROXIMITY_THRESHOLD = 0.5  # m – wann gilt die Drohne als "nahe" am Gate (Spline einfrieren)
+SENSOR_RANGE          = 0.7   # m – 100 for level 0,1, 0.7 für level 2
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -49,6 +53,8 @@ class MyController(Controller):
 
         self._pos_integral = np.zeros(3)
         self._current_goal  = None
+
+        self._last_obstacles = np.empty((0, 8))
 
         print("\n========== INIT ==========")
         print(f"  n_gates      : {self._n_gates}")
@@ -119,11 +125,24 @@ class MyController(Controller):
 
         print("=====================\n")
         return gate_data
+    
+    def _filter_trusted_obstacles(self, obs, pos):
+        trusted = []
+        pos_xy = pos[:2]
+        for o in obs["obstacles_pos"]:
+            if np.linalg.norm(o[:2] - pos_xy) < SENSOR_RANGE:  # sensor_range
+                trusted.append(o)
+        for g in obs["gates_pos"]:
+            if np.linalg.norm(g[:2] - pos_xy) < SENSOR_RANGE:
+                trusted.append(g)
+        return np.array(trusted) if len(trusted) > 0 else np.empty((0,3))
 
     # ── Occupancy Grid ────────────────────────────────────────────────────────
 
-    def _build_occupancy_grid(self, obs: dict, current_gate: int) -> np.ndarray:
+    def _build_occupancy_grid(self, obs: dict, start_pos: np.ndarray, current_gate: int) -> np.ndarray:
         obstacles = obs["obstacles_pos"]
+        print(f"  [build grid] raw obstacles:\n{np.round(obstacles,3)}")
+        # obstacles = self._filter_trusted_obstacles(obs, start_pos)
         all_points = np.vstack([self._gate_pos[:, :2], obstacles[:, :2]])
         min_bounds = np.min(all_points, axis=0) - 1.5
         max_bounds = np.max(all_points, axis=0) + 1.5
@@ -240,10 +259,20 @@ class MyController(Controller):
                else np.vstack([before, [approach_xy], [center_xy]])
 
     def _gate_waypoints(self, gate_id: int, prev_pos: np.ndarray):
-        center = self._gate_pos[gate_id].copy()
-        normal = self._gate_normal(gate_id)[:2]
+        # center = self._gate_pos[gate_id].copy()
+        gate = self._gate_pos[gate_id]
+        dist_to_gate = np.linalg.norm(prev_pos - gate)
 
-        center_xy = center[:2]
+        if dist_to_gate < SENSOR_RANGE:
+            normal = self._gate_normal(gate_id)[:2]
+            center = gate
+            center_xy = center[:2]
+        else:
+            normal = self._gate_normal(gate_id)[:2]
+            center = gate
+            center_xy = center[:2]
+
+        
 
         # Zwei Seiten des Gates
         approach_xy = center_xy - normal * GATE_APPROACH_OFFSET
@@ -253,6 +282,32 @@ class MyController(Controller):
         exit_pt  = np.array([exit_xy[0],     exit_xy[1],     center[2]])
 
         return approach, center, exit_pt
+    
+    def _obstacles_changed(self, obs, pos):
+        current = self._filter_trusted_obstacles(obs, pos)
+
+        print(f"  [obstacle check] current trusted obstacles:\n{np.round(current,3)}")
+
+        # First call → initialize
+        if not hasattr(self, "_last_trusted"):
+            self._last_trusted = current.copy()
+            return False
+
+        # Case 1: number changed (NEW obstacle appeared)
+        if len(current) != len(self._last_trusted):
+            print("  [REPLAN] new obstacle entered sensor range")
+            self._last_trusted = current.copy()
+            return True
+
+        # Case 2: same number but positions changed significantly
+        for c in current:
+            dists = np.linalg.norm(self._last_trusted - c, axis=1)
+            if len(dists) == 0 or np.min(dists) > 0.1:
+                print("  [REPLAN] obstacle position refined")
+                self._last_trusted = current.copy()
+                return True
+
+        return False
 
     def _build_spline(self, start_pos, gate_id, obs, label=""):
 
@@ -268,7 +323,7 @@ class MyController(Controller):
         #DEFINE GATE WAYPOINTS
         approach, center, exit_pt = self._gate_waypoints(gate_id, from_pos)
         # Baue Occupancy Grid und finde Pfad von aktueller Position zum approach point
-        grid = self._build_occupancy_grid(obs, gate_id)
+        grid = self._build_occupancy_grid(obs, start_pos, gate_id)
         path_xy_1 = self._astar(from_pos, approach, grid)
         path_xy_2 = np.array([approach[:2], center[:2]])
         path_xy_3 = np.array([center[:2], exit_pt[:2]])
@@ -375,12 +430,15 @@ class MyController(Controller):
                 self._current_exit = None
                 self._build_spline(pos, current_gate, obs, label="approach_exit")
 
-        # We want to replan every 0.2 seconds, except we are close to the gate (z.B. innerhalb von 0.3m)
-        # dann lassen wir den Spline einfrieren damit die Drone nicht zu spät reagiert
-        if self._tick % int(REPLAN_INTERVAL * self._freq) == 0:
-            gate_center = self._gate_pos[current_gate]
-            dist_to_gate = np.linalg.norm(pos - gate_center)
+        gate_center = self._gate_pos[current_gate]
 
+        # we want to replan every time we detect something new 
+        # but only if we are not already very close to the gate
+
+        
+
+        if self._obstacles_changed(obs, pos):
+            dist_to_gate = np.linalg.norm(pos - gate_center)
             if dist_to_gate > GATE_PROXIMITY_THRESHOLD:
                 print(f"  Regular replan, dist_to_gate={dist_to_gate:.2f}")
                 self._build_spline(pos, current_gate, obs, label="regular_replan")
@@ -390,12 +448,11 @@ class MyController(Controller):
         # ── Spline auswerten ──────────────────────────────────────────────────
         t_elapsed = (self._tick - self._t_start_tick) / self._freq
 
-        if t_elapsed > self._t_total + 0.5:
-            gate_center = self._gate_pos[current_gate]
-            dist_to_gate = np.linalg.norm(pos[:2] - gate_center[:2])
+        dist_to_gate = np.linalg.norm(pos[:2] - gate_center[:2])
 
+        if t_elapsed > self._t_total + 0.5:
             # Nur replan wenn noch nicht in der Nähe des Gates/dahinter
-            if dist_to_gate > 0.3:
+            if dist_to_gate > GATE_PROXIMITY_THRESHOLD:
                 print(f"  [timeout] replan, dist_to_gate={dist_to_gate:.2f}")
                 self._build_spline(pos, current_gate, obs, label="timeout_replan")
             else:
@@ -416,12 +473,20 @@ class MyController(Controller):
             print(f"  next (0.5s) : {np.round(future_pos, 3)}")
 
         # PID
-        kp = np.array([1.0, 1.0, 1.0])
-        kd = np.array([1.0, 1.0, 1.0])
-        ki = np.array([2.0, 2.0, 1.0])
+        if dist_to_gate < GATE_PROXIMITY_THRESHOLD:
+            print(f"  Near gate (dist={dist_to_gate:.2f}), using more conservative PID gains")
+            kp = np.array([8.0, 8.0, 2.0])
+            kd = np.array([3.5, 3.5, 1.0])
+            ki = np.array([1.0, 1.0, 0.5])
+        else:
+            kp = np.array([4.0, 4.0, 3.0])
+            kd = np.array([2.0, 2.0, 1.5])
+            ki = np.array([2.0, 2.0, 1.0])
 
         pos_error = des_pos - pos
         vel_error = des_vel - vel
+
+        # print("vz:", vel[2])
 
         self._pos_integral += pos_error * dt
         self._pos_integral  = np.clip(self._pos_integral, -0.5, 0.5)
@@ -429,7 +494,7 @@ class MyController(Controller):
         acc = kp * pos_error + kd * vel_error + ki * self._pos_integral
         # print(f"  [PID debug] pos_error={np.round(pos_error,3)} vel_error={np.round(vel_error,3)} acc={np.round(acc,3)}")
         acc[:2] = np.clip(acc[:2], -4.0, 4.0)
-        acc[2]  = np.clip(acc[2], -10.0, 10.0)
+        acc[2]  = np.clip(acc[2], -4.0, 4.0)
 
         # print(f"des_z={des_pos[2]:.2f}, actual_z={pos[2]:.2f}")
         # print(f"pos_error={np.round(pos_error,3)}, vel_error={np.round(vel_error,3)}, acc={np.round(acc,3)}")
