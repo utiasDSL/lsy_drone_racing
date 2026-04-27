@@ -24,6 +24,12 @@ import rclpy
 from drone_racing_msgs.srv import RealCalibrateClock  # type: ignore[import-untyped]
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 
+if TYPE_CHECKING:
+    from rclpy.client import Client
+    from rclpy.node import Node
+
+logger = logging.getLogger(__name__)
+
 
 def _suppress_shutdown_thread_errors():
     """Install a threading.excepthook that silences expected ROS2 shutdown exceptions.
@@ -45,19 +51,12 @@ def _suppress_shutdown_thread_errors():
     threading.excepthook = _hook
 
 
-if TYPE_CHECKING:
-    from rclpy.client import Client
-    from rclpy.node import Node
-
-logger = logging.getLogger(__name__)
-
-
 def compute_latency_ms(timestamp: float, clock_offset: float = 0.0) -> float:
     """Compute one-way latency in milliseconds from a sent timestamp.
 
     Args:
         timestamp: Time the message was sent.
-        clock_offset: Calibrated offset (host_time − client_time) in seconds.
+        clock_offset: Calibrated offset (host_time - client_time) in seconds.
             Zero when called on the host side (timestamps are already in host time).
 
     Returns:
@@ -95,8 +94,10 @@ def calibrate_clock(client: Client, n: int = 5, timeout: float = 60.0) -> float:
     for _ in range(n):
         t_send = time.time()
         future = client.call_async(RealCalibrateClock.Request())
-        while not future.done():
-            time.sleep(0.0001)  # Don't busy-wait too aggressively
+        ready = threading.Event()
+        future.add_done_callback(lambda _: ready.set())
+        if not ready.wait(timeout=timeout):
+            raise TimeoutError("Clock calibration call timed out")
         t_recv = time.time()
         offsets.append(future.result().host_timestamp - (t_send + t_recv) / 2)
     return sum(offsets) / len(offsets)
