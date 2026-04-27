@@ -26,7 +26,6 @@ from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 
 if TYPE_CHECKING:
     from rclpy.client import Client
-    from rclpy.node import Node
 
 logger = logging.getLogger(__name__)
 
