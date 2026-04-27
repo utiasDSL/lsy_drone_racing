@@ -69,9 +69,10 @@ class StateActionBuilder:
 
         action = np.zeros(13, dtype=np.float32)
         action[0:3] = target_pos
-        action[3:6] = desired_vel
-        action[6:9] = desired_acc
+        #action[3:6] = desired_vel/20
+        #action[6:9] = desired_acc/20
         action[9] = self._last_yaw
+        action[1] -= 0.2  # Small vertical bias to encourage better ground clearance
         return action
 
     @staticmethod

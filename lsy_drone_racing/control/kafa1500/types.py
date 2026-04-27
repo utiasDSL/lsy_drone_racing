@@ -33,6 +33,12 @@ class GateFrame:
     position: Vec3
     forward: Vec3
     lateral: Vec3
+    up: Vec3
+    traversal_point: Vec3
+    inner_half_width: float
+    inner_half_height: float
+    safe_half_width: float
+    safe_half_height: float
 
 
 @dataclass(slots=True)
@@ -41,6 +47,7 @@ class GatePlan:
 
     gate_idx: int
     gate_pos: Vec3
+    gate_traversal_pos: Vec3
     gate_x: Vec3
     pass_target: Vec3
     path_spline: BSpline

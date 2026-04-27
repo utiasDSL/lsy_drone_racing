@@ -43,6 +43,7 @@ class KaFa1500(Controller):
 
         self._plan: GatePlan | None = None
         self._current_target = self._start_pos.copy()
+        self._reference_speed = 0.0
 
     def compute_control(
         self,
@@ -101,6 +102,7 @@ class KaFa1500(Controller):
 
         self._plan = None
         self._current_target = self._start_pos.copy()
+        self._reference_speed = 0.0
         self._action_builder.reset()
 
     def render_callback(self, sim: Sim):
@@ -162,7 +164,12 @@ class KaFa1500(Controller):
             self._state = KaFa1500State.FINISH
             return self._hold_target(pos, self._action_builder.heading_vector())
 
-        self._plan = self._navigator.plan_gate(obs, target_gate)
+        self._plan = self._navigator.plan_gate(
+            obs,
+            target_gate,
+            start_pos=pos,
+            start_vel=obs["vel"].astype(np.float32),
+        )
         scan_steps = self._tick - self._scan_started_at
         horizontal_speed = float(np.linalg.norm(obs["vel"][:2]))
         min_hold_elapsed = scan_steps >= self._planner_settings.scan_hold_steps
@@ -171,6 +178,7 @@ class KaFa1500(Controller):
 
         if min_hold_elapsed and (speed_settled or max_hold_elapsed):
             self._state = KaFa1500State.APPROACH
+            return self._approach_target(pos)
         return self._hold_target(pos, self._takeoff_heading())
 
     def _approach_target(self, pos: Vec3) -> tuple[Vec3, Vec3, float, Vec3, Vec3]:
@@ -178,15 +186,17 @@ class KaFa1500(Controller):
         if self._plan is None:
             return self._hold_target(pos, self._takeoff_heading())
 
-        path_target = self._navigator.follow_path(pos, self._plan, self._action_settings.route_speed)
+        route_speed = self._smooth_speed(self._action_settings.route_speed)
+        path_target = self._navigator.follow_path(pos, self._plan, route_speed)
         signed_progress = float(np.dot(pos - self._plan.gate_pos, self._plan.gate_x))
         if signed_progress > -self._planner_settings.approach_tol:
             self._state = KaFa1500State.PASS_GATE
-            pass_target = self._navigator.follow_path(pos, self._plan, self._action_settings.pass_speed)
+            pass_speed = self._smooth_speed(self._action_settings.pass_speed)
+            pass_target = self._navigator.follow_path(pos, self._plan, pass_speed)
             return (
                 pass_target.target,
                 self._plan.gate_x,
-                self._action_settings.pass_speed,
+                pass_speed,
                 pass_target.ref_vel,
                 pass_target.ref_acc,
             )
@@ -198,8 +208,8 @@ class KaFa1500(Controller):
             if final_corridor
             else self._action_settings.route_speed
         )
-        if final_corridor:
-            path_target = self._navigator.follow_path(pos, self._plan, speed)
+        speed = self._smooth_speed(speed)
+        path_target = self._navigator.follow_path(pos, self._plan, speed)
         return (
             path_target.target,
             yaw_dir.astype(np.float32),
@@ -219,7 +229,8 @@ class KaFa1500(Controller):
             self._begin_scan()
             return self._hold_target(pos, self._takeoff_heading())
 
-        path_target = self._navigator.follow_path(pos, self._plan, self._action_settings.pass_speed)
+        pass_speed = self._smooth_speed(self._action_settings.pass_speed)
+        path_target = self._navigator.follow_path(pos, self._plan, pass_speed)
         signed_progress = float(np.dot(pos - self._plan.gate_pos, self._plan.gate_x))
         if signed_progress > self._planner_settings.max_pass_overshoot:
             self._begin_scan()
@@ -227,7 +238,7 @@ class KaFa1500(Controller):
         return (
             path_target.target,
             self._plan.gate_x,
-            self._action_settings.pass_speed,
+            pass_speed,
             path_target.ref_vel,
             path_target.ref_acc,
         )
@@ -236,6 +247,7 @@ class KaFa1500(Controller):
         """Hold the current XY position while preserving safe flight height."""
         target = pos.copy()
         target[2] = max(target[2], self._takeoff_height)
+        self._reference_speed *= 0.7
         zero = np.zeros(3, dtype=np.float32)
         return target, yaw_dir, 0.0, zero, zero
 
@@ -251,3 +263,9 @@ class KaFa1500(Controller):
             [np.cos(self._takeoff_yaw), np.sin(self._takeoff_yaw), 0.0],
             dtype=np.float32,
         )
+
+    def _smooth_speed(self, target_speed: float) -> float:
+        """Low-pass filter reference speed to avoid discontinuous replanning handoffs."""
+        gain = self._action_settings.speed_transition_gain
+        self._reference_speed = (1.0 - gain) * self._reference_speed + gain * target_speed
+        return float(max(0.0, self._reference_speed))

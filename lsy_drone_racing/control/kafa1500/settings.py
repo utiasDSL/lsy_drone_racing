@@ -15,7 +15,7 @@ class PlannerSettings:
     align_distance: float = 0.95
     approach_distance: float = 0.62
     pass_distance: float = 0.44
-    takeoff_tol: float = 0.12
+    takeoff_tol: float = 0.5
     approach_tol: float = 0.12
     replan_margin: float = 0.10
     max_pass_overshoot: float = 0.32
@@ -23,7 +23,7 @@ class PlannerSettings:
     max_route_points: int = 4
     path_spacing: float = 0.06
     spline_sample_spacing: float = 0.01
-    path_lookahead: float = 0.46
+    path_lookahead: float = 0.7
     pre_gate_lookahead: float = 0.28
     final_corridor_distance: float = 0.34
     path_smoothing_iterations: int = 5
@@ -36,9 +36,23 @@ class PlannerSettings:
     corner_radius: float = 0.42
     corner_samples: int = 28
     final_straight_length: float = 0.14
-    drone_radius: float = 0.08
-    obstacle_radius: float = 0.015
-    tracking_margin: float = 0.16
+    gate_inner_width: float = 0.40
+    gate_inner_height: float = 0.40
+    gate_outer_width: float = 0.72
+    gate_frame_safety_margin: float = 0.05
+    gate_support_base_distance: float = 0.24
+    gate_support_step_distance: float = 0.06
+    gate_clearance_half_depth: float = 0.10
+    gate_clearance_max_attempts: int = 5
+    gate_center_tolerance: float = 0.02
+    gate_center_region_radius: float = 0.04
+    gate_vertical_bias: float = -0.045
+    continuity_start_step_min: float = 0.10
+    continuity_start_step_max: float = 0.30
+    continuity_start_dt: float = 0.22
+    drone_radius: float = 0.1
+    obstacle_radius: float = 0.3
+    tracking_margin: float = 0.01
 
     @property
     def obstacle_clearance(self) -> float:
@@ -68,3 +82,6 @@ class ActionSettings:
     max_pass_lateral_acc: float = 0.48
     velocity_filter_gain: float = 0.10
     accel_filter_gain: float = 0.13
+    yaw_slew_gain: float = 0.22
+    max_yaw_step: float = 0.08
+    speed_transition_gain: float = 0.22
