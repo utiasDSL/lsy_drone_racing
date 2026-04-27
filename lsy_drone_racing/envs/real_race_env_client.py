@@ -256,13 +256,9 @@ class RealMultiDroneRaceEnvClient(Env):
         """Send a final stop message and close all ROS connections."""
         logger.info("Closing environment...")
         if self._client_state_pub:
-            try:
-                self._send_state_update(
-                    np.zeros(4 if self.control_mode == "attitude" else 13), stopped=True
-                )
-                time.sleep(0.1)  # allow the executor thread to flush the message before shutdown
-            except Exception as e:
-                logger.warning(f"Could not send final stop message: {e}")
+            self._send_state_update(
+                np.zeros(4 if self.control_mode == "attitude" else 13), stopped=True
+            )            
         if self._comm:
             self._comm.close()
         if self._ros_connector:
