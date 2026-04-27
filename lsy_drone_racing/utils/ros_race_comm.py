@@ -116,9 +116,9 @@ class RaceCommNode:
     def __init__(self, name: str):
         """Initialize and spin the ROS2 node in a background thread."""
         _suppress_shutdown_thread_errors()
-        self._node = rclpy.create_node(name)
+        self.node = rclpy.create_node(name)
         self._executor = SingleThreadedExecutor()
-        self._executor.add_node(self._node)
+        self._executor.add_node(self.node)
 
         def _spin():
             try:
@@ -139,13 +139,9 @@ class RaceCommNode:
         self._thread.start()
         logger.debug(f"RaceCommNode '{name}' started")
 
-    @property
-    def node(self) -> Node:
-        """The underlying rclpy node."""
-        return self._node
 
     def close(self):
         """Shut down the executor and destroy the node."""
         self._executor.shutdown(timeout_sec=1.0)
-        self._node.destroy_node()
+        self.node.destroy_node()
         logger.debug("RaceCommNode closed")
