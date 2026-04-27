@@ -27,8 +27,8 @@ APPROACH_THRESHOLD    = 0.15  # m – wann gilt Approach als erreicht?
 GATE_THRESHOLD        = 0.12  # m – wann gilt Gate-Zentrum als erreicht?
 GATE_HALF_WIDTH       = 0.45  # etwas größer als echte Gate-Öffnung
 GATE_MARGIN           = 0.12  # kleinere Inflation für Gate-Rahmen
-TIME_SCALE            = 3.0   # Zeitfaktor für Spline-Geschwindigkeit
-SLOWNDOWN_SCALE       = 2.0   # Faktor um letzten Abschnitt zu verlangsamen
+TIME_SCALE            = 2.0   # Zeitfaktor für Spline-Geschwindigkeit
+SLOWNDOWN_SCALE       = 4.0   # Faktor um letzten Abschnitt zu verlangsamen
 REPLAN_INTERVAL       = 0.05   # s – wie oft replanen (außer bei Nähe zum Gate)
 GATE_PROXIMITY_THRESHOLD = 0.5  # m – wann gilt die Drohne als "nahe" am Gate (Spline einfrieren)
 SENSOR_RANGE          = 0.7   # m – 100 for level 0,1, 0.7 für level 2
@@ -492,6 +492,12 @@ class MyController(Controller):
             kd = np.array([2.0, 2.0, 1.5])
             ki = np.array([2.0, 2.0, 1.0])
 
+        scale = 3.0 / TIME_SCALE  # reference is your old stable value, 3.0 was stable
+
+        kp_new = kp * scale**2
+        kd_new = kd * scale
+        ki_new = ki * scale**2
+
         pos_error = des_pos - pos
         vel_error = des_vel - vel
 
@@ -500,7 +506,7 @@ class MyController(Controller):
         self._pos_integral += pos_error * dt
         self._pos_integral  = np.clip(self._pos_integral, -0.5, 0.5)
 
-        acc = kp * pos_error + kd * vel_error + ki * self._pos_integral
+        acc = kp_new * pos_error + kd_new * vel_error + ki_new * self._pos_integral
         # print(f"  [PID debug] pos_error={np.round(pos_error,3)} vel_error={np.round(vel_error,3)} acc={np.round(acc,3)}")
         acc[:2] = np.clip(acc[:2], -4.0, 4.0)
         acc[2]  = np.clip(acc[2], -4.0, 4.0)
