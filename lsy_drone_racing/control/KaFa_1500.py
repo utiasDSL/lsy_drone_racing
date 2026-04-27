@@ -184,8 +184,14 @@ class KaFa1500(Controller):
             if signed_progress > self._planner_settings.replan_margin:
                 if target_gate < 0:
                     self._state = KaFa1500State.FINISH
+                    hold_target = pos.copy()
+                    hold_target[2] = max(hold_target[2], self._takeoff_height)
+                    return hold_target, self._action_builder.heading_vector(), 0.0
                 else:
                     self._begin_scan()
+                    hover_target = pos.copy()
+                    hover_target[2] = max(hover_target[2], self._takeoff_height)
+                    return hover_target, self._takeoff_heading(), 0.0
             return self._plan.pass_target, self._plan.gate_x, self._action_settings.pass_speed
 
         raise ValueError(f"Invalid state: {self._state}")

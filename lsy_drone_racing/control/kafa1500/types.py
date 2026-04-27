@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from scipy.interpolate import BSpline
 
 Observation = dict[str, NDArray[np.floating]]
 Vec3 = NDArray[np.float32]
@@ -39,6 +43,9 @@ class GatePlan:
     gate_pos: Vec3
     gate_x: Vec3
     pass_target: Vec3
+    path_spline: BSpline
+    path_spline_d1: BSpline
+    path_params: NDArray[np.float32]
     path_points: NDArray[np.float32]
     path_lengths: NDArray[np.float32]
     route_line: NDArray[np.float32]
