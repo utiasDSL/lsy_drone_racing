@@ -113,7 +113,7 @@ class ReferenceManager:
             ds_dt = speed / tangent_norm
             velocity = (tangent * ds_dt).astype(np.float32)
             acceleration = (curvature * ds_dt**2).astype(np.float32)
-            if float(np.linalg.norm(tangent[:2])) > 1e-6:
+            if self._config.follow_path_yaw and float(np.linalg.norm(tangent[:2])) > 1e-6:
                 self._last_yaw = float(np.arctan2(tangent[1], tangent[0]))
 
         return Reference(

@@ -33,6 +33,16 @@ class GateTargetPlanner:
         gate_ids: list[int] = [-1]
         cursor = start_pos.astype(np.float32)
 
+        if target_gate > 0:
+            previous_gate = self.gate_frame(obs, target_gate - 1)
+            escape = self._previous_gate_escape(cursor, previous_gate, obstacles)
+            if float(np.linalg.norm(escape - cursor)) > 0.04:
+                for point in self._route_segment(cursor, escape, obstacles, previous_gate.lateral):
+                    points.append(point)
+                    protected.append(False)
+                    gate_ids.append(-1)
+                cursor = escape.astype(np.float32)
+
         for gate_idx in range(target_gate, len(obs["gates_pos"])):
             gate = self.gate_frame(obs, gate_idx)
             pre_distance = self._per_gate(self._config.d_pre_per_gate, gate_idx, self._config.d_pre)
@@ -68,6 +78,39 @@ class GateTargetPlanner:
         controls = self._smooth_controls(controls, obstacles, protected_array)
         gate_ids_array = self._align_gate_ids(points, gate_ids, controls)
         return controls, gate_ids_array
+
+    def _previous_gate_escape(
+        self, start: Vec3, gate: GateFrame, obstacles: NDArray[np.float32]
+    ) -> Vec3:
+        """Move clear of the just-passed gate before climbing toward the next gate."""
+        rel = start - gate.traversal
+        progress = float(rel @ gate.forward)
+        if abs(progress) > self._config.previous_gate_escape_window:
+            return start.astype(np.float32)
+        target_progress = max(self._config.previous_gate_escape_distance, progress + 0.12)
+        lateral = float(rel @ gate.lateral)
+        vertical = float(rel @ gate.up)
+        vertical = min(vertical, gate.safe_half_height)
+        base = (
+            gate.traversal
+            + target_progress * gate.forward
+            + lateral * gate.lateral
+            + vertical * gate.up
+        ).astype(np.float32)
+
+        best = base
+        best_score = np.inf
+        for offset in self._config.previous_gate_escape_lateral_offsets:
+            candidate = (base + float(offset) * gate.lateral).astype(np.float32)
+            if not self._point_clear(candidate, obstacles):
+                continue
+            if self._segment_blocked(start, candidate, obstacles):
+                continue
+            score = abs(float(offset))
+            if score < best_score:
+                best = candidate
+                best_score = score
+        return best.astype(np.float32)
 
     def gate_frame(self, obs: Observation, gate_idx: int) -> GateFrame:
         """Extract one gate frame from observations."""

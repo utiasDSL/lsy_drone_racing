@@ -76,6 +76,7 @@ class KaFa1500Attitude(Controller):
         if self._should_replan(obs):
             self._replan(obs)
 
+        self._remember_observation_flags(obs)
         self._active_reference = self._references.update(obs["pos"].astype(np.float32), self._tick)
         return self._feedback.command(obs, self._active_reference)
 
@@ -91,9 +92,6 @@ class KaFa1500Attitude(Controller):
         """Advance internal bookkeeping."""
         self._tick += 1
         self._finished = bool(self._finished or terminated or truncated or obs["target_gate"] == -1)
-        self._last_target_gate = int(obs["target_gate"])
-        self._last_gates_visited = np.asarray(obs["gates_visited"]).copy()
-        self._last_obstacles_visited = np.asarray(obs["obstacles_visited"]).copy()
         return self._finished
 
     def episode_callback(self) -> None:
@@ -134,6 +132,12 @@ class KaFa1500Attitude(Controller):
         new_obstacle_seen = bool((obstacles_visited & ~self._last_obstacles_visited).any())
         return target_changed or new_gate_seen or new_obstacle_seen
 
+    def _remember_observation_flags(self, obs: Observation) -> None:
+        """Store observations after replanning decisions have used the previous values."""
+        self._last_target_gate = int(obs["target_gate"])
+        self._last_gates_visited = np.asarray(obs["gates_visited"]).copy()
+        self._last_obstacles_visited = np.asarray(obs["obstacles_visited"]).copy()
+
     def _make_takeoff_position(self, obs: Observation) -> NDArray[np.float32]:
         """Create a vertical takeoff target."""
         pos = obs["pos"].astype(np.float32)
@@ -159,4 +163,3 @@ class KaFa1500Attitude(Controller):
     def _yaw_from_obs(obs: Observation) -> float:
         """Extract yaw from the drone quaternion."""
         return float(R.from_quat(obs["quat"]).as_euler("xyz", degrees=False)[2])
-
