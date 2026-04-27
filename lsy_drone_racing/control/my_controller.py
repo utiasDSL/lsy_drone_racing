@@ -25,6 +25,8 @@ GATE_HALF_WIDTH       = 0.45  # etwas größer als echte Gate-Öffnung
 GATE_MARGIN           = 0.12  # kleinere Inflation für Gate-Rahmen
 TIME_SCALE            = 2.0   # Zeitfaktor für Spline-Geschwindigkeit
 SLOWNDOWN_SCALE       = 1.0   # Faktor um letzten Abschnitt zu verlangsamen
+REPLAN_INTERVAL       = 1.0   # s – wie oft replanen (außer bei Nähe zum Gate)
+GATE_PROXIMITY_THRESHOLD = 0.3  # m – wann gilt die Drohne als "nahe" am Gate (Spline einfrieren)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -365,12 +367,7 @@ class MyController(Controller):
             print(f"\n>>> Entering phase 2 at tick={self._tick}, t={t:.3f}")
             self._build_spline(pos, gate_id=current_gate, obs=obs, label="phase2_init")
 
-        # ── Gate gewechselt → sofort neu planen ───────────────────────────────
-        # if current_gate != self._prev_target_gate:
-        #     print(f">>> Gate passed! {self._prev_target_gate} → {current_gate}")
-        #     self._prev_target_gate = current_gate
-        #     self._build_spline(pos, current_gate, obs, label="gate_passed")
-
+        # This works with levels 0 and 1 but for level 2 we need more replanning
         if hasattr(self, "_current_exit") and self._current_exit is not None:
             dist_to_exit = np.linalg.norm(pos - self._current_exit)
             if dist_to_exit < 0.15:
@@ -378,24 +375,18 @@ class MyController(Controller):
                 self._current_exit = None
                 self._build_spline(pos, current_gate, obs, label="approach_exit")
 
-        # # ── Sensor-Updates (Gate-Positionen verfeinert) ───────────────────────
-        # if self._update_gates(obs):
-        #     self._build_spline(pos, gate_id=current_gate, obs=obs, label="gate_updated")
+        # We want to replan every 0.2 seconds, except we are close to the gate (z.B. innerhalb von 0.3m)
+        # dann lassen wir den Spline einfrieren damit die Drone nicht zu spät reagiert
+        if self._tick % int(REPLAN_INTERVAL * self._freq) == 0:
+            gate_center = self._gate_pos[current_gate]
+            dist_to_gate = np.linalg.norm(pos - gate_center)
 
-        # # ── Subgoal-Fortschritt prüfen ────────────────────────────────────────
-        # if self._current_goal is not None:
-        #     pos_err = np.linalg.norm(pos - self._current_goal)
-        #     # Stage 0 (approach): großzügigerer Threshold, Geschwindigkeit egal
-        #     # Stage 1 (center):   enger Threshold, damit wir wirklich durch
-        #     threshold = GATE_THRESHOLD if self._subgoal_stage == 1 else APPROACH_THRESHOLD
-
-        #     if pos_err < threshold:
-        #         print(f"  Reached subgoal stage {self._subgoal_stage} (err={pos_err:.3f}m)")
-        #         self._subgoal_stage += 1
-        #         if self._subgoal_stage > 2:
-        #             self._subgoal_stage = 0
-        #         self._build_spline(pos, current_gate, obs, label="subgoal_switch")
-
+            if dist_to_gate > GATE_PROXIMITY_THRESHOLD:
+                print(f"  Regular replan, dist_to_gate={dist_to_gate:.2f}")
+                self._build_spline(pos, current_gate, obs, label="regular_replan")
+            else:
+                print(f"  Near gate (dist={dist_to_gate:.2f}), skipping replan to avoid late reaction")
+      
         # ── Spline auswerten ──────────────────────────────────────────────────
         t_elapsed = (self._tick - self._t_start_tick) / self._freq
 
@@ -426,8 +417,8 @@ class MyController(Controller):
 
         # PID
         kp = np.array([1.0, 1.0, 1.0])
-        kd = np.array([2.0, 2.0, 1.0])
-        ki = np.array([0.2, 0.2, 1.0])
+        kd = np.array([1.0, 1.0, 1.0])
+        ki = np.array([2.0, 2.0, 1.0])
 
         pos_error = des_pos - pos
         vel_error = des_vel - vel
@@ -440,8 +431,8 @@ class MyController(Controller):
         acc[:2] = np.clip(acc[:2], -4.0, 4.0)
         acc[2]  = np.clip(acc[2], -10.0, 10.0)
 
-        print(f"des_z={des_pos[2]:.2f}, actual_z={pos[2]:.2f}")
-        print(f"pos_error={np.round(pos_error,3)}, vel_error={np.round(vel_error,3)}, acc={np.round(acc,3)}")
+        # print(f"des_z={des_pos[2]:.2f}, actual_z={pos[2]:.2f}")
+        # print(f"pos_error={np.round(pos_error,3)}, vel_error={np.round(vel_error,3)}, acc={np.round(acc,3)}")
 
         target_pos = self._gate_pos[min(current_gate, self._n_gates - 1)]
         delta      = target_pos - pos
