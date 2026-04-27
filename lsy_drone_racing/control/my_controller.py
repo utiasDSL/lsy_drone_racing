@@ -27,13 +27,19 @@ class MyController(Controller):
 
 
         # In __init__: Use these balanced gains
-        self.kp = np.array([1.2, 1.2, 2.0])  # Slightly sharper position tracking
-        self.ki = np.array([0.05, 0.05, 0.05]) # Lower I-gain to prevent wind-up overshoots
-        self.kd = np.array([0.5, 0.5, 0.8])  # Halved from your original to stop the wobbling
-        self.ki_range = np.array([2.0, 2.0, 0.4])
+# 1. Softer P and D gains to prevent high-frequency shaking when inertia randomly drops
+        self.kp = np.array([0.8, 0.8, 1.5])
+        self.kd = np.array([0.4, 0.4, 0.6])
+        
+        # 2. Stronger I gain to quickly "learn" and adapt to the unknown random mass
+        self.ki = np.array([0.25, 0.25, 0.4]) 
+        
+        # 3. Increase the ki_range (windup limit) so it is actually allowed 
+        # to push hard enough to carry the heaviest random mass spawns
+        self.ki_range = np.array([4.0, 4.0, 2.5])
         self.i_error = np.zeros(3)
         self.g = 9.81
-        self._t_total = 16  # s
+        self._t_total = 12  # s
         # --- DYNAMIC TRAJECTORY GENERATION ---
 
         self.nominal_gates = [np.array(g["pos"]) for g in config.env.track.gates]
@@ -58,10 +64,10 @@ class MyController(Controller):
         R_OBS = 0.03 / 2.0
         GATE_HALF_WIDTH = 0.4 / 2
         
-        MARGIN = 0.05 
+        MARGIN = 0.10
         SAFE_RADIUS = R_DRONE + R_OBS + MARGIN 
         MAX_GATE_SHIFT = GATE_HALF_WIDTH - R_DRONE - 0.02 
-        GATE_DEPTH = 0.8          
+        GATE_DEPTH = 0.5      
         
         waypoints_list = [current_pos]
         takeoff_pos = current_pos.copy()
@@ -88,7 +94,7 @@ class MyController(Controller):
                     detour_pos = obs_pos.copy()
                     detour_pos[2] = gate_pos[2] 
                     detour_pos += right_shift * SAFE_RADIUS 
-                    detour_pos -= direction * 0.2
+                    detour_pos -= direction * 0.25
                     waypoints_list.append(detour_pos)
                     break 
             
@@ -98,35 +104,70 @@ class MyController(Controller):
             # --- PHASE 3: TWO-STAGE EXIT DODGE ---
             phantom_pos = gate_pos + (direction * GATE_DEPTH)
             post_dodge_pos = None
+            blocking_obs_dist = None
+            closest_obs_pos = None
             
+            # Step 1: Scan for the closest blocking obstacle behind the gate
             for obs_pos in target_obstacles:
-                dist_to_phantom = np.linalg.norm(phantom_pos[0:2] - obs_pos[0:2])
-                dist_from_gate = np.linalg.norm(obs_pos[0:2] - gate_pos[0:2])
-                exit_threshold = np.sqrt(GATE_DEPTH**2 + 4 * (SAFE_RADIUS**2)) - GATE_DEPTH
+                obs_dir = obs_pos[0:2] - gate_pos[0:2]
+                forward_dist = np.dot(obs_dir, direction[0:2])
                 
-                if (dist_to_phantom + dist_from_gate) < (GATE_DEPTH + exit_threshold):
-                    actual_shift = min(SAFE_RADIUS, MAX_GATE_SHIFT)
-                    cross_p = direction[0]*(obs_pos[1]-gate_pos[1]) - direction[1]*(obs_pos[0]-gate_pos[0])
+                # Check if it is within 1.5m in front of us
+                if 0 < forward_dist < 1.5:
+                    lateral_dist = np.linalg.norm(obs_dir - forward_dist * direction[0:2])
                     
-                    shift_dir = right_shift if cross_p > 0 else -right_shift
-                        
-                    # Stage 1: Safely clear the gate frame
-                    phantom_pos = gate_pos + (direction * GATE_DEPTH) + (shift_dir * actual_shift)
-                    
-                    # Stage 2: Full dodge once in open space
-                    post_dodge_pos = gate_pos + (direction * (GATE_DEPTH + SAFE_RADIUS * 2.5)) + (shift_dir * SAFE_RADIUS)
-                    break 
+                    # If it is in our flight path
+                    if lateral_dist < SAFE_RADIUS:
+                        if blocking_obs_dist is None or forward_dist < blocking_obs_dist:
+                            blocking_obs_dist = forward_dist
+                            closest_obs_pos = obs_pos
+                            
+            # Step 2: Calculate variable GATE_DEPTH
+            if blocking_obs_dist is not None:
+                # Scale depth to 40% of the distance to the obstacle, 
+                # but never less than 0.15m (to clear the gate frame)
+                GATE_DEPTH = max(0.15, blocking_obs_dist * 0.4)
+            else:
+                # If the track is clear, use a smooth 0.8m straight exit
+                GATE_DEPTH = 0.8 
+                
+            # Step 3: Create the waypoints
+            phantom_pos = gate_pos + (direction * GATE_DEPTH)
+            post_dodge_pos = None
             
+            if blocking_obs_dist is not None:
+                # Determine which way to shift
+                cross_p = direction[0]*(closest_obs_pos[1]-gate_pos[1]) - direction[1]*(closest_obs_pos[0]-gate_pos[0])
+                shift_dir = right_shift if cross_p > 0 else -right_shift
+                
+                # Stage 1: Shift the phantom position slightly to start the dodge
+                phantom_pos += shift_dir * min(SAFE_RADIUS, MAX_GATE_SHIFT)
+                
+                # Stage 2: Full sweep placed perfectly parallel to the obstacle
+                post_dodge_pos = closest_obs_pos.copy()
+                post_dodge_pos[2] = gate_pos[2]
+                post_dodge_pos += shift_dir * (SAFE_RADIUS * 2.5)
+            
+            # Append waypoints
             phantom_pos[2] = gate_pos[2]
             waypoints_list.append(phantom_pos)
             
             if post_dodge_pos is not None:
-                post_dodge_pos[2] = gate_pos[2]
                 waypoints_list.append(post_dodge_pos)
             
         waypoints = np.array(waypoints_list)
-        t = np.linspace(0, self._t_total, len(waypoints))
+        
+        diffs = np.diff(waypoints, axis=0)
+        distances = np.linalg.norm(diffs, axis=1)
+        cum_dist = np.insert(np.cumsum(distances), 0, 0.0)
+        
+        if cum_dist[-1] > 0:
+            t = (cum_dist / cum_dist[-1]) * self._t_total
+        else:
+            t = np.linspace(0, self._t_total, len(waypoints))
+
         self._des_pos_spline = CubicSpline(t, waypoints)
+        #self._des_pos_spline = PchipInterpolator(t, waypoints, axis=0)
         self._des_vel_spline = self._des_pos_spline.derivative()
 
     def compute_control(
@@ -196,6 +237,7 @@ class MyController(Controller):
         target_thrust += self.ki * self.i_error
         target_thrust += self.kd * vel_error
         target_thrust[2] += self.drone_mass * self.g
+
 
         # Update z_axis to the current orientation of the drone
         z_axis = R.from_quat(obs["quat"]).as_matrix()[:, 2]
