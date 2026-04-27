@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
-from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.control.kafa1500.settings import ActionSettings
 from lsy_drone_racing.control.kafa1500.types import KaFa1500State, Observation, Vec3
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from lsy_drone_racing.control.kafa1500.settings import ActionSettings
 
 
 class StateActionBuilder:
@@ -15,7 +20,6 @@ class StateActionBuilder:
 
     def __init__(self, settings: ActionSettings, takeoff_yaw: float):
         """Store tuning parameters and initialize filter state."""
-
         self._settings = settings
         self._takeoff_yaw = takeoff_yaw
         self._last_yaw = takeoff_yaw
@@ -24,14 +28,12 @@ class StateActionBuilder:
 
     def reset(self) -> None:
         """Reset filters and restore the takeoff heading."""
-
         self._last_yaw = self._takeoff_yaw
         self._filtered_vel_cmd[:] = 0.0
         self._filtered_acc_cmd[:] = 0.0
 
     def heading_vector(self) -> Vec3:
         """Return the current heading direction in the XY plane."""
-
         return np.array([np.cos(self._last_yaw), np.sin(self._last_yaw), 0.0], dtype=np.float32)
 
     def build(
@@ -42,17 +44,25 @@ class StateActionBuilder:
         speed_limit: float,
         state: KaFa1500State,
         state_changed: bool,
+        ref_vel: Vec3 | None = None,
+        ref_acc: Vec3 | None = None,
     ) -> NDArray[np.float32]:
         """Generate the next 13D full-state command."""
-
         pos = obs["pos"].astype(np.float32)
         vel = obs["vel"].astype(np.float32)
         pos_error = target_pos - pos
 
-        desired_vel = self._desired_velocity(pos_error, vel, yaw_dir, speed_limit, state)
+        desired_vel = self._desired_velocity(
+            pos_error,
+            vel,
+            yaw_dir,
+            speed_limit,
+            state,
+            ref_vel,
+        )
         desired_vel = self._filter_velocity(desired_vel, speed_limit, state, state_changed)
 
-        desired_acc = self._desired_acceleration(pos_error, vel, desired_vel, state)
+        desired_acc = self._desired_acceleration(pos_error, vel, desired_vel, state, ref_acc)
         desired_acc = self._filter_acceleration(desired_acc, state, state_changed)
 
         self._update_yaw(desired_vel, yaw_dir, state)
@@ -67,7 +77,6 @@ class StateActionBuilder:
     @staticmethod
     def yaw_from_quat(quat: NDArray[np.floating]) -> float:
         """Extract yaw from an xyzw quaternion."""
-
         return float(R.from_quat(quat).as_euler("xyz", degrees=False)[2])
 
     def _desired_velocity(
@@ -77,18 +86,23 @@ class StateActionBuilder:
         yaw_dir: Vec3,
         speed_limit: float,
         state: KaFa1500State,
+        ref_vel: Vec3 | None,
     ) -> Vec3:
         """Compute the raw desired velocity before filtering."""
-
         desired_vel = self._settings.pos_gain * pos_error - self._settings.vel_damping * vel
         if state in (KaFa1500State.APPROACH, KaFa1500State.PASS_GATE):
-            tangent = yaw_dir.astype(np.float32)
-            tangent_norm = float(np.linalg.norm(tangent))
-            if tangent_norm > 1e-6:
-                tangent /= tangent_norm
-                tangent_vel = tangent * speed_limit
-                correction_vel = 0.55 * pos_error - 0.18 * vel
-                desired_vel = tangent_vel + correction_vel
+            correction_vel = (
+                self._settings.tangent_correction_gain * pos_error
+                - self._settings.tangent_velocity_damping * vel
+            )
+            if ref_vel is not None and np.linalg.norm(ref_vel) > 1e-6:
+                desired_vel = ref_vel.astype(np.float32) + correction_vel
+            else:
+                tangent = yaw_dir.astype(np.float32)
+                tangent_norm = float(np.linalg.norm(tangent))
+                if tangent_norm > 1e-6:
+                    tangent /= tangent_norm
+                    desired_vel = tangent * speed_limit + correction_vel
 
         desired_vel = self._clip_norm(desired_vel.astype(np.float32), speed_limit)
         if state == KaFa1500State.TAKEOFF:
@@ -105,7 +119,6 @@ class StateActionBuilder:
         state_changed: bool,
     ) -> Vec3:
         """Low-pass filter the velocity command outside hover-like states."""
-
         if state_changed or state in (KaFa1500State.TAKEOFF, KaFa1500State.SCAN):
             self._filtered_vel_cmd = desired_vel.copy()
         else:
@@ -121,10 +134,14 @@ class StateActionBuilder:
         vel: Vec3,
         desired_vel: Vec3,
         state: KaFa1500State,
+        ref_acc: Vec3 | None,
     ) -> Vec3:
         """Compute the raw desired acceleration before filtering."""
+        feedforward_acc = np.zeros(3, dtype=np.float32)
+        if ref_acc is not None and np.linalg.norm(ref_acc) > 1e-6:
+            feedforward_acc = ref_acc.astype(np.float32)
 
-        desired_acc = self._settings.acc_gain * (desired_vel - vel)
+        desired_acc = feedforward_acc + self._settings.acc_gain * (desired_vel - vel)
         desired_acc[2] += self._settings.vertical_acc_gain * pos_error[2]
         desired_acc[:2] = self._clip_norm(desired_acc[:2], self._lateral_acc_cap(state))
         desired_acc[2] = float(
@@ -152,7 +169,6 @@ class StateActionBuilder:
         state_changed: bool,
     ) -> Vec3:
         """Low-pass filter the acceleration command outside hover-like states."""
-
         if state_changed or state in (KaFa1500State.TAKEOFF, KaFa1500State.SCAN):
             self._filtered_acc_cmd = desired_acc.copy()
         else:
@@ -164,7 +180,6 @@ class StateActionBuilder:
 
     def _update_yaw(self, desired_vel: Vec3, yaw_dir: Vec3, state: KaFa1500State) -> None:
         """Update the commanded yaw from the intended planar travel direction."""
-
         planar_dir = yaw_dir[:2] if np.linalg.norm(yaw_dir[:2]) > 1e-6 else desired_vel[:2]
         if state in (KaFa1500State.TAKEOFF, KaFa1500State.SCAN):
             self._last_yaw = self._takeoff_yaw
@@ -173,7 +188,6 @@ class StateActionBuilder:
 
     def _lateral_acc_cap(self, state: KaFa1500State) -> float:
         """Select the lateral acceleration cap for the current state."""
-
         match state:
             case KaFa1500State.TAKEOFF:
                 return self._settings.max_takeoff_lateral_acc
@@ -189,7 +203,6 @@ class StateActionBuilder:
     @staticmethod
     def _clip_norm(vec: Vec3, max_norm: float) -> Vec3:
         """Scale a vector down to the requested norm limit."""
-
         norm = float(np.linalg.norm(vec))
         if norm < 1e-6 or norm <= max_norm:
             return vec.astype(np.float32)

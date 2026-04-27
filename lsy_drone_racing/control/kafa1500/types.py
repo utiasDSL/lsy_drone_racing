@@ -45,6 +45,7 @@ class GatePlan:
     pass_target: Vec3
     path_spline: BSpline
     path_spline_d1: BSpline
+    path_spline_d2: BSpline
     path_params: NDArray[np.float32]
     path_points: NDArray[np.float32]
     path_lengths: NDArray[np.float32]
@@ -58,4 +59,6 @@ class PathTarget:
 
     target: Vec3
     yaw_dir: Vec3
+    ref_vel: Vec3
+    ref_acc: Vec3
     remaining: float

@@ -3,21 +3,20 @@
 from __future__ import annotations
 
 from heapq import heappop, heappush
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
-from numpy.typing import NDArray
-from scipy.interpolate import BSpline, make_interp_spline
+from scipy.interpolate import make_interp_spline
 from scipy.spatial.transform import Rotation as R
 
-from lsy_drone_racing.control.kafa1500.settings import PlannerSettings
-from lsy_drone_racing.control.kafa1500.types import (
-    GateFrame,
-    GatePlan,
-    Observation,
-    PathTarget,
-    Vec3,
-)
+from lsy_drone_racing.control.kafa1500.types import GateFrame, GatePlan, PathTarget
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+    from scipy.interpolate import BSpline
+
+    from lsy_drone_racing.control.kafa1500.settings import PlannerSettings
+    from lsy_drone_racing.control.kafa1500.types import Observation, Vec3
 
 
 class GateNavigator:
@@ -25,12 +24,10 @@ class GateNavigator:
 
     def __init__(self, settings: PlannerSettings):
         """Store the planner settings."""
-
         self._settings = settings
 
     def plan_gate(self, obs: Observation, gate_idx: int) -> GatePlan:
         """Create a fresh local plan for the current target gate."""
-
         pos = obs["pos"].astype(np.float32)
         obstacles = np.asarray(obs["obstacles_pos"], dtype=np.float32)
         gate = self._gate_frame(obs, gate_idx)
@@ -39,12 +36,19 @@ class GateNavigator:
         pass_target = gate.position + self._settings.pass_distance * gate.forward
 
         route_points = self._plan_route(pos, align_target, approach_target, gate, obstacles)
-        anchors = np.vstack([pos, *route_points]).astype(np.float32)
+        anchors = np.vstack([pos, *route_points, gate.position, pass_target]).astype(np.float32)
         control_points = self._build_smooth_path(anchors, obstacles)
-        path_spline, path_spline_d1, path_params, path_points, path_lengths = (
+        (
+            path_spline,
+            path_spline_d1,
+            path_spline_d2,
+            path_params,
+            path_points,
+            path_lengths,
+        ) = (
             self._build_path_spline(control_points, obstacles)
         )
-        route_line = np.vstack([path_points, gate.position, pass_target]).astype(np.float32)
+        route_line = path_points.astype(np.float32)
 
         return GatePlan(
             gate_idx=gate_idx,
@@ -53,6 +57,7 @@ class GateNavigator:
             pass_target=pass_target,
             path_spline=path_spline,
             path_spline_d1=path_spline_d1,
+            path_spline_d2=path_spline_d2,
             path_params=path_params,
             path_points=path_points,
             path_lengths=path_lengths,
@@ -65,7 +70,6 @@ class GateNavigator:
         obstacles: NDArray[np.float32],
     ) -> tuple[Vec3, Vec3]:
         """Pick gate approach targets, shifting laterally if the nominal corridor is blocked."""
-
         base_align = gate.position - self._settings.align_distance * gate.forward
         base_approach = gate.position - self._settings.approach_distance * gate.forward
 
@@ -112,9 +116,13 @@ class GateNavigator:
             return best_pair
         return base_align.astype(np.float32), base_approach.astype(np.float32)
 
-    def follow_path(self, pos: Vec3, plan: GatePlan) -> PathTarget:
-        """Project onto the current plan and sample a spline lookahead target."""
-
+    def follow_path(
+        self,
+        pos: Vec3,
+        plan: GatePlan,
+        reference_speed: float,
+    ) -> PathTarget:
+        """Project onto the current plan and sample a spline-derived reference state."""
         projected = self._project_onto_path(
             pos,
             plan.path_points,
@@ -132,12 +140,26 @@ class GateNavigator:
         target_s = min(float(plan.path_lengths[-1]), plan.progress + lookahead)
         target_param = self._arc_length_to_param(target_s, plan.path_lengths, plan.path_params)
         target = np.asarray(plan.path_spline(target_param), dtype=np.float32)
-        yaw_dir = np.asarray(plan.path_spline_d1(target_param), dtype=np.float32)
-        yaw_norm = float(np.linalg.norm(yaw_dir))
-        yaw_dir = plan.gate_x if yaw_norm < 1e-6 else yaw_dir / yaw_norm
+        d1 = np.asarray(plan.path_spline_d1(target_param), dtype=np.float32)
+        d2 = np.asarray(plan.path_spline_d2(target_param), dtype=np.float32)
+
+        tangent_norm = float(np.linalg.norm(d1))
+        yaw_dir = plan.gate_x if tangent_norm < 1e-6 else d1 / tangent_norm
+
+        clipped_speed = float(max(0.0, reference_speed))
+        if clipped_speed < 1e-6 or tangent_norm < 1e-6:
+            ref_vel = np.zeros(3, dtype=np.float32)
+            ref_acc = np.zeros(3, dtype=np.float32)
+        else:
+            ds_dt = clipped_speed / tangent_norm
+            ref_vel = (d1 * ds_dt).astype(np.float32)
+            ref_acc = (d2 * (ds_dt**2)).astype(np.float32)
+
         return PathTarget(
             target=target.astype(np.float32),
             yaw_dir=yaw_dir.astype(np.float32),
+            ref_vel=ref_vel.astype(np.float32),
+            ref_acc=ref_acc.astype(np.float32),
             remaining=remaining,
         )
 
@@ -149,7 +171,6 @@ class GateNavigator:
         clearance: float | None = None,
     ) -> bool:
         """Check whether any obstacle blocks a straight segment."""
-
         obstacles = np.asarray(obstacles_pos, dtype=np.float32)
         segment_clearance = self._settings.obstacle_clearance if clearance is None else clearance
         blocker = self._segment_blocker(
@@ -162,7 +183,6 @@ class GateNavigator:
 
     def _gate_frame(self, obs: Observation, gate_idx: int) -> GateFrame:
         """Return the gate center and its local forward/lateral axes."""
-
         gate_pos = obs["gates_pos"][gate_idx].astype(np.float32)
         gate_quat = obs["gates_quat"][gate_idx]
         rotation = R.from_quat(gate_quat).as_matrix().astype(np.float32)
@@ -185,7 +205,6 @@ class GateNavigator:
         obstacles: NDArray[np.float32],
     ) -> list[Vec3]:
         """Build a short route that stays clear of nearby obstacle poles."""
-
         route_targets = [
             align_target.astype(np.float32),
             approach_target.astype(np.float32),
@@ -218,7 +237,6 @@ class GateNavigator:
         preferred_lateral: Vec3,
     ) -> list[Vec3]:
         """Plan one obstacle-avoiding segment with a visibility graph."""
-
         planning_clearance = (
             self._settings.obstacle_clearance + self._settings.visibility_clearance_margin
         )
@@ -252,12 +270,12 @@ class GateNavigator:
         if path is None:
             return self._route_segment(start, end, obstacles, preferred_lateral)
 
-        simplified = self._shortcut_route(
+        smoothed = self._smooth_obstacle_route(
             np.asarray(path, dtype=np.float32),
             obstacles,
             planning_clearance,
         )
-        return [point.astype(np.float32) for point in simplified[1:]]
+        return [point.astype(np.float32) for point in smoothed[1:]]
 
     def _obstacle_visibility_nodes(
         self,
@@ -267,11 +285,19 @@ class GateNavigator:
         obstacles: NDArray[np.float32],
     ) -> list[Vec3]:
         """Generate candidate graph nodes around one obstacle."""
-
         radius = self._settings.obstacle_clearance + self._settings.visibility_clearance_margin
         segment = end[:2] - start[:2]
-        base_angle = float(np.arctan2(segment[1], segment[0])) if np.linalg.norm(segment) > 1e-6 else 0.0
-        angles = np.linspace(0.0, 2.0 * np.pi, self._settings.visibility_node_samples, endpoint=False)
+        base_angle = (
+            float(np.arctan2(segment[1], segment[0]))
+            if np.linalg.norm(segment) > 1e-6
+            else 0.0
+        )
+        angles = np.linspace(
+            0.0,
+            2.0 * np.pi,
+            self._settings.visibility_node_samples,
+            endpoint=False,
+        )
         candidates: list[Vec3] = []
 
         for angle in base_angle + angles:
@@ -284,43 +310,91 @@ class GateNavigator:
 
         return candidates
 
-    @staticmethod
     def _shortest_node_path(
+        self,
         adjacency: list[list[tuple[float, int]]],
         nodes: list[Vec3],
     ) -> list[Vec3] | None:
-        """Run Dijkstra on the visibility graph from node 0 to node 1."""
-
+        """Run a turn-aware Dijkstra search from node 0 to node 1."""
         goal_idx = 1
-        distances = [np.inf] * len(nodes)
-        previous = [-1] * len(nodes)
-        distances[0] = 0.0
-        heap: list[tuple[float, int]] = [(0.0, 0)]
+        goal_dir = nodes[goal_idx][:2] - nodes[0][:2]
+        goal_norm = float(np.linalg.norm(goal_dir))
+        if goal_norm > 1e-6:
+            goal_dir = goal_dir / goal_norm
+
+        start_state = (-1, 0)
+        distances: dict[tuple[int, int], float] = {start_state: 0.0}
+        previous: dict[tuple[int, int], tuple[int, int] | None] = {start_state: None}
+        best_goal_state: tuple[int, int] | None = None
+        best_goal_cost = np.inf
+        heap: list[tuple[float, int, int]] = [(0.0, -1, 0)]
 
         while heap:
-            current_dist, current_idx = heappop(heap)
-            if current_dist > distances[current_idx]:
+            current_dist, prev_idx, current_idx = heappop(heap)
+            state = (prev_idx, current_idx)
+            if current_dist > distances.get(state, np.inf):
                 continue
             if current_idx == goal_idx:
+                best_goal_state = state
+                best_goal_cost = current_dist
                 break
-            for edge_cost, neighbor_idx in adjacency[current_idx]:
-                next_dist = current_dist + edge_cost
-                if next_dist >= distances[neighbor_idx]:
-                    continue
-                distances[neighbor_idx] = next_dist
-                previous[neighbor_idx] = current_idx
-                heappush(heap, (next_dist, neighbor_idx))
 
-        if not np.isfinite(distances[goal_idx]):
+            for edge_cost, neighbor_idx in adjacency[current_idx]:
+                turn_penalty = self._turn_penalty(
+                    nodes,
+                    prev_idx,
+                    current_idx,
+                    neighbor_idx,
+                    goal_dir.astype(np.float32),
+                )
+                next_state = (current_idx, neighbor_idx)
+                next_dist = current_dist + edge_cost + turn_penalty
+                if next_dist >= distances.get(next_state, np.inf):
+                    continue
+                distances[next_state] = next_dist
+                previous[next_state] = state
+                heappush(heap, (next_dist, current_idx, neighbor_idx))
+
+        if best_goal_state is None or not np.isfinite(best_goal_cost):
             return None
 
-        path_indices = []
-        cursor = goal_idx
-        while cursor != -1:
-            path_indices.append(cursor)
+        path_indices: list[int] = []
+        cursor: tuple[int, int] | None = best_goal_state
+        while cursor is not None:
+            _, current_idx = cursor
+            path_indices.append(current_idx)
             cursor = previous[cursor]
         path_indices.reverse()
         return [nodes[idx].astype(np.float32) for idx in path_indices]
+
+    def _turn_penalty(
+        self,
+        nodes: list[Vec3],
+        prev_idx: int,
+        current_idx: int,
+        next_idx: int,
+        goal_dir: NDArray[np.float32],
+    ) -> float:
+        """Penalize heading changes so obstacle routes bend more gradually."""
+        outgoing = nodes[next_idx][:2] - nodes[current_idx][:2]
+        outgoing_norm = float(np.linalg.norm(outgoing))
+        if outgoing_norm < 1e-6:
+            return 0.0
+        outgoing = outgoing / outgoing_norm
+
+        if prev_idx == -1:
+            if float(np.linalg.norm(goal_dir)) < 1e-6:
+                return 0.0
+            heading_cos = float(np.clip(np.dot(goal_dir, outgoing), -1.0, 1.0))
+            return 0.5 * self._settings.visibility_turn_weight * (1.0 - heading_cos)
+
+        incoming = nodes[current_idx][:2] - nodes[prev_idx][:2]
+        incoming_norm = float(np.linalg.norm(incoming))
+        if incoming_norm < 1e-6:
+            return 0.0
+        incoming = incoming / incoming_norm
+        turn_cos = float(np.clip(np.dot(incoming, outgoing), -1.0, 1.0))
+        return self._settings.visibility_turn_weight * (1.0 - turn_cos)
 
     def _route_segment(
         self,
@@ -330,7 +404,6 @@ class GateNavigator:
         preferred_lateral: Vec3,
     ) -> list[Vec3]:
         """Expand a segment with bypass waypoints when an obstacle blocks it."""
-
         cursor = start.astype(np.float32)
         segment_points: list[Vec3] = []
         for _ in range(self._settings.max_route_points):
@@ -353,13 +426,32 @@ class GateNavigator:
         segment_points.append(end.astype(np.float32))
         return segment_points
 
+    def _smooth_obstacle_route(
+        self,
+        points: NDArray[np.float32],
+        obstacles: NDArray[np.float32],
+        clearance: float,
+    ) -> NDArray[np.float32]:
+        """Relax a graph route into a wider, lower-curvature obstacle detour."""
+        smoothed = self._shortcut_route(points.astype(np.float32), obstacles, clearance)
+        for _ in range(self._settings.obstacle_route_relaxation_iterations):
+            smoothed = self._relax_control_points(
+                smoothed,
+                obstacles,
+                clearance=clearance,
+                iterations=1,
+                weight=min(self._settings.control_relaxation_weight + 0.10, 0.82),
+                fixed_tail=1,
+            )
+            smoothed = self._shortcut_route(smoothed, obstacles, clearance)
+        return self._dedupe_points(smoothed.astype(np.float32))
+
     def _gate_swing_waypoint(
         self,
         gate: GateFrame,
         obstacles: NDArray[np.float32],
     ) -> Vec3 | None:
         """Insert a lateral swing waypoint if the gate corridor is blocked."""
-
         found_blocker = False
         best_lateral = 0.0
         best_along = 0.0
@@ -396,7 +488,6 @@ class GateNavigator:
         clearance: float,
     ) -> tuple[Vec3, float, NDArray[np.float32]] | None:
         """Return the closest obstacle that violates the segment clearance."""
-
         segment = end[:2] - start[:2]
         denom = float(np.dot(segment, segment))
         if denom < 1e-9:
@@ -430,7 +521,6 @@ class GateNavigator:
         preferred_lateral: Vec3,
     ) -> Vec3:
         """Place a short bypass waypoint around one blocking obstacle."""
-
         _, t_clamped, closest_xy = blocker
         segment = end[:2] - start[:2]
         segment_norm = float(np.linalg.norm(segment))
@@ -473,7 +563,6 @@ class GateNavigator:
         obstacles: NDArray[np.float32],
     ) -> NDArray[np.float32]:
         """Smooth the anchor polyline while preserving a straight final corridor."""
-
         anchors = self._dedupe_points(anchors.astype(np.float32))
         anchors = self._shortcut_route(anchors, obstacles)
         anchors = self._relax_control_points(anchors, obstacles)
@@ -499,7 +588,6 @@ class GateNavigator:
         clearance: float | None = None,
     ) -> NDArray[np.float32]:
         """Greedily remove intermediate waypoints when a direct hop is obstacle-free."""
-
         points = self._dedupe_points(points.astype(np.float32))
         if len(points) <= 2:
             return points
@@ -529,35 +617,47 @@ class GateNavigator:
         self,
         points: NDArray[np.float32],
         obstacles: NDArray[np.float32],
+        clearance: float | None = None,
+        iterations: int | None = None,
+        weight: float | None = None,
+        fixed_tail: int | None = None,
     ) -> NDArray[np.float32]:
         """Pull internal control points toward smooth arcs while preserving clearance."""
-
         points = self._dedupe_points(points.astype(np.float32))
         if len(points) <= 3:
             return points
 
         relaxed = points.copy()
-        fixed_tail = 2 if len(points) > 3 else 1
-        clearance = self._settings.obstacle_clearance
-        weight = self._settings.control_relaxation_weight
+        tail = fixed_tail if fixed_tail is not None else (2 if len(points) > 3 else 1)
+        segment_clearance = (
+            self._settings.obstacle_clearance if clearance is None else clearance
+        )
+        blend_weight = (
+            self._settings.control_relaxation_weight if weight is None else weight
+        )
+        num_iterations = (
+            self._settings.control_relaxation_iterations
+            if iterations is None
+            else iterations
+        )
 
-        for _ in range(self._settings.control_relaxation_iterations):
+        for _ in range(num_iterations):
             updated = relaxed.copy()
-            for idx in range(1, len(relaxed) - fixed_tail):
+            for idx in range(1, len(relaxed) - tail):
                 prev_point = updated[idx - 1]
                 curr_point = relaxed[idx]
                 next_point = relaxed[idx + 1]
 
                 midpoint = 0.5 * (prev_point + next_point)
-                candidate = (1.0 - weight) * curr_point + weight * midpoint
+                candidate = (1.0 - blend_weight) * curr_point + blend_weight * midpoint
                 candidate = candidate.astype(np.float32)
                 candidate[2] = curr_point[2]
 
-                if not self._point_is_clear(candidate, obstacles, clearance):
+                if not self._point_is_clear(candidate, obstacles, segment_clearance):
                     continue
-                if self._segment_blocker(prev_point, candidate, obstacles, clearance):
+                if self._segment_blocker(prev_point, candidate, obstacles, segment_clearance):
                     continue
-                if self._segment_blocker(candidate, next_point, obstacles, clearance):
+                if self._segment_blocker(candidate, next_point, obstacles, segment_clearance):
                     continue
 
                 updated[idx] = candidate
@@ -572,79 +672,104 @@ class GateNavigator:
     ) -> tuple[
         BSpline,
         BSpline,
+        BSpline,
         NDArray[np.float32],
         NDArray[np.float32],
         NDArray[np.float32],
     ]:
-        """Fit a smooth spline and sample it densely for rendering and projection."""
-
+        """Fit and sample a strictly cubic spline trajectory for tracking."""
         control_points = self._dedupe_points(control_points.astype(np.float32))
-        params = self._cumulative_lengths(control_points)
-        total_param = float(params[-1])
+        path_spline, sample_params, sampled_points, sampled_lengths = self._fit_and_sample_cubic(
+            control_points
+        )
 
-        if total_param < 1e-6:
-            sample_params = np.zeros(1, dtype=np.float32)
-            path_points = control_points[:1].astype(np.float32)
-            path_lengths = np.zeros(1, dtype=np.float32)
-            path_spline = make_interp_spline(
-                np.array([0.0, 1.0], dtype=np.float64),
-                np.vstack([path_points[0], path_points[0]]).astype(np.float64),
-                k=1,
-                axis=0,
+        if not self._path_is_clear(sampled_points, obstacles):
+            dense_spacing = max(0.015, 0.5 * self._settings.path_spacing)
+            densified = self._resample_polyline(control_points, dense_spacing)
+            dense_spline, dense_params, dense_points, dense_lengths = self._fit_and_sample_cubic(
+                densified
             )
-            return (
-                path_spline,
-                path_spline.derivative(),
-                sample_params,
-                path_points,
-                path_lengths,
-            )
-
-        linear_spline = self._make_interp_spline(params, control_points, degree=1)
-        linear_params = self._spline_sample_params(total_param, params)
-        linear_points = np.asarray(linear_spline(linear_params), dtype=np.float32)
-        linear_points[0] = control_points[0]
-        linear_points[-1] = control_points[-1]
-        linear_params, linear_points = self._compress_curve_samples(linear_params, linear_points)
-        linear_lengths = self._cumulative_lengths(linear_points)
-
-        max_degree = min(3, len(control_points) - 1)
-        for degree in range(max_degree, 0, -1):
-            path_spline = self._make_interp_spline(params, control_points, degree=degree)
-            sample_params = self._spline_sample_params(total_param, params)
-            sampled_points = np.asarray(path_spline(sample_params), dtype=np.float32)
-            sampled_points[0] = control_points[0]
-            sampled_points[-1] = control_points[-1]
-            sample_params, sampled_points = self._compress_curve_samples(
-                sample_params,
-                sampled_points,
-            )
-            sampled_lengths = self._cumulative_lengths(sampled_points)
-            if self._path_is_clear(sampled_points, obstacles):
-                return (
-                    path_spline,
-                    path_spline.derivative(),
-                    sample_params,
-                    sampled_points,
-                    sampled_lengths,
-                )
-
-        if self._path_is_clear(linear_points, obstacles):
-            return (
-                linear_spline,
-                linear_spline.derivative(),
-                linear_params,
-                linear_points,
-                linear_lengths,
-            )
+            if self._path_is_clear(dense_points, obstacles):
+                path_spline = dense_spline
+                sample_params = dense_params
+                sampled_points = dense_points
+                sampled_lengths = dense_lengths
 
         return (
-            linear_spline,
-            linear_spline.derivative(),
-            params.astype(np.float32),
-            control_points.astype(np.float32),
-            self._cumulative_lengths(control_points),
+            path_spline,
+            path_spline.derivative(),
+            path_spline.derivative(2),
+            sample_params,
+            sampled_points,
+            sampled_lengths,
         )
+
+    def _fit_and_sample_cubic(
+        self,
+        control_points: NDArray[np.float32],
+    ) -> tuple[BSpline, NDArray[np.float32], NDArray[np.float32], NDArray[np.float32]]:
+        """Fit one cubic spline candidate and sample it with arc-length parameterization."""
+        cubic_controls = self._prepare_cubic_control_points(control_points)
+        params = self._strictly_increasing_params(cubic_controls)
+        total_param = float(params[-1])
+        path_spline = self._make_interp_spline(params, cubic_controls, degree=3)
+
+        if path_spline.k != 3:
+            raise RuntimeError("Spline construction must remain cubic.")
+
+        sample_params = self._spline_sample_params(total_param, params)
+        sampled_points = np.asarray(path_spline(sample_params), dtype=np.float32)
+        sampled_points[0] = cubic_controls[0]
+        sampled_points[-1] = cubic_controls[-1]
+        sample_params, sampled_points = self._compress_curve_samples(sample_params, sampled_points)
+        sampled_lengths = self._cumulative_lengths(sampled_points)
+        return path_spline, sample_params, sampled_points, sampled_lengths
+
+    def _prepare_cubic_control_points(
+        self,
+        points: NDArray[np.float32],
+    ) -> NDArray[np.float32]:
+        """Ensure at least four control points so cubic interpolation is always well-defined."""
+        points = self._dedupe_points(points.astype(np.float32))
+
+        if len(points) == 0:
+            return np.zeros((4, 3), dtype=np.float32)
+
+        if len(points) == 1:
+            return np.repeat(points, 4, axis=0).astype(np.float32)
+
+        if len(points) == 2:
+            p0 = points[0]
+            p1 = points[1]
+            span = p1 - p0
+            return np.vstack([
+                p0,
+                p0 + span / 3.0,
+                p0 + (2.0 * span) / 3.0,
+                p1,
+            ]).astype(np.float32)
+
+        if len(points) == 3:
+            p0 = points[0]
+            p1 = points[1]
+            p2 = points[2]
+            if np.linalg.norm(p1 - p0) >= np.linalg.norm(p2 - p1):
+                inserted = 0.5 * (p0 + p1)
+                return np.vstack([p0, inserted, p1, p2]).astype(np.float32)
+            inserted = 0.5 * (p1 + p2)
+            return np.vstack([p0, p1, inserted, p2]).astype(np.float32)
+
+        return points.astype(np.float32)
+
+    @staticmethod
+    def _strictly_increasing_params(points: NDArray[np.float32]) -> NDArray[np.float32]:
+        """Build a cumulative parameter grid with a guaranteed positive step."""
+        params = GateNavigator._cumulative_lengths(points).astype(np.float32)
+        min_step = 1e-3
+        for idx in range(1, len(params)):
+            if params[idx] - params[idx - 1] < min_step:
+                params[idx] = params[idx - 1] + min_step
+        return params.astype(np.float32)
 
     def _path_is_clear(
         self,
@@ -652,7 +777,6 @@ class GateNavigator:
         obstacles: NDArray[np.float32],
     ) -> bool:
         """Check point-wise and segment-wise obstacle clearance for a path."""
-
         if len(obstacles) == 0 or len(path_points) < 2:
             return True
 
@@ -678,7 +802,6 @@ class GateNavigator:
         clearance: float,
     ) -> bool:
         """Check whether one point respects the obstacle clearance radius."""
-
         if len(obstacles) == 0:
             return True
         distances = np.linalg.norm(obstacles[:, :2] - point[:2], axis=1)
@@ -691,7 +814,6 @@ class GateNavigator:
         end_xy: NDArray[np.float32],
     ) -> float:
         """Project an XY point onto an XY segment and return the clamped ratio."""
-
         segment_xy = end_xy - start_xy
         denom = float(np.dot(segment_xy, segment_xy))
         if denom < 1e-9:
@@ -700,7 +822,6 @@ class GateNavigator:
 
     def _rounded_polyline(self, points: NDArray[np.float32]) -> NDArray[np.float32]:
         """Round waypoint corners with short Bezier blends."""
-
         points = self._dedupe_points(points.astype(np.float32))
         if len(points) <= 2:
             return points
@@ -742,7 +863,7 @@ class GateNavigator:
                     + (2.0 * (1.0 - t) * t) * corner
                     + (t**2) * exit
                 )
-                rounded.append(cast(Vec3, bezier_point.astype(np.float32)))
+                rounded.append(cast("Vec3", bezier_point.astype(np.float32)))
 
             rounded.append(exit.astype(np.float32))
 
@@ -757,7 +878,6 @@ class GateNavigator:
         obstacles: NDArray[np.float32],
     ) -> NDArray[np.float32]:
         """Keep a short straight tail into the gate approach point when safe."""
-
         path_points = self._dedupe_points(path_points.astype(np.float32))
         if len(path_points) <= 2:
             return path_points
@@ -782,7 +902,6 @@ class GateNavigator:
 
     def _chaikin(self, points: NDArray[np.float32]) -> NDArray[np.float32]:
         """Apply one Chaikin corner-cutting pass while preserving endpoints."""
-
         if len(points) <= 2:
             return points.astype(np.float32)
 
@@ -802,7 +921,6 @@ class GateNavigator:
         spacing: float,
     ) -> NDArray[np.float32]:
         """Resample a polyline at approximately uniform spacing."""
-
         points = self._dedupe_points(points)
         if len(points) <= 1:
             return points.astype(np.float32)
@@ -824,7 +942,6 @@ class GateNavigator:
         control_params: NDArray[np.float32],
     ) -> NDArray[np.float32]:
         """Create a dense parameter grid that always includes spline control parameters."""
-
         num_samples = max(
             128,
             int(np.ceil(total_param / self._settings.spline_sample_spacing)) + 1,
@@ -841,7 +958,6 @@ class GateNavigator:
         degree: int,
     ) -> BSpline:
         """Create an interpolating spline with float64 internals for SciPy."""
-
         return make_interp_spline(
             params.astype(np.float64),
             control_points.astype(np.float64),
@@ -855,7 +971,6 @@ class GateNavigator:
         sample_points: NDArray[np.float32],
     ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
         """Drop duplicate neighboring spline samples while keeping endpoints."""
-
         if len(sample_points) <= 1:
             return sample_params.astype(np.float32), sample_points.astype(np.float32)
 
@@ -878,7 +993,6 @@ class GateNavigator:
         sample_params: NDArray[np.float32],
     ) -> float:
         """Map approximate arc length along the spline to the spline parameter."""
-
         if arc_length <= 0.0 or len(sample_params) == 1:
             return float(sample_params[0])
         if arc_length >= float(sample_lengths[-1]):
@@ -893,7 +1007,6 @@ class GateNavigator:
         current_progress: float,
     ) -> float:
         """Project the current position onto the piecewise-linear path."""
-
         best_dist = np.inf
         best_s = current_progress
         for idx in range(len(path_points) - 1):
@@ -920,7 +1033,6 @@ class GateNavigator:
         arc_length: float,
     ) -> Vec3:
         """Sample a point on a polyline using precomputed cumulative lengths."""
-
         if arc_length <= 0.0:
             return points[0]
         if arc_length >= float(lengths[-1]):
@@ -939,7 +1051,6 @@ class GateNavigator:
     @staticmethod
     def _cumulative_lengths(points: NDArray[np.float32]) -> NDArray[np.float32]:
         """Compute cumulative arc lengths for a polyline."""
-
         if len(points) == 0:
             return np.zeros(0, dtype=np.float32)
         if len(points) == 1:
@@ -951,7 +1062,6 @@ class GateNavigator:
     @staticmethod
     def _dedupe_points(points: NDArray[np.float32]) -> NDArray[np.float32]:
         """Drop near-duplicate consecutive points from a path."""
-
         if len(points) <= 1:
             return points.astype(np.float32)
 
