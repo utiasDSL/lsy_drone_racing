@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import heapq
+from lsy_drone_racing.envs.race_core import obs
 import numpy as np
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation as R
@@ -297,6 +298,7 @@ class MyController(Controller):
         if len(current) != len(self._last_trusted):
             print("  [REPLAN] new obstacle entered sensor range")
             self._last_trusted = current.copy()
+            self._update_gates(obs)  # auch Gates updaten, falls sie jetzt sichtbar sind
             return True
 
         # Case 2: same number but positions changed significantly
@@ -305,6 +307,7 @@ class MyController(Controller):
             if len(dists) == 0 or np.min(dists) > 0.1:
                 print("  [REPLAN] obstacle position refined")
                 self._last_trusted = current.copy()
+                self._update_gates(obs)  # auch Gates updaten, falls sie jetzt sichtbar sind
                 return True
 
         return False
@@ -325,6 +328,9 @@ class MyController(Controller):
         # Baue Occupancy Grid und finde Pfad von aktueller Position zum approach point
         grid = self._build_occupancy_grid(obs, start_pos, gate_id)
         path_xy_1 = self._astar(from_pos, approach, grid)
+        if path_xy_1 is None:
+            print("  [WARNING] No path found to approach point! Using direct line.")
+            path_xy_1 = np.array([from_pos[:2], approach[:2]])
         path_xy_2 = np.array([approach[:2], center[:2]])
         path_xy_3 = np.array([center[:2], exit_pt[:2]])
 
@@ -435,20 +441,23 @@ class MyController(Controller):
         # we want to replan every time we detect something new 
         # but only if we are not already very close to the gate
 
-        
+        dist_to_gate = np.linalg.norm(pos[:2] - gate_center[:2])
 
         if self._obstacles_changed(obs, pos):
-            dist_to_gate = np.linalg.norm(pos - gate_center)
             if dist_to_gate > GATE_PROXIMITY_THRESHOLD:
                 print(f"  Regular replan, dist_to_gate={dist_to_gate:.2f}")
                 self._build_spline(pos, current_gate, obs, label="regular_replan")
             else:
                 print(f"  Near gate (dist={dist_to_gate:.2f}), skipping replan to avoid late reaction")
       
+        if dist_to_gate < SENSOR_RANGE:
+            new_pos = obs["gates_pos"][current_gate]
+            if np.linalg.norm(new_pos - self._gate_pos[current_gate]) > 0.05:
+                print("  [REPLAN] gate pose refined")
+                self._gate_pos[current_gate] = new_pos
+                self._build_spline(pos, current_gate, obs, label="gate_update")
         # ── Spline auswerten ──────────────────────────────────────────────────
         t_elapsed = (self._tick - self._t_start_tick) / self._freq
-
-        dist_to_gate = np.linalg.norm(pos[:2] - gate_center[:2])
 
         if t_elapsed > self._t_total + 0.5:
             # Nur replan wenn noch nicht in der Nähe des Gates/dahinter
@@ -475,9 +484,9 @@ class MyController(Controller):
         # PID
         if dist_to_gate < GATE_PROXIMITY_THRESHOLD:
             print(f"  Near gate (dist={dist_to_gate:.2f}), using more conservative PID gains")
-            kp = np.array([8.0, 8.0, 2.0])
-            kd = np.array([3.5, 3.5, 1.0])
-            ki = np.array([1.0, 1.0, 0.5])
+            kp = np.array([1.0, 1.0, 0.1])
+            kd = np.array([1.0, 1.0, 0.05])
+            ki = np.array([5.0, 5.0, 5.5])
         else:
             kp = np.array([4.0, 4.0, 3.0])
             kd = np.array([2.0, 2.0, 1.5])
