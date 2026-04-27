@@ -70,19 +70,52 @@ class MyController(Controller):
         # print("==============================\n")
 
     # ── Hilfsmethode: Gate-Normalenvektor korrekt bestimmen ───────────────────
-    def _gate_normal(self, gate_id: int, drone_pos: np.ndarray = None) -> np.ndarray:
+    def _gate_normal(self, gate_id: int) -> np.ndarray:
         rot = R.from_quat(self._gate_quat[gate_id])
-        # X-Achse ist die Durchfahrtsachse (laut Debug-Output)
-        normal = rot.apply([1, 0, 0])
-        normal[2] = 0.0
-        normal /= np.linalg.norm(normal) + 1e-9
 
-        # Vorzeichen: normal soll VON der Drone WEG zeigen (durch das Gate)
-        if drone_pos is not None:
-            to_gate = self._gate_pos[gate_id][:2] - drone_pos[:2]
-            if np.dot(normal[:2], to_gate) < 0:
-                normal = -normal
-        return normal
+        # Feste Definition: X-Achse = Durchflugrichtung
+        normal = rot.apply([1.0, 0.0, 0.0])
+
+        # Optional: nur XY
+        normal[2] = 0.0
+
+        norm = np.linalg.norm(normal)
+        if norm < 1e-9:
+            return np.array([1.0, 0.0, 0.0])
+
+        return normal / norm
+    
+    #── Debug-Hilfsmethode: Gate-Info ausgeben ─────────────────────────────────
+    
+    def print_gate_info(self, drone_pos=None):
+        """Prints gate position, normal, approach and exit points."""
+        gate_data = []
+
+        print("\n===== GATE INFO =====")
+        for i in range(self._n_gates):
+            pos = self._gate_pos[i]
+
+            normal = self._gate_normal(i)
+
+            approach = pos - GATE_APPROACH_OFFSET * normal
+            exit_pt  = pos + GATE_EXIT_OFFSET * normal
+
+            print(f"Gate {i}:")
+            print(f"  position : {np.round(pos, 3)}")
+            print(f"  normal   : {np.round(normal, 3)}")
+            print(f"  approach : {np.round(approach, 3)}")
+            print(f"  exit     : {np.round(exit_pt, 3)}")
+
+            gate_data.append({
+                "id": i,
+                "position": pos.copy(),
+                "normal": normal.copy(),
+                "approach": approach.copy(),
+                "exit": exit_pt.copy()
+            })
+
+        print("=====================\n")
+        return gate_data
 
     # ── Occupancy Grid ────────────────────────────────────────────────────────
 
@@ -106,13 +139,14 @@ class MyController(Controller):
             self._mark_circle(grid, obs_pos[:2], inflate_obs, min_bounds)
 
         # ── Nicht-Ziel-Gates als Wand ─────────────────────────────────────────
+        # Edit: Alle Gates als Wände markieren, damit A* nicht durch sie hindurch plant 
+        # wir haben ja approach/exit points als Pflichtpunkte
         for i in range(self._n_gates):
-            if i == current_gate:
-                continue
+            # if i == current_gate:
+            #     continue
 
             gate_center = self._gate_pos[i][:2]
-            rot  = R.from_quat(self._gate_quat[i])
-            normal = rot.apply([1, 0, 0])[:2]
+            normal = self._gate_normal(i)[:2]
             normal /= np.linalg.norm(normal) + 1e-9
             perp = np.array([-normal[1], normal[0]])  # entlang Gate-Breite
 
@@ -186,7 +220,7 @@ class MyController(Controller):
     
     # ── Spline bauen ──────────────────────────────────────────────────────────
 
-    def _insert_gate_waypoints(self, path_xy, approach_xy, center_xy):
+    def _insert_gate_waypoints(self, path_xy, approach_xy, center_xy, exit_xy):
         """Ersetzt den Teil des Pfades nahe dem Gate durch approach → center."""
         # Finde den Punkt im Pfad der approach am nächsten ist
         dists = np.linalg.norm(path_xy - approach_xy, axis=1)
@@ -199,53 +233,61 @@ class MyController(Controller):
             dists2 = np.linalg.norm(after - center_xy, axis=1)
             idx2   = int(np.argmin(dists2))
             after  = after[idx2+1:]
-        return np.vstack([before, [approach_xy], [center_xy], after]) if len(after) > 0 \
+        return np.vstack([before, [approach_xy], [center_xy], [exit_xy]]) if len(after) > 0 \
                else np.vstack([before, [approach_xy], [center_xy]])
 
     def _gate_waypoints(self, gate_id: int, prev_pos: np.ndarray):
-        """prev_pos = vorheriges Gate (oder Startpos beim ersten Gate)."""
         center = self._gate_pos[gate_id].copy()
-        rot    = R.from_quat(self._gate_quat[gate_id])
-        normal = rot.apply([1, 0, 0])[:2]
-        normal /= np.linalg.norm(normal) + 1e-9
+        normal = self._gate_normal(gate_id)[:2]
 
-        candidate_a = center[:2] - GATE_APPROACH_OFFSET * normal
-        candidate_b = center[:2] + GATE_APPROACH_OFFSET * normal
+        center_xy = center[:2]
 
-        # Approach = Kandidat auf der Seite von der wir kommen
-        from_dir = center[:2] - prev_pos[:2]
-        if np.dot(candidate_a - center[:2], from_dir) < 0:
-            approach_xy, exit_xy = candidate_a, candidate_b
-        else:
-            approach_xy, exit_xy = candidate_b, candidate_a
+        # Zwei Seiten des Gates
+        approach_xy = center_xy - normal * GATE_APPROACH_OFFSET
+        exit_xy = center_xy + normal * GATE_APPROACH_OFFSET
 
         approach = np.array([approach_xy[0], approach_xy[1], center[2]])
         exit_pt  = np.array([exit_xy[0],     exit_xy[1],     center[2]])
+
         return approach, center, exit_pt
 
     def _build_spline(self, start_pos, gate_id, obs, label=""):
-        # Vorheriges Gate als Anflugrichtung-Referenz
-        if gate_id == 0:
-            prev_pos = start_pos
-        else:
-            prev_pos = self._gate_pos[gate_id - 1]
 
-        approach, center, exit_pt = self._gate_waypoints(gate_id, prev_pos)
-        gate_z  = self._gate_pos[gate_id][2]
+        # Debug: Gate-Info ausgeben
+        self.print_gate_info(drone_pos=start_pos)
 
-        # Kein subgoal_stage mehr – ein einziger Spline durch approach → center → exit
-        grid    = self._build_occupancy_grid(obs, gate_id)
-        path_xy = self._astar(start_pos, exit_pt, grid)  # Ziel = exit
+        from_pos = start_pos
 
-        if path_xy is None or len(path_xy) < 2:
-            xy = np.vstack([start_pos[:2], exit_pt[:2]])
-        else:
-            xy = np.array(path_xy)
 
-        # approach und center als Pflichtpunkte einsetzen
-        # finde den Index wo der Pfad am nächsten an approach vorbeikommt
-        # und ersetze diesen Bereich durch approach → center
-        xy = self._insert_gate_waypoints(xy, approach[:2], center[:2])
+        # DEBUG
+        print(f"  [waypoint debug] gate_id={gate_id} from_pos={np.round(from_pos[:2],3)}")
+        
+        #DEFINE GATE WAYPOINTS
+        approach, center, exit_pt = self._gate_waypoints(gate_id, from_pos)
+        # Baue Occupancy Grid und finde Pfad von aktueller Position zum approach point
+        grid = self._build_occupancy_grid(obs, gate_id)
+        path_xy_1 = self._astar(from_pos, approach, grid)
+        path_xy_2 = np.array([approach[:2], center[:2]])
+        path_xy_3 = np.array([center[:2], exit_pt[:2]])
+
+        # # fallback handling
+        # def safe(p, fallback_start, fallback_end):
+        #     if p is None or len(p) < 2:
+        #         return [fallback_start[:2], fallback_end[:2]]
+        #     return p
+        
+        # xy = safe(path_xy_1, from_pos, approach) + safe(path_xy_2, approach, center) + safe(path_xy_3, center, exit_pt)
+        #
+        xy = np.vstack([
+        np.array(path_xy_1),
+        approach[:2],          # 🔴 FORCE
+        np.array(path_xy_2)[1:],
+        center[:2],            # 🔴 FORCE
+        np.array(path_xy_3)[1:],
+        exit_pt[:2]            # 🔴 FORCE
+        ])
+        
+        gate_z   = self._gate_pos[gate_id][2]
 
         z         = np.linspace(start_pos[2], gate_z, len(xy))
         waypoints = np.column_stack([xy, z])
@@ -341,10 +383,17 @@ class MyController(Controller):
         # ── Spline auswerten ──────────────────────────────────────────────────
         t_elapsed = (self._tick - self._t_start_tick) / self._freq
 
-        if t_elapsed > self._t_total + 0.5:  # 0.5s Puffer
-            # Spline ist abgelaufen aber Subgoal nicht erreicht → neu planen
-            print(f"  [timeout] Spline abgelaufen, replan stage={self._subgoal_stage}")
-            self._build_spline(pos, current_gate, obs, label="timeout_replan")
+        if t_elapsed > self._t_total + 0.5:
+            gate_center = self._gate_pos[current_gate]
+            dist_to_gate = np.linalg.norm(pos[:2] - gate_center[:2])
+
+            # Nur replan wenn noch nicht in der Nähe des Gates/dahinter
+            if dist_to_gate > 0.3:
+                print(f"  [timeout] replan, dist_to_gate={dist_to_gate:.2f}")
+                self._build_spline(pos, current_gate, obs, label="timeout_replan")
+            else:
+                # Spline eingefroren lassen – Drone ist schon nah genug
+                self._t_start_tick = self._tick  # Timer zurücksetzen damit kein Loop
 
         t_sp    = min(t_elapsed, self._t_total)
         des_pos = self._spline(t_sp)
