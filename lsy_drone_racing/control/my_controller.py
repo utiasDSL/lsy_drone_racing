@@ -15,14 +15,16 @@ TAKEOFF_HEIGHT = 0.5
 TAKEOFF_TIME   = 3.0
 
 # ── Tuning ────────────────────────────────────────────────────────────────────
-GATE_APPROACH_OFFSET  = 0.4   # m vor dem Gate-Zentrum
-GATE_EXIT_OFFSET      = 0.4   # m hinter dem Gate-Zentrum
-OBSTACLE_MARGIN       = 0.35  # physischer Radius der Hindernisse (m)
+GATE_APPROACH_OFFSET  = 0.3   # m vor dem Gate-Zentrum
+GATE_EXIT_OFFSET      = 0.3   # m hinter dem Gate-Zentrum
+OBSTACLE_MARGIN       = 0.05  # physischer Radius der Hindernisse (m)
 GRID_RESOLUTION       = 0.15  # A*-Auflösung (m)
 APPROACH_THRESHOLD    = 0.15  # m – wann gilt Approach als erreicht?
 GATE_THRESHOLD        = 0.12  # m – wann gilt Gate-Zentrum als erreicht?
 GATE_HALF_WIDTH       = 0.45  # etwas größer als echte Gate-Öffnung
 GATE_MARGIN           = 0.12  # kleinere Inflation für Gate-Rahmen
+TIME_SCALE            = 2.0   # Zeitfaktor für Spline-Geschwindigkeit
+SLOWNDOWN_SCALE       = 1.0   # Faktor um letzten Abschnitt zu verlangsamen
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -44,7 +46,6 @@ class MyController(Controller):
         self._t_start_tick = 0
 
         self._pos_integral = np.zeros(3)
-        self._subgoal_stage = 0   # 0=approach, 1=center, 2=exit
         self._current_goal  = None
 
         print("\n========== INIT ==========")
@@ -270,14 +271,8 @@ class MyController(Controller):
         path_xy_2 = np.array([approach[:2], center[:2]])
         path_xy_3 = np.array([center[:2], exit_pt[:2]])
 
-        # # fallback handling
-        # def safe(p, fallback_start, fallback_end):
-        #     if p is None or len(p) < 2:
-        #         return [fallback_start[:2], fallback_end[:2]]
-        #     return p
-        
-        # xy = safe(path_xy_1, from_pos, approach) + safe(path_xy_2, approach, center) + safe(path_xy_3, center, exit_pt)
-        #
+        self._current_exit = exit_pt.copy()
+
         xy = np.vstack([
         np.array(path_xy_1),
         approach[:2],          # 🔴 FORCE
@@ -286,10 +281,25 @@ class MyController(Controller):
         np.array(path_xy_3)[1:],
         exit_pt[:2]            # 🔴 FORCE
         ])
+
+        # Doppelte Punkte entfernen (können durch approach/center/exit Einfügung entstehen)
+        def remove_duplicate_points(xy, eps=1e-3):
+            filtered = [xy[0]]
+            for p in xy[1:]:
+                if np.linalg.norm(p - filtered[-1]) > eps:
+                    filtered.append(p)
+            return np.array(filtered)
+
+        xy = remove_duplicate_points(xy)
         
         gate_z   = self._gate_pos[gate_id][2]
 
-        z         = np.linspace(start_pos[2], gate_z, len(xy))
+        # Drohen erst bei exit_pt auf Gate höhe - zu spät !!!
+        # z         = np.linspace(start_pos[2], gate_z, len(xy))
+        # waypoints = np.column_stack([xy, z])
+
+        # Stattdessen: sofort auf Gate-Höhe gehen, damit wir nicht zu spät sind
+        z         = np.full(len(xy), gate_z)
         waypoints = np.column_stack([xy, z])
 
         # Zeitparametrisierung: gleichmäßig nach Distanz, mit Slow-down am Ende
@@ -298,16 +308,15 @@ class MyController(Controller):
 
         # Letzten Abschnitt verlangsamen
         t_scale = np.ones(len(dists))
-        t_scale[-1] = 2.5
+        t_scale[-1] = SLOWNDOWN_SCALE
 
-        t_knots = np.concatenate([[0.0], np.cumsum(dists * t_scale * 3.5)])
+        t_knots = np.concatenate([[0.0], np.cumsum(dists * t_scale * TIME_SCALE)])
         self._t_total = t_knots[-1]
 
         self._spline     = CubicSpline(t_knots, waypoints, bc_type="natural")
         self._spline_vel = self._spline.derivative()
         self._t_start_tick = self._tick
 
-        print(f"\n--- _build_spline [{label}] tick={self._tick} stage={self._subgoal_stage} ---")
         print(f"  exit_pt   : {np.round(exit_pt, 3)}")
         print(f"  approach  : {np.round(approach, 3)}")
         print(f"  center    : {np.round(center, 3)}")
@@ -357,10 +366,17 @@ class MyController(Controller):
             self._build_spline(pos, gate_id=current_gate, obs=obs, label="phase2_init")
 
         # ── Gate gewechselt → sofort neu planen ───────────────────────────────
-        if current_gate != self._prev_target_gate:
-            print(f">>> Gate passed! {self._prev_target_gate} → {current_gate}")
-            self._prev_target_gate = current_gate
-            self._build_spline(pos, current_gate, obs, label="gate_passed")
+        # if current_gate != self._prev_target_gate:
+        #     print(f">>> Gate passed! {self._prev_target_gate} → {current_gate}")
+        #     self._prev_target_gate = current_gate
+        #     self._build_spline(pos, current_gate, obs, label="gate_passed")
+
+        if hasattr(self, "_current_exit") and self._current_exit is not None:
+            dist_to_exit = np.linalg.norm(pos - self._current_exit)
+            if dist_to_exit < 0.15:
+                print(f"  Approaching exit point, dist_to_exit={dist_to_exit:.2f}")
+                self._current_exit = None
+                self._build_spline(pos, current_gate, obs, label="approach_exit")
 
         # # ── Sensor-Updates (Gate-Positionen verfeinert) ───────────────────────
         # if self._update_gates(obs):
@@ -399,10 +415,19 @@ class MyController(Controller):
         des_pos = self._spline(t_sp)
         des_vel = self._spline_vel(t_sp)
 
+        if self._tick % 20 == 0:
+            future_t = min(t_sp + 0.5, self._t_total)
+            future_pos = self._spline(future_t)
+
+            print(f"[PATH DEBUG]")
+            print(f"  current pos : {np.round(pos, 3)}")
+            print(f"  des_pos     : {np.round(des_pos, 3)}")
+            print(f"  next (0.5s) : {np.round(future_pos, 3)}")
+
         # PID
-        kp = np.array([2.5, 2.5, 3.5])
-        kd = np.array([0.6, 0.6, 1.2])
-        ki = np.array([0.2, 0.2, 0.5])
+        kp = np.array([1.0, 1.0, 1.0])
+        kd = np.array([2.0, 2.0, 1.0])
+        ki = np.array([0.2, 0.2, 1.0])
 
         pos_error = des_pos - pos
         vel_error = des_vel - vel
@@ -411,7 +436,12 @@ class MyController(Controller):
         self._pos_integral  = np.clip(self._pos_integral, -0.5, 0.5)
 
         acc = kp * pos_error + kd * vel_error + ki * self._pos_integral
-        acc = np.clip(acc, -6.0, 6.0)
+        # print(f"  [PID debug] pos_error={np.round(pos_error,3)} vel_error={np.round(vel_error,3)} acc={np.round(acc,3)}")
+        acc[:2] = np.clip(acc[:2], -4.0, 4.0)
+        acc[2]  = np.clip(acc[2], -10.0, 10.0)
+
+        print(f"des_z={des_pos[2]:.2f}, actual_z={pos[2]:.2f}")
+        print(f"pos_error={np.round(pos_error,3)}, vel_error={np.round(vel_error,3)}, acc={np.round(acc,3)}")
 
         target_pos = self._gate_pos[min(current_gate, self._n_gates - 1)]
         delta      = target_pos - pos
@@ -441,6 +471,5 @@ class MyController(Controller):
         self._t_total        = 0.0
         self._t_start_tick   = 0
         self._pos_integral   = np.zeros(3)
-        self._subgoal_stage  = 0
         self._current_goal   = None
         self._prev_target_gate = 0
