@@ -258,7 +258,7 @@ class RealMultiDroneRaceEnvClient(Env):
         if self._client_state_pub:
             self._send_state_update(
                 np.zeros(4 if self.control_mode == "attitude" else 13), stopped=True
-            )            
+            )
         if self._comm:
             self._comm.close()
         if self._ros_connector:

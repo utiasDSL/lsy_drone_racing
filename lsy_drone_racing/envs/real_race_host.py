@@ -476,8 +476,8 @@ class CrazyFlieRealRaceHost(RealRaceHost):
 
         Args:
             track: Track configuration (see :func:`~lsy_drone_racing.envs.utils.load_track`).
-            deploy: List of drone configs, each with ``id``, ``channel``, and ``drone_model``.
-            drones: Per-drone kwargs, each with ``freq`` and ``control_mode``.
+            deploy_args: List of drone configs, each with ``id``, ``channel``, and ``drone_model``.
+            control_args: Per-drone kwargs, each with ``freq`` and ``control_mode``.
         """
         self.gates, self.obstacles, self.drones_pose = load_track(track)
         self.n_gates = len(self.gates.pos)
