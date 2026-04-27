@@ -31,7 +31,11 @@ def main(config: str = "multi_level2.toml"):
     """
     rclpy.init()
     config_obj = load_config(Path(__file__).parents[1] / "config" / config)
-    host = CrazyFlieRealRaceHost(config_obj)
+    host = CrazyFlieRealRaceHost(
+        track=config_obj.env.track,
+        deploy_args=config_obj.deploy,
+        control_args=config_obj.env.kwargs,
+    )
     try:
         host.update_poses(
             track_obj=config_obj.deploy.real_track_objects,

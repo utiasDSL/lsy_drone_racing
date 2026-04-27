@@ -375,31 +375,28 @@ class CrazyflieWorker:
 class RealRaceHost:
     """Base class for multi-drone race hosts.
 
-    Subclasses implement :meth:`load_config`, :meth:`connect_drones`,
-    :meth:`host_main_loop`, and :meth:`close` for a specific drone platform.
+    Subclasses implement :meth:`connect_drones`, :meth:`host_main_loop`, and :meth:`close`
+    for a specific drone platform.
     """
 
-    _num_drones: int = 0
-    _config: ConfigDict | None = None
     _comm: RaceCommNode | None
     _host_ready_pub: Publisher | None
     _race_start_pub: Publisher | None
 
-    def __init__(self, config: ConfigDict):
+    def __init__(self, num_drones: int):
         """Initialize the host and set up ROS2 communication.
 
         Args:
-            config: Full configuration dictionary (deploy + env sections).
+            num_drones: Number of drones participating in the race.
         """
-        self._config = config
+        self._num_drones = num_drones
         self._shutdown_event = threading.Event()
-        self._clients_ready: dict[int, bool] = {}
-        self._clients_stopped: dict[int, bool] = {}
+        self._clients_ready: dict[int, bool] = {rank: False for rank in range(num_drones)}
+        self._clients_stopped: dict[int, bool] = {rank: False for rank in range(num_drones)}
         self._start_time = time.time()
         self._comm = None
         self._host_ready_pub = None
         self._race_start_pub = None
-        self.load_config(config)
         self.init_comm()
 
     def init_comm(self):
@@ -432,10 +429,6 @@ class RealRaceHost:
                 )
             )
         logger.debug("ROS2 communication initialized")
-
-    def load_config(self, config: ConfigDict):
-        """Load and validate the configuration. Must be implemented by subclasses."""
-        raise NotImplementedError
 
     def connect_drones(self):
         """Connect to all drones. Must be implemented by subclasses."""
@@ -478,39 +471,30 @@ class CrazyFlieRealRaceHost(RealRaceHost):
     _init_barrier: mp.synchronize.Barrier | None
     _mp_ctx: mp.context.BaseContext
 
-    def __init__(self, config: ConfigDict):
+    def __init__(self, track: ConfigDict, deploy_args: list[dict], control_args: list[dict]):
         """Initialize the host.
 
         Args:
-            config: Full configuration dictionary (deploy + env sections).
+            track: Track configuration (see :func:`~lsy_drone_racing.envs.utils.load_track`).
+            deploy: List of drone configs, each with ``id``, ``channel``, and ``drone_model``.
+            drones: Per-drone kwargs, each with ``freq`` and ``control_mode``.
         """
-        super().__init__(config)
+        self.gates, self.obstacles, self.drones_pose = load_track(track)
+        self.n_gates = len(self.gates.pos)
+        self.n_obstacles = len(self.obstacles.pos)
+        self.pos_limit_low = np.array(track.safety_limits["pos_limit_low"])
+        self.pos_limit_high = np.array(track.safety_limits["pos_limit_high"])
+        self._drone_names = [f"cf{drone['id']}" for drone in deploy_args.drones]
+        self._drone_ids = [drone["id"] for drone in deploy_args.drones]
+        self._drone_channels = [drone["channel"] for drone in deploy_args.drones]
+        self._drone_models = [drone["drone_model"] for drone in deploy_args.drones]
+        self._drone_control_freq = [kwargs["freq"] for kwargs in control_args]
+        self._drone_control_mode = [kwargs["control_mode"] for kwargs in control_args]
+        super().__init__(num_drones=len(deploy_args.drones))
         self._mp_ctx = mp.get_context("spawn")
         self._processes = []
         self._stop_event = None
         self._init_barrier = None
-
-    def load_config(self, config: ConfigDict):
-        """Parse drone and track information from the configuration.
-
-        Args:
-            config: Full configuration dictionary (deploy + env sections).
-        """
-        self.gates, self.obstacles, self.drones_pose = load_track(config.env.track)
-        self.n_gates = len(self.gates.pos)
-        self.n_obstacles = len(self.obstacles.pos)
-        self.pos_limit_low = np.array(config.env.track.safety_limits["pos_limit_low"])
-        self.pos_limit_high = np.array(config.env.track.safety_limits["pos_limit_high"])
-        self._num_drones = len(config.deploy.drones)
-        self._drone_names = [f"cf{drone['id']}" for drone in config.deploy.drones]
-        self._drone_ids = [drone["id"] for drone in config.deploy.drones]
-        self._drone_channels = [drone["channel"] for drone in config.deploy.drones]
-        self._drone_models = [drone["drone_model"] for drone in config.deploy.drones]
-        self._drone_control_freq = [kwargs["freq"] for kwargs in config.env.kwargs]
-        self._drone_control_mode = [kwargs["control_mode"] for kwargs in config.env.kwargs]
-        for rank in range(self._num_drones):
-            self._clients_ready[rank] = False
-            self._clients_stopped[rank] = False
 
     def check_track(
         self, rng_config: ConfigDict, check_objects: bool = True, check_drones: bool = True
