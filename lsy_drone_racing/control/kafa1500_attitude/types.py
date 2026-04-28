@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
-    from scipy.interpolate import BSpline
+    from scipy.interpolate import PPoly
 
 Observation = dict[str, NDArray[np.floating]]
 Vec3 = NDArray[np.float32]
@@ -42,9 +42,9 @@ class GateFrame:
 class CubicPath:
     """Strictly cubic path plus samples used by the reference manager."""
 
-    spline: BSpline
-    velocity_spline: BSpline
-    acceleration_spline: BSpline
+    spline: PPoly
+    velocity_spline: PPoly
+    acceleration_spline: PPoly
     params: NDArray[np.float32]
     points: NDArray[np.float32]
     lengths: NDArray[np.float32]
@@ -62,4 +62,3 @@ class Reference:
     index: int
     distance: float
     done: bool
-

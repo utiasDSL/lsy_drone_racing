@@ -24,15 +24,19 @@ class PathConfig:
     takeoff_reached_distance: float = 0.14
     gate_inner_width: float = 0.40
     gate_inner_height: float = 0.40
+    gate_outer_width: float = 0.72
+    gate_outer_height: float = 0.72
+    gate_keepout_margin: float = 0.16
     gate_safety_margin: float = 0.075
     vertical_reference_offset: float = -0.035
     d_pre: float = 0.42
     d_post: float = 0.32
     d_pass: float = 0.56
+    plan_gate_horizon: int = 2
     d_pre_per_gate: tuple[float, ...] = (0.50, 0.42, 0.38, 0.36)
     d_post_per_gate: tuple[float, ...] = (0.32, 0.34, 0.36, 0.38)
-    previous_gate_escape_distance: float = 0.28
-    previous_gate_escape_window: float = 0.24
+    previous_gate_escape_distance: float = 0.28 * 5
+    previous_gate_escape_window: float = 0.24 
     previous_gate_escape_lateral_offsets: tuple[float, ...] = (
         0.0,
         0.18,
@@ -67,9 +71,9 @@ class ReferenceConfig:
     start_index: int = 1
     max_advance_per_step: int = 3
     nearest_forward_search: int = 6
-    nominal_speed: float = 0.38
-    gate_speed: float = 0.30
-    final_speed: float = 0.25
+    nominal_speed: float = 0.30
+    gate_speed: float = 0.24
+    final_speed: float = 0.22
     gate_window_samples: int = 5
     follow_path_yaw: bool = False
 
