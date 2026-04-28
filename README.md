@@ -12,7 +12,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 4 | Xiaochen & Aoji | 9.318 | 55 | 2 |
 | 5 | Wei Lun & Lars | 10.407 | 70 | 2 |
 | 6 | Theo & Olcay | 13.038 | 50 | 1 |
-| 7 | Marcel (TA) | 21.059 | 75 | 4 |
+| 7 | Marcel (TA) | 20.061 | 80 | 5 |
 | 8 | Martin (TA) | 27.082 | 85 | 1 |
 | 9 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
@@ -29,6 +29,8 @@ This competition is only for students of the ADR course at TUM. Students have to
 | - | FlyingPacers (MAADR) | N/A | 0 | 0 |
 | - | Justin & Finn | N/A | 0 | 0 |
 | - | XYZ | N/A | 0 | 0 |
+| - | Ka-Fa 1500 | N/A | 0 | 0 |
+| - | eagle | N/A | 0 | 0 |
 
 ## Hall of fame 🏆
 * [Winter 2025 Leaderboard](./previous_leaderboards/winter25/README.md)
