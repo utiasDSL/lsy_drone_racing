@@ -102,6 +102,33 @@ def simulate(
         controller.episode_reset()
         ep_times.append(curr_time if obs["target_gate"] == -1 else None)
 
+    successful_times = [t for t in ep_times if t is not None]
+    n_success = len(successful_times)
+    success_rate = (n_success / max(n_runs, 1)) * 100.0
+    avg_success_time = (sum(successful_times) / n_success) if n_success > 0 else None
+
+    if n_success > 0:
+        successful_times_text = ", ".join(f"{t:.3f}" for t in successful_times)
+    else:
+        successful_times_text = "N/A"
+
+    logger.info(
+        (
+            "Simulation summary:\n"
+            "Runs: %d\n"
+            "Successes: %d/%d\n"
+            "Success rate: %.1f%%\n"
+            "Successful run times (s): %s\n"
+            "Average success time (s): %s\n"
+        ),
+        n_runs,
+        n_success,
+        n_runs,
+        success_rate,
+        successful_times_text,
+        f"{avg_success_time:.3f}" if avg_success_time is not None else "N/A",
+    )
+
     # Close the environment
     env.close()
     return ep_times
