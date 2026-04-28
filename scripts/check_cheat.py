@@ -5,7 +5,7 @@ student_dir = Path("student_code")
 base_dir = Path("original_main") # The competition root directory
 
 # 1. Check files that must be EXACT matches
-exact_files = ["scripts/evaluate.py", "scripts/sim.py"]
+exact_files = ["scripts/evaluate.py", "scripts/sim.py", ".github/workflows/competition.yaml"]
 
 for file_path in exact_files:
     student_file = student_dir / file_path

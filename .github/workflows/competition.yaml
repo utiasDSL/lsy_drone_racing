@@ -51,13 +51,13 @@ jobs:
           activate-environment: false
           locked: true
 
+      - name: Run Anti-Cheat Check
+        run: pixi run --manifest-path student_code/pyproject.toml python scripts/check_cheat.py
+
       - name: Check Whitelist by Username
         env:
           STUDENT_REPO: ${{ inputs.repository }}
         run: pixi run --manifest-path student_code/pyproject.toml python scripts/check_whitelist.py "${STUDENT_REPO%%/*}"
-
-      - name: Run Anti-Cheat Check
-        run: pixi run --manifest-path student_code/pyproject.toml python scripts/check_cheat.py
 
       - name: Run Student Evaluation
         working-directory: student_code
