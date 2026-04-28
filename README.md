@@ -13,9 +13,10 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 5 | Xiaochen & Aoji | 9.318 | 55 | 2 |
 | 6 | Wei Lun & Lars | 10.407 | 70 | 2 |
 | 7 | Theo & Olcay | 13.038 | 50 | 1 |
-| 8 | Marcel (TA) | 20.061 | 80 | 5 |
-| 9 | Martin (TA) | 27.082 | 85 | 1 |
-| 10 | Radu (TA) | 28.290 | 60 | 1 |
+| 8 | Timo & Jeffrey | 18.063 | 70 | 1 |
+| 9 | Marcel (TA) | 20.061 | 80 | 5 |
+| 10 | Martin (TA) | 27.082 | 85 | 1 |
+| 11 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
 | - | Sama & Luc | N/A | 0 | 0 |
 | - | Thunderstrike | N/A | 0 | 0 |
@@ -24,7 +25,6 @@ This competition is only for students of the ADR course at TUM. Students have to
 | - | aaa | N/A | 0 | 0 |
 | - | Sandro & Marek | N/A | 0 | 0 |
 | - | Okan | N/A | 0 | 0 |
-| - | Timo & Jeffrey | N/A | 0 | 0 |
 | - | Celia & Paula | N/A | 0 | 0 |
 | - | Leonie & Nicolas | N/A | 0 | 0 |
 | - | FlyingPacers (MAADR) | N/A | 0 | 0 |
