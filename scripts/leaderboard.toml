@@ -120,6 +120,9 @@ github = "NoMoreNameToUse"
 [team20]
 name = "Ka-Fa 1500"
 github = "deniz-onat"
+time = 8.808333333333334
+success_rate = 0.6
+submissions = 1
 
 [team21]
 name = "eagle"
