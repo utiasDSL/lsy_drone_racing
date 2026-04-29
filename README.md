@@ -7,9 +7,9 @@ This competition is only for students of the ADR course at TUM. Students have to
 | Rank | Team | Time [s] | Success Rate [%] | Submissions |
 | :---: | :--- | :---  | :--- | :---: |
 | 🥇 | Nikola & Moritz | 5.122 | 50 | 8 |
-| 🥈 | Millennium Falcon | 6.242 | 65 | 5 |
-| 🥉 | Deniz & Ahmet | 6.494 | 50 | 10 |
-| 4 | Wei Lun & Lars | 6.702 | 50 | 3 |
+| 🥈 | Wei Lun & Lars | 6.222 | 60 | 4 |
+| 🥉 | Millennium Falcon | 6.242 | 65 | 5 |
+| 4 | Deniz & Ahmet | 6.494 | 50 | 10 |
 | 5 | Ka-Fa 1500 | 8.808 | 60 | 1 |
 | 6 | Xiaochen & Aoji | 9.318 | 55 | 2 |
 | 7 | XYZ | 9.338 | 65 | 1 |
