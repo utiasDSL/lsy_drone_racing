@@ -131,9 +131,9 @@ github = "fbesong"
 [team19]
 name = "XYZ"
 github = "NoMoreNameToUse"
-time = 9.338461538461537
-success_rate = 0.65
-submissions = 1
+time = 7.136
+success_rate = 0.75
+submissions = 2
 
 [team20]
 name = "Ka-Fa 1500"
