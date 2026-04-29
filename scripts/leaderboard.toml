@@ -144,9 +144,5 @@ name = "eagle"
 github = "cyuzuzo-j"
 
 [team22]
-name = "Philipp (MAADR)"
-github = "philippreinig"
-
-[team23]
-name = "Moritz (MAADR)"
+name = "MAAD Flies (MAADR)"
 github = "moritzschueler"
