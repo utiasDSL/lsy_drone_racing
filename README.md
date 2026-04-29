@@ -20,9 +20,10 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 12 | IshowSpeed | 13.330 | 50 | 2 |
 | 13 | Sama & Luc | 18.949 | 55 | 2 |
 | 14 | Marcel (TA) | 20.061 | 80 | 5 |
-| 15 | eagle | 22.647 | 60 | 1 |
-| 16 | Martin (TA) | 27.082 | 85 | 1 |
-| 17 | Radu (TA) | 28.290 | 60 | 1 |
+| 15 | MAAD Flies (MAADR) | 20.685 | 80 | 1 |
+| 16 | eagle | 22.647 | 60 | 1 |
+| 17 | Martin (TA) | 27.082 | 85 | 1 |
+| 18 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
 | - | Thunderstrike | N/A | 0 | 0 |
 | - | Release the drone | N/A | 0 | 0 |
@@ -31,7 +32,6 @@ This competition is only for students of the ADR course at TUM. Students have to
 | - | Celia & Paula | N/A | 0 | 0 |
 | - | Leonie & Nicolas | N/A | 0 | 0 |
 | - | Justin & Finn | N/A | 0 | 0 |
-| - | MAAD Flies (MAADR) | N/A | 0 | 0 |
 
 ## Hall of fame 🏆
 * [Winter 2025 Leaderboard](./previous_leaderboards/winter25/README.md)
