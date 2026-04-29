@@ -17,8 +17,8 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 9 | Ka-Fa 1500 | 8.808 | 60 | 1 |
 | 10 | Xiaochen & Aoji | 9.318 | 55 | 2 |
 | 11 | XYZ | 9.338 | 65 | 1 |
-| 12 | Marcel (TA) | 20.061 | 80 | 5 |
-| 13 | Sama & Luc | 21.216 | 50 | 1 |
+| 12 | Sama & Luc | 18.949 | 55 | 2 |
+| 13 | Marcel (TA) | 20.061 | 80 | 5 |
 | 14 | Martin (TA) | 27.082 | 85 | 1 |
 | 15 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
