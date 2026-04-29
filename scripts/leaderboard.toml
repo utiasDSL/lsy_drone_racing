@@ -44,6 +44,9 @@ github = "Qshao007"
 [team4]
 name = "IshowSpeed"
 github = "HongMinhNhat35"
+time = 13.445454545454545
+success_rate = 0.55
+submissions = 1
 
 [team5]
 name = "Release the drone"
