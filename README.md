@@ -17,7 +17,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 9 | Timo & Jeffrey | 8.554 | 65 | 15 |
 | 10 | Ka-Fa 1500 | 8.808 | 60 | 1 |
 | 11 | XYZ | 9.338 | 65 | 1 |
-| 12 | IshowSpeed | 13.445 | 55 | 1 |
+| 12 | IshowSpeed | 13.330 | 50 | 2 |
 | 13 | Sama & Luc | 18.949 | 55 | 2 |
 | 14 | Marcel (TA) | 20.061 | 80 | 5 |
 | 15 | Martin (TA) | 27.082 | 85 | 1 |
