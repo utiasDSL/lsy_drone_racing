@@ -12,8 +12,8 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 4 | Deniz & Ahmet | 6.494 | 50 | 10 |
 | 5 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
 | 6 | Theo & Olcay | 8.660 | 50 | 4 |
-| 7 | Ka-Fa 1500 | 8.808 | 60 | 1 |
-| 8 | Timo & Jeffrey | 8.850 | 60 | 12 |
+| 7 | Timo & Jeffrey | 8.682 | 50 | 13 |
+| 8 | Ka-Fa 1500 | 8.808 | 60 | 1 |
 | 9 | Xiaochen & Aoji | 9.318 | 55 | 2 |
 | 10 | XYZ | 9.338 | 65 | 1 |
 | 11 | Sandro & Marek | 9.347 | 55 | 1 |
