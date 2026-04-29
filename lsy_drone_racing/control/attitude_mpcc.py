@@ -16,7 +16,6 @@ from dataclasses import dataclass
 import numpy as np
 from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
 from casadi import MX, cos, sin, vertcat, dot, DM, norm_2, floor, if_else
-from crazyflow.sim.visualize import draw_line
 from scipy.interpolate import CubicSpline
 from scipy.spatial.transform import Rotation
 
@@ -28,7 +27,6 @@ from drone_models.core import load_params
 from lsy_drone_racing.control import Controller
 
 if TYPE_CHECKING:
-    from crazyflow import Sim
     from numpy.typing import NDArray
 
 
@@ -52,7 +50,7 @@ class MPCCConfig:
     # Lower values = more speed
     q_lag: float = 80.0                    # Lag error weight
     q_lag_peak: float = 500.0              # Lag error weight at gates
-    q_contour: float =120.0               # Contour error weight
+    q_contour: float = 120.0               # Contour error weight
     q_contour_peak: float = 700.0          # Contour error weight at gates
     q_attitude: float = 1.0                # Attitude regularization
     
@@ -60,37 +58,22 @@ class MPCCConfig:
     r_thrust: float = 0.2                  # Thrust rate penalty
     r_roll: float = 0.3                    # Roll rate penalty
     r_pitch: float = 0.3                   # Pitch rate penalty
-    r_yaw: float = 0.5                    # Yaw rate penalty
+    r_yaw: float = 0.50                    # Yaw rate penalty
     
     # Speed incentive
-    mu_speed: float = 10.0                  # Progress reward
-    w_speed_gate: float = 10.0               # Speed penalty at gates
+    mu_speed: float = 9.3                  # Progress reward
+    w_speed_gate: float = 10.2               # Speed penalty at gates
     
-    #Cost weight multipliers
-    k_qc_gate: float = 0.6                   # Cost weight multiplier near gates
-    k_qc_obs: float = 0.7                    # Cost weight multiplier near obstacles
-
-
     # Safety bounds
     pos_bounds: tuple = (
-        (-2.5, 2.5),                        # X bounds
-        (-2.0, 1.5),                        # Y bounds
+        (-2.6, 2.6),                        # X bounds
+        (-2.0, 1.8),                        # Y bounds
         (-0.1, 2.0),                        # Z bounds
     )
     vel_bounds: tuple = (-1.0, 4.0)         # Velocity bounds (m/s)
     
     # Path planning
     planned_duration: float = 30.0          # Nominal trajectory duration
-
-    # Theta projection / branch protection
-    theta_proj_window_back: float = 0.8     # Local projection window behind current theta
-    theta_proj_window_front: float = 2.5    # Local projection window ahead of current theta
-    theta_proj_sample_step: float = 0.03    # Sampling step for local projection search
-
-    # Gate-order stage tracking
-    gate_stage_theta_margin: float = 0.20   # Extra theta margin beyond active gate
-    gate_stage_slowdown_window: float = 0.35  # Slowdown window near stage end
-    v_theta_stage_scale_min: float = 0.35   # Minimum scale for v_theta_cmd upper bound near stage end
     
     # Logging settings
     log_interval: int = 100                 # Print debug info every N ticks
@@ -138,7 +121,7 @@ class MPCCController(Controller):
         self.finished = False
         
         # Load dynamics parameters
-        self._dyn_params = load_params("so_rpy_rotor", config.sim.drone_model)
+        self._dyn_params = load_params("so_rpy", config.sim.drone_model)
         self._mass = float(self._dyn_params["mass"])
         self._gravity = -float(self._dyn_params["gravity_vec"][-1])
         self.hover_thrust = self._mass * self._gravity
@@ -157,8 +140,6 @@ class MPCCController(Controller):
         num_gates = len(obs['gates_pos'])
         self._gate_detected_flags = np.zeros(num_gates, dtype=bool)
         self._gate_real_positions = np.full((num_gates, 3), np.nan)
-        self._active_gate_stage = 0
-        self._stage_theta_end = np.inf
         
         # Plan initial trajectory
         self._plan_trajectory(obs)
@@ -181,7 +162,6 @@ class MPCCController(Controller):
         
         # Current observation (for debug)
         self._current_pos = obs["pos"].copy()
-        self._actual_path_points = [obs["pos"].copy()]
         print(f"[MPCC] Initialized. Horizon: N={self.N}, T={self.T:.2f}s")
         print(f"[MPCC] Arc trajectory length: {self.arc_trajectory.x[-1]:.2f}")
     
@@ -194,7 +174,7 @@ class MPCCController(Controller):
         print(f"[MPCC] Planning trajectory at T={self._step_count / self._ctrl_freq:.2f}s")
     
         obs_planning = obs.copy()
-        obs_planning['pos'] = self._initial_pos.copy()
+        obs_planning['pos'] = self._initial_pos.copy()    
             
         # Use path planner to generate trajectory
         result = self.path_planner.plan_trajectory(
@@ -213,97 +193,10 @@ class MPCCController(Controller):
         self.arc_trajectory = result.arc_spline
         self.waypoints = result.waypoints
         self.total_arc_length = result.total_length
-        self._cache_planned_path()
-        self._refresh_gate_stage(obs)
         
         # Cache for cost computation
         self._cached_gate_centers = obs["gates_pos"].copy()
         self._cached_obstacles = obs["obstacles_pos"].copy()
-
-    def _cache_planned_path(self):
-        """Cache a uniformly sampled version of the full planned arc-length path."""
-        if not hasattr(self, "arc_trajectory"):
-            self._planned_path_points = np.zeros((0, 3), dtype=float)
-            return
-        n_samples = 300
-        theta = np.linspace(0.0, float(self.arc_trajectory.x[-1]), n_samples)
-        self._planned_path_points = np.asarray(self.arc_trajectory(theta), dtype=float)
-
-    def _refresh_gate_stage(self, obs: dict[str, NDArray[np.floating]]):
-        """Refresh active gate stage and corresponding theta endpoint."""
-        if self._trajectory_result.gate_thetas is None or len(self._trajectory_result.gate_thetas) == 0:
-            self._active_gate_stage = 0
-            self._stage_theta_end = float(self.arc_trajectory.x[-1])
-            return
-
-        visited = np.array(obs.get("gates_visited", []), dtype=bool)
-        if visited.size == 0:
-            next_gate = 0
-        else:
-            next_gate = int(np.argmax(~visited)) if np.any(~visited) else int(len(self._trajectory_result.gate_thetas))
-
-        self._active_gate_stage = min(next_gate, len(self._trajectory_result.gate_thetas))
-        if self._active_gate_stage >= len(self._trajectory_result.gate_thetas):
-            self._stage_theta_end = float(self.arc_trajectory.x[-1])
-        else:
-            self._stage_theta_end = min(
-                float(self.arc_trajectory.x[-1]),
-                float(self._trajectory_result.gate_thetas[self._active_gate_stage]) + self.mpcc_cfg.gate_stage_theta_margin,
-            )
-
-    def _project_theta_local(self, position: NDArray[np.floating], center_theta: Optional[float] = None) -> float:
-        """
-        Project position to trajectory using a local theta window.
-
-        This avoids jumping to nearby parallel branches in self-intersections.
-        """
-        if not hasattr(self, "arc_trajectory"):
-            return 0.0
-
-        cfg = self.mpcc_cfg
-        theta_max = float(self.arc_trajectory.x[-1])
-        center = float(self.last_theta if center_theta is None else center_theta)
-
-        lo = max(0.0, center - cfg.theta_proj_window_back)
-        hi = min(theta_max, center + cfg.theta_proj_window_front)
-        hi = min(hi, float(self._stage_theta_end))
-        if hi <= lo + 1e-6:
-            return float(np.clip(center, 0.0, theta_max))
-
-        step = max(1e-3, float(cfg.theta_proj_sample_step))
-        theta_samples = np.arange(lo, hi + step, step)
-        pts = np.asarray(self.arc_trajectory(theta_samples), dtype=float)
-        dists = np.linalg.norm(pts - position[None, :], axis=1)
-        idx = int(np.argmin(dists))
-        return float(theta_samples[idx])
-
-    def _apply_stage_progress_limit(self, obs: dict[str, NDArray[np.floating]]):
-        """Update active stage and scale v_theta upper bound near stage end."""
-        self._refresh_gate_stage(obs)
-
-        base_ub = 1.8
-        remain = max(0.0, float(self._stage_theta_end) - float(self.last_theta))
-        window = max(1e-3, float(self.mpcc_cfg.gate_stage_slowdown_window))
-        if remain >= window:
-            scale = 1.0
-        else:
-            min_scale = float(self.mpcc_cfg.v_theta_stage_scale_min)
-            scale = min_scale + (1.0 - min_scale) * (remain / window)
-
-        v_theta_ub = max(0.2, base_ub * scale)
-        ubu_stage = np.array([10.0, 10.0, 10.0, 10.0, v_theta_ub], dtype=float)
-        lbu_stage = np.array([-10.0, -10.0, -10.0, -10.0, 0.0], dtype=float)
-        for i in range(self.N):
-            self.solver.constraints_set(i, "lbu", lbu_stage)
-            self.solver.constraints_set(i, "ubu", ubu_stage)
-
-    @staticmethod
-    def _downsample_polyline(points: NDArray[np.floating], max_points: int) -> NDArray[np.floating]:
-        """Downsample a polyline to keep rendering cost bounded."""
-        if points.shape[0] <= max_points:
-            return points
-        idx = np.linspace(0, points.shape[0] - 1, max_points, dtype=int)
-        return points[idx]
     
     # =========================================================================
     # MPCC Solver Construction
@@ -338,7 +231,7 @@ class MPCCController(Controller):
         # Input constraints
         # [df_cmd, dr_cmd, dp_cmd, dy_cmd, v_theta_cmd]
         ocp.constraints.lbu = np.array([-10.0, -10.0, -10.0, -10.0, 0.0])
-        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 1.8])
+        ocp.constraints.ubu = np.array([10.0, 10.0, 10.0, 10.0, 1.83])
         ocp.constraints.idxbu = np.array([0, 1, 2, 3, 4])
         
         # Initial state (will be overwritten)
@@ -493,7 +386,6 @@ class MPCCController(Controller):
     
     def _encode_trajectory_params(self) -> np.ndarray:
         """Encode trajectory for MPCC cost function."""
-        cfg = self.mpcc_cfg
         theta_samples = np.arange(0.0, self.model_traj_length, self.model_arc_step)
         
         # Sample positions and tangents
@@ -506,13 +398,13 @@ class MPCCController(Controller):
         # Gate proximity
         for gate_center in self._cached_gate_centers:
             d_gate = np.linalg.norm(pd_vals - gate_center, axis=-1)
-            qc_gate = cfg.k_qc_gate * np.exp(-8.0 * d_gate**2)
+            qc_gate = 0.4 * np.exp(-8.0 * d_gate**2)
             qc_dyn = np.maximum(qc_dyn, qc_gate)
         
         # Obstacle proximity
         for obst_center in self._cached_obstacles:
             d_obs_xy = np.linalg.norm(pd_vals[:, :2] - obst_center[:2], axis=-1)
-            qc_obs = cfg.k_qc_obs * np.exp(-8.0 * d_obs_xy**2)
+            qc_obs = 0.2 * np.exp(-8.0 * d_obs_xy**2)
             qc_dyn = np.maximum(qc_dyn, qc_obs)
         
         return np.concatenate([pd_vals.reshape(-1), tp_vals.reshape(-1), qc_dyn])
@@ -631,33 +523,33 @@ class MPCCController(Controller):
             Control command [roll_cmd, pitch_cmd, yaw_cmd, thrust_cmd].
         """
         self._current_pos = obs["pos"].copy()
-        if not self._actual_path_points:
-            self._actual_path_points.append(obs["pos"].copy())
         
         # Check for environment changes
         if self._detect_environment_change(obs):
             print(f"[MPCC] Environment change detected, replanning...")
             self._plan_trajectory(obs)
-            # Re-project theta with local-window search to avoid branch jumps.
+            # θ auf neue Trajektorie projizieren (nur nach vorne)
             try:
-                self.last_theta = self._project_theta_local(obs["pos"], center_theta=self.last_theta)
+                theta_proj, _ = self.path_planner.find_closest_point(
+                    self.arc_trajectory, obs["pos"]
+                )
+                self.last_theta = max(self.last_theta, float(theta_proj))
             except Exception as e:
                 print(f"[MPCC] Warning: could not project theta after replanning: {e}")
 
-            # Reset warm start so optimizer does not drag old path states.
+                # self.last_theta = 0.0
+
+            """
+            # Warmstart zurücksetzen, damit der Solver zum neuen Pfad passt
             if hasattr(self, "_x_warm"):
                 del self._x_warm
             if hasattr(self, "_u_warm"):
                 del self._u_warm
-                
+            """
             # Update solver parameters
             param_vec = self._encode_trajectory_params()
             for k in range(self.N + 1):
                 self.solver.set(k, "p", param_vec)
-
-        # Always keep theta on the local branch and active stage.
-        self.last_theta = self._project_theta_local(obs["pos"], center_theta=self.last_theta)
-        self._apply_stage_progress_limit(obs)
         
         # Convert quaternion to Euler angles
         quat = obs["quat"]
@@ -719,7 +611,7 @@ class MPCCController(Controller):
         self.last_f_collective = float(x_next[9])
         self.last_f_cmd = float(x_next[10])
         self.last_rpy_cmd = np.array(x_next[11:14])
-        self.last_theta = min(float(x_next[14]), float(self._stage_theta_end))
+        self.last_theta = float(x_next[14])
         
         # Build output command [roll, pitch, yaw, thrust]
         cmd = np.array([
@@ -748,9 +640,6 @@ class MPCCController(Controller):
         info: dict
     ) -> bool:
         """Called after each step."""
-        self._actual_path_points.append(obs["pos"].copy())
-        if len(self._actual_path_points) > 5000:
-            self._actual_path_points = self._actual_path_points[-5000:]
         return self.finished
     
     def episode_callback(self):
@@ -769,7 +658,6 @@ class MPCCController(Controller):
         self.last_f_collective = self.hover_thrust
         self.last_f_cmd = self.hover_thrust
         self.last_rpy_cmd = np.zeros(3)
-        self._actual_path_points = []
     
     # =========================================================================
     # Debug Methods
@@ -779,29 +667,26 @@ class MPCCController(Controller):
         """Return line segments for visualization."""
         debug_lines = []
         
-        # Planned complete path (green)
-        if self._planned_path_points.shape[0] >= 1:
+        # Full arc-length path
+        if hasattr(self, "arc_trajectory"):
             try:
-                full_path = self._downsample_polyline(self._planned_path_points, max_points=400)
-                if full_path.shape[0] == 1:
-                    full_path = np.vstack([full_path, full_path])
+                full_path = self.arc_trajectory(self.arc_trajectory.x)
                 debug_lines.append(
-                    (full_path, np.array([0.0, 1.0, 0.0, 0.9]), 2.0, 2.0)
+                    (full_path, np.array([0.5, 0.5, 0.5, 0.7]), 2.0, 2.0)
                 )
             except Exception:
                 pass
         
-        # Real flown path (red)
-        if len(self._actual_path_points) >= 2:
+        # Predicted trajectory
+        if hasattr(self, "_x_warm"):
             try:
-                flown_path = np.asarray(self._actual_path_points, dtype=float)
-                flown_path = self._downsample_polyline(flown_path, max_points=500)
+                pred_states = np.array([x[:3] for x in self._x_warm])
                 debug_lines.append(
-                    (flown_path, np.array([1.0, 0.0, 0.0, 0.95]), 2.5, 2.5)
+                    (pred_states, np.array([1.0, 0.1, 0.1, 0.95]), 3.0, 3.0)
                 )
             except Exception:
                 pass
-
+        
         # Line to current reference
         if hasattr(self, "last_theta") and hasattr(self, "arc_trajectory"):
             try:
@@ -814,11 +699,6 @@ class MPCCController(Controller):
                 pass
         
         return debug_lines
-
-    def render_callback(self, sim: Sim):
-        """Render debug lines in the simulator."""
-        for points, rgba, min_size, max_size in self.get_debug_lines():
-            draw_line(sim, points, rgba=tuple(rgba), start_size=min_size, end_size=max_size)
     
     def get_trajectory(self) -> CubicSpline:
         """Get the current trajectory spline."""

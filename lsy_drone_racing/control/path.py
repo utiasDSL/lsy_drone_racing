@@ -5,7 +5,8 @@ Path Planning Module for Drone Racing
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, List, Tuple, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 from scipy.interpolate import CubicSpline
@@ -23,8 +24,9 @@ if TYPE_CHECKING:
 class PathConfig:
     """Configuration for path planning."""
     # Waypoint generation
-    approach_distance: float = 0.45          # Distance before/after gate center
-    num_intermediate_points: int = 5        # Points around each gate (front2/front1/center/back1/back2)
+    approach_distance_before: float = 0.38   # Distance before gate center
+    approach_distance_after: float = 0.49    # Distance after gate center
+    num_intermediate_points: int = 5        # Points around each gate
     
     # Detour settings
     angle_threshold: float = 120.0          # Angle threshold for backtracking detection (degrees)
@@ -156,7 +158,8 @@ class PathPlanner:
         initial_position: NDArray[np.floating],
         gate_positions: NDArray[np.floating],
         gate_normals: NDArray[np.floating],
-        approach_distance: Optional[float] = None,
+        approach_distance_before: Optional[float] = None,
+        approach_distance_after: Optional[float] = None,
         num_points: Optional[int] = None
     ) -> NDArray[np.floating]:
         """
@@ -168,22 +171,32 @@ class PathPlanner:
             initial_position: Starting position of the drone.
             gate_positions: Positions of all gates (N, 3).
             gate_normals: Normal vectors of all gates (N, 3).
-            approach_distance: Distance before/after gate center (optional).
+            approach_distance_before: Distance before gate center (optional).
+            approach_distance_after: Distance after gate center (optional).
             num_points: Number of points around each gate (optional).
             
         Returns:
             Array of waypoints (M, 3) including initial position.
         """
-        approach_dist = approach_distance or self.config.approach_distance
+        approach_dist_before = (
+            approach_distance_before
+            if approach_distance_before is not None
+            else self.config.approach_distance_before
+        )
+        approach_dist_after = (
+            approach_distance_after
+            if approach_distance_after is not None
+            else self.config.approach_distance_after
+        )
         n_points = num_points or self.config.num_intermediate_points
         num_gates = gate_positions.shape[0]
         
         # Create waypoints before and after each gate
         waypoints_per_gate = []
         for i in range(n_points):
-            # Interpolate from -approach_distance to +approach_distance
+            # Interpolate from -approach_distance_before to +approach_distance_after
             alpha = i / (n_points - 1) if n_points > 1 else 0.0
-            offset = -approach_dist + alpha * 2 * approach_dist
+            offset = -approach_dist_before + alpha * (approach_dist_before + approach_dist_after)
             waypoints_per_gate.append(gate_positions + offset * gate_normals)
         
         # Reshape to (num_gates * n_points, 3)
@@ -220,8 +233,7 @@ class PathPlanner:
             gate_positions: Positions of all gates.
             gate_normals: Normal vectors (x-axes) of all gates.
             gate_y_axes: Y-axes (width direction) of all gates.
-            gate_z_axes: Z-axes (height direction) of all gates. Kept for API
-                compatibility; detours are lateral-only.
+            gate_z_axes: Z-axes (height direction) of all gates.
             num_intermediate_points: Points per gate (for index calculation).
             angle_threshold: Angle threshold for backtracking detection (degrees).
             detour_distance: Distance from gate center for detour waypoint.
@@ -267,7 +279,7 @@ class PathPlanner:
             if angle_deg > angle_thresh:
                 gate_center = gate_positions[i]
                 y_axis = gate_y_axes[i]
-                _ = gate_z_axes[i]
+                z_axis = gate_z_axes[i]
                 
                 # Project vector onto gate plane
                 v_proj = v - np.dot(v, normal_i) * normal_i
@@ -277,9 +289,16 @@ class PathPlanner:
                     detour_direction = y_axis
                 else:
                     v_proj_y = np.dot(v_proj, y_axis)
-                    # Lateral-only detour: choose left/right around the gate.
-                    # We intentionally avoid z-axis (up/down) detour waypoints.
-                    detour_direction = y_axis if v_proj_y >= 0.0 else -y_axis
+                    v_proj_z = np.dot(v_proj, z_axis)
+                    proj_angle = np.degrees(np.arctan2(v_proj_z, v_proj_y))
+                    
+                    # Determine detour direction based on angle
+                    if -90 <= proj_angle < 45:
+                        detour_direction = y_axis
+                    elif 45 <= proj_angle < 135:
+                        detour_direction = z_axis
+                    else:
+                        detour_direction = -y_axis
                 
                 # Calculate and insert detour waypoint
                 detour_waypoint = gate_center + detour_dist * detour_direction
