@@ -18,10 +18,10 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 10 | XYZ | 9.338 | 65 | 1 |
 | 11 | Sandro & Marek | 9.347 | 55 | 1 |
 | 12 | Marcel (TA) | 20.061 | 80 | 5 |
-| 13 | Martin (TA) | 27.082 | 85 | 1 |
-| 14 | Radu (TA) | 28.290 | 60 | 1 |
+| 13 | Sama & Luc | 21.216 | 50 | 1 |
+| 14 | Martin (TA) | 27.082 | 85 | 1 |
+| 15 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
-| - | Sama & Luc | N/A | 0 | 0 |
 | - | Thunderstrike | N/A | 0 | 0 |
 | - | IshowSpeed | N/A | 0 | 0 |
 | - | Release the drone | N/A | 0 | 0 |

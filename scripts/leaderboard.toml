@@ -33,6 +33,9 @@ submissions = 6
 [team2]
 name = "Sama & Luc"
 github = "sama-abuassad"
+time = 21.216
+success_rate = 0.5
+submissions = 1
 
 [team3]
 name = "Thunderstrike"
