@@ -10,13 +10,13 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 🥈 | Millennium Falcon | 5.998 | 60 | 6 |
 | 🥉 | Wei Lun & Lars | 6.222 | 60 | 4 |
 | 4 | Deniz & Ahmet | 6.494 | 50 | 10 |
-| 5 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
-| 6 | Timo & Jeffrey | 8.554 | 65 | 15 |
-| 7 | Theo & Olcay | 8.660 | 50 | 4 |
-| 8 | Ka-Fa 1500 | 8.808 | 60 | 1 |
-| 9 | Xiaochen & Aoji | 9.318 | 55 | 2 |
-| 10 | XYZ | 9.338 | 65 | 1 |
-| 11 | Sandro & Marek | 9.347 | 55 | 1 |
+| 5 | Sandro & Marek | 7.504 | 50 | 2 |
+| 6 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
+| 7 | Timo & Jeffrey | 8.554 | 65 | 15 |
+| 8 | Theo & Olcay | 8.660 | 50 | 4 |
+| 9 | Ka-Fa 1500 | 8.808 | 60 | 1 |
+| 10 | Xiaochen & Aoji | 9.318 | 55 | 2 |
+| 11 | XYZ | 9.338 | 65 | 1 |
 | 12 | Marcel (TA) | 20.061 | 80 | 5 |
 | 13 | Sama & Luc | 21.216 | 50 | 1 |
 | 14 | Martin (TA) | 27.082 | 85 | 1 |
@@ -31,8 +31,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 | - | Leonie & Nicolas | N/A | 0 | 0 |
 | - | Justin & Finn | N/A | 0 | 0 |
 | - | eagle | N/A | 0 | 0 |
-| - | Philipp (MAADR) | N/A | 0 | 0 |
-| - | Moritz (MAADR) | N/A | 0 | 0 |
+| - | MAAD Flies (MAADR) | N/A | 0 | 0 |
 
 ## Hall of fame 🏆
 * [Winter 2025 Leaderboard](./previous_leaderboards/winter25/README.md)
