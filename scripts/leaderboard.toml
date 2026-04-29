@@ -145,6 +145,9 @@ submissions = 1
 [team21]
 name = "eagle"
 github = "cyuzuzo-j"
+time = 22.646666666666665
+success_rate = 0.6
+submissions = 1
 
 [team22]
 name = "MAAD Flies (MAADR)"
