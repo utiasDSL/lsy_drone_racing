@@ -9,12 +9,12 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 🥇 | Nikola & Moritz | 4.896 | 55 | 9 |
 | 🥈 | Millennium Falcon | 5.998 | 60 | 6 |
 | 🥉 | Wei Lun & Lars | 6.222 | 60 | 4 |
-| 4 | Deniz & Ahmet | 6.494 | 50 | 10 |
-| 5 | Xiaochen & Aoji | 6.934 | 50 | 3 |
-| 6 | Sandro & Marek | 7.504 | 50 | 2 |
-| 7 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
-| 8 | Timo & Jeffrey | 8.554 | 65 | 15 |
-| 9 | Theo & Olcay | 8.644 | 55 | 5 |
+| 4 | Theo & Olcay | 6.325 | 65 | 6 |
+| 5 | Deniz & Ahmet | 6.494 | 50 | 10 |
+| 6 | Xiaochen & Aoji | 6.934 | 50 | 3 |
+| 7 | Sandro & Marek | 7.504 | 50 | 2 |
+| 8 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
+| 9 | Timo & Jeffrey | 8.554 | 65 | 15 |
 | 10 | Ka-Fa 1500 | 8.808 | 60 | 1 |
 | 11 | XYZ | 9.338 | 65 | 1 |
 | 12 | Sama & Luc | 18.949 | 55 | 2 |
