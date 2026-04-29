@@ -114,6 +114,9 @@ submissions = 10
 [team17]
 name = "FlyingPacers (MAADR)"
 github = "sebastianserna30"
+time = 7.690909090909091
+success_rate = 0.55
+submissions = 1
 
 [team18]
 name = "Justin & Finn"
