@@ -10,7 +10,7 @@ on:
 jobs:
   online-competition:
     # Skip this job if running on the main repo to prevent failing CI/CD. Only run on student forks.
-    if: ${{ github.repository != 'utiasDSL/lsy_drone_racing' }}
+    if: ${{ github.repository != 'learnsyslab/lsy_drone_racing' }}
 
     runs-on: ubuntu-latest
 
@@ -18,7 +18,7 @@ jobs:
       - name: Send Dispatch to Central Repo
         run: |
           # Notice the URL now ends with /competition.yaml/dispatches
-          curl -X POST https://api.github.com/repos/utiasDSL/lsy_drone_racing/actions/workflows/competition.yaml/dispatches \
+          curl -X POST https://api.github.com/repos/learnsyslab/lsy_drone_racing/actions/workflows/competition.yaml/dispatches \
           -H "Accept: application/vnd.github.v3+json" \
           -H "Authorization: Bearer ${{ secrets.DISPATCH_TOKEN }}" \
           -d '{
