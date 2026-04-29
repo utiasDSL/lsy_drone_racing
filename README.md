@@ -15,7 +15,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 7 | XYZ | 9.338 | 65 | 1 |
 | 8 | Sandro & Marek | 9.347 | 55 | 1 |
 | 9 | Theo & Olcay | 13.038 | 50 | 1 |
-| 10 | Timo & Jeffrey | 15.183 | 60 | 2 |
+| 10 | Timo & Jeffrey | 13.622 | 60 | 3 |
 | 11 | Marcel (TA) | 20.061 | 80 | 5 |
 | 12 | Martin (TA) | 27.082 | 85 | 1 |
 | 13 | Radu (TA) | 28.290 | 60 | 1 |
