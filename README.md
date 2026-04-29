@@ -16,7 +16,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 8 | Xiaochen & Aoji | 9.318 | 55 | 2 |
 | 9 | XYZ | 9.338 | 65 | 1 |
 | 10 | Sandro & Marek | 9.347 | 55 | 1 |
-| 11 | Timo & Jeffrey | 10.248 | 50 | 8 |
+| 11 | Timo & Jeffrey | 9.578 | 60 | 9 |
 | 12 | Marcel (TA) | 20.061 | 80 | 5 |
 | 13 | Martin (TA) | 27.082 | 85 | 1 |
 | 14 | Radu (TA) | 28.290 | 60 | 1 |
