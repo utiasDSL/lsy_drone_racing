@@ -47,9 +47,9 @@ submissions = 2
 [team4]
 name = "IshowSpeed"
 github = "HongMinhNhat35"
-time = 7.340000000000001
-success_rate = 0.6
-submissions = 4
+time = 7.279999999999999
+success_rate = 0.5
+submissions = 5
 
 [team5]
 name = "Release the drone"
