@@ -9,7 +9,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 🥇 | Nikola & Moritz | 4.896 | 55 | 9 |
 | 🥈 | Millennium Falcon | 5.404 | 50 | 7 |
 | 🥉 | Wei Lun & Lars | 5.587 | 55 | 5 |
-| 4 | Timo & Jeffrey | 5.947 | 55 | 18 |
+| 4 | Timo & Jeffrey | 5.893 | 60 | 19 |
 | 5 | Theo & Olcay | 6.095 | 55 | 7 |
 | 6 | Xiaochen & Aoji | 6.246 | 50 | 4 |
 | 7 | Leonie & Nicolas | 6.291 | 65 | 9 |
