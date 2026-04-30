@@ -15,18 +15,18 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 7 | Leonie & Nicolas | 6.860 | 50 | 4 |
 | 8 | Sandro & Marek | 7.072 | 50 | 3 |
 | 9 | XYZ | 7.136 | 75 | 2 |
-| 10 | Ka-Fa 1500 | 7.564 | 50 | 4 |
-| 11 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
-| 12 | IshowSpeed | 7.752 | 50 | 3 |
-| 13 | Timo & Jeffrey | 8.554 | 65 | 15 |
-| 14 | Sama & Luc | 18.949 | 55 | 2 |
-| 15 | Marcel (TA) | 20.061 | 80 | 5 |
-| 16 | MAAD Flies (MAADR) | 20.685 | 80 | 1 |
-| 17 | eagle | 22.647 | 60 | 1 |
-| 18 | Martin (TA) | 27.082 | 85 | 1 |
-| 19 | Radu (TA) | 28.290 | 60 | 1 |
+| 10 | Thunderstrike | 7.262 | 50 | 1 |
+| 11 | Ka-Fa 1500 | 7.564 | 50 | 4 |
+| 12 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
+| 13 | IshowSpeed | 7.752 | 50 | 3 |
+| 14 | Timo & Jeffrey | 8.554 | 65 | 15 |
+| 15 | Sama & Luc | 18.949 | 55 | 2 |
+| 16 | Marcel (TA) | 20.061 | 80 | 5 |
+| 17 | MAAD Flies (MAADR) | 20.685 | 80 | 1 |
+| 18 | eagle | 22.647 | 60 | 1 |
+| 19 | Martin (TA) | 27.082 | 85 | 1 |
+| 20 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
-| - | Thunderstrike | N/A | 0 | 0 |
 | - | Release the drone | N/A | 0 | 0 |
 | - | aaa | N/A | 0 | 0 |
 | - | Okan | N/A | 0 | 0 |
