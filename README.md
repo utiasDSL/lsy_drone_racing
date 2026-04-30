@@ -20,17 +20,17 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 12 | Ka-Fa 1500 | 7.564 | 50 | 4 |
 | 13 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
 | 14 | IshowSpeed | 7.752 | 50 | 3 |
-| 15 | Sama & Luc | 18.949 | 55 | 2 |
-| 16 | Marcel (TA) | 20.061 | 80 | 5 |
-| 17 | MAAD Flies (MAADR) | 20.685 | 80 | 1 |
-| 18 | eagle | 22.647 | 60 | 1 |
-| 19 | Martin (TA) | 27.082 | 85 | 1 |
-| 20 | Radu (TA) | 28.290 | 60 | 1 |
+| 15 | Celia & Paula | 9.565 | 60 | 1 |
+| 16 | Sama & Luc | 18.949 | 55 | 2 |
+| 17 | Marcel (TA) | 20.061 | 80 | 5 |
+| 18 | MAAD Flies (MAADR) | 20.685 | 80 | 1 |
+| 19 | eagle | 22.647 | 60 | 1 |
+| 20 | Martin (TA) | 27.082 | 85 | 1 |
+| 21 | Radu (TA) | 28.290 | 60 | 1 |
 | - | Yuming (TA) | N/A | 0 | 0 |
 | - | Release the drone | N/A | 0 | 0 |
 | - | aaa | N/A | 0 | 0 |
 | - | Okan | N/A | 0 | 0 |
-| - | Celia & Paula | N/A | 0 | 0 |
 | - | Justin & Finn | N/A | 0 | 0 |
 
 ## Hall of fame 🏆
