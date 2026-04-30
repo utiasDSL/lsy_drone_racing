@@ -18,8 +18,8 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 10 | Thunderstrike | 6.774 | 70 | 2 |
 | 11 | Sandro & Marek | 7.072 | 50 | 3 |
 | 12 | XYZ | 7.136 | 75 | 2 |
-| 13 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
-| 14 | IshowSpeed | 7.752 | 50 | 3 |
+| 13 | IshowSpeed | 7.340 | 60 | 4 |
+| 14 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
 | 15 | Celia & Paula | 9.565 | 60 | 1 |
 | 16 | Sama & Luc | 18.949 | 55 | 2 |
 | 17 | Marcel (TA) | 20.061 | 80 | 5 |
