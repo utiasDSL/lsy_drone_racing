@@ -15,7 +15,7 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 7 | Leonie & Nicolas | 6.860 | 50 | 4 |
 | 8 | Sandro & Marek | 7.072 | 50 | 3 |
 | 9 | XYZ | 7.136 | 75 | 2 |
-| 10 | Ka-Fa 1500 | 7.650 | 50 | 2 |
+| 10 | Ka-Fa 1500 | 7.565 | 55 | 3 |
 | 11 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
 | 12 | IshowSpeed | 7.752 | 50 | 3 |
 | 13 | Timo & Jeffrey | 8.554 | 65 | 15 |

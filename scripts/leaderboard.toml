@@ -141,9 +141,9 @@ submissions = 2
 [team20]
 name = "Ka-Fa 1500"
 github = "deniz-onat"
-time = 7.65
-success_rate = 0.5
-submissions = 2
+time = 7.565454545454545
+success_rate = 0.55
+submissions = 3
 
 [team21]
 name = "eagle"
