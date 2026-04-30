@@ -11,13 +11,13 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 🥉 | Wei Lun & Lars | 5.520 | 55 | 6 |
 | 4 | Theo & Olcay | 5.606 | 50 | 9 |
 | 5 | Timo & Jeffrey | 5.829 | 55 | 21 |
-| 6 | Xiaochen & Aoji | 6.246 | 50 | 4 |
-| 7 | Leonie & Nicolas | 6.291 | 65 | 9 |
-| 8 | Deniz & Ahmet | 6.494 | 50 | 10 |
-| 9 | Thunderstrike | 6.774 | 70 | 2 |
-| 10 | Sandro & Marek | 7.072 | 50 | 3 |
-| 11 | XYZ | 7.136 | 75 | 2 |
-| 12 | Ka-Fa 1500 | 7.564 | 50 | 4 |
+| 6 | Ka-Fa 1500 | 5.864 | 50 | 5 |
+| 7 | Xiaochen & Aoji | 6.246 | 50 | 4 |
+| 8 | Leonie & Nicolas | 6.291 | 65 | 9 |
+| 9 | Deniz & Ahmet | 6.494 | 50 | 10 |
+| 10 | Thunderstrike | 6.774 | 70 | 2 |
+| 11 | Sandro & Marek | 7.072 | 50 | 3 |
+| 12 | XYZ | 7.136 | 75 | 2 |
 | 13 | FlyingPacers (MAADR) | 7.691 | 55 | 1 |
 | 14 | IshowSpeed | 7.752 | 50 | 3 |
 | 15 | Celia & Paula | 9.565 | 60 | 1 |
