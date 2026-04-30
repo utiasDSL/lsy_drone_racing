@@ -47,7 +47,7 @@ class StateController(Controller):
         """Initialization of the controller."""
         super().__init__(obs, info, config)
         self._freq = config.env.freq
-        self._t_total = 7.0
+        self._t_total = 6
 
         self._waypoints_list = []
         self._gate_indices = {}
@@ -192,7 +192,7 @@ class StateController(Controller):
             acc_samples = self._des_acc_spline(t_samples)
             max_acc = np.max(np.linalg.norm(acc_samples, axis=1))
 
-            if max_acc > 2.2:
+            if max_acc > 3.0:
                 self._t_total += 0.2
             else:
                 break
@@ -288,7 +288,7 @@ class StateController(Controller):
 
         straight_boost = 1.0
         if upcoming_acc < 3.0:
-            straight_boost = 1.0 + 1.0 * (1.0 - (upcoming_acc / 3.0))
+            straight_boost = 1.0 + 1.5 * (1.0 - (upcoming_acc / 4.0))
 
         accel_factor = straight_boost / accel_penalty
 
