@@ -71,6 +71,7 @@ def test_attitude_controller(physics: str, controller: str):
         ctrl.step_callback(action, obs, reward, terminated, truncated, info)
         if terminated or truncated:
             break
+    env.close()
     assert obs["target_gate"] == -1, "Attitude controller failed to complete the track"
 
 

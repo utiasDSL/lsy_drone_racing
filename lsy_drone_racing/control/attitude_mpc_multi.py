@@ -1,4 +1,4 @@
-"""This module wraps the AttitudeController to handle batched multi-agent environments.
+"""This module wraps the AttitudeMPC to handle batched multi-agent environments.
 
 In multi-agent simulations, observations are batched across all drones.
 The rank index is used to select the state of the current drone.
@@ -8,17 +8,15 @@ from __future__ import annotations  # Python 3.10 type hints
 
 from typing import TYPE_CHECKING
 
-from lsy_drone_racing.control.attitude_controller import (
-    AttitudeController as SingleAttitudeController,
-)
+from lsy_drone_racing.control.attitude_mpc import AttitudeMPC as SingleAttitudeMPC
 
 if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
 
 
-class AttitudeController(SingleAttitudeController):
-    """Example of a controller using the collective thrust and attitude interface."""
+class AttitudeMPC(SingleAttitudeMPC):
+    """Example of a MPC using the collective thrust and attitude interface."""
 
     def __init__(self, obs: dict[str, NDArray[np.floating]], info: dict, config: dict):
         """Initialize the attitude controller.
@@ -58,4 +56,5 @@ class AttitudeController(SingleAttitudeController):
             "quat": obs["quat"][self.rank],
             "ang_vel": obs["ang_vel"][self.rank],
         }
+
         return super().compute_control(obs, info)
