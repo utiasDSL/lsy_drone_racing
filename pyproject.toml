@@ -28,7 +28,7 @@ dependencies = ["fire >= 0.6.0", "numpy", "toml >= 0.10.2"]
 sim = [
     "gymnasium[array-api] >= 1.2.0",
     "ml-collections >= 1.0",
-    "packaging >= 24.0",
+    "packaging >= 24.0, < 26",
     "drone-models",
     "drone-controllers",
     "crazyflow @ git+https://github.com/utiasDSL/crazyflow.git@0.1.0b0",
@@ -38,7 +38,7 @@ sim = [
 # option[gpu]: simulation with gpu
 gpu = ["jax[cuda12]"]
 # option[deploy]: deploy to real drones
-deploy = ["cfclient", "drone-estimators"]
+deploy = ["cfclient >= 2025.9, < 2026.0", "cflib == 0.1.30", "drone-estimators"]
 # option[rl]: train rl policy
 rl = ["torch == 2.8.0", "wandb"]
 # option[gamepad]: use a gamepad as input for your drone
@@ -69,6 +69,7 @@ cmake = "*"
 compilers = ">=1.9.0, <1.11.0"
 make = "*"
 openblas = ">=0.3.30,<0.4"
+packaging = "<26"
 
 [tool.pixi.pypi-dependencies]
 lsy_drone_racing = { path = ".", editable = true }
