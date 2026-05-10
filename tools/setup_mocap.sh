@@ -12,7 +12,7 @@ if [ ! -d ros_ws/src/drone_racing_msgs/.git ]; then
   git clone --branch real_race git@github.com:N0OBSTUDENT/drone_racing_msgs.git ros_ws/src/drone_racing_msgs
 fi
 
-if [ ! -f ros_ws/install/setup.sh ] || [ ! -d ros_ws/install/drone_racing_msgs ]; then
+if [ ! -x ros_ws/install/motion_capture_tracking/lib/motion_capture_tracking/motion_capture_tracking_node ] || [ ! -d ros_ws/install/drone_racing_msgs ]; then
   echo "[Pixi activation] Running colcon build..."
   (cd ros_ws && colcon build --cmake-args -DCMAKE_POLICY_VERSION_MINIMUM=3.5)
 fi
