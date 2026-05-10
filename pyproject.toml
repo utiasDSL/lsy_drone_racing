@@ -31,7 +31,7 @@ sim = [
     "packaging >= 24.0, < 26",
     "drone-models",
     "drone-controllers",
-    "crazyflow @ git+https://github.com/utiasDSL/crazyflow.git@0.1.0b0",
+    "crazyflow>=0.1.0",
     "jax >= 0.7",
     "warp-lang",
 ]
@@ -78,7 +78,7 @@ lsy_drone_racing = { path = ".", editable = true }
 scripts = ["tools/setup_acados.sh"]
 
 [tool.pixi.tasks]
-evaluate = { cmd = "python scripts/evaluation.py", description = "Evaluate the controller" }
+evaluate = { cmd = "python scripts/evaluate.py", description = "Evaluate the controller" }
 
 ### environments
 [tool.pixi.environments]
@@ -88,6 +88,7 @@ gpu = { features = ["sim", "gpu"], solve-group = "default" }
 tests = { features = ["sim", "rl", "tests"], solve-group = "default" }
 gpu-tests = { features = ["sim", "gpu", "tests"], solve-group = "default" }
 gamepad = { features = ["sim", "gamepad"], solve-group = "default" }
+profile = { features = ["sim", "profile", "gpu"], solve-group = "default" }
 
 ## feature [kilted]
 [tool.pixi.feature.kilted]
@@ -137,6 +138,9 @@ tests = { cmd = "pytest -v tests", description = "Run tests" }
 
 [tool.pixi.feature.tests.dependencies]
 pytest = "*"
+
+[tool.pixi.feature.profile.dependencies]
+pyinstrument = "*"
 
 ########################
 # Linting and formatting settings

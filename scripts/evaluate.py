@@ -1,4 +1,4 @@
-"""Competition auto-submission script.
+"""Competition evaluation script.
 
 Note:
     Please do not alter this script or ask the course supervisors first!
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    """Run the simulation N times and save the results as 'submission.csv'."""
-    n_runs = 1
+    """Run the simulation N times and save the results as 'evaluation.csv'."""
+    n_runs = 20
     config_file = "level2.toml"
     config = load_config(Path(__file__).parents[1] / "config" / config_file)
     ep_times = simulate(
@@ -32,7 +32,7 @@ def main():
 
     # Abort if more than half of the runs failed
     if (success_rate := 1 - n_failed / n_runs) < 0.5:
-        logger.error("More than 50% of all runs failed! Aborting submission.")
+        logger.error("More than 50% of all runs failed! Aborting evaluation.")
         raise RuntimeError("Too many runs failed!")
 
     successful_times_avg = np.mean([x for x in ep_times if x is not None])
@@ -40,7 +40,7 @@ def main():
     logger.info(f"Success Rate: {success_rate * 100}%")
     file = Path(__file__).parents[1] / "evaluation.csv"
     with open(file, "w") as f:
-        f.write(f"{np.mean(successful_times_avg)},{success_rate},")
+        f.write(f"{successful_times_avg},{success_rate},")
     logger.info(f"Results saved in {file}")
 
 

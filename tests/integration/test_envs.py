@@ -9,6 +9,7 @@ from drone_models import available_models
 import lsy_drone_racing  # noqa: F401, environment registrations
 from lsy_drone_racing.envs.drone_race import DroneRaceEnv
 from lsy_drone_racing.utils import load_config
+from tests.conftest import skip_if_headless
 
 CONFIG_FILES = {
     "DroneRacing-v0": ["level0.toml", "level1.toml", "level2.toml"],
@@ -68,7 +69,7 @@ def test_single_drone_envs(config_file: str, physics: str, device: str):
     assert obs["pos"].device == device, f"Expected device {device}, but got {obs['pos'].device}"
     env.close()
 
-    kwargs["num_envs"] = 2
+    kwargs["num_envs"] = 3
     env = gymnasium.make_vec("DroneRacing-v0", **kwargs)
     env.reset()
     for _ in range(2):
@@ -109,7 +110,7 @@ def test_multi_drone_envs(config_file: str, physics: str, device: str):
         obs, _, _, _, _ = env.step(env.action_space.sample())
     assert obs["pos"].device == device, f"Expected device {device}, but got {obs['pos'].device}"
     env.close()
-    kwargs["num_envs"] = 2
+    kwargs["num_envs"] = 3
     env = gymnasium.make_vec("MultiDroneRacing-v0", **kwargs)
     env.reset()
     for _ in range(2):
@@ -133,22 +134,17 @@ def test_vector_envs_randomization(config_file: str):
         randomizations=config.env.get("randomizations"),
     )
 
-    def get_obj_mocap(env: DroneRaceEnv) -> jax.Array:
-        gate_mocap_ids = env.data.gate_mj_ids
-        obstacle_mocap_ids = env.data.obstacle_mj_ids
-        gates_mocap_pos = env.sim.mjx_data.mocap_pos[:, gate_mocap_ids]
-        gates_mocap_quat = env.sim.mjx_data.mocap_quat[:, gate_mocap_ids][..., [1, 2, 3, 0]]
-        obstacles_mocap_pos = env.sim.mjx_data.mocap_pos[:, obstacle_mocap_ids]
-        return gates_mocap_pos, gates_mocap_quat, obstacles_mocap_pos
+    def get_obj_data(env: DroneRaceEnv) -> jax.Array:
+        return env.data.gates_pos, env.data.gates_quat, env.data.obstacles_pos
 
-    # Backup nominal track mocap data
-    nominal_gates_pos, nominal_gates_quat, nominal_obstacles_pos = get_obj_mocap(env)
+    # Backup nominal track data (before reset, gates_pos is initialized to nominal values).
+    nominal_gates_pos, nominal_gates_quat, nominal_obstacles_pos = get_obj_data(env)
 
     env.reset()
 
     # Check if track is randomized
-    gates_pos, gates_quat, obstacles_pos = get_obj_mocap(env)
-    drone_pos = env.sim.data.states.pos[:, 0, :]
+    gates_pos, gates_quat, obstacles_pos = get_obj_data(env)
+    drone_pos = env.data.sim_data.states.pos[:, 0, :]
     nominal_drone_pos = env.sim.default_data.states.pos[:, 0, :]
     assert not jp.allclose(gates_pos, nominal_gates_pos), "gates_pos not randomized"
     assert not jp.allclose(gates_quat, nominal_gates_quat), "gates_quat not randomized"
@@ -157,15 +153,15 @@ def test_vector_envs_randomization(config_file: str):
 
     action = jp.tile(jp.array([0.0, 0.0, 0.0, 0.6]), (2, 1))  # ensure drone doesn't crash
     env.step(action)
-    gates_pos_1, gates_quat_1, obstacles_pos_1 = get_obj_mocap(env)
+    gates_pos_1, gates_quat_1, obstacles_pos_1 = get_obj_data(env)
 
     # Force reset 2nd world
     env.data = env.data.replace(marked_for_reset=env.data.marked_for_reset.at[1].set(True))
 
     # Step once to trigger autoreset
     env.step(action)
-    gates_pos_2, gates_quat_2, obstacles_pos_2 = get_obj_mocap(env)
-    drone_pos = env.sim.data.states.pos[:, 0, :]
+    gates_pos_2, gates_quat_2, obstacles_pos_2 = get_obj_data(env)
+    drone_pos = env.data.sim_data.states.pos[:, 0, :]
     nominal_drone_pos = env.sim.default_data.states.pos[:, 0, :]
 
     # Check if track is re-randomized for the 2nd world but not for the 1st world
@@ -186,4 +182,89 @@ def test_vector_envs_randomization(config_file: str):
         "obstacles_pos[1] not re-randomized"
     )
 
+    env.close()
+
+
+@skip_if_headless
+@pytest.mark.integration
+def test_render():
+    """Smoke test: env.render() runs at every lifecycle stage for DroneRacing-v0."""
+    config = load_config(Path(__file__).parents[2] / "config" / "level0.toml")
+    env = gymnasium.make(
+        "DroneRacing-v0",
+        freq=config.env.freq,
+        sim_config=config.sim,
+        sensor_range=config.env.sensor_range,
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=config.env.seed,
+    )
+    # Right after reset
+    env.reset()
+    env.render()
+    # Mid-episode: render after several steps
+    for _ in range(5):
+        env.step(env.action_space.sample())
+        env.render()
+
+    # Force terminal state
+    data = env.unwrapped.data
+    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[...].set(-1))
+    env.step(env.action_space.sample())
+    assert jp.all(env.unwrapped.data.disabled_drones), "drone not actually disabled"
+    env.render()
+    env.close()
+
+
+@skip_if_headless
+@pytest.mark.integration
+def test_render_multi_drone():
+    """Smoke test: env.render() runs at every lifecycle stage for MultiDroneRacing-v0."""
+    config = load_config(Path(__file__).parents[2] / "config" / "multi_level0.toml")
+    env = gymnasium.make(
+        "MultiDroneRacing-v0",
+        freq=config.env.kwargs[0]["freq"],
+        sim_config=config.sim,
+        sensor_range=config.env.kwargs[0]["sensor_range"],
+        control_mode="state",
+        track=config.env.track,
+        disturbances=config.env.get("disturbances"),
+        randomizations=config.env.get("randomizations"),
+        seed=config.env.seed,
+    )
+    # Right after reset
+    env.reset()
+    env.render()
+    # Mid-episode: render after several steps
+    for _ in range(5):
+        env.step(env.action_space.sample())
+        env.render()
+
+    # Force only drone 0 (in world 0) into a terminal state by setting its target
+    # gate to -1. The other drones stay active, so autoreset will not fire (it
+    # only triggers when all drones in a world are disabled). The next step will
+    # mark drone 0 as disabled and warp it below the ground via
+    # `_warp_disabled_drones`, exercising the renderer with a mix of active and
+    # warped drones.
+    data = env.unwrapped.data
+    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[0, 0].set(-1))
+    env.step(env.action_space.sample())
+
+    # Verify drone 0 is disabled and the others are still active.
+    disabled = env.unwrapped.data.disabled_drones
+    assert bool(disabled[0, 0]), "drone 0 should be disabled after target_gate=-1"
+    assert not bool(jp.all(disabled)), "only drone 0 should be disabled, not all drones"
+
+    env.render()
+
+    # Force ALL drones into a terminal state by setting every target gate to
+    # -1. On the next step, every drone will be disabled and (because the env
+    # has autoreset enabled) the world will be auto-reset before render is
+    # called again.
+    data = env.unwrapped.data
+    env.unwrapped.data = data.replace(target_gate=data.target_gate.at[...].set(-1))
+    env.step(env.action_space.sample())
+    env.render()
     env.close()

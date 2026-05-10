@@ -9,16 +9,18 @@ At each time step, the controller computes the next desired position by evaluati
     trajectory if you receive updated gate and obstacle poses.
 """
 
-from __future__ import annotations  # Python 3.10 type hints
+from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 import numpy as np
+from crazyflow.sim.visualize import draw_line, draw_points
 from scipy.interpolate import CubicSpline
 
 from lsy_drone_racing.control import Controller
 
 if TYPE_CHECKING:
+    from crazyflow import Sim
     from numpy.typing import NDArray
 
 
@@ -39,10 +41,11 @@ class StateController(Controller):
         self._freq = config.env.freq
 
         # Same waypoints as in the attitude controller. Determined by trial and error.
+        start_pos = obs["pos"]
         waypoints = np.array(
             [
-                [-1.5, 0.75, 0.05],
-                [-1.0, 0.55, 0.4],
+                start_pos,
+                [-1.0, 0.75, 0.4],
                 [0.3, 0.35, 0.7],
                 [1.3, -0.15, 0.9],
                 [0.85, 0.85, 1.2],
@@ -53,7 +56,7 @@ class StateController(Controller):
                 [0.5, -0.75, 1.2],
             ]
         )
-        self._t_total = 15  # s
+        self._t_total = 18  # s
         t = np.linspace(0, self._t_total, len(waypoints))
         self._des_pos_spline = CubicSpline(t, waypoints)
 
@@ -102,3 +105,10 @@ class StateController(Controller):
     def episode_callback(self):
         """Reset the internal state."""
         self._tick = 0
+
+    def render_callback(self, sim: Sim):
+        """Visualize the desired trajectory and the current setpoint."""
+        setpoint = self._des_pos_spline(self._tick / self._freq).reshape(1, -1)
+        draw_points(sim, setpoint, rgba=(1.0, 0.0, 0.0, 1.0), size=0.02)
+        trajectory = self._des_pos_spline(np.linspace(0, self._t_total, 100))
+        draw_line(sim, trajectory, rgba=(0.0, 1.0, 0.0, 1.0))

@@ -3,8 +3,8 @@ LSY Drone Racing
 
 Welcome to the LSY Drone Racing documentation! This project provides a simulator and code for deployment on real robot hardware for autonomous drone racing.
 
-.. image:: img/banner.jpeg
-   :alt: LSY Drone Racing Banner
+.. image:: img/race.gif
+   :alt: LSY Drone Racing
    :align: center
    :width: 600px
 

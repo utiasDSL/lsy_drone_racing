@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import numpy as np
+    from crazyflow import Sim
     from numpy.typing import NDArray
 
 
@@ -100,6 +101,13 @@ class Controller(ABC):
 
         Instructions:
             Use any collected information to learn, adapt, and/or re-plan.
+        """
+
+    def render_callback(self, sim: Sim):
+        """Callback function called before the environment's rendering.
+
+        You can use this function to render additional information on the screen, such as the
+        planned trajectory, the drone's target state, etc.
         """
 
     def reset(self):
