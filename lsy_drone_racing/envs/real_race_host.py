@@ -329,7 +329,7 @@ class CrazyflieWorker:
             self.logger.info("Waiting for start signal...")
             self.init_barrier.wait(timeout=None)
             self._control_loop()
-        except mp.BrokenBarrierError:
+        except threading.BrokenBarrierError:
             # This will ONLY trigger during initilization phase,
             # since no further wait() will be called here
             pass
@@ -672,8 +672,7 @@ class CrazyFlieRealRaceHost(RealRaceHost):
         """
         if self._init_barrier.broken:
             return
-
-        logger.info("Waiting for clients...")
+        logger.info("Drones connected, waiting for clients...")
         t_start = time.time()
         while time.time() - t_start < 300.0:
             self._host_ready_pub.publish(RealHostReady(elapsed_time=0.0, timestamp=time.time()))
@@ -689,7 +688,7 @@ class CrazyFlieRealRaceHost(RealRaceHost):
 
         try:
             self._init_barrier.wait(timeout=None)
-        except mp.BrokenBarrierError:
+        except threading.BrokenBarrierError:
             return
 
         logger.info("Race started")

@@ -48,7 +48,6 @@ def main(config: str = "multi_level2.toml"):
             check_drones=config_obj.deploy.check_drone_start_pos,
         )
         host.connect_drones()
-        logger.info("Drones connected, starting main loop...")
         host.host_main_loop()
     except KeyboardInterrupt:
         logger.info("Interrupted, shutting down...")
