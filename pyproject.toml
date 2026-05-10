@@ -38,10 +38,7 @@ sim = [
 # option[gpu]: simulation with gpu
 gpu = ["jax[cuda12]"]
 # option[deploy]: deploy to real drones
-deploy = [
-    "cfclient",
-    "drone-estimators",
-]
+deploy = ["cfclient", "drone-estimators"]
 # option[rl]: train rl policy
 rl = ["torch == 2.8.0", "wandb"]
 # option[gamepad]: use a gamepad as input for your drone
@@ -102,6 +99,7 @@ cmake = "*"
 pkg-config = "*"
 make = "*"
 ninja = "*"
+libboost-devel = ">=1.86,<1.87"
 # ROS specific tools
 rosdep = "*"
 colcon-common-extensions = "*"
@@ -123,11 +121,13 @@ description = "Run the Zenoh router on the host machine"
 cmd = "ros2 launch motion_capture_tracking launch.py"
 
 [tool.pixi.feature.deploy.tasks.estimator]
-cmd = ["python",
-        "-m",
-        "drone_estimators.ros_nodes.ros2_node",
-        "--drone_name",
-        "{{drone_name}}"]
+cmd = [
+    "python",
+    "-m",
+    "drone_estimators.ros_nodes.ros2_node",
+    "--drone_name",
+    "{{drone_name}}",
+]
 args = [{ "arg" = "drone_name", "default" = "cf10" }]
 
 ## feature [tests]
@@ -171,7 +171,7 @@ ignore = ["ANN401"]
 fixable = ["ALL"]
 unfixable = []
 
-[tool.ruff.lint.isort]  # Prevent ruff from reporting conflicting settings with isort
+[tool.ruff.lint.isort]
 split-on-trailing-comma = false
 
 [tool.ruff.lint.per-file-ignores]
