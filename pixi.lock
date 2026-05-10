@@ -6264,7 +6264,7 @@ packages:
 - pypi: ./
   name: lsy-drone-racing
   version: 0.0.1
-  sha256: 1df42881877bcb9dda85e86834b50cc37f220e34d7bb6d7c94b6af7cf006dead
+  sha256: c29844ce330e02d8933a9ccff54ca902b8b15e47213edb0c6e123153c12872af
   requires_dist:
   - fire>=0.6.0
   - numpy
