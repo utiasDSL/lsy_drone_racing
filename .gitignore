@@ -17,5 +17,6 @@ c_generated_code/
 # pixi environments
 .pixi/*
 !.pixi/config.toml
-ros_ws/
-acados/
+# ROS2 workspace build artifacts
+ros_ws/**
+acados/**

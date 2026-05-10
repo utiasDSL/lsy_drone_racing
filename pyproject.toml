@@ -18,7 +18,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
 ]
 
-
 ########################
 # Pip Dependencies
 ########################
@@ -29,7 +28,7 @@ dependencies = ["fire >= 0.6.0", "numpy", "toml >= 0.10.2"]
 sim = [
     "gymnasium[array-api] >= 1.2.0",
     "ml-collections >= 1.0",
-    "packaging >= 24.0",
+    "packaging >= 24.0, < 26",
     "drone-models",
     "drone-controllers",
     "crazyflow>=0.1.0",
@@ -39,10 +38,7 @@ sim = [
 # option[gpu]: simulation with gpu
 gpu = ["jax[cuda12]"]
 # option[deploy]: deploy to real drones
-deploy = [
-    "cfclient",
-    "drone-estimators",
-]
+deploy = ["cfclient >= 2025.9, < 2026.0", "cflib == 0.1.30", "drone-estimators"]
 # option[rl]: train rl policy
 rl = ["torch == 2.8.0", "wandb"]
 # option[gamepad]: use a gamepad as input for your drone
@@ -73,6 +69,7 @@ cmake = "*"
 compilers = ">=1.9.0, <1.11.0"
 make = "*"
 openblas = ">=0.3.30,<0.4"
+packaging = "<26"
 
 [tool.pixi.pypi-dependencies]
 lsy_drone_racing = { path = ".", editable = true }
@@ -104,14 +101,36 @@ cmake = "*"
 pkg-config = "*"
 make = "*"
 ninja = "*"
+libboost-devel = ">=1.86,<1.87"
 # ROS specific tools
 rosdep = "*"
 colcon-common-extensions = "*"
 # Kilted specific tools
 ros-kilted-desktop = "*"
+ros-kilted-rmw-zenoh-cpp = "*"
 
 [tool.pixi.feature.kilted.activation]
 scripts = ["tools/setup_mocap.sh"]
+env = { RMW_IMPLEMENTATION = "rmw_zenoh_cpp", ZENOH_ROUTER_CHECK_ATTEMPTS = "-1" }
+
+[tool.pixi.feature.kilted.tasks.zenoh-router]
+# To use ROS with Zenoh backend, a router is mandatory
+cmd = "ros2 run rmw_zenoh_cpp rmw_zenohd"
+description = "Run the Zenoh router on the host machine"
+
+## feature [deploy]
+[tool.pixi.feature.deploy.tasks.mocap]
+cmd = "ros2 launch motion_capture_tracking launch.py"
+
+[tool.pixi.feature.deploy.tasks.estimator]
+cmd = [
+    "python",
+    "-m",
+    "drone_estimators.ros_nodes.ros2_node",
+    "--drone_name",
+    "{{drone_name}}",
+]
+args = [{ "arg" = "drone_name", "default" = "cf10" }]
 
 ## feature [tests]
 [tool.pixi.feature.tests.tasks]
@@ -157,7 +176,7 @@ ignore = ["ANN401"]
 fixable = ["ALL"]
 unfixable = []
 
-[tool.ruff.lint.isort]  # Prevent ruff from reporting conflicting settings with isort
+[tool.ruff.lint.isort]
 split-on-trailing-comma = false
 
 [tool.ruff.lint.per-file-ignores]
