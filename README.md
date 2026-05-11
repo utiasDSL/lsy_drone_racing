@@ -10,9 +10,9 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 🥈 | Millennium Falcon | 5.404 | 50 | 7 |
 | 🥉 | Wei Lun & Lars | 5.520 | 55 | 6 |
 | 4 | Theo & Olcay | 5.606 | 50 | 9 |
-| 5 | Timo & Jeffrey | 5.829 | 55 | 21 |
-| 6 | Ka-Fa 1500 | 5.864 | 50 | 5 |
-| 7 | Deniz & Ahmet | 5.916 | 50 | 11 |
+| 5 | Deniz & Ahmet | 5.790 | 50 | 12 |
+| 6 | Timo & Jeffrey | 5.829 | 55 | 21 |
+| 7 | Ka-Fa 1500 | 5.864 | 50 | 5 |
 | 8 | Xiaochen & Aoji | 6.246 | 50 | 4 |
 | 9 | Leonie & Nicolas | 6.291 | 65 | 9 |
 | 10 | XYZ | 6.486 | 50 | 3 |
