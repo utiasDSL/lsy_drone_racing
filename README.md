@@ -12,10 +12,10 @@ This competition is only for students of the ADR course at TUM. Students have to
 | 4 | Theo & Olcay | 5.606 | 50 | 9 |
 | 5 | Timo & Jeffrey | 5.829 | 55 | 21 |
 | 6 | Ka-Fa 1500 | 5.864 | 50 | 5 |
-| 7 | Xiaochen & Aoji | 6.246 | 50 | 4 |
-| 8 | Leonie & Nicolas | 6.291 | 65 | 9 |
-| 9 | XYZ | 6.486 | 50 | 3 |
-| 10 | Deniz & Ahmet | 6.494 | 50 | 10 |
+| 7 | Deniz & Ahmet | 5.916 | 50 | 11 |
+| 8 | Xiaochen & Aoji | 6.246 | 50 | 4 |
+| 9 | Leonie & Nicolas | 6.291 | 65 | 9 |
+| 10 | XYZ | 6.486 | 50 | 3 |
 | 11 | Thunderstrike | 6.774 | 70 | 2 |
 | 12 | Sandro & Marek | 7.072 | 50 | 3 |
 | 13 | IshowSpeed | 7.280 | 50 | 5 |
